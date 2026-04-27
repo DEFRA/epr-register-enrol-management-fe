@@ -1,6 +1,8 @@
 import {
   applyWorkItemAction,
-  completeWorkItemTask
+  assignWorkItem,
+  completeWorkItemTask,
+  unassignWorkItem
 } from '#/server/common/helpers/backend-api/backend-api.js'
 
 /**
@@ -22,27 +24,51 @@ import {
  */
 export function createWorkItemActionsService({
   completeTask = completeWorkItemTask,
-  applyAction = applyWorkItemAction
+  applyAction = applyWorkItemAction,
+  assign = assignWorkItem,
+  unassign = unassignWorkItem
 } = {}) {
   return {
     /**
      * Mark a single task complete on a work item.
      * @returns {Promise<{ ok: true, workItem: object } | { ok: false, reason: string, message: string, status?: number }>}
      */
-    async completeTask({ workItemId, taskId }) {
+    async completeTask({ workItemId, taskId, user = null }) {
       assertId(workItemId, 'workItemId')
       assertId(taskId, 'taskId')
-      const result = await completeTask({ workItemId, taskId })
+      const result = await completeTask({ workItemId, taskId, user })
       return toResult(result)
     },
 
     /**
      * Invoke a named action against a work item (e.g. approve, reject, withdraw).
      */
-    async applyAction({ workItemId, actionId }) {
+    async applyAction({ workItemId, actionId, user = null }) {
       assertId(workItemId, 'workItemId')
       assertId(actionId, 'actionId')
-      const result = await applyAction({ workItemId, actionId })
+      const result = await applyAction({ workItemId, actionId, user })
+      return toResult(result)
+    },
+
+    /**
+     * Assign (or re-assign) a work item to a user. The backend enforces the
+     * role-based rules; the BFF forwards the acting user's identity and
+     * roles via headers attached by the backend client.
+     */
+    async assign({ workItemId, assigneeId, assigneeName = null, user = null }) {
+      assertId(workItemId, 'workItemId')
+      assertId(assigneeId, 'assigneeId')
+      const result = await assign({ workItemId, assigneeId, assigneeName, user })
+      return toResult(result)
+    },
+
+    /**
+     * Clear the current assignment. Backend requires the caller to hold the
+     * `assign` role.
+     */
+    async unassign({ workItemId, user = null }) {
+      assertId(workItemId, 'workItemId')
+      const result = await unassign({ workItemId, user })
       return toResult(result)
     }
   }
@@ -60,6 +86,14 @@ function toResult(result) {
   }
   if (result.status === 404) {
     return { ok: false, reason: 'not-found', message: 'Work item not found' }
+  }
+  if (result.status === 403) {
+    return {
+      ok: false,
+      reason: 'not-authorized',
+      status: result.status,
+      message: result.problem?.detail ?? 'You are not authorised to perform this action'
+    }
   }
   if (result.status === 409) {
     return {

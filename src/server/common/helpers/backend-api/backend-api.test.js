@@ -2,10 +2,12 @@ import { describe, expect, test, vi } from 'vitest'
 
 import {
   applyWorkItemAction,
+  assignWorkItem,
   completeWorkItemTask,
   getBackendHealth,
   getWorkItem,
-  getWorkItems
+  getWorkItems,
+  unassignWorkItem
 } from './backend-api.js'
 
 describe('#getBackendHealth', () => {
@@ -438,5 +440,129 @@ describe('#getWorkItem', () => {
     expect(fetchImpl.mock.calls[0][0]).toBe(
       'http://backend:8085/work-items/a%2Fb%20c'
     )
+  })
+})
+
+describe('#getWorkItems user identity headers', () => {
+  test('Forwards x-cdp-user-id, name, and roles when a user is supplied', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice', roles: ['standard', 'assign'] }
+    })
+
+    const headers = fetchImpl.mock.calls[0][1].headers
+    expect(headers['x-cdp-user-id']).toBe('u-1')
+    expect(headers['x-cdp-user-name']).toBe('Alice')
+    expect(headers['x-cdp-user-roles']).toBe('standard,assign')
+  })
+
+  test('Encodes assigneeId and unassigned filters into the query string', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      assigneeId: 'u-9',
+      unassigned: true,
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const url = fetchImpl.mock.calls[0][0]
+    expect(url).toContain('assigneeId=u-9')
+    expect(url).toContain('unassigned=true')
+  })
+})
+
+describe('#assignWorkItem', () => {
+  test('POSTs the assignee body to the assign endpoint with user headers', async () => {
+    const workItem = { id: 'abc', assignedToId: 'u-2', assignedToName: 'Bob' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await assignWorkItem({
+      workItemId: 'abc',
+      assigneeId: 'u-2',
+      assigneeName: 'Bob',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice', roles: ['assign'] }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/abc/assign',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ assigneeId: 'u-2', assigneeName: 'Bob' }),
+        headers: expect.objectContaining({
+          'content-type': 'application/json',
+          'x-cdp-user-id': 'u-1',
+          'x-cdp-user-roles': 'assign'
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('Surfaces a 403 with status so the service can map to not-authorized', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ detail: 'Forbidden' })
+    })
+
+    const result = await assignWorkItem({
+      workItemId: 'abc',
+      assigneeId: 'u-2',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      status: 403,
+      problem: { detail: 'Forbidden' }
+    })
+  })
+})
+
+describe('#unassignWorkItem', () => {
+  test('POSTs to the unassign endpoint and returns the cleared work item', async () => {
+    const workItem = { id: 'abc', assignedToId: null }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await unassignWorkItem({
+      workItemId: 'abc',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', roles: ['assign'] }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/abc/unassign',
+      expect.objectContaining({ method: 'POST' })
+    )
+    expect(result).toEqual({ ok: true, workItem })
   })
 })

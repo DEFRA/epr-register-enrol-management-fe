@@ -12,6 +12,8 @@ import {
 } from '#/server/work-items/core/templates.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
+  assignWorkItem: vi.fn(),
+  unassignWorkItem: vi.fn(),
   getBackendHealth: vi.fn(),
   getWorkItem: vi.fn(),
   getWorkItems: vi.fn(),
@@ -23,7 +25,9 @@ const {
   getWorkItem,
   getWorkItems,
   completeWorkItemTask,
-  applyWorkItemAction
+  applyWorkItemAction,
+  assignWorkItem,
+  unassignWorkItem
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '11111111-1111-1111-1111-111111111111'
@@ -76,6 +80,8 @@ describe('#workItemDetailController', () => {
     getWorkItems.mockReset()
     completeWorkItemTask.mockReset()
     applyWorkItemAction.mockReset()
+    assignWorkItem.mockReset()
+    unassignWorkItem.mockReset()
     clearWorkItemRegistry()
     clearDetailTemplateRegistry()
   })
@@ -90,7 +96,10 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(getWorkItem).toHaveBeenCalledWith({ workItemId: ID })
+    expect(getWorkItem).toHaveBeenCalledWith({
+      workItemId: ID,
+      user: expect.objectContaining({ id: expect.any(String) })
+    })
     expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
     expect(result).toEqual(expect.stringContaining('Re-accreditation'))
     expect(result).toEqual(expect.stringContaining('Submitted'))
@@ -200,7 +209,8 @@ describe('#workItemDetailController', () => {
     expect(headers.location).toBe(`/work-items/${ID}`)
     expect(completeWorkItemTask).toHaveBeenCalledWith({
       workItemId: ID,
-      taskId: 'check-eligibility'
+      taskId: 'check-eligibility',
+      user: expect.objectContaining({ id: expect.any(String) })
     })
   })
 
@@ -254,5 +264,99 @@ describe('#workItemDetailController', () => {
 
     expect(statusCode).toBe(statusCodes.conflict)
     expect(result).toEqual(expect.stringContaining('Tasks outstanding'))
+  })
+
+  test('POST assign forwards the assignee id and a directory-resolved name to the API', async () => {
+    registerReaccreditation()
+    assignWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        assignedToId: 'stub-standard-1',
+        assignedToName: 'Stub Standard User'
+      })
+    })
+
+    const { statusCode, headers } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/assign`,
+      payload: 'assigneeId=stub-standard-1',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' }
+    })
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    expect(assignWorkItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workItemId: ID,
+        assigneeId: 'stub-standard-1',
+        // The controller resolves the snapshot name from the assignable
+        // users directory (stub-auth users) so the backend gets a
+        // canonical name even when the form omitted it.
+        assigneeName: 'Stub Standard User',
+        user: expect.objectContaining({ id: expect.any(String) })
+      })
+    )
+  })
+
+  test('POST assign with empty assigneeId re-renders detail with an inline error', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/assign`,
+      payload: '',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' }
+    })
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toEqual(
+      expect.stringContaining('Choose a user to assign this work item to.')
+    )
+    expect(assignWorkItem).not.toHaveBeenCalled()
+  })
+
+  test('POST assign surfaces a backend 403 as inline not-authorized error', async () => {
+    registerReaccreditation()
+    assignWorkItem.mockResolvedValue({
+      ok: false,
+      status: 403,
+      problem: { detail: 'Standard users can only self-assign' }
+    })
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/assign`,
+      payload: 'assigneeId=stub-standard-1',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' }
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
+    expect(result).toEqual(
+      expect.stringContaining('Standard users can only self-assign')
+    )
+  })
+
+  test('POST unassign clears the assignment and redirects', async () => {
+    registerReaccreditation()
+    unassignWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ assignedToId: null, assignedToName: null })
+    })
+
+    const { statusCode, headers } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/unassign`
+    })
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    expect(unassignWorkItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workItemId: ID,
+        user: expect.objectContaining({ id: expect.any(String) })
+      })
+    )
   })
 })

@@ -200,3 +200,57 @@ async register(server) {
 
 The plugin clears the registry at each `createServer()` so tests stay
 hermetic — modules re-register on every server boot.
+
+## Assignment (RA-95)
+
+The list and detail pages support assignment of work items to a user.
+Two roles drive what a user can do:
+
+- `assign` — sees an assignee picker on the detail page and can re-assign
+  or unassign any work item.
+- `standard` — sees a single "Take this work item" button on the detail
+  page when the item is unassigned. Cannot re-assign other people's work.
+
+The frontend is a BFF: every request to the backend forwards the signed-in
+user's id, name and roles via these headers (set by
+`buildHeaders` in `backend-api.js`):
+
+| Header | Value |
+| --- | --- |
+| `x-cdp-user-id` | `request.auth.credentials.id` |
+| `x-cdp-user-name` | `request.auth.credentials.name` |
+| `x-cdp-user-roles` | `request.auth.credentials.roles` joined with `,` |
+
+The backend turns those into claims and enforces the role rules
+server-side; the BFF UI affordances are a UX convenience only.
+
+### Assignable users directory
+
+`src/server/work-items/core/assignees.js` exposes `getAssignableUsers()`
+and `findAssignableUser(id)`. For the PoC this re-uses the stub-auth
+`STUB_USERS` list so the picker, the form values and the user that signs
+in via the stub login all share the same ids. A real deployment will
+replace this with an Entra ID directory lookup.
+
+### List filters
+
+The list page exposes an "Assignment" filter with four mutually-exclusive
+modes (radio buttons), encoded into `assigneeMode`:
+
+| Mode | Backend translation |
+| --- | --- |
+| `any` (default) | no filter |
+| `mine` | `assigneeId=<currentUserId>` |
+| `unassigned` | `unassigned=true` |
+| `user` | `assigneeId=<assigneeUserId>` (revealed `<select>`) |
+
+### Detail actions
+
+| Route | Authorization (Hapi scope is intentionally **not** set) |
+| --- | --- |
+| `POST /work-items/{id}/assign` | Open to any authenticated user; backend rejects with 403 if the caller is a standard user trying to assign to someone else or take an owned item. |
+| `POST /work-items/{id}/unassign` | Open at the route layer; backend requires the `assign` role. |
+
+The assign controller resolves the snapshot display name from the
+assignable-users directory so the backend always receives a canonical
+`assigneeName` even when the form omitted it.

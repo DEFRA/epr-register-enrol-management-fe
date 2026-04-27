@@ -3,6 +3,8 @@
 {% from "govuk/components/table/macro.njk" import govukTable %}
 {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
 {% from "govuk/components/checkboxes/macro.njk" import govukCheckboxes %}
+{% from "govuk/components/radios/macro.njk" import govukRadios %}
+{% from "govuk/components/select/macro.njk" import govukSelect %}
 {% from "govuk/components/input/macro.njk" import govukInput %}
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/pagination/macro.njk" import govukPagination %}
@@ -48,6 +50,45 @@
           }) }}
         {% endif %}
 
+        {# Assignee filter (RA-95). The "Specific user…" radio reveals a #}
+        {# select listing the assignable-users directory. Same options are #}
+        {# offered to every user; only the assign *write* is role-gated. #}
+        {% set assigneeUserSelectHtml %}
+          {{ govukSelect({
+            id: "filter-assignee-user",
+            name: "assigneeUserId",
+            label: { text: "Assigned to", classes: "govuk-label--s" },
+            items: assigneeUserOptions,
+            attributes: { "data-testid": "work-items-filter-assignee-user" }
+          }) }}
+        {% endset %}
+
+        {% set assigneeRadioItems = [] %}
+        {% for option in assigneeFilterOptions %}
+          {% if option.conditional %}
+            {% set _ = assigneeRadioItems.push({
+              value: option.value,
+              text: option.text,
+              checked: option.checked,
+              conditional: { html: assigneeUserSelectHtml }
+            }) %}
+          {% else %}
+            {% set _ = assigneeRadioItems.push({
+              value: option.value,
+              text: option.text,
+              checked: option.checked
+            }) %}
+          {% endif %}
+        {% endfor %}
+
+        {{ govukRadios({
+          idPrefix: "filter-assignee",
+          name: "assigneeMode",
+          classes: "govuk-radios--small",
+          fieldset: { legend: { text: "Assignment", classes: "govuk-fieldset__legend--s" } },
+          items: assigneeRadioItems
+        }) }}
+
         <div class="govuk-button-group">
           {{ govukButton({ text: "Apply filters", attributes: { "data-testid": "work-items-filter-apply" } }) }}
           {% if hasFilters %}
@@ -85,7 +126,8 @@
               { text: item.typeDisplayName },
               { text: item.stateDisplayName },
               { text: item.submittedAt },
-              { text: item.submittedBy or "—" }
+              { text: item.submittedBy or "—" },
+              { text: item.assigneeDisplayName or "Unassigned" }
             ]) %}
           {% endfor %}
 
@@ -95,7 +137,8 @@
               { text: "Type" },
               { text: "State" },
               { text: "Submitted" },
-              { text: "Submitted by" }
+              { text: "Submitted by" },
+              { text: "Assigned to" }
             ],
             rows: rows,
             attributes: { "data-testid": "work-items-table" }

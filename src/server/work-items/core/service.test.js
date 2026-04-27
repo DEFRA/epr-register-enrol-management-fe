@@ -18,7 +18,8 @@ describe('createWorkItemActionsService', () => {
 
       expect(completeTask).toHaveBeenCalledWith({
         workItemId: 'abc',
-        taskId: 'check-eligibility'
+        taskId: 'check-eligibility',
+        user: null
       })
       expect(result).toEqual({ ok: true, workItem: { id: 'abc', stateId: 'submitted' } })
     })
@@ -112,6 +113,92 @@ describe('createWorkItemActionsService', () => {
       await expect(service.applyAction({ workItemId: 'abc', actionId: '' })).rejects.toThrow(
         /actionId/
       )
+    })
+  })
+
+  describe('assign', () => {
+    test('forwards the assignee and user to the API client', async () => {
+      const assign = vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: { id: 'abc', assignedToId: 'u-2', assignedToName: 'Bob' }
+      })
+      const service = createWorkItemActionsService({ assign })
+
+      const result = await service.assign({
+        workItemId: 'abc',
+        assigneeId: 'u-2',
+        assigneeName: 'Bob',
+        user: { id: 'u-1' }
+      })
+
+      expect(assign).toHaveBeenCalledWith({
+        workItemId: 'abc',
+        assigneeId: 'u-2',
+        assigneeName: 'Bob',
+        user: { id: 'u-1' }
+      })
+      expect(result.ok).toBe(true)
+      expect(result.workItem.assignedToId).toBe('u-2')
+    })
+
+    test('rejects when assigneeId is empty', async () => {
+      const service = createWorkItemActionsService({ assign: vi.fn() })
+      await expect(
+        service.assign({ workItemId: 'abc', assigneeId: '' })
+      ).rejects.toThrow(/assigneeId/)
+    })
+
+    test('translates a 403 into a not-authorized result', async () => {
+      const assign = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        problem: { detail: 'Standard user cannot assign to others' }
+      })
+      const service = createWorkItemActionsService({ assign })
+
+      const result = await service.assign({
+        workItemId: 'abc',
+        assigneeId: 'u-2'
+      })
+
+      expect(result.ok).toBe(false)
+      expect(result.reason).toBe('not-authorized')
+      expect(result.message).toContain('Standard user')
+    })
+  })
+
+  describe('unassign', () => {
+    test('forwards the user to the API client', async () => {
+      const unassign = vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: { id: 'abc', assignedToId: null }
+      })
+      const service = createWorkItemActionsService({ unassign })
+
+      const result = await service.unassign({
+        workItemId: 'abc',
+        user: { id: 'u-1' }
+      })
+
+      expect(unassign).toHaveBeenCalledWith({
+        workItemId: 'abc',
+        user: { id: 'u-1' }
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    test('translates a 403 into a not-authorized result', async () => {
+      const unassign = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        problem: { detail: 'Forbidden' }
+      })
+      const service = createWorkItemActionsService({ unassign })
+
+      const result = await service.unassign({ workItemId: 'abc' })
+
+      expect(result.ok).toBe(false)
+      expect(result.reason).toBe('not-authorized')
     })
   })
 })

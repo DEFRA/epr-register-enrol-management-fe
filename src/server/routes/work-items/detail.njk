@@ -4,6 +4,7 @@
 {% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
 {% from "govuk/components/task-list/macro.njk" import govukTaskList %}
 {% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/select/macro.njk" import govukSelect %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 
 {# ---------------------------------------------------------------- #}
@@ -41,9 +42,79 @@
           { key: { text: "Template version" }, value: { text: workItem.templateVersion } },
           { key: { text: "Submitted at" }, value: { text: workItem.submittedAt } },
           { key: { text: "Submitted by" }, value: { text: workItem.submittedBy or "—" } },
-          { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt } }
+          { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt } },
+          { key: { text: "Assigned to" }, value: { text: assignment.assignedToName or "Unassigned" } }
         ]
       }) }}
+
+      {# --------------------------- Assignment --------------------------- #}
+      {# RA-95. Assign-role users see a picker and re-assign / unassign    #}
+      {# buttons. Standard users see a "Take this work item" button only   #}
+      {# when the item is currently unassigned. Backend enforces the same  #}
+      {# rules — the BFF is just providing a sensible UI.                  #}
+      <h2 class="govuk-heading-m">Assignment</h2>
+      <div data-testid="work-item-assignment">
+        {% if assignment.canAssignAnyone %}
+          <form method="post"
+                action="/work-items/{{ workItem.id }}/assign"
+                class="govuk-!-margin-bottom-3"
+                novalidate>
+            {{ govukSelect({
+              id: "assign-assignee-id",
+              name: "assigneeId",
+              label: { text: "Assign to", classes: "govuk-label--s" },
+              items: assignment.assignableUsers,
+              attributes: { "data-testid": "assign-select" }
+            }) }}
+            <div class="govuk-button-group">
+              {{ govukButton({
+                text: assignment.isUnassigned and "Assign" or "Re-assign",
+                attributes: { "data-testid": "assign-submit" }
+              }) }}
+              {% if assignment.canUnassign %}
+                {# Distinct form so the unassign button doesn't carry the   #}
+                {# select payload.                                           #}
+              {% endif %}
+            </div>
+          </form>
+          {% if assignment.canUnassign %}
+            <form method="post"
+                  action="/work-items/{{ workItem.id }}/unassign"
+                  novalidate>
+              {{ govukButton({
+                text: "Unassign",
+                classes: "govuk-button--secondary",
+                attributes: { "data-testid": "unassign-submit" }
+              }) }}
+            </form>
+          {% endif %}
+        {% elif assignment.canSelfAssign %}
+          <form method="post"
+                action="/work-items/{{ workItem.id }}/assign"
+                novalidate>
+            <input type="hidden" name="assigneeId" value="{{ assignment.selfAssignUserId }}" />
+            {% if assignment.selfAssignUserName %}
+              <input type="hidden" name="assigneeName" value="{{ assignment.selfAssignUserName }}" />
+            {% endif %}
+            {{ govukButton({
+              text: "Take this work item",
+              attributes: { "data-testid": "self-assign-submit" }
+            }) }}
+          </form>
+        {% elif assignment.callerIsAssignee %}
+          <p class="govuk-body" data-testid="assignment-caller-is-assignee">
+            This work item is assigned to you.
+          </p>
+        {% else %}
+          <p class="govuk-body" data-testid="assignment-readonly">
+            {% if assignment.isUnassigned %}
+              This work item is not currently assigned.
+            {% else %}
+              This work item is assigned to {{ assignment.assignedToName }}.
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
 
       {# ------------------------------ Tasks ------------------------------ #}
       <h2 class="govuk-heading-m">Tasks</h2>

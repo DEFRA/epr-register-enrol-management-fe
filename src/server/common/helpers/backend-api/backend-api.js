@@ -6,12 +6,29 @@ import { createLogger } from '../logging/logger.js'
 const logger = createLogger()
 
 const COGNITO_CLIENT_ID_HEADER = 'x-cdp-cognito-client-id'
+const USER_ID_HEADER = 'x-cdp-user-id'
+const USER_NAME_HEADER = 'x-cdp-user-name'
+const USER_ROLES_HEADER = 'x-cdp-user-roles'
 
-function buildHeaders(extra = {}) {
+/**
+ * Build the headers attached to every backend call. The Cognito client id
+ * identifies the BFF *as a service* and is required (CDP itself adds it on
+ * service-to-service calls); the optional user-* headers forward the
+ * acting end-user's identity and role membership so the backend can make
+ * role-based decisions and produce useful audit lines.
+ */
+function buildHeaders(extra = {}, user = null) {
   const headers = { ...extra }
   const clientId = config.get('backendApi.cognitoClientId')
   if (clientId) {
     headers[COGNITO_CLIENT_ID_HEADER] = clientId
+  }
+  if (user) {
+    if (user.id) headers[USER_ID_HEADER] = String(user.id)
+    if (user.name) headers[USER_NAME_HEADER] = String(user.name)
+    if (Array.isArray(user.roles) && user.roles.length > 0) {
+      headers[USER_ROLES_HEADER] = user.roles.join(',')
+    }
   }
   return headers
 }
@@ -72,20 +89,31 @@ export async function getWorkItems({
   typeIds,
   stateIds,
   search,
+  assigneeId,
+  unassigned,
   page,
   pageSize,
+  user = null,
   baseUrl = config.get('backendApi.url'),
   timeoutMs = config.get('backendApi.timeoutMs'),
   fetchImpl = fetch
 } = {}) {
-  const url = buildWorkItemsUrl(baseUrl, { typeIds, stateIds, search, page, pageSize })
+  const url = buildWorkItemsUrl(baseUrl, {
+    typeIds,
+    stateIds,
+    search,
+    assigneeId,
+    unassigned,
+    page,
+    pageSize
+  })
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const response = await fetchImpl(url, {
       signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' })
+      headers: buildHeaders({ accept: 'application/json' }, user)
     })
 
     if (!response.ok) {
@@ -105,7 +133,7 @@ export async function getWorkItems({
   }
 }
 
-function buildWorkItemsUrl(baseUrl, { typeIds, stateIds, search, page, pageSize }) {
+function buildWorkItemsUrl(baseUrl, { typeIds, stateIds, search, assigneeId, unassigned, page, pageSize }) {
   const root = `${baseUrl.replace(/\/$/, '')}/work-items`
   const params = new URLSearchParams()
 
@@ -117,6 +145,12 @@ function buildWorkItemsUrl(baseUrl, { typeIds, stateIds, search, page, pageSize 
   }
   if (search && String(search).trim() !== '') {
     params.append('search', String(search).trim())
+  }
+  if (assigneeId && String(assigneeId).trim() !== '') {
+    params.append('assigneeId', String(assigneeId).trim())
+  }
+  if (unassigned === true) {
+    params.append('unassigned', 'true')
   }
   if (page != null && page !== '') params.append('page', String(page))
   if (pageSize != null && pageSize !== '') params.append('pageSize', String(pageSize))
@@ -166,6 +200,7 @@ function parseWorkItemsBody(body) {
  */
 export async function getWorkItem({
   workItemId,
+  user = null,
   baseUrl = config.get('backendApi.url'),
   timeoutMs = config.get('backendApi.timeoutMs'),
   fetchImpl = fetch
@@ -177,7 +212,7 @@ export async function getWorkItem({
   try {
     const response = await fetchImpl(url, {
       signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' })
+      headers: buildHeaders({ accept: 'application/json' }, user)
     })
 
     if (response.status === 404) {
@@ -213,12 +248,13 @@ export async function getWorkItem({
 export async function completeWorkItemTask({
   workItemId,
   taskId,
+  user = null,
   baseUrl = config.get('backendApi.url'),
   timeoutMs = config.get('backendApi.timeoutMs'),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/tasks/${encodeURIComponent(taskId)}/complete`
-  return postJson({ url, timeoutMs, fetchImpl, label: 'completeWorkItemTask' })
+  return postJson({ url, timeoutMs, fetchImpl, user, label: 'completeWorkItemTask' })
 }
 
 /**
@@ -228,24 +264,70 @@ export async function completeWorkItemTask({
 export async function applyWorkItemAction({
   workItemId,
   actionId,
+  user = null,
   baseUrl = config.get('backendApi.url'),
   timeoutMs = config.get('backendApi.timeoutMs'),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/actions/${encodeURIComponent(actionId)}`
-  return postJson({ url, timeoutMs, fetchImpl, label: 'applyWorkItemAction' })
+  return postJson({ url, timeoutMs, fetchImpl, user, label: 'applyWorkItemAction' })
 }
 
-async function postJson({ url, timeoutMs, fetchImpl, label }) {
+/**
+ * Assign (or re-assign) a work item to a user. The backend enforces the
+ * role-based rules; this client just forwards the request and the acting
+ * user's identity / roles.
+ *
+ * Same response shape as {@link completeWorkItemTask}, with the addition
+ * that a 403 reaches the caller as `{ ok: false, status: 403, problem }` —
+ * the caller's service layer maps that to a `not-authorized` reason.
+ */
+export async function assignWorkItem({
+  workItemId,
+  assigneeId,
+  assigneeName,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/assign`
+  return postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'assignWorkItem',
+    body: { assigneeId, assigneeName: assigneeName ?? null }
+  })
+}
+
+export async function unassignWorkItem({
+  workItemId,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/unassign`
+  return postJson({ url, timeoutMs, fetchImpl, user, label: 'unassignWorkItem' })
+}
+
+async function postJson({ url, timeoutMs, fetchImpl, user, label, body = null }) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const response = await fetchImpl(url, {
+    const requestInit = {
       method: 'POST',
       signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' })
-    })
+      headers: buildHeaders({ accept: 'application/json' }, user)
+    }
+    if (body != null) {
+      requestInit.headers['content-type'] = 'application/json'
+      requestInit.body = JSON.stringify(body)
+    }
+    const response = await fetchImpl(url, requestInit)
 
     if (!response.ok) {
       // Try to surface a problem-details body so callers can render the

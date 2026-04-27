@@ -12,7 +12,9 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getWorkItem: vi.fn(),
   getWorkItems: vi.fn(),
   completeWorkItemTask: vi.fn(),
-  applyWorkItemAction: vi.fn()
+  applyWorkItemAction: vi.fn(),
+  assignWorkItem: vi.fn(),
+  unassignWorkItem: vi.fn()
 }))
 
 const { getWorkItems } = await import(
@@ -278,5 +280,73 @@ describe('#workItemListController', () => {
       expect.stringContaining('No work items match your filters.')
     )
     expect(result).toEqual(expect.stringContaining('Clear filters'))
+  })
+
+  test('Translates assigneeMode=mine into the signed-in user id', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?assigneeMode=mine'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // Default test user is the assign-role stub user.
+        assigneeId: 'test-assign-id',
+        unassigned: false
+      })
+    )
+  })
+
+  test('Translates assigneeMode=unassigned into unassigned=true', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?assigneeMode=unassigned'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({ assigneeId: null, unassigned: true })
+    )
+  })
+
+  test('Translates assigneeMode=user with assigneeUserId into a backend assigneeId filter', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?assigneeMode=user&assigneeUserId=u-9'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({ assigneeId: 'u-9', unassigned: false })
+    )
+  })
+
+  test('Drops unknown assigneeMode values silently', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?assigneeMode=ghost'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({ assigneeId: null, unassigned: false })
+    )
+  })
+
+  test('Forwards the signed-in user to the backend client so identity headers are sent', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({ method: 'GET', url: '/work-items' })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user: expect.objectContaining({ id: expect.any(String) })
+      })
+    )
   })
 })
