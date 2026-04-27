@@ -77,7 +77,8 @@ describe('context and cache', () => {
             }
           ],
           serviceName: 'EPR Register Case Management',
-          serviceUrl: '/'
+          serviceUrl: '/',
+          user: null
         })
       })
 
@@ -171,7 +172,8 @@ describe('context and cache', () => {
             }
           ],
           serviceName: 'EPR Register Case Management',
-          serviceUrl: '/'
+          serviceUrl: '/',
+          user: null
         })
       })
     })

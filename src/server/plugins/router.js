@@ -28,11 +28,26 @@ export const router = {
             appType: 'custom'
           })
 
-          await server.register({
-            plugin: (await import('@defra/hapi-connect')).default,
-            options: {
-              path: '/public',
-              middleware: [vite.middlewares]
+          const { finished } = await import('node:stream/promises')
+          const connectMod = (await import('connect')).default
+
+          const app = connectMod()
+          app.use('/public', vite.middlewares)
+
+          server.route({
+            method: '*',
+            path: '/public/{param*}',
+            options: { auth: false },
+            handler: async (request, h) => {
+              const { req, res } = request.raw
+              const { promise: next, resolve: resolveNext } =
+                Promise.withResolvers()
+              app(req, res, () => resolveNext(true))
+              const nextCalled = await Promise.race([finished(res), next])
+              if (nextCalled) {
+                return h.response().code(404)
+              }
+              return h.abandon
             }
           })
         })()

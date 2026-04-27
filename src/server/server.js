@@ -15,6 +15,9 @@ import { getCacheEngine } from './common/helpers/session-cache/cache-engine.js'
 import { secureContext } from '@defra/hapi-secure-context'
 import { contentSecurityPolicy } from './plugins/content-security-policy.js'
 import { metrics } from '@defra/cdp-metrics'
+import { authPlugin } from './common/helpers/auth/auth-plugin.js'
+import { stubAuthPlugin } from './common/helpers/auth/stub-auth-plugin.js'
+import { authRoutes } from './routes/auth/index.js'
 
 export async function createServer() {
   setupProxy()
@@ -54,6 +57,11 @@ export async function createServer() {
       strictHeader: false
     }
   })
+  const authToRegister =
+    config.get('auth.stubEnabled') || config.get('isTest')
+      ? stubAuthPlugin
+      : authPlugin
+
   await server.register([
     requestLogger,
     requestTracing,
@@ -61,9 +69,11 @@ export async function createServer() {
     secureContext,
     pulse,
     sessionCache,
+    authToRegister,
     nunjucksConfig,
     Scooter,
     contentSecurityPolicy,
+    authRoutes,
     router // Register all the controllers/routes defined in src/server/router.js
   ])
 

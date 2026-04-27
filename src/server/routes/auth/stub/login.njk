@@ -1,0 +1,51 @@
+{% extends 'layouts/page.njk' %}
+
+{% block content %}
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1 class="govuk-heading-l">Stub Login</h1>
+      <p class="govuk-body">
+        This is a development stub. Select a user to log in as.
+      </p>
+
+      {% if error %}
+        <div class="govuk-error-summary">
+          <h2 class="govuk-error-summary__title">There is a problem</h2>
+          <div class="govuk-error-summary__body">
+            <ul class="govuk-list govuk-error-summary__list">
+              <li>{{ error }}</li>
+            </ul>
+          </div>
+        </div>
+      {% endif %}
+
+      <form method="POST" action="/auth/stub/login">
+        <div class="govuk-form-group">
+          <fieldset class="govuk-fieldset">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+              <h2 class="govuk-fieldset__heading">Select a regulator user</h2>
+            </legend>
+            <div class="govuk-radios">
+              {% for user in users %}
+                <div class="govuk-radios__item">
+                  <input
+                    class="govuk-radios__input"
+                    id="user-{{ loop.index }}"
+                    name="userId"
+                    type="radio"
+                    value="{{ user.id }}"
+                  >
+                  <label class="govuk-label govuk-radios__label" for="user-{{ loop.index }}">
+                    {{ user.name }} ({{ user.roles | join(', ') }})
+                  </label>
+                </div>
+              {% endfor %}
+            </div>
+          </fieldset>
+        </div>
+
+        <button class="govuk-button" type="submit">Log in</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}
