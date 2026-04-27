@@ -280,3 +280,31 @@ delete UI by design.
 - Author display falls back through `createdByName → createdBy → "Unknown"`
   so a note remains attributable even if the user-name header was missing
   at write time.
+
+## Audit log (RA-97)
+
+The detail page renders a framework-provided **audit log** below the notes
+section showing every state-changing action that has occurred against the
+work item: task completions, action applications, assignment changes,
+notes added. Modules inherit the timeline for free — they do not
+register anything to opt in.
+
+### Wiring
+
+| Layer | What it does |
+| --- | --- |
+| `backend-api.js` `getWorkItem` | The backend already includes `auditLog` (oldest-first) on the `WorkItemResponse`; nothing new to call. |
+| `core/audit-log.js` `decorateAuditLog(entries)` | Adds a one-line `summary` per entry derived from its `details` (e.g. task display name, `from → to` state, assignee name change). Pure helper. |
+| `routes/work-items/detail.controller.js` `decorate()` | Calls `decorateAuditLog` so the template gets `workItem.auditLog` ready to render. |
+| `routes/work-items/detail.njk` | Renders entries as an ordered list under the **Audit log** heading, in the order the backend projected them (chronological, oldest-first). |
+
+### Conventions
+
+- The backend is the source of truth for ordering — the frontend never
+  re-sorts. If a project ever wants newest-first, change the backend
+  projection (and the docs above).
+- Author display falls back through `createdByName → createdBy → "System"`.
+- The summary is **derived**, not authored: if a new action or a new
+  detail key is added on the backend, extend `summariseAuditEntry` so the
+  template stays declarative.
+

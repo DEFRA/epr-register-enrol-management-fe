@@ -2,6 +2,7 @@ import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
+import { decorateAuditLog } from '#/server/work-items/core/audit-log.js'
 import {
   findAssignableUser,
   getAssignableUsers
@@ -330,7 +331,8 @@ function decorate(workItem) {
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
     payloadJson: safeStringify(workItem.payload),
-    assigneeDisplayName: workItem.assignedToName ?? workItem.assignedToId ?? null
+    assigneeDisplayName: workItem.assignedToName ?? workItem.assignedToId ?? null,
+    auditLog: decorateAuditLog(workItem.auditLog)
   }
 }
 
