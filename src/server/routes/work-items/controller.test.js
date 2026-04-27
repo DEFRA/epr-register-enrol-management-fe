@@ -14,7 +14,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   completeWorkItemTask: vi.fn(),
   applyWorkItemAction: vi.fn(),
   assignWorkItem: vi.fn(),
-  unassignWorkItem: vi.fn()
+  unassignWorkItem: vi.fn(),
+  addWorkItemNote: vi.fn()
 }))
 
 const { getWorkItems } = await import(

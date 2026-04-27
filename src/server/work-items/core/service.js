@@ -1,4 +1,5 @@
 import {
+  addWorkItemNote,
   applyWorkItemAction,
   assignWorkItem,
   completeWorkItemTask,
@@ -26,7 +27,8 @@ export function createWorkItemActionsService({
   completeTask = completeWorkItemTask,
   applyAction = applyWorkItemAction,
   assign = assignWorkItem,
-  unassign = unassignWorkItem
+  unassign = unassignWorkItem,
+  addNote = addWorkItemNote
 } = {}) {
   return {
     /**
@@ -69,6 +71,25 @@ export function createWorkItemActionsService({
     async unassign({ workItemId, user = null }) {
       assertId(workItemId, 'workItemId')
       const result = await unassign({ workItemId, user })
+      return toResult(result)
+    },
+
+    /**
+     * Append a free-text note (RA-96) to a work item. The backend snapshots
+     * the acting user's identity onto the note for an immutable audit
+     * narrative; the BFF just forwards the text and lets the backend
+     * validate (blank text / over-length) so the rules live in one place.
+     */
+    async addNote({ workItemId, text, user = null }) {
+      assertId(workItemId, 'workItemId')
+      if (typeof text !== 'string' || text.trim() === '') {
+        return {
+          ok: false,
+          reason: 'invalid',
+          message: 'Note text is required.'
+        }
+      }
+      const result = await addNote({ workItemId, text: text.trim(), user })
       return toResult(result)
     }
   }

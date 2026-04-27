@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
 
 import {
+  addWorkItemNote,
   applyWorkItemAction,
   assignWorkItem,
   completeWorkItemTask,
@@ -564,5 +565,72 @@ describe('#unassignWorkItem', () => {
       expect.objectContaining({ method: 'POST' })
     )
     expect(result).toEqual({ ok: true, workItem })
+  })
+})
+
+describe('#addWorkItemNote', () => {
+  test('POSTs the note text body to the notes endpoint with user headers', async () => {
+    const workItem = {
+      id: 'abc',
+      notes: [
+        {
+          id: 'n-1',
+          text: 'hello',
+          createdAt: '2026-04-27T12:00:00Z',
+          createdBy: 'u-1',
+          createdByName: 'Alice'
+        }
+      ]
+    }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await addWorkItemNote({
+      workItemId: 'abc',
+      text: 'hello',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/abc/notes',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ text: 'hello' }),
+        headers: expect.objectContaining({
+          'content-type': 'application/json',
+          'x-cdp-user-id': 'u-1',
+          'x-cdp-user-name': 'Alice'
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('Surfaces a 400 with the problem detail so callers can render the engine reason', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ detail: 'Note text is required.' })
+    })
+
+    const result = await addWorkItemNote({
+      workItemId: 'abc',
+      text: '',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      status: 400,
+      problem: { detail: 'Note text is required.' }
+    })
   })
 })

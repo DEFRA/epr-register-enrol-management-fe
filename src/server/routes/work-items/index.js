@@ -1,5 +1,6 @@
 import { workItemListController } from './controller.js'
 import {
+  makeAddNoteController,
   makeApplyActionController,
   makeAssignController,
   makeCompleteTaskController,
@@ -60,6 +61,13 @@ export const workItems = {
           method: 'POST',
           path: '/work-items/{id}/unassign',
           ...makeUnassignController()
+        },
+        {
+          // Add a note (RA-96). Open to any authenticated user; the backend
+          // snapshots the acting user's identity onto the note.
+          method: 'POST',
+          path: '/work-items/{id}/notes',
+          ...makeAddNoteController()
         }
       ])
     }

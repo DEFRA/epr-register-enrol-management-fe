@@ -313,6 +313,32 @@ export async function unassignWorkItem({
   return postJson({ url, timeoutMs, fetchImpl, user, label: 'unassignWorkItem' })
 }
 
+/**
+ * Append a free-text note to a work item (RA-96). The backend snapshots
+ * the acting user's id and name (forwarded via the standard user-* headers)
+ * onto the note for an immutable audit narrative. Same response shape as
+ * {@link completeWorkItemTask} — the updated `WorkItemResponse`, including
+ * the freshly-appended note projected newest-first under `notes`.
+ */
+export async function addWorkItemNote({
+  workItemId,
+  text,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/notes`
+  return postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'addWorkItemNote',
+    body: { text }
+  })
+}
+
 async function postJson({ url, timeoutMs, fetchImpl, user, label, body = null }) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)

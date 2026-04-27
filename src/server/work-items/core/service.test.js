@@ -201,4 +201,83 @@ describe('createWorkItemActionsService', () => {
       expect(result.reason).toBe('not-authorized')
     })
   })
+
+  describe('addNote', () => {
+    test('forwards trimmed text and user to the API client and returns the updated work item', async () => {
+      const addNote = vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: {
+          id: 'abc',
+          notes: [{ id: 'n-1', text: 'hello', createdBy: 'alice-1' }]
+        }
+      })
+      const service = createWorkItemActionsService({ addNote })
+
+      const result = await service.addNote({
+        workItemId: 'abc',
+        text: '  hello  ',
+        user: { id: 'alice-1', name: 'Alice' }
+      })
+
+      expect(addNote).toHaveBeenCalledWith({
+        workItemId: 'abc',
+        text: 'hello',
+        user: { id: 'alice-1', name: 'Alice' }
+      })
+      expect(result.ok).toBe(true)
+      expect(result.workItem.notes).toHaveLength(1)
+    })
+
+    test('rejects blank text locally without calling the API client', async () => {
+      const addNote = vi.fn()
+      const service = createWorkItemActionsService({ addNote })
+
+      const result = await service.addNote({ workItemId: 'abc', text: '   ' })
+
+      expect(addNote).not.toHaveBeenCalled()
+      expect(result).toEqual({
+        ok: false,
+        reason: 'invalid',
+        message: 'Note text is required.'
+      })
+    })
+
+    test('translates a 400 from the backend (e.g. over-length) into an invalid result', async () => {
+      const addNote = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        problem: { detail: 'Note text must be 4000 characters or fewer.' }
+      })
+      const service = createWorkItemActionsService({ addNote })
+
+      const result = await service.addNote({
+        workItemId: 'abc',
+        text: 'long-text'
+      })
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'invalid',
+        status: 400,
+        message: 'Note text must be 4000 characters or fewer.'
+      })
+    })
+
+    test('translates a 404 into a not-found result', async () => {
+      const addNote = vi.fn().mockResolvedValue({ ok: false, status: 404 })
+      const service = createWorkItemActionsService({ addNote })
+
+      const result = await service.addNote({ workItemId: 'abc', text: 'hi' })
+
+      expect(result.ok).toBe(false)
+      expect(result.reason).toBe('not-found')
+    })
+
+    test('rejects an empty workItemId', async () => {
+      const service = createWorkItemActionsService({ addNote: vi.fn() })
+      await expect(
+        service.addNote({ workItemId: '', text: 'x' })
+      ).rejects.toThrow(/workItemId/)
+    })
+  })
 })

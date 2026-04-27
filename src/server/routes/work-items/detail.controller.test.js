@@ -18,7 +18,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getWorkItem: vi.fn(),
   getWorkItems: vi.fn(),
   completeWorkItemTask: vi.fn(),
-  applyWorkItemAction: vi.fn()
+  applyWorkItemAction: vi.fn(),
+  addWorkItemNote: vi.fn()
 }))
 
 const {
@@ -27,7 +28,8 @@ const {
   completeWorkItemTask,
   applyWorkItemAction,
   assignWorkItem,
-  unassignWorkItem
+  unassignWorkItem,
+  addWorkItemNote
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '11111111-1111-1111-1111-111111111111'
@@ -82,6 +84,7 @@ describe('#workItemDetailController', () => {
     applyWorkItemAction.mockReset()
     assignWorkItem.mockReset()
     unassignWorkItem.mockReset()
+    addWorkItemNote.mockReset()
     clearWorkItemRegistry()
     clearDetailTemplateRegistry()
   })
@@ -357,6 +360,131 @@ describe('#workItemDetailController', () => {
         workItemId: ID,
         user: expect.objectContaining({ id: expect.any(String) })
       })
+    )
+  })
+
+  test('Renders the notes section with existing notes newest-first as projected by the backend', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        notes: [
+          {
+            id: '22222222-2222-2222-2222-222222222222',
+            text: 'Newer note from Alice',
+            createdAt: '2026-04-27T11:00:00Z',
+            createdBy: 'alice-1',
+            createdByName: 'Alice Example'
+          },
+          {
+            id: '33333333-3333-3333-3333-333333333333',
+            text: 'Older note from Bob',
+            createdAt: '2026-04-27T09:00:00Z',
+            createdBy: 'bob-2',
+            createdByName: 'Bob Example'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Newer note from Alice'))
+    expect(result).toEqual(expect.stringContaining('Older note from Bob'))
+    expect(result).toEqual(expect.stringContaining('Alice Example'))
+    // Newest-first ordering: newer note's text appears before the older one.
+    expect(result.indexOf('Newer note from Alice')).toBeLessThan(
+      result.indexOf('Older note from Bob')
+    )
+    // Add-note form is always rendered.
+    expect(result).toEqual(
+      expect.stringContaining(`/work-items/${ID}/notes`)
+    )
+    expect(result).toEqual(expect.stringContaining('Add a note'))
+  })
+
+  test('Renders an empty-notes message when no notes exist', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ notes: [] })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(
+      expect.stringContaining('No notes have been added to this work item')
+    )
+  })
+
+  test('POST notes forwards trimmed text to the backend and redirects on success', async () => {
+    addWorkItemNote.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem()
+    })
+
+    const { statusCode, headers } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/notes`,
+      payload: 'text=  Spoke to applicant.  ',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' }
+    })
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}#notes`)
+    expect(addWorkItemNote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workItemId: ID,
+        text: 'Spoke to applicant.',
+        user: expect.objectContaining({ id: expect.any(String) })
+      })
+    )
+  })
+
+  test('POST notes with blank text re-renders detail with an inline error and does not call the backend', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/notes`,
+      payload: 'text=   ',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' }
+    })
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toEqual(expect.stringContaining('Could not add note'))
+    expect(result).toEqual(expect.stringContaining('Note text is required'))
+    expect(addWorkItemNote).not.toHaveBeenCalled()
+  })
+
+  test('POST notes surfaces a backend 400 (e.g. over-length) inline', async () => {
+    registerReaccreditation()
+    addWorkItemNote.mockResolvedValue({
+      ok: false,
+      status: 400,
+      problem: { detail: 'Note text must be 4000 characters or fewer.' }
+    })
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/notes`,
+      payload: 'text=non-empty-but-rejected-by-backend',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' }
+    })
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toEqual(
+      expect.stringContaining('Note text must be 4000 characters or fewer.')
     )
   })
 })

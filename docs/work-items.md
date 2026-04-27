@@ -254,3 +254,29 @@ modes (radio buttons), encoded into `assigneeMode`:
 The assign controller resolves the snapshot display name from the
 assignable-users directory so the backend always receives a canonical
 `assigneeName` even when the form omitted it.
+
+## Notes (RA-96)
+
+The detail page renders the framework-level **notes** an assessor has
+attached to the work item, plus a single-textarea form for adding a new
+one. Notes are an append-only audit narrative — there is no edit or
+delete UI by design.
+
+### Wiring
+
+| Layer | What it does |
+| --- | --- |
+| `backend-api.js` `addWorkItemNote({ workItemId, text, user })` | POSTs `{ text }` to `/work-items/{id}/notes` with the user-* headers. |
+| `core/service.js` `service.addNote({ workItemId, text, user })` | Validates locally for blank text (so we don't round-trip an obviously-bad request), trims, calls the API client, returns the framework's standard `{ ok, reason, message }` shape. |
+| `routes/work-items/detail.controller.js` `makeAddNoteController()` | Wired at `POST /work-items/{id}/notes`. PRG-redirects to `/work-items/{id}#notes` on success; re-renders the detail page with an inline notification banner on validation failure. |
+| `routes/work-items/detail.njk` | Renders existing notes (newest-first as the backend projects them) plus a `govukCharacterCount` form (`maxlength: 4000` mirrors `WorkItemService.MaxNoteLength`). |
+
+### Conventions
+
+- The detail template is intentionally permissive — every authenticated
+  user sees the add-note form. Authorization is the backend's job.
+- Note text is rendered with `white-space: pre-wrap` so line breaks the
+  assessor entered are preserved without enabling HTML.
+- Author display falls back through `createdByName → createdBy → "Unknown"`
+  so a note remains attributable even if the user-name header was missing
+  at write time.

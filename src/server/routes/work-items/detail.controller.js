@@ -163,6 +163,40 @@ export function makeUnassignController({
   }
 }
 
+/**
+ * Append a note (RA-96) to a work item. The form posts a single `text`
+ * field; the controller forwards it through the framework service object
+ * and PRG-redirects on success so refresh is harmless. Validation errors
+ * (blank or over-length) come back as `reason: 'invalid'` and are surfaced
+ * inline by the same notification banner used by the other action handlers.
+ */
+export function makeAddNoteController({
+  service = createWorkItemActionsService()
+} = {}) {
+  return {
+    async handler(request, h) {
+      const id = request.params.id
+      const payload = request.payload ?? {}
+      const text = typeof payload.text === 'string' ? payload.text : ''
+      const result = await service.addNote({
+        workItemId: id,
+        text,
+        user: getUser(request)
+      })
+      if (result.ok) {
+        return h.redirect(`/work-items/${encodeURIComponent(id)}#notes`)
+      }
+      return renderDetailFromResult({
+        request,
+        h,
+        id,
+        result,
+        actionLabel: 'add note'
+      })
+    }
+  }
+}
+
 async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   const id = request.params.id
   const user = getUser(request)
