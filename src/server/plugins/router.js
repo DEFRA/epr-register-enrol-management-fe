@@ -5,6 +5,8 @@ import { about } from '../routes/about/index.js'
 import { backendStatus } from '../routes/backend-status/index.js'
 import { health } from '../routes/health/index.js'
 import { serveStaticFiles } from './serve-static-files.js'
+import { workItemsPlugin } from '../work-items/core/plugin.js'
+import { workItemModules } from '../work-items/modules.js'
 import { config } from '#/config/config.js'
 
 export const router = {
@@ -18,6 +20,9 @@ export const router = {
 
       // Application specific routes, add your own routes here
       await server.register([home, about, backendStatus])
+
+      // Work item modules — see src/server/work-items/modules.js
+      await server.register(workItemsPlugin(workItemModules))
 
       // Static assets
       if (!config.get('isProduction') && !config.get('isTest')) {
