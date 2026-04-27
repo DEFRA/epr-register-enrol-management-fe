@@ -4,6 +4,7 @@ import {
   applyWorkItemAction,
   completeWorkItemTask,
   getBackendHealth,
+  getWorkItem,
   getWorkItems
 } from './backend-api.js'
 
@@ -330,5 +331,112 @@ describe('#applyWorkItemAction', () => {
     })
 
     expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
+  })
+})
+
+describe('#getWorkItem', () => {
+  test('GETs the single-item endpoint and returns the work item', async () => {
+    const workItem = {
+      id: 'abc',
+      typeId: 're-accreditation',
+      stateId: 'submitted',
+      templateVersion: 'v1',
+      tasks: [],
+      availableActions: []
+    }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await getWorkItem({
+      workItemId: 'abc',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/abc',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        headers: expect.objectContaining({
+          accept: 'application/json',
+          'x-cdp-cognito-client-id': expect.any(String)
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('Returns ok=false with status=404 when the work item does not exist', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({})
+    })
+
+    const result = await getWorkItem({
+      workItemId: 'missing',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({ ok: false, status: 404 })
+  })
+
+  test('Returns ok=false with status and message on other 5xx', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve({})
+    })
+
+    const result = await getWorkItem({
+      workItemId: 'abc',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      status: 503,
+      error: 'Backend returned 503'
+    })
+  })
+
+  test('Returns transport error when fetch throws', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+
+    const result = await getWorkItem({
+      workItemId: 'abc',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
+  })
+
+  test('URL-encodes the work item id', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({})
+    })
+
+    await getWorkItem({
+      workItemId: 'a/b c',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      'http://backend:8085/work-items/a%2Fb%20c'
+    )
   })
 })

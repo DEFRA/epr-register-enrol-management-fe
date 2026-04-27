@@ -1,0 +1,111 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+{% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
+{% from "govuk/components/task-list/macro.njk" import govukTaskList %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+
+{# ---------------------------------------------------------------- #}
+{# Generic work item detail template.                                #}
+{#                                                                   #}
+{# Used as the fallback when the work item's `(typeId,                #}
+{# templateVersion)` pair has no module-specific template registered. #}
+{# Renders the envelope (id, type, state, submitter, payload), the   #}
+{# tasks projected by the engine, and the available actions, all in  #}
+{# GOV.UK Design System macros only — no JavaScript dependency.       #}
+{# ---------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItem.id
+  }) }}
+
+  {% if notice %}
+    {{ govukNotificationBanner({
+      type: notice.kind == 'error' and 'important' or 'success',
+      titleText: notice.title or (notice.kind == 'error' and 'There was a problem' or 'Success'),
+      text: notice.message
+    }) }}
+  {% endif %}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      {{ govukSummaryList({
+        attributes: { "data-testid": "work-item-summary" },
+        rows: [
+          { key: { text: "Id" },           value: { text: workItem.id } },
+          { key: { text: "Type" },         value: { text: workItem.typeDisplayName } },
+          { key: { text: "State" },        value: { text: workItem.stateDisplayName } },
+          { key: { text: "Template version" }, value: { text: workItem.templateVersion } },
+          { key: { text: "Submitted at" }, value: { text: workItem.submittedAt } },
+          { key: { text: "Submitted by" }, value: { text: workItem.submittedBy or "—" } },
+          { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt } }
+        ]
+      }) }}
+
+      {# ------------------------------ Tasks ------------------------------ #}
+      <h2 class="govuk-heading-m">Tasks</h2>
+
+      {% if workItem.tasks and workItem.tasks.length > 0 %}
+        <ul class="govuk-list" data-testid="work-item-tasks">
+          {% for task in workItem.tasks %}
+            <li class="govuk-!-margin-bottom-3" data-testid="work-item-task-{{ task.taskId }}">
+              <span class="govuk-!-margin-right-2">{{ task.displayName }}</span>
+              {% if task.isComplete %}
+                {{ govukTag({ text: "Complete", classes: "govuk-tag--green" }) }}
+              {% else %}
+                {{ govukTag({ text: "Incomplete", classes: "govuk-tag--blue" }) }}
+                <form method="post"
+                      action="/work-items/{{ workItem.id }}/tasks/{{ task.taskId }}/complete"
+                      class="govuk-!-display-inline-block govuk-!-margin-left-2"
+                      novalidate>
+                  {{ govukButton({
+                    text: "Mark complete",
+                    classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+                    attributes: { "data-testid": "complete-task-" + task.taskId }
+                  }) }}
+                </form>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="govuk-body" data-testid="work-item-no-tasks">
+          No tasks are required for this work item in its current state.
+        </p>
+      {% endif %}
+
+      {# ---------------------------- Actions ----------------------------- #}
+      <h2 class="govuk-heading-m">Actions</h2>
+
+      {% if workItem.availableActions and workItem.availableActions.length > 0 %}
+        <div class="govuk-button-group" data-testid="work-item-actions">
+          {% for action in workItem.availableActions %}
+            <form method="post"
+                  action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
+                  class="govuk-!-display-inline-block"
+                  novalidate>
+              {{ govukButton({
+                text: action.displayName,
+                classes: action.actionId == 'reject' and 'govuk-button--warning' or '',
+                attributes: { "data-testid": "action-" + action.actionId }
+              }) }}
+            </form>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="govuk-body" data-testid="work-item-no-actions">
+          No actions are currently available for this work item.
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="govuk-grid-column-one-third">
+      <h2 class="govuk-heading-s">Payload</h2>
+      <pre class="govuk-!-font-size-14"
+           data-testid="work-item-payload"><code>{{ workItem.payloadJson }}</code></pre>
+    </div>
+  </div>
+{% endblock %}

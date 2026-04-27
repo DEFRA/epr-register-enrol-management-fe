@@ -1,0 +1,16 @@
+{% extends 'layouts/page.njk' %}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItemId
+  }) }}
+
+  <p class="govuk-body" data-testid="work-item-not-found">
+    No work item exists with id <strong>{{ workItemId }}</strong>.
+  </p>
+
+  <p class="govuk-body">
+    <a class="govuk-link" href="/work-items">Back to all work items</a>
+  </p>
+{% endblock %}

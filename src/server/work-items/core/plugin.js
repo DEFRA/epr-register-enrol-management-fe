@@ -3,6 +3,7 @@ import {
   registerWorkItemType
 } from './registry.js'
 import { assertValidWorkItemModule } from './module.js'
+import { clearDetailTemplateRegistry } from './templates.js'
 
 /**
  * Hapi plugin that registers a list of work item modules with the server.
@@ -13,8 +14,9 @@ import { assertValidWorkItemModule } from './module.js'
  *   3. Its `register(server)` callback is awaited so it can mount routes,
  *      view paths and any module-scoped state.
  *
- * The registry is cleared on every plugin registration so repeated
- * `createServer()` calls (as happens in tests) don't accumulate stale types.
+ * The work item and detail-template registries are cleared on every plugin
+ * registration so repeated `createServer()` calls (as happens in tests)
+ * don't accumulate stale types or templates.
  *
  * Adding a new work item type to the application requires only adding its
  * module to `src/server/work-items/modules.js` — no changes to this plugin
@@ -25,6 +27,7 @@ export const workItemsPlugin = (modules) => ({
     name: 'work-items',
     async register(server) {
       clearWorkItemRegistry()
+      clearDetailTemplateRegistry()
       for (const mod of modules) {
         assertValidWorkItemModule(mod)
         registerWorkItemType(mod.type)

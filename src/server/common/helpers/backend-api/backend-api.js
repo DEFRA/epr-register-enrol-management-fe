@@ -154,6 +154,53 @@ function parseWorkItemsBody(body) {
 }
 
 /**
+ * Fetch a single work item by id.
+ *
+ * Returns the backend's `WorkItemResponse` shape so the caller can render
+ * the full envelope (id, type, state, payload, templateVersion) plus engine
+ * projection (tasks, availableActions). Result shape:
+ *  - { ok: true, workItem }                  on success
+ *  - { ok: false, status: 404 }              when no work item exists
+ *  - { ok: false, status, error }            on other 4xx/5xx
+ *  - { ok: false, error }                    on transport errors
+ */
+export async function getWorkItem({
+  workItemId,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(url, {
+      signal: controller.signal,
+      headers: buildHeaders({ accept: 'application/json' })
+    })
+
+    if (response.status === 404) {
+      return { ok: false, status: 404 }
+    }
+    if (!response.ok) {
+      return { ok: false, status: response.status, error: `Backend returned ${response.status}` }
+    }
+
+    const workItem = await response.json()
+    return { ok: true, workItem }
+  } catch (error) {
+    logger.warn({ err: error, url }, 'Backend API getWorkItem failed')
+    return {
+      ok: false,
+      error: error.name === 'AbortError' ? 'Request timed out' : error.message
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * Mark a task as complete on a work item.
  *
  * The backend's task & state engine validates the call and replies with the

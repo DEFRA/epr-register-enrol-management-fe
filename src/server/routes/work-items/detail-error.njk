@@ -1,0 +1,19 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItemId
+  }) }}
+
+  {{ govukNotificationBanner({
+    titleText: "Could not reach the backend",
+    html: '<p class="govuk-notification-banner__heading" data-testid="work-item-detail-error">' + (error or "Unknown error") + '</p>'
+  }) }}
+
+  <p class="govuk-body">
+    <a class="govuk-link" href="/work-items">Back to all work items</a>
+  </p>
+{% endblock %}

@@ -81,7 +81,7 @@
           {% set rows = [] %}
           {% for item in items %}
             {% set _ = rows.push([
-              { text: item.id },
+              { html: '<a class="govuk-link" href="/work-items/' + item.id + '" data-testid="work-item-link-' + item.id + '">' + item.id + '</a>' },
               { text: item.typeDisplayName },
               { text: item.stateDisplayName },
               { text: item.submittedAt },

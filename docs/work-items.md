@@ -129,3 +129,74 @@ bookmarked URLs from before a module was removed still render.
 - `clearWorkItemRegistry` is intended for tests and for the plugin itself,
   which calls it at the start of every registration so repeated `createServer()`
   calls in tests do not accumulate stale types.
+
+## Detail view & template versioning (RA-94)
+
+The detail view at `/work-items/{id}` is a generic page mounted by
+`src/server/routes/work-items/` that renders **any** work item, regardless
+of type, by reading the projection returned by the backend. The same
+controller handles three operations:
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET`  | `/work-items/{id}` | Render the detail view: envelope summary, current task list and available actions. |
+| `POST` | `/work-items/{id}/tasks/{taskId}/complete` | Mark a task complete, then PRG-redirect back to the detail view. On engine failure, re-renders in place with a notification banner. |
+| `POST` | `/work-items/{id}/actions/{actionId}` | Apply a named action (e.g. `approve`, `reject`), then PRG-redirect. Same in-place error rendering. |
+
+POST handlers go through `createWorkItemActionsService()`, which wraps the
+backend HTTP calls and returns a typed result the controller switches on
+(`{ ok: true, workItem }`, `{ ok: false, reason: 'not-allowed', status,
+message }`, `{ ok: false, reason: 'invalid', status, message }`, etc.).
+The generic detail template lives at
+`src/server/routes/work-items/detail.njk` and uses **only** GOV.UK Design
+System macros — no JavaScript — so the page works in the same way the rest
+of the service does.
+
+### Template versioning
+
+Each work item carries a `templateVersion` from the backend. The frontend
+keeps an in-memory registry mapping `(typeId, version)` to a Nunjucks
+template path:
+
+```js
+import {
+  registerDetailTemplate,
+  registerModuleDetailTemplates
+} from '#/server/work-items/core/templates.js'
+
+// One at a time:
+registerDetailTemplate('re-accreditation', 'v1', 're-accreditation/detail-v1')
+
+// Or batched at module register time:
+registerModuleDetailTemplates('re-accreditation', {
+  v1: 're-accreditation/detail-v1',
+  v2: 're-accreditation/detail-v2'
+})
+```
+
+`resolveDetailTemplate(typeId, version)` is what the controller calls; it
+returns the registered template if present, otherwise falls back to the
+generic `'work-items/detail'`. Template paths are relative to
+`src/server/routes/`, matching the Nunjucks `relativeTo` config.
+
+When a module ships v2 of its template, it leaves the v1 entry in place so
+historical work items continue to render exactly as they did at the time
+of assessment. The audit history therefore stays accurate even as the
+module's templates evolve.
+
+### Wiring into a module
+
+A module that wants its own detail template registers the template paths in
+its `register(server)` function:
+
+```js
+async register(server) {
+  registerModuleDetailTemplates('my-type', {
+    v1: 'my-type/detail-v1'
+  })
+  server.route({ /* ...module routes... */ })
+}
+```
+
+The plugin clears the registry at each `createServer()` so tests stay
+hermetic — modules re-register on every server boot.
