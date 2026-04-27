@@ -308,3 +308,23 @@ register anything to opt in.
   detail key is added on the backend, extend `summariseAuditEntry` so the
   template stays declarative.
 
+## Example: re-accreditation module (RA-98)
+
+Reference frontend module mirroring the backend's `ReAccreditationType`. All
+files live under `src/server/work-items/re-accreditation/`:
+
+| File | Role |
+| --- | --- |
+| `module.js` | Exports `reAccreditationModule = { type, register }`. The `type` block declares states (`submitted`, `assessment-in-progress`, `awaiting-decision`, terminal `approved` / `rejected` / `withdrawn`), per-state placeholder tasks and the transitions (`start-assessment`, `submit-for-decision`, `approve`, `reject`, `withdraw`, `withdraw-during-assessment`) in lock-step with the backend. The `register` callback registers the v1 detail template with the framework and is otherwise a no-op — every state-changing UI action goes through the framework's generic routes. |
+| `module.test.js` | Verifies the module passes `assertValidWorkItemModule`, that the type's shape matches expectations, and that `register` makes the v1 detail template resolvable from the framework registry. |
+| `../../routes/re-accreditation/detail-v1.njk` | Type-specific detail template selected by the framework when a work item's `(typeId, templateVersion)` is `(re-accreditation, v1)`. Extends `work-items/detail.njk` so it inherits summary, tasks, actions, notes and audit log rendering, and layers a re-accreditation-specific tagline on top. |
+
+Wired into the application by a single line in `src/server/work-items/modules.js`:
+
+```js
+import { reAccreditationModule } from './re-accreditation/module.js'
+export const workItemModules = [reAccreditationModule]
+```
+
+The states / tasks / transitions are placeholders for the PoC per the AC; the
+intended workflow diagram is referenced in RA-85.

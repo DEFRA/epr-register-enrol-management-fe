@@ -10,4 +10,6 @@
  * No other core code needs to change.
  */
 
-export const workItemModules = []
+import { reAccreditationModule } from './re-accreditation/module.js'
+
+export const workItemModules = [reAccreditationModule]

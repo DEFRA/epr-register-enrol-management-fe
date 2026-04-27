@@ -1,0 +1,24 @@
+{# ------------------------------------------------------------------- #}
+{# Re-accreditation detail template (v1) — RA-98.                       #}
+{#                                                                      #}
+{# Type-specific view selected by the framework's detail controller     #}
+{# whenever a work item's `(typeId, templateVersion)` is                 #}
+{# `(re-accreditation, v1)`. Extends the generic detail template to     #}
+{# inherit summary, tasks, actions, notes and audit log rendering, and  #}
+{# layers a re-accreditation-specific tagline on top so it is obvious   #}
+{# this is the type-specific view rather than the generic fallback.     #}
+{# ------------------------------------------------------------------- #}
+
+{% extends 'work-items/detail.njk' %}
+
+{% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+
+{% block content %}
+  <div data-testid="re-accreditation-detail">
+    {{ govukNotificationBanner({
+      titleText: "Re-accreditation work item",
+      text: "Reference implementation showing how a module supplies its own detail template (RA-98)."
+    }) }}
+    {{ super() }}
+  </div>
+{% endblock %}
