@@ -93,3 +93,75 @@ export async function getWorkItems({
     clearTimeout(timer)
   }
 }
+
+/**
+ * Mark a task as complete on a work item.
+ *
+ * The backend's task & state engine validates the call and replies with the
+ * updated `WorkItemResponse` (including refreshed `tasks` and
+ * `availableActions`). Failure shapes:
+ *  - { ok: false, status: 404, ... } when the work item does not exist
+ *  - { ok: false, status, problem } when the engine rejects the call
+ *  - { ok: false, error } on transport errors
+ */
+export async function completeWorkItemTask({
+  workItemId,
+  taskId,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/tasks/${encodeURIComponent(taskId)}/complete`
+  return postJson({ url, timeoutMs, fetchImpl, label: 'completeWorkItemTask' })
+}
+
+/**
+ * Invoke a named action (e.g. "approve", "reject") against a work item.
+ * Same response shape as {@link completeWorkItemTask}.
+ */
+export async function applyWorkItemAction({
+  workItemId,
+  actionId,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/actions/${encodeURIComponent(actionId)}`
+  return postJson({ url, timeoutMs, fetchImpl, label: 'applyWorkItemAction' })
+}
+
+async function postJson({ url, timeoutMs, fetchImpl, label }) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: buildHeaders({ accept: 'application/json' })
+    })
+
+    if (!response.ok) {
+      // Try to surface a problem-details body so callers can render the
+      // engine's reason (e.g. "Action not allowed: tasks outstanding").
+      let problem
+      try {
+        problem = await response.json()
+      } catch {
+        problem = undefined
+      }
+      return { ok: false, status: response.status, problem }
+    }
+
+    const workItem = await response.json()
+    return { ok: true, workItem }
+  } catch (error) {
+    logger.warn({ err: error, url }, `Backend API ${label} failed`)
+    return {
+      ok: false,
+      error: error.name === 'AbortError' ? 'Request timed out' : error.message
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}

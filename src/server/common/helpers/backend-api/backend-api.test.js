@@ -1,6 +1,11 @@
 import { describe, expect, test, vi } from 'vitest'
 
-import { getBackendHealth, getWorkItems } from './backend-api.js'
+import {
+  applyWorkItemAction,
+  completeWorkItemTask,
+  getBackendHealth,
+  getWorkItems
+} from './backend-api.js'
 
 describe('#getBackendHealth', () => {
   test('Returns ok=true with status and body when backend responds', async () => {
@@ -159,5 +164,130 @@ describe('#getWorkItems', () => {
     })
 
     expect(result).toEqual({ ok: true, items: [] })
+  })
+})
+
+describe('#completeWorkItemTask', () => {
+  test('POSTs to the engine endpoint and returns the updated work item', async () => {
+    const workItem = { id: 'abc', stateId: 'submitted', tasks: [], availableActions: [] }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await completeWorkItemTask({
+      workItemId: 'abc',
+      taskId: 'check-eligibility',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/abc/tasks/check-eligibility/complete',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ accept: 'application/json' })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('Returns ok=false with the problem body on a 4xx response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ title: 'Invalid action', detail: 'Task not applicable' })
+    })
+
+    const result = await completeWorkItemTask({
+      workItemId: 'abc',
+      taskId: 'unknown',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe(400)
+    expect(result.problem.detail).toBe('Task not applicable')
+  })
+
+  test('URL-encodes the task id', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({})
+    })
+
+    await completeWorkItemTask({
+      workItemId: 'abc',
+      taskId: 'a/b c',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      'http://backend:8085/work-items/abc/tasks/a%2Fb%20c/complete'
+    )
+  })
+})
+
+describe('#applyWorkItemAction', () => {
+  test('POSTs to the action endpoint and returns the updated work item', async () => {
+    const workItem = { id: 'abc', stateId: 'approved' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await applyWorkItemAction({
+      workItemId: 'abc',
+      actionId: 'approve',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/abc/actions/approve',
+      expect.objectContaining({ method: 'POST' })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('Returns ok=false with status when no JSON body is available', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.reject(new Error('not json'))
+    })
+
+    const result = await applyWorkItemAction({
+      workItemId: 'abc',
+      actionId: 'approve',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({ ok: false, status: 500, problem: undefined })
+  })
+
+  test('Returns transport error when fetch throws', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+
+    const result = await applyWorkItemAction({
+      workItemId: 'abc',
+      actionId: 'approve',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
   })
 })

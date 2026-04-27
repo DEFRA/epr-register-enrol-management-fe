@@ -13,6 +13,8 @@ Defined in `src/server/work-items/`:
 | `core/registry.js` | In-memory registry of work item types: `registerWorkItemType`, `getWorkItemType`, `getWorkItemTypes`, `clearWorkItemRegistry`. |
 | `core/module.js` | `assertValidWorkItemModule(mod)` — boot-time validation of a module's shape. |
 | `core/plugin.js` | `workItemsPlugin(modules)` — Hapi plugin that registers each module with the server. |
+| `core/engine.js` | `projectWorkItem(type, workItem)` and `canApplyAction(type, workItem, actionId)` — pure helpers that mirror the backend task & state engine for use in handlers and templates. |
+| `core/service.js` | `createWorkItemActionsService()` — framework-level service object that wraps the backend's task-completion and action endpoints with intent-named methods (`completeTask`, `applyAction`) and a result shape Hapi handlers can switch on. |
 | `modules.js` | The list of modules wired into the application. **The only file that changes when adding a type.** |
 
 The plugin is mounted in `src/server/plugins/router.js` and runs once during
@@ -45,7 +47,17 @@ export const myTypeModule = {
         default:
           return []
       }
-    }
+    },
+    // Allowed state changes, exposed as named actions. The engine blocks
+    // any action whose `requiresAllTasksComplete` is unset/`true` while
+    // tasks for the from-state are outstanding. Set it to `false` for
+    // actions that should always be available (e.g. "withdraw").
+    transitions: [
+      { actionId: 'approve', displayName: 'Approve', fromStateId: 'submitted', toStateId: 'approved' },
+      { actionId: 'reject',  displayName: 'Reject',  fromStateId: 'submitted', toStateId: 'rejected' },
+      { actionId: 'withdraw', displayName: 'Withdraw',
+        fromStateId: 'submitted', toStateId: 'rejected', requiresAllTasksComplete: false }
+    ]
   },
 
   // Hapi plugin-style register; receives the already-built server.
@@ -99,6 +111,10 @@ experience is delivered by RA-93.
 - Mount routes under `/work-items/<type-id>` to avoid clashes.
 - Keep `type` declarative — no I/O from inside `getTasksForState` other than
   cheap pure logic. Side effects belong in route handlers / service objects.
+- All form submissions go through service objects. Use
+  `createWorkItemActionsService()` for task completion / state changes;
+  module-specific services should follow the same factory + result-object
+  pattern so handlers can switch on outcome without parsing HTTP.
 - `clearWorkItemRegistry` is intended for tests and for the plugin itself,
   which calls it at the start of every registration so repeated `createServer()`
   calls in tests do not accumulate stale types.
