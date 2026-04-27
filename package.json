@@ -1,7 +1,7 @@
 {
-  "name": "cdp-node-frontend-template",
-  "version": "0.15.0",
-  "description": "CDP Frontend Template",
+  "name": "epr-register-case-management-frontend-poc",
+  "version": "0.1.0",
+  "description": "EPR Register Case Management Frontend (PoC)",
   "sideEffects": false,
   "main": "src/index.js",
   "type": "module",

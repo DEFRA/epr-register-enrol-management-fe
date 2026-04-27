@@ -69,9 +69,14 @@ describe('context and cache', () => {
               current: false,
               text: 'About',
               href: '/about'
+            },
+            {
+              current: false,
+              text: 'Backend status',
+              href: '/backend-status'
             }
           ],
-          serviceName: 'cdp-node-frontend-template',
+          serviceName: 'EPR Register Case Management',
           serviceUrl: '/'
         })
       })
@@ -158,9 +163,14 @@ describe('context and cache', () => {
               current: false,
               text: 'About',
               href: '/about'
+            },
+            {
+              current: false,
+              text: 'Backend status',
+              href: '/backend-status'
             }
           ],
-          serviceName: 'cdp-node-frontend-template',
+          serviceName: 'EPR Register Case Management',
           serviceUrl: '/'
         })
       })

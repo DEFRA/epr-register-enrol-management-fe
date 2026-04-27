@@ -44,7 +44,7 @@ export const config = convict({
   serviceName: {
     doc: 'Applications Service Name',
     format: String,
-    default: 'cdp-node-frontend-template'
+    default: 'EPR Register Case Management'
   },
   root: {
     doc: 'Project root',
@@ -179,7 +179,7 @@ export const config = convict({
     keyPrefix: {
       doc: 'Redis cache key prefix name used to isolate the cached results across multiple clients',
       format: String,
-      default: 'cdp-node-frontend-template:',
+      default: 'epr-register-case-management:',
       env: 'REDIS_KEY_PREFIX'
     },
     useSingleInstanceCache: {
@@ -213,6 +213,20 @@ export const config = convict({
       format: String,
       default: 'x-cdp-request-id',
       env: 'TRACING_HEADER'
+    }
+  },
+  backendApi: {
+    url: {
+      doc: 'Base URL of the case management backend API',
+      format: String,
+      default: 'http://localhost:8085',
+      env: 'BACKEND_API_URL'
+    },
+    timeoutMs: {
+      doc: 'Timeout for backend API calls in milliseconds',
+      format: Number,
+      default: 5000,
+      env: 'BACKEND_API_TIMEOUT_MS'
     }
   }
 })

@@ -38,17 +38,21 @@ services:
 
   ################################################################################
 
-  your-frontend:
+  case-management-frontend:
     build: ./
+    container_name: case-management-frontend
     ports:
       - '3000:3000'
     links:
       - 'floci:floci'
       - 'redis:redis'
+      - 'case-management-backend:case-management-backend'
     depends_on:
       floci:
         condition: service_healthy
       redis:
+        condition: service_started
+      case-management-backend:
         condition: service_started
     env_file:
       - 'compose/aws.env'
@@ -60,29 +64,31 @@ services:
       SESSION_COOKIE_SECURE: false
       USE_SINGLE_INSTANCE_CACHE: true
       REDIS_TLS: false
+      BACKEND_API_URL: http://case-management-backend:8085
     networks:
       - cdp-tenant
 
-  # your-backend:
-  #   image: defradigital/your-backend:${YOUR_BACKEND_VERSION:-latest}
-  #   ports:
-  #     - '3555:3555'
-  #   links:
-  #     - 'foci:floci'
-  #     - 'mongodb:mongodb'
-  #   depends_on:
-  #     floci:
-  #       condition: service_healthy
-  #     mongodb:
-  #       condition: service_started
-  #   env_file:
-  #     - 'compose/aws.env'
-  #   environment:
-  #     PORT: 3001
-  #     NODE_ENV: development
-  #     MONGO_URI: mongodb://mongodb:27017/
-  #   networks:
-  #     - cdp-tenant
+  case-management-backend:
+    build: ../epr-register-case-management-backend-poc
+    container_name: case-management-backend
+    ports:
+      - '8085:8085'
+    links:
+      - 'floci:floci'
+      - 'mongodb:mongodb'
+    depends_on:
+      floci:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+    env_file:
+      - 'compose/aws.env'
+    environment:
+      ASPNETCORE_URLS: http://+:8085
+      Mongo__DatabaseUri: mongodb://mongodb:27017/
+      Mongo__DatabaseName: epr-register-case-management
+    networks:
+      - cdp-tenant
 
 ################################################################################
 

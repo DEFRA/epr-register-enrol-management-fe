@@ -1,221 +1,138 @@
-# CDP Node.js Frontend Template
+# EPR Register Case Management Frontend (PoC)
 
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=DEFRA_cdp-node-frontend-template&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=DEFRA_cdp-node-frontend-template)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=DEFRA_cdp-node-frontend-template&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=DEFRA_cdp-node-frontend-template)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=DEFRA_cdp-node-frontend-template&metric=coverage)](https://sonarcloud.io/summary/new_code?id=DEFRA_cdp-node-frontend-template)
+A proof-of-concept Node.js / [Hapi](https://hapi.dev/) frontend for the EPR
+Register case management service. Built from
+[cdp-node-frontend-template](https://github.com/DEFRA/cdp-node-frontend-template)
+and styled with the [GOV.UK Design System](https://design-system.service.gov.uk/).
 
-Core delivery platform Node.js Frontend Template.
+The frontend renders GDS-compliant pages and calls the
+[`epr-register-case-management-backend-poc`](../epr-register-case-management-backend-poc/)
+HTTP API server-to-server.
 
 - [Requirements](#requirements)
-  - [Node.js](#nodejs)
-- [Server-side Caching](#server-side-caching)
-- [Redis](#redis)
-- [Local Development](#local-development)
-  - [Setup](#setup)
-  - [Development](#development)
-  - [Production](#production)
-  - [Npm scripts](#npm-scripts)
-  - [Update dependencies](#update-dependencies)
-  - [Formatting](#formatting)
-    - [Windows prettier issue](#windows-prettier-issue)
-- [Docker](#docker)
-  - [Development image](#development-image)
-  - [Production image](#production-image)
-  - [Docker Compose](#docker-compose)
-  - [Dependabot](#dependabot)
-  - [SonarCloud](#sonarcloud)
+- [Local development](#local-development)
+- [Running with Docker Compose](#running-with-docker-compose)
+- [Running the full stack](#running-the-full-stack)
+- [Backend integration](#backend-integration)
+- [Configuration](#configuration)
+- [Testing](#testing)
 - [Licence](#licence)
-  - [About the licence](#about-the-licence)
 
 ## Requirements
 
-### Node.js
+- Node.js 24+ (managed via [`nvm`](https://github.com/nvm-sh/nvm) — `nvm use`)
+- npm 10+
+- [Docker](https://www.docker.com/) and Docker Compose (for the Docker workflow)
+- The [case management backend](../epr-register-case-management-backend-poc/)
+  running on `http://localhost:8085` (see backend README)
 
-Please install Node Version Manager [nvm](https://github.com/creationix/nvm)
+## Local development
 
-To use the correct version of Node.js for this application, via nvm:
+Install dependencies and start the dev server with hot reload:
 
 ```bash
-cd cdp-node-frontend-template
 nvm use
-```
-
-## Server-side Caching
-
-We use Catbox for server-side caching. By default the service will use CatboxRedis when deployed and CatboxMemory for
-local development.
-You can override the default behaviour by setting the `SESSION_CACHE_ENGINE` environment variable to either `redis` or
-`memory`.
-
-Please note: CatboxMemory (`memory`) is _not_ suitable for production use! The cache will not be shared between each
-instance of the service and it will not persist between restarts.
-
-## Redis
-
-Redis is an in-memory key-value store. Every instance of a service has access to the same Redis key-value store similar
-to how services might have a database (or MongoDB). All frontend services are given access to a namespaced prefixed that
-matches the service name. e.g. `my-service` will have access to everything in Redis that is prefixed with `my-service`.
-
-If your service does not require a session cache to be shared between instances or if you don't require Redis, you can
-disable setting `SESSION_CACHE_ENGINE=false` or changing the default value in `src/config/index.js`.
-
-## Proxy
-
-We are using forward-proxy which is set up by default. To make use of this: `import { fetch } from 'undici'` then
-because of the `setGlobalDispatcher(new ProxyAgent(proxyUrl))` calls will use the ProxyAgent Dispatcher
-
-If you are not using Wreck, Axios or Undici or a similar http that uses `Request`. Then you may have to provide the
-proxy dispatcher:
-
-To add the dispatcher to your own client:
-
-```javascript
-import { ProxyAgent } from 'undici'
-
-return await fetch(url, {
-  dispatcher: new ProxyAgent({
-    uri: proxyUrl,
-    keepAliveTimeout: 10,
-    keepAliveMaxTimeout: 10
-  })
-})
-```
-
-## Local Development
-
-### Setup
-
-Install application dependencies:
-
-```bash
 npm install
-```
-
-### Git hooks
-
-Install git hooks (optional)
-
-```bash
-npm run git:hooks
-```
-
-### Development
-
-To run the application in `development` mode run:
-
-```bash
 npm run dev
 ```
 
-### Production
+The frontend listens on `http://localhost:3000`. Routes:
 
-To mimic the application running in `production` mode locally run:
+- `/` — Home
+- `/about` — About page
+- `/backend-status` — Calls the backend's `/health` endpoint and renders
+  the result. Use this to verify the integration is wired correctly.
+- `/health` — Frontend health probe
 
-```bash
-npm start
-```
+The dev server uses CatboxMemory for session storage (no Redis required
+locally) and serves Vite-built assets. Set `BACKEND_API_URL` to point at
+a non-default backend location.
 
-### Npm scripts
+## Running with Docker Compose
 
-All available Npm scripts can be seen in [package.json](./package.json)
-To view them in your command line run:
-
-```bash
-npm run
-```
-
-### Update dependencies
-
-To update dependencies use [npm-check-updates](https://github.com/raineorshine/npm-check-updates):
-
-> The following script is a good start. Check out all the options on
-> the [npm-check-updates](https://github.com/raineorshine/npm-check-updates)
-
-```bash
-ncu --interactive --format group
-```
-
-### Formatting
-
-#### Windows prettier issue
-
-If you are having issues with formatting of line breaks on Windows update your global git config by running:
-
-```bash
-git config --global core.autocrlf false
-```
-
-## Docker
-
-### Development image
-
-> [!TIP]
-> For Apple Silicon users, you may need to add `--platform linux/amd64` to the `docker run` command to ensure
-> compatibility fEx: `docker build --platform=linux/arm64 --no-cache --tag cdp-node-frontend-template`
-
-Build:
-
-```bash
-docker build --target development --no-cache --tag cdp-node-frontend-template:development .
-```
-
-Run:
-
-```bash
-docker run -p 3000:3000 cdp-node-frontend-template:development
-```
-
-### Production image
-
-Build:
-
-```bash
-docker build --no-cache --tag cdp-node-frontend-template .
-```
-
-Run:
-
-```bash
-docker run -p 3000:3000 cdp-node-frontend-template
-```
-
-### Docker Compose
-
-A local environment with:
-
-- Floci (replacing Localstack) for AWS services (S3, SQS)
-- Redis
-- MongoDB
-- This service.
-- A commented out backend example.
+The Compose stack builds the frontend image, the sibling backend image
+and brings up Redis, MongoDB and Floci (AWS emulator):
 
 ```bash
 docker compose up --build -d
 ```
 
-### Dependabot
+Once healthy, browse to `http://localhost:3000`. The
+`/backend-status` page should report **Reachable**, confirming the
+frontend has called the backend's `/health` endpoint over the internal
+Docker network.
 
-We have added an example dependabot configuration file to the repository. You can enable it by renaming
-the [.github/example.dependabot.yml](.github/example.dependabot.yml) to `.github/dependabot.yml`
+Tear it down with:
 
-### SonarCloud
+```bash
+docker compose down -v
+```
 
-Instructions for setting up SonarCloud can be found in [sonar-project.properties](./sonar-project.properties).
+> The frontend Compose file builds the backend image directly from the
+> sibling repository at `../epr-register-case-management-backend-poc`. If
+> you keep the two repos in different parent directories, adjust the
+> `build:` path in [compose.yml](compose.yml) accordingly.
+
+## Running the full stack
+
+The simplest way to run both services together is the frontend's Compose
+file (above) — it includes the backend, MongoDB and Redis.
+
+If you'd rather run each repo's Compose stack independently, ensure they
+share the `cdp-tenant` Docker network and that the frontend's
+`BACKEND_API_URL` points at the backend service.
+
+To run both natively (no Docker):
+
+```bash
+# In epr-register-case-management-backend-poc
+docker compose up -d mongodb       # or run MongoDB locally
+dotnet run --project Backend.Api --launch-profile Backend.Api
+
+# In epr-register-case-management-frontend-poc
+npm run dev
+```
+
+## Backend integration
+
+- Backend client: [`src/server/common/helpers/backend-api/backend-api.js`](src/server/common/helpers/backend-api/backend-api.js)
+- Status page controller: [`src/server/routes/backend-status/controller.js`](src/server/routes/backend-status/controller.js)
+- Configuration key: `backendApi.url` (env: `BACKEND_API_URL`)
+
+The backend is called using `undici`'s global `fetch` so it picks up the
+forward-proxy configured in [`setup-proxy.js`](src/server/common/helpers/proxy/setup-proxy.js)
+when running in environments that require it.
+
+## Configuration
+
+Configuration is managed via [`convict`](https://github.com/mozilla/node-convict).
+Notable environment variables for local integration:
+
+| Variable                  | Default                  | Description                                |
+| ------------------------- | ------------------------ | ------------------------------------------ |
+| `PORT`                    | `3000`                   | Frontend HTTP port                         |
+| `BACKEND_API_URL`         | `http://localhost:8085`  | Base URL of the case management backend    |
+| `BACKEND_API_TIMEOUT_MS`  | `5000`                   | Backend request timeout                    |
+| `SESSION_CACHE_ENGINE`    | `memory` (dev)           | `memory` or `redis`. Memory is ephemeral.  |
+| `REDIS_HOST`              | `127.0.0.1`              | Used when `SESSION_CACHE_ENGINE=redis`     |
+
+> Session storage uses CatboxMemory by default in development; Redis is
+> only required for production-style local runs (e.g. via Compose). Both
+> are intentionally ephemeral — the frontend holds no persistent data.
+
+See [`src/config/config.js`](src/config/config.js) for the full schema.
+
+## Testing
+
+```bash
+npm test
+```
+
+Tests run with [Vitest](https://vitest.dev/) and start the Hapi server
+with `server.inject` for route-level assertions. The backend client is
+covered by unit tests with a mocked `fetch`.
 
 ## Licence
 
-THIS INFORMATION IS LICENSED UNDER THE CONDITIONS OF THE OPEN GOVERNMENT LICENCE found at:
-
-<http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3>
-
-The following attribution statement MUST be cited in your products and applications when using this information.
-
-> Contains public sector information licensed under the Open Government license v3
-
-### About the licence
-
-The Open Government Licence (OGL) was developed by the Controller of Her Majesty's Stationery Office (HMSO) to enable
-information providers in the public sector to license the use and re-use of their information under a common open
-licence.
-
-It is designed to encourage use and re-use of information freely and flexibly, with only a few conditions.
+THIS INFORMATION IS LICENSED UNDER THE CONDITIONS OF THE OPEN GOVERNMENT
+LICENCE found at: <http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3>.
