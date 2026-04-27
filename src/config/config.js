@@ -227,6 +227,12 @@ export const config = convict({
       format: Number,
       default: 5000,
       env: 'BACKEND_API_TIMEOUT_MS'
+    },
+    cognitoClientId: {
+      doc: 'CDP Cognito client id sent on outbound calls to the backend (x-cdp-cognito-client-id header). Empty string disables the header.',
+      format: String,
+      default: 'frontend',
+      env: 'BACKEND_API_COGNITO_CLIENT_ID'
     }
   },
   environment: {

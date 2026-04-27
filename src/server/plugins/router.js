@@ -4,6 +4,7 @@ import { home } from '../routes/home/index.js'
 import { about } from '../routes/about/index.js'
 import { backendStatus } from '../routes/backend-status/index.js'
 import { health } from '../routes/health/index.js'
+import { workItems } from '../routes/work-items/index.js'
 import { serveStaticFiles } from './serve-static-files.js'
 import { workItemsPlugin } from '../work-items/core/plugin.js'
 import { workItemModules } from '../work-items/modules.js'
@@ -19,7 +20,7 @@ export const router = {
       await server.register([health])
 
       // Application specific routes, add your own routes here
-      await server.register([home, about, backendStatus])
+      await server.register([home, about, backendStatus, workItems])
 
       // Work item modules — see src/server/work-items/modules.js
       await server.register(workItemsPlugin(workItemModules))

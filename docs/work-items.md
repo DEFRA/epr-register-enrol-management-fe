@@ -82,6 +82,16 @@ export const myTypeModule = {
 
 That is the complete list of changes required outside the new module folder.
 
+## Cross-type list
+
+The cross-type work item list lives outside any module — it shows every
+submitted item regardless of type and is mounted at `/work-items` by
+`src/server/routes/work-items/`. It calls `getWorkItems()` in
+`src/server/common/helpers/backend-api/backend-api.js` and decorates each row
+with the registered type's display name (falling back to the raw id if no
+module is registered for that type). The richer filter/search/pagination
+experience is delivered by RA-93.
+
 ## Conventions
 
 - A module **must not** import from another module's folder. Shared concerns
