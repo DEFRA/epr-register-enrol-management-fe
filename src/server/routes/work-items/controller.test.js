@@ -16,6 +16,17 @@ const { getWorkItems } = await import(
   '#/server/common/helpers/backend-api/backend-api.js'
 )
 
+function emptyPage(overrides = {}) {
+  return {
+    ok: true,
+    items: [],
+    totalCount: 0,
+    page: 1,
+    pageSize: 20,
+    ...overrides
+  }
+}
+
 describe('#workItemListController', () => {
   let server
 
@@ -35,7 +46,7 @@ describe('#workItemListController', () => {
   })
 
   test('Renders the empty state when the backend has no items', async () => {
-    getWorkItems.mockResolvedValue({ ok: true, items: [] })
+    getWorkItems.mockResolvedValue(emptyPage())
 
     const { result, statusCode } = await server.inject({
       method: 'GET',
@@ -62,19 +73,21 @@ describe('#workItemListController', () => {
       getTasksForState: () => []
     })
 
-    getWorkItems.mockResolvedValue({
-      ok: true,
-      items: [
-        {
-          id: '11111111-1111-1111-1111-111111111111',
-          typeId: 're-accreditation',
-          stateId: 'submitted',
-          submittedAt: '2026-04-27T10:00:00Z',
-          submittedBy: 'frontend',
-          payload: {}
-        }
-      ]
-    })
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: 'frontend',
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
 
     const { result, statusCode } = await server.inject({
       method: 'GET',
@@ -82,7 +95,9 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('11111111-1111-1111-1111-111111111111'))
+    expect(result).toEqual(
+      expect.stringContaining('11111111-1111-1111-1111-111111111111')
+    )
     expect(result).toEqual(expect.stringContaining('Re-accreditation'))
     expect(result).toEqual(expect.stringContaining('Submitted'))
     expect(result).toEqual(expect.stringContaining('frontend'))
@@ -90,19 +105,21 @@ describe('#workItemListController', () => {
 
   test('Falls back to raw type id when no module is registered for the type', async () => {
     clearWorkItemRegistry()
-    getWorkItems.mockResolvedValue({
-      ok: true,
-      items: [
-        {
-          id: '22222222-2222-2222-2222-222222222222',
-          typeId: 'unknown-type',
-          stateId: 'mystery',
-          submittedAt: '2026-04-27T10:00:00Z',
-          submittedBy: null,
-          payload: {}
-        }
-      ]
-    })
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: '22222222-2222-2222-2222-222222222222',
+            typeId: 'unknown-type',
+            stateId: 'mystery',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
 
     const { result, statusCode } = await server.inject({
       method: 'GET',
@@ -125,7 +142,138 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Could not reach the backend'))
+    expect(result).toEqual(
+      expect.stringContaining('Could not reach the backend')
+    )
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
+  })
+
+  test('Forwards type, state, search and page filters to the backend', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [
+        { id: 'submitted', displayName: 'Submitted' },
+        { id: 'approved', displayName: 'Approved', isTerminal: true }
+      ],
+      getTasksForState: () => []
+    })
+    registerWorkItemType({
+      id: 'other',
+      displayName: 'Other',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+
+    getWorkItems.mockResolvedValue(
+      emptyPage({ totalCount: 0, page: 2, pageSize: 20 })
+    )
+
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation&typeId=other&stateId=approved&search=acme&page=2'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typeIds: ['re-accreditation', 'other'],
+        stateIds: ['approved'],
+        search: 'acme',
+        page: 2,
+        pageSize: 20
+      })
+    )
+  })
+
+  test('Drops unknown type and state filter values', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=ghost&stateId=mystery&search=&page=0'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typeIds: [],
+        stateIds: [],
+        search: '',
+        page: 1,
+        pageSize: 20
+      })
+    )
+  })
+
+  test('Renders a pagination block when there is more than one page', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: '33333333-3333-3333-3333-333333333333',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 45,
+        page: 2,
+        pageSize: 20
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items?page=2'
+    })
+
+    // govuk-pagination renders a <nav class="govuk-pagination">.
+    expect(result).toEqual(expect.stringContaining('govuk-pagination'))
+    // Previous and next links preserve the page parameter.
+    expect(result).toEqual(expect.stringContaining('href="/work-items"'))
+    expect(result).toEqual(expect.stringContaining('href="/work-items?page=3"'))
+    expect(result).toEqual(
+      expect.stringContaining(
+        'Showing page <strong>2</strong> of <strong>3</strong>'
+      )
+    )
+  })
+
+  test('Shows a filtered empty-state message when filters are active but nothing matches', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation'
+    })
+
+    expect(result).toEqual(
+      expect.stringContaining('No work items match your filters.')
+    )
+    expect(result).toEqual(expect.stringContaining('Clear filters'))
   })
 })

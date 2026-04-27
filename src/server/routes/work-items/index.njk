@@ -2,6 +2,10 @@
 
 {% from "govuk/components/table/macro.njk" import govukTable %}
 {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+{% from "govuk/components/checkboxes/macro.njk" import govukCheckboxes %}
+{% from "govuk/components/input/macro.njk" import govukInput %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/pagination/macro.njk" import govukPagination %}
 
 {% block content %}
   {{ appHeading({
@@ -10,39 +14,97 @@
   }) }}
 
   <div class="govuk-grid-row">
-    <div class="govuk-grid-column-full">
+    <div class="govuk-grid-column-one-third">
+      <form method="get" action="/work-items" novalidate data-testid="work-items-filter-form">
+        <h2 class="govuk-heading-m">Filter</h2>
+
+        {{ govukInput({
+          id: "search",
+          name: "search",
+          label: { text: "Search", classes: "govuk-label--s" },
+          hint: { text: "Search by id or submitter" },
+          value: filters.search,
+          spellcheck: false,
+          autocomplete: "off"
+        }) }}
+
+        {% if typeOptions.length > 0 %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-type",
+            name: "typeId",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "Type", classes: "govuk-fieldset__legend--s" } },
+            items: typeOptions
+          }) }}
+        {% endif %}
+
+        {% if stateOptions.length > 0 %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-state",
+            name: "stateId",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "State", classes: "govuk-fieldset__legend--s" } },
+            items: stateOptions
+          }) }}
+        {% endif %}
+
+        <div class="govuk-button-group">
+          {{ govukButton({ text: "Apply filters", attributes: { "data-testid": "work-items-filter-apply" } }) }}
+          {% if hasFilters %}
+            <a class="govuk-link" href="/work-items" data-testid="work-items-filter-clear">Clear filters</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+
+    <div class="govuk-grid-column-two-thirds">
       {% if not ok %}
         {{ govukNotificationBanner({
           titleText: "Could not reach the backend",
           html: '<p class="govuk-notification-banner__heading">' + (error or "Unknown error") + '</p>'
         }) }}
-      {% elif items.length === 0 %}
-        <p class="govuk-body" data-testid="work-items-empty">
-          No work items have been submitted yet.
-        </p>
       {% else %}
-        {% set rows = [] %}
-        {% for item in items %}
-          {% set _ = rows.push([
-            { text: item.id },
-            { text: item.typeDisplayName },
-            { text: item.stateDisplayName },
-            { text: item.submittedAt },
-            { text: item.submittedBy or "—" }
-          ]) %}
-        {% endfor %}
+        <p class="govuk-body" data-testid="work-items-summary">
+          {% if totalCount === 0 %}
+            {% if hasFilters %}
+              No work items match your filters.
+            {% else %}
+              No work items have been submitted yet.
+            {% endif %}
+          {% else %}
+            Showing page <strong>{{ page }}</strong> of <strong>{{ totalPages }}</strong>
+            ({{ totalCount }} work item{% if totalCount != 1 %}s{% endif %}{% if filterSummary.description %} — {{ filterSummary.description }}{% endif %})
+          {% endif %}
+        </p>
 
-        {{ govukTable({
-          head: [
-            { text: "ID" },
-            { text: "Type" },
-            { text: "State" },
-            { text: "Submitted" },
-            { text: "Submitted by" }
-          ],
-          rows: rows,
-          attributes: { "data-testid": "work-items-table" }
-        }) }}
+        {% if items.length > 0 %}
+          {% set rows = [] %}
+          {% for item in items %}
+            {% set _ = rows.push([
+              { text: item.id },
+              { text: item.typeDisplayName },
+              { text: item.stateDisplayName },
+              { text: item.submittedAt },
+              { text: item.submittedBy or "—" }
+            ]) %}
+          {% endfor %}
+
+          {{ govukTable({
+            head: [
+              { text: "ID" },
+              { text: "Type" },
+              { text: "State" },
+              { text: "Submitted" },
+              { text: "Submitted by" }
+            ],
+            rows: rows,
+            attributes: { "data-testid": "work-items-table" }
+          }) }}
+
+          {% if pagination %}
+            {{ govukPagination(pagination) }}
+          {% endif %}
+        {% endif %}
       {% endif %}
     </div>
   </div>

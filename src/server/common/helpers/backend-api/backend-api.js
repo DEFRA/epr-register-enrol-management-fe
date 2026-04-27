@@ -53,21 +53,32 @@ export async function getBackendHealth({
 }
 
 /**
- * Fetches every work item from the case management backend.
+ * Fetches a single page of work items from the case management backend.
+ *
+ * Accepts the filter / search / pagination shape that the backend's
+ * `GET /work-items` endpoint expects:
+ *  - `typeIds` / `stateIds` — string arrays, repeated as `typeId=` / `stateId=`
+ *  - `search`               — free-text needle
+ *  - `page` / `pageSize`    — 1-based page + page size
  *
  * Returns an object describing the result:
- *  - { ok: true, items }              when the backend responds with a list
- *  - { ok: false, status?, error }    when the request fails or returns non-2xx
+ *  - { ok: true, items, totalCount, page, pageSize }   on success
+ *  - { ok: false, status?, error }                     on transport / 4xx-5xx
  *
- * Items are returned as the backend's `WorkItemResponse` shape:
+ * Items keep the backend's `WorkItemResponse` shape:
  *   { id, typeId, stateId, submittedAt, submittedBy, payload }
  */
 export async function getWorkItems({
+  typeIds,
+  stateIds,
+  search,
+  page,
+  pageSize,
   baseUrl = config.get('backendApi.url'),
   timeoutMs = config.get('backendApi.timeoutMs'),
   fetchImpl = fetch
 } = {}) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items`
+  const url = buildWorkItemsUrl(baseUrl, { typeIds, stateIds, search, page, pageSize })
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -81,8 +92,8 @@ export async function getWorkItems({
       return { ok: false, status: response.status, error: `Backend returned ${response.status}` }
     }
 
-    const items = await response.json()
-    return { ok: true, items: Array.isArray(items) ? items : [] }
+    const body = await response.json()
+    return parseWorkItemsBody(body)
   } catch (error) {
     logger.warn({ err: error, url }, 'Backend API getWorkItems failed')
     return {
@@ -92,6 +103,54 @@ export async function getWorkItems({
   } finally {
     clearTimeout(timer)
   }
+}
+
+function buildWorkItemsUrl(baseUrl, { typeIds, stateIds, search, page, pageSize }) {
+  const root = `${baseUrl.replace(/\/$/, '')}/work-items`
+  const params = new URLSearchParams()
+
+  for (const typeId of toArray(typeIds)) {
+    if (typeId) params.append('typeId', typeId)
+  }
+  for (const stateId of toArray(stateIds)) {
+    if (stateId) params.append('stateId', stateId)
+  }
+  if (search && String(search).trim() !== '') {
+    params.append('search', String(search).trim())
+  }
+  if (page != null && page !== '') params.append('page', String(page))
+  if (pageSize != null && pageSize !== '') params.append('pageSize', String(pageSize))
+
+  const qs = params.toString()
+  return qs === '' ? root : `${root}?${qs}`
+}
+
+function toArray(value) {
+  if (value == null) return []
+  return Array.isArray(value) ? value : [value]
+}
+
+function parseWorkItemsBody(body) {
+  // Tolerate a bare list (older backend / tests) as well as the paged envelope.
+  if (Array.isArray(body)) {
+    return {
+      ok: true,
+      items: body,
+      totalCount: body.length,
+      page: 1,
+      pageSize: body.length
+    }
+  }
+  if (body && Array.isArray(body.items)) {
+    return {
+      ok: true,
+      items: body.items,
+      totalCount: typeof body.totalCount === 'number' ? body.totalCount : body.items.length,
+      page: typeof body.page === 'number' ? body.page : 1,
+      pageSize: typeof body.pageSize === 'number' ? body.pageSize : body.items.length
+    }
+  }
+  return { ok: true, items: [], totalCount: 0, page: 1, pageSize: 0 }
 }
 
 /**

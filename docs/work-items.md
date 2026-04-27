@@ -101,8 +101,19 @@ submitted item regardless of type and is mounted at `/work-items` by
 `src/server/routes/work-items/`. It calls `getWorkItems()` in
 `src/server/common/helpers/backend-api/backend-api.js` and decorates each row
 with the registered type's display name (falling back to the raw id if no
-module is registered for that type). The richer filter/search/pagination
-experience is delivered by RA-93.
+module is registered for that type).
+
+The page supports filter, search and pagination (RA-93):
+
+- Type filter — checkbox per registered module.
+- State filter — checkbox per state surfaced by any registered module.
+- Free-text search — matched on work item id and submitter.
+- Pagination — `govuk-pagination`, default page size of 20.
+
+All filters are submitted via plain GET (`<form method="get">` plus anchor
+links for page navigation), so the page works with no JavaScript in the
+browser. Unknown filter values are silently dropped at the controller so
+bookmarked URLs from before a module was removed still render.
 
 ## Conventions
 

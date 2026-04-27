@@ -1,11 +1,9 @@
 import { workItemListController } from './controller.js'
 
 /**
- * Routes for the cross-type work item list.
- *
- * The detailed list with filtering, search and pagination is delivered by RA-93;
- * RA-91 only requires that newly-submitted items become visible to caseworkers,
- * so this initial view is intentionally minimal.
+ * Routes for the cross-type work item list with filter, search and
+ * pagination (RA-93). All filters are submitted via plain GET so the page
+ * works with no JavaScript in the browser.
  */
 export const workItems = {
   plugin: {

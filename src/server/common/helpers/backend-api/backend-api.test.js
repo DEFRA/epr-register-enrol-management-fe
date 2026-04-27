@@ -86,7 +86,8 @@ describe('#getWorkItems', () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve(items)
+      json: () =>
+        Promise.resolve({ items, totalCount: 1, page: 1, pageSize: 20 })
     })
 
     const result = await getWorkItems({
@@ -105,7 +106,41 @@ describe('#getWorkItems', () => {
         })
       })
     )
-    expect(result).toEqual({ ok: true, items })
+    expect(result).toEqual({
+      ok: true,
+      items,
+      totalCount: 1,
+      page: 1,
+      pageSize: 20
+    })
+  })
+
+  test('Encodes filters, search and pagination as query string parameters', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 2, pageSize: 5 })
+    })
+
+    await getWorkItems({
+      typeIds: ['re-accreditation', 'other'],
+      stateIds: ['submitted'],
+      search: '  acme  ',
+      page: 2,
+      pageSize: 5,
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const calledUrl = fetchImpl.mock.calls[0][0]
+    expect(calledUrl).toContain('typeId=re-accreditation')
+    expect(calledUrl).toContain('typeId=other')
+    expect(calledUrl).toContain('stateId=submitted')
+    expect(calledUrl).toContain('search=acme')
+    expect(calledUrl).toContain('page=2')
+    expect(calledUrl).toContain('pageSize=5')
   })
 
   test('Returns ok=false with status when the backend responds with an error', async () => {
@@ -163,7 +198,13 @@ describe('#getWorkItems', () => {
       fetchImpl
     })
 
-    expect(result).toEqual({ ok: true, items: [] })
+    expect(result).toEqual({
+      ok: true,
+      items: [],
+      totalCount: 0,
+      page: 1,
+      pageSize: 0
+    })
   })
 })
 
