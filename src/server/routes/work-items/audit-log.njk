@@ -1,0 +1,47 @@
+{% extends 'layouts/page.njk' %}
+
+{# ---------------------------------------------------------------- #}
+{# Standalone audit log page for a work item (RA-97).                #}
+{#                                                                   #}
+{# Framework-provided audit timeline: every state-changing engine    #}
+{# call (task complete, action applied, assignment change, note      #}
+{# added) appends one entry on the backend. Projected chronologically #}
+{# (oldest-first) so we render top-to-bottom without re-sorting.     #}
+{# ---------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItem.id
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      {% if workItem.auditLog and workItem.auditLog.length > 0 %}
+        <ol class="govuk-list" data-testid="work-item-audit-log">
+          {% for entry in workItem.auditLog %}
+            <li class="govuk-!-margin-bottom-3" data-testid="work-item-audit-entry-{{ entry.id }}">
+              <p class="govuk-body govuk-!-margin-bottom-1">
+                <strong>{{ entry.actionDisplayName }}</strong>
+                {% if entry.summary %}
+                  — {{ entry.summary }}
+                {% endif %}
+              </p>
+              <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-0">
+                {{ entry.createdByName or entry.createdBy or "System" }} — {{ entry.createdAt }}
+              </p>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="govuk-body" data-testid="work-item-no-audit-log">
+          No actions have been recorded against this work item yet.
+        </p>
+      {% endif %}
+
+      <p class="govuk-body">
+        <a class="govuk-link" href="/work-items/{{ workItem.id }}">Back to work item</a>
+      </p>
+    </div>
+  </div>
+{% endblock %}
