@@ -488,7 +488,7 @@ describe('#workItemDetailController', () => {
     )
   })
 
-  test('Renders the audit log section with entries in chronological (oldest-first) order, action, actor and timestamp', async () => {
+  test('Links to the standalone audit log page rather than rendering entries inline', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -502,20 +502,6 @@ describe('#workItemDetailController', () => {
             createdAt: '2026-04-27T09:00:00Z',
             createdBy: 'alice-1',
             createdByName: 'Alice Example'
-          },
-          {
-            id: 'bbbb2222-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-            action: 'action-applied',
-            actionDisplayName: 'Action applied',
-            details: {
-              actionId: 'approve',
-              actionDisplayName: 'Approve',
-              fromStateId: 'submitted',
-              toStateId: 'approved'
-            },
-            createdAt: '2026-04-27T10:00:00Z',
-            createdBy: 'bob-2',
-            createdByName: 'Bob Example'
           }
         ]
       })
@@ -527,36 +513,12 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Audit log'))
-    expect(result).toEqual(expect.stringContaining('Task completed'))
-    expect(result).toEqual(expect.stringContaining('Check eligibility'))
-    expect(result).toEqual(expect.stringContaining('Action applied'))
-    expect(result).toEqual(expect.stringContaining('Approve (submitted → approved)'))
-    expect(result).toEqual(expect.stringContaining('Alice Example'))
-    expect(result).toEqual(expect.stringContaining('Bob Example'))
-    expect(result).toEqual(expect.stringContaining('2026-04-27T09:00:00Z'))
-    // Chronological (oldest-first) ordering: the earlier entry appears
-    // before the later one in the rendered HTML.
-    expect(result.indexOf('Task completed')).toBeLessThan(
-      result.indexOf('Action applied')
-    )
-  })
-
-  test('Renders an empty audit log message when no entries exist', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({ auditLog: [] })
-    })
-
-    const { statusCode, result } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('View audit log'))
     expect(result).toEqual(
-      expect.stringContaining('No actions have been recorded against this work item yet.')
+      expect.stringContaining(`/work-items/${ID}/audit-log`)
     )
+    // Entries are rendered on the dedicated page, not inline on the detail
+    // view.
+    expect(result).not.toEqual(expect.stringContaining('Task completed'))
   })
 })

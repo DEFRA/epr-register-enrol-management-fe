@@ -7,6 +7,7 @@ import {
   makeUnassignController,
   workItemDetailController
 } from './detail.controller.js'
+import { workItemAuditLogController } from './audit-log.controller.js'
 
 /**
  * Routes for the cross-type work item list (RA-93) plus the detail view,
@@ -35,6 +36,13 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}',
           ...workItemDetailController
+        },
+        {
+          // RA-97. Standalone audit log page so the detail view stays
+          // focused on current state, tasks and actions.
+          method: 'GET',
+          path: '/work-items/{id}/audit-log',
+          ...workItemAuditLogController
         },
         {
           method: 'POST',

@@ -283,11 +283,13 @@ delete UI by design.
 
 ## Audit log (RA-97)
 
-The detail page renders a framework-provided **audit log** below the notes
-section showing every state-changing action that has occurred against the
-work item: task completions, action applications, assignment changes,
-notes added. Modules inherit the timeline for free — they do not
-register anything to opt in.
+A framework-provided **audit log** records every state-changing action
+that has occurred against a work item: task completions, action
+applications, assignment changes, notes added. The log lives on its own
+page at `/work-items/{id}/audit-log` so the detail view stays focused on
+the work item's current state, tasks and actions; the detail page links
+out to it. Modules inherit the timeline for free — they do not register
+anything to opt in.
 
 ### Wiring
 
@@ -295,8 +297,9 @@ register anything to opt in.
 | --- | --- |
 | `backend-api.js` `getWorkItem` | The backend already includes `auditLog` (oldest-first) on the `WorkItemResponse`; nothing new to call. |
 | `core/audit-log.js` `decorateAuditLog(entries)` | Adds a one-line `summary` per entry derived from its `details` (e.g. task display name, `from → to` state, assignee name change). Pure helper. |
-| `routes/work-items/detail.controller.js` `decorate()` | Calls `decorateAuditLog` so the template gets `workItem.auditLog` ready to render. |
-| `routes/work-items/detail.njk` | Renders entries as an ordered list under the **Audit log** heading, in the order the backend projected them (chronological, oldest-first). |
+| `routes/work-items/audit-log.controller.js` `workItemAuditLogController` | Re-fetches the work item, decorates the entries with `decorateAuditLog`, and renders the standalone audit log template. |
+| `routes/work-items/audit-log.njk` | Renders entries as an ordered list under the **Audit log** heading, in the order the backend projected them (chronological, oldest-first), with a link back to the detail page. |
+| `routes/work-items/detail.njk` | Renders a **View audit log** link to `/work-items/{id}/audit-log` instead of the timeline itself. |
 
 ### Conventions
 
@@ -317,7 +320,7 @@ files live under `src/server/work-items/re-accreditation/`:
 | --- | --- |
 | `module.js` | Exports `reAccreditationModule = { type, register }`. The `type` block declares states (`submitted`, `assessment-in-progress`, `awaiting-decision`, terminal `approved` / `rejected` / `withdrawn`), per-state placeholder tasks and the transitions (`start-assessment`, `submit-for-decision`, `approve`, `reject`, `withdraw`, `withdraw-during-assessment`) in lock-step with the backend. The `register` callback registers the v1 detail template with the framework and is otherwise a no-op — every state-changing UI action goes through the framework's generic routes. |
 | `module.test.js` | Verifies the module passes `assertValidWorkItemModule`, that the type's shape matches expectations, and that `register` makes the v1 detail template resolvable from the framework registry. |
-| `../../routes/re-accreditation/detail-v1.njk` | Type-specific detail template selected by the framework when a work item's `(typeId, templateVersion)` is `(re-accreditation, v1)`. Extends `work-items/detail.njk` so it inherits summary, tasks, actions, notes and audit log rendering, and layers a re-accreditation-specific tagline on top. |
+| `../../routes/re-accreditation/detail-v1.njk` | Type-specific detail template selected by the framework when a work item's `(typeId, templateVersion)` is `(re-accreditation, v1)`. Extends `work-items/detail.njk` so it inherits summary, tasks, actions, notes and the audit-log link, and layers a re-accreditation-specific tagline on top. |
 
 Wired into the application by a single line in `src/server/work-items/modules.js`:
 
