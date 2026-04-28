@@ -11,20 +11,18 @@ updates:
       build:
         patterns:
           - '@babel/*'
-          - 'autoprefixer'
           - 'babel-plugin-module-resolver'
-          - 'babel-loader'
-          - 'babel-plugin-transform-import-meta'
-          - 'tsx'
-          - 'webpack'
-          - 'webpack-*'
-          - 'terser-webpack-plugin'
+          - 'vite'
+          - 'vite-*'
+          - '@vitejs/*'
 
       lint:
         patterns:
           - 'prettier'
           - 'stylelint'
           - 'stylelint-*'
+          - 'eslint'
+          - 'eslint-*'
 
       logging:
         patterns:
@@ -41,17 +39,12 @@ updates:
           - 'nodemon'
           - 'npm-run-all'
           - 'lodash'
-          - 'source-map-loader'
           - 'sass-*'
           - 'postcss-*'
 
       types:
         patterns:
           - '@types/*'
-
-    ignore:
-      - dependency-name: 'eslint-*'
-      - dependency-name: 'eslint'
 
     # Schedule run every Monday, local time
     schedule:

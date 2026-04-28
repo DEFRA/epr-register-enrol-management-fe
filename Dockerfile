@@ -48,4 +48,7 @@ ARG PORT
 ENV PORT=${PORT}
 EXPOSE ${PORT}
 
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -fsS http://localhost:${PORT}/health || exit 1
+
 CMD [ "node", "src" ]

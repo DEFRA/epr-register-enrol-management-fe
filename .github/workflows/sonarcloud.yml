@@ -1,46 +1,37 @@
-name: Publish
+name: Run SonarCloud coverage scan
 
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
 
 permissions:
   id-token: write
-  contents: write
+  contents: read
   pull-requests: write
-
-env:
-  AWS_REGION: eu-west-2
-  AWS_ACCOUNT_ID: '094954420758'
 
 jobs:
   build:
-    if: github.run_number != 1
-    name: CDP-build-workflow
+    if: github.run_number != 1 && github.actor != 'dependabot[bot]'
+    name: CDP SonarCloud coverage scan
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - name: Test code and Create Test Coverage Reports
+      - name: Set up Node
         uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: |
-          npm ci
-          npm run build:frontend
-          npm test
 
-      - name: Build and Publish
-        uses: DEFRA/cdp-build-action/build@main
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install and test with coverage
+        run: |
+          npm ci
+          npm test
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v5.3.1
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

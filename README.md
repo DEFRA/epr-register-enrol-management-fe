@@ -132,6 +132,13 @@ Tests run with [Vitest](https://vitest.dev/) and start the Hapi server
 with `server.inject` for route-level assertions. The backend client is
 covered by unit tests with a mocked `fetch`.
 
+## Deployment
+
+This service targets the CDP platform. See
+[`docs/cdp-deployment.md`](docs/cdp-deployment.md) for the container port,
+required environment variables, secrets, AWS resources and Squid proxy
+allow-list.
+
 ## Licence
 
 THIS INFORMATION IS LICENSED UNDER THE CONDITIONS OF THE OPEN GOVERNMENT
