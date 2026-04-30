@@ -10,6 +10,13 @@ const USER_ID_HEADER = 'x-cdp-user-id'
 const USER_NAME_HEADER = 'x-cdp-user-name'
 const USER_ROLES_HEADER = 'x-cdp-user-roles'
 
+// Backend-side role that bypasses the per-tenant submittedBy filter. The
+// case-management FE is, by definition, a case-worker portal — anyone who
+// has authenticated into this BFF is a case worker — so we always forward
+// it. This is independent of the FE-level scopes (`standard`, `assign`)
+// which still drive UI gating inside the BFF.
+const BACKEND_CASE_WORKER_ROLE = 'case-worker'
+
 /**
  * Build the headers attached to every backend call. The Cognito client id
  * identifies the BFF *as a service* and is required (CDP itself adds it on
@@ -26,9 +33,11 @@ function buildHeaders(extra = {}, user = null) {
   if (user) {
     if (user.id) headers[USER_ID_HEADER] = String(user.id)
     if (user.name) headers[USER_NAME_HEADER] = String(user.name)
-    if (Array.isArray(user.roles) && user.roles.length > 0) {
-      headers[USER_ROLES_HEADER] = user.roles.join(',')
+    const roles = Array.isArray(user.roles) ? [...user.roles] : []
+    if (!roles.includes(BACKEND_CASE_WORKER_ROLE)) {
+      roles.push(BACKEND_CASE_WORKER_ROLE)
     }
+    headers[USER_ROLES_HEADER] = roles.join(',')
   }
   return headers
 }
@@ -258,6 +267,36 @@ export async function completeWorkItemTask({
 }
 
 /**
+ * Set a task's lifecycle status (epr-gl6) on a work item.
+ *
+ * `status` is the `WorkItemTaskStatus` name (`NotStarted` | `InProgress` |
+ * `Blocked` | `Completed`); the backend binds case-insensitively. Same
+ * response shape as {@link completeWorkItemTask}: `{ ok: true, workItem }`
+ * on success, `{ ok: false, status, problem }` for engine rejections, and
+ * `{ ok: false, error }` on transport errors.
+ */
+export async function setWorkItemTaskStatus({
+  workItemId,
+  taskId,
+  status,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/tasks/${encodeURIComponent(taskId)}/status`
+  return postJson({
+    url,
+    method: 'PUT',
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'setWorkItemTaskStatus',
+    body: { status }
+  })
+}
+
+/**
  * Invoke a named action (e.g. "approve", "reject") against a work item.
  * Same response shape as {@link completeWorkItemTask}.
  */
@@ -339,13 +378,13 @@ export async function addWorkItemNote({
   })
 }
 
-async function postJson({ url, timeoutMs, fetchImpl, user, label, body = null }) {
+async function postJson({ url, timeoutMs, fetchImpl, user, label, body = null, method = 'POST' }) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const requestInit = {
-      method: 'POST',
+      method,
       signal: controller.signal,
       headers: buildHeaders({ accept: 'application/json' }, user)
     }

@@ -58,6 +58,71 @@ describe('createWorkItemActionsService', () => {
     })
   })
 
+  describe('setTaskStatus', () => {
+    test('forwards the canonical status to the API and returns the updated work item', async () => {
+      const setTaskStatus = vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: { id: 'abc', stateId: 'submitted' }
+      })
+      const service = createWorkItemActionsService({ setTaskStatus })
+
+      const result = await service.setTaskStatus({
+        workItemId: 'abc',
+        taskId: 'check-eligibility',
+        status: 'in-progress',
+        user: { id: 'u-1' }
+      })
+
+      expect(setTaskStatus).toHaveBeenCalledWith({
+        workItemId: 'abc',
+        taskId: 'check-eligibility',
+        status: 'InProgress',
+        user: { id: 'u-1' }
+      })
+      expect(result).toEqual({ ok: true, workItem: { id: 'abc', stateId: 'submitted' } })
+    })
+
+    test('rejects an unknown status without calling the backend', async () => {
+      const setTaskStatus = vi.fn()
+      const service = createWorkItemActionsService({ setTaskStatus })
+
+      const result = await service.setTaskStatus({
+        workItemId: 'abc',
+        taskId: 't',
+        status: 'banana'
+      })
+
+      expect(setTaskStatus).not.toHaveBeenCalled()
+      expect(result.ok).toBe(false)
+      expect(result.reason).toBe('invalid')
+      expect(result.message).toMatch(/Completed/)
+    })
+
+    test('translates a 404 into a not-found result', async () => {
+      const setTaskStatus = vi.fn().mockResolvedValue({ ok: false, status: 404 })
+      const service = createWorkItemActionsService({ setTaskStatus })
+
+      const result = await service.setTaskStatus({
+        workItemId: 'abc',
+        taskId: 't',
+        status: 'Blocked'
+      })
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'not-found',
+        message: 'Work item not found'
+      })
+    })
+
+    test('rejects an empty taskId', async () => {
+      const service = createWorkItemActionsService({ setTaskStatus: vi.fn() })
+      await expect(
+        service.setTaskStatus({ workItemId: 'abc', taskId: '', status: 'Blocked' })
+      ).rejects.toThrow(/taskId/)
+    })
+  })
+
   describe('applyAction', () => {
     test('translates a 409 into a not-allowed result with the engine message', async () => {
       const applyAction = vi.fn().mockResolvedValue({

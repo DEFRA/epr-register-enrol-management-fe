@@ -18,6 +18,7 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getWorkItem: vi.fn(),
   getWorkItems: vi.fn(),
   completeWorkItemTask: vi.fn(),
+  setWorkItemTaskStatus: vi.fn(),
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn()
 }))
@@ -26,6 +27,7 @@ const {
   getWorkItem,
   getWorkItems,
   completeWorkItemTask,
+  setWorkItemTaskStatus,
   applyWorkItemAction,
   assignWorkItem,
   unassignWorkItem,
@@ -81,6 +83,7 @@ describe('#workItemDetailController', () => {
     getWorkItem.mockReset()
     getWorkItems.mockReset()
     completeWorkItemTask.mockReset()
+    setWorkItemTaskStatus.mockReset()
     applyWorkItemAction.mockReset()
     assignWorkItem.mockReset()
     unassignWorkItem.mockReset()
@@ -107,7 +110,8 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(expect.stringContaining('Re-accreditation'))
     expect(result).toEqual(expect.stringContaining('Submitted'))
     expect(result).toEqual(expect.stringContaining('Check eligibility'))
-    expect(result).toEqual(expect.stringContaining('Mark complete'))
+    expect(result).toEqual(expect.stringContaining('Not started'))
+    expect(result).toEqual(expect.stringContaining('Update status'))
     expect(result).toEqual(expect.stringContaining('Acme'))
     expect(result).toEqual(expect.stringContaining('v1'))
   })
@@ -132,8 +136,8 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Complete'))
-    expect(result).not.toEqual(expect.stringContaining('Mark complete'))
+    expect(result).toEqual(expect.stringContaining('Completed'))
+    expect(result).not.toEqual(expect.stringContaining('Update status'))
     expect(result).toEqual(expect.stringContaining('Approve'))
     expect(result).toEqual(
       expect.stringContaining(`/work-items/${ID}/actions/approve`)
@@ -234,6 +238,117 @@ describe('#workItemDetailController', () => {
     expect(statusCode).toBe(statusCodes.badRequest)
     expect(result).toEqual(expect.stringContaining('Could not'))
     expect(result).toEqual(expect.stringContaining('is not required'))
+  })
+
+  test('POST set-task-status forwards the canonical status to the API and redirects on success', async () => {
+    setWorkItemTaskStatus.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        tasks: [{ taskId: 'check-eligibility', displayName: 'Check eligibility', isComplete: false, status: 'InProgress' }]
+      })
+    })
+
+    const { statusCode, headers } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/tasks/check-eligibility/status`,
+      payload: { status: 'InProgress' }
+    })
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    expect(setWorkItemTaskStatus).toHaveBeenCalledWith({
+      workItemId: ID,
+      taskId: 'check-eligibility',
+      status: 'InProgress',
+      user: expect.objectContaining({ id: expect.any(String) })
+    })
+  })
+
+  test('POST set-task-status rejects an unknown status without calling the backend', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/tasks/check-eligibility/status`,
+      payload: { status: 'bogus' }
+    })
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toEqual(expect.stringContaining('Could not'))
+    expect(setWorkItemTaskStatus).not.toHaveBeenCalled()
+  })
+
+  test('POST set-task-status surfaces a 409 inline when the engine refuses', async () => {
+    registerReaccreditation()
+    setWorkItemTaskStatus.mockResolvedValue({
+      ok: false,
+      status: 409,
+      problem: { detail: 'Task does not apply to this state' }
+    })
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'POST',
+      url: `/work-items/${ID}/tasks/check-eligibility/status`,
+      payload: { status: 'Blocked' }
+    })
+
+    expect(statusCode).toBe(statusCodes.conflict)
+    expect(result).toEqual(expect.stringContaining('Task does not apply to this state'))
+  })
+
+  test('Renders the richer task-status tag and select for an in-progress task', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        tasks: [
+          {
+            taskId: 'check-eligibility',
+            displayName: 'Check eligibility',
+            isComplete: false,
+            status: 'InProgress'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('In progress'))
+    expect(result).toEqual(expect.stringContaining('govuk-tag--blue'))
+    expect(result).toEqual(expect.stringContaining('task-status-select-check-eligibility'))
+  })
+
+  test('Renders a Blocked task with the red tag and no completed badge', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        tasks: [
+          {
+            taskId: 'check-eligibility',
+            displayName: 'Check eligibility',
+            isComplete: false,
+            status: 'Blocked'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Blocked'))
+    expect(result).toEqual(expect.stringContaining('govuk-tag--red'))
   })
 
   test('POST action redirects to the detail page on success', async () => {

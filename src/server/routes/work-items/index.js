@@ -4,6 +4,7 @@ import {
   makeApplyActionController,
   makeAssignController,
   makeCompleteTaskController,
+  makeSetTaskStatusController,
   makeUnassignController,
   workItemDetailController
 } from './detail.controller.js'
@@ -48,6 +49,16 @@ export const workItems = {
           method: 'POST',
           path: '/work-items/{id}/tasks/{taskId}/complete',
           ...makeCompleteTaskController()
+        },
+        {
+          // epr-gl6: richer task lifecycle. The form posts a `status` field
+          // matching the backend's `WorkItemTaskStatus` enum names
+          // (`NotStarted` | `InProgress` | `Blocked` | `Completed`). The
+          // controller forwards to `PUT /tasks/{taskId}/status` via the
+          // service object.
+          method: 'POST',
+          path: '/work-items/{id}/tasks/{taskId}/status',
+          ...makeSetTaskStatusController()
         },
         {
           method: 'POST',

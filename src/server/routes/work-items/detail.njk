@@ -123,20 +123,36 @@
       {% if workItem.tasks and workItem.tasks.length > 0 %}
         <ul class="govuk-list" data-testid="work-item-tasks">
           {% for task in workItem.tasks %}
-            <li class="govuk-!-margin-bottom-3" data-testid="work-item-task-{{ task.taskId }}">
-              <span class="govuk-!-margin-right-2">{{ task.displayName }}</span>
-              {% if task.isComplete %}
-                {{ govukTag({ text: "Complete", classes: "govuk-tag--green" }) }}
-              {% else %}
-                {{ govukTag({ text: "Incomplete", classes: "govuk-tag--blue" }) }}
+            <li class="govuk-!-margin-bottom-4" data-testid="work-item-task-{{ task.taskId }}">
+              <div class="govuk-!-margin-bottom-2">
+                <span class="govuk-!-margin-right-2">{{ task.displayName }}</span>
+                {{ govukTag({
+                  text: task.statusLabel,
+                  classes: task.statusTagClass,
+                  attributes: { "data-testid": "task-status-tag-" + task.taskId }
+                }) }}
+              </div>
+              {% if not task.isComplete %}
                 <form method="post"
-                      action="/work-items/{{ workItem.id }}/tasks/{{ task.taskId }}/complete"
-                      class="govuk-!-display-inline-block govuk-!-margin-left-2"
+                      action="/work-items/{{ workItem.id }}/tasks/{{ task.taskId }}/status"
+                      class="govuk-!-display-block"
                       novalidate>
+                  <div class="govuk-form-group govuk-!-margin-bottom-2">
+                    {{ govukSelect({
+                      id: "task-status-" + task.taskId,
+                      name: "status",
+                      label: {
+                        text: "Set status",
+                        classes: "govuk-label--s govuk-visually-hidden"
+                      },
+                      items: task.statusOptions,
+                      attributes: { "data-testid": "task-status-select-" + task.taskId }
+                    }) }}
+                  </div>
                   {{ govukButton({
-                    text: "Mark complete",
+                    text: "Update status",
                     classes: "govuk-button--secondary govuk-!-margin-bottom-0",
-                    attributes: { "data-testid": "complete-task-" + task.taskId }
+                    attributes: { "data-testid": "set-task-status-" + task.taskId }
                   }) }}
                 </form>
               {% endif %}

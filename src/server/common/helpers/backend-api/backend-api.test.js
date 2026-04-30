@@ -8,6 +8,7 @@ import {
   getBackendHealth,
   getWorkItem,
   getWorkItems,
+  setWorkItemTaskStatus,
   unassignWorkItem
 } from './backend-api.js'
 
@@ -280,6 +281,60 @@ describe('#completeWorkItemTask', () => {
   })
 })
 
+describe('#setWorkItemTaskStatus', () => {
+  test('PUTs the status JSON body to the status endpoint', async () => {
+    const workItem = { id: 'abc', stateId: 'submitted' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await setWorkItemTaskStatus({
+      workItemId: 'abc',
+      taskId: 'check-eligibility',
+      status: 'InProgress',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/abc/tasks/check-eligibility/status',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ status: 'InProgress' }),
+        headers: expect.objectContaining({
+          accept: 'application/json',
+          'content-type': 'application/json'
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('Returns the problem body on a 400 response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ title: 'Invalid status', detail: 'Unknown status value' })
+    })
+
+    const result = await setWorkItemTaskStatus({
+      workItemId: 'abc',
+      taskId: 'check-eligibility',
+      status: 'bogus',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.status).toBe(400)
+    expect(result.problem.detail).toBe('Unknown status value')
+  })
+})
+
 describe('#applyWorkItemAction', () => {
   test('POSTs to the action endpoint and returns the updated work item', async () => {
     const workItem = { id: 'abc', stateId: 'approved' }
@@ -462,7 +517,10 @@ describe('#getWorkItems user identity headers', () => {
     const headers = fetchImpl.mock.calls[0][1].headers
     expect(headers['x-cdp-user-id']).toBe('u-1')
     expect(headers['x-cdp-user-name']).toBe('Alice')
-    expect(headers['x-cdp-user-roles']).toBe('standard,assign')
+    // The BFF always asserts the backend `case-worker` role on outbound
+    // calls — anyone signed into the case-management portal IS a case
+    // worker — independent of the BFF-level scopes.
+    expect(headers['x-cdp-user-roles']).toBe('standard,assign,case-worker')
   })
 
   test('Encodes assigneeId and unassigned filters into the query string', async () => {
@@ -513,7 +571,7 @@ describe('#assignWorkItem', () => {
         headers: expect.objectContaining({
           'content-type': 'application/json',
           'x-cdp-user-id': 'u-1',
-          'x-cdp-user-roles': 'assign'
+          'x-cdp-user-roles': 'assign,case-worker'
         })
       })
     )

@@ -57,6 +57,45 @@ export function makeCompleteTaskController({
   }
 }
 
+/**
+ * Move a task through the richer `WorkItemTaskStatus` lifecycle (epr-gl6).
+ *
+ * The form posts a single `status` field (e.g. `InProgress`); the service
+ * validates it against the canonical set and forwards the change to the
+ * backend's `PUT /tasks/{taskId}/status` endpoint. PRG-redirects on
+ * success; engine rejections (unknown task, invalid value) and transport
+ * failures surface inline via the same notification banner used by the
+ * other action handlers.
+ */
+export function makeSetTaskStatusController({
+  service = createWorkItemActionsService()
+} = {}) {
+  return {
+    async handler(request, h) {
+      const { id, taskId } = request.params
+      const payload = request.payload ?? {}
+      const status = typeof payload.status === 'string' ? payload.status : ''
+      const result = await service.setTaskStatus({
+        workItemId: id,
+        taskId,
+        status,
+        user: getUser(request)
+      })
+
+      if (result.ok) {
+        return h.redirect(`/work-items/${encodeURIComponent(id)}`)
+      }
+      return renderDetailFromResult({
+        request,
+        h,
+        id,
+        result,
+        actionLabel: `update task "${taskId}" status`
+      })
+    }
+  }
+}
+
 export function makeApplyActionController({
   service = createWorkItemActionsService()
 } = {}) {
@@ -330,9 +369,64 @@ function decorate(workItem) {
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
     payloadJson: safeStringify(workItem.payload),
-    assigneeDisplayName: workItem.assignedToName ?? workItem.assignedToId ?? null
+    assigneeDisplayName: workItem.assignedToName ?? workItem.assignedToId ?? null,
+    tasks: Array.isArray(workItem.tasks)
+      ? workItem.tasks.map(decorateTask)
+      : []
   }
 }
+
+/**
+ * Project a backend task into the richer view model the detail template
+ * expects (epr-gl6). Falls back to the legacy `isComplete` boolean when an
+ * older backend payload is rendered, so historical fixtures and any pre
+ * epr-gl6 work item snapshots still display sensibly.
+ */
+function decorateTask(task) {
+  const rawStatus = typeof task?.status === 'string' ? task.status : null
+  const fallback = task?.isComplete ? 'Completed' : 'NotStarted'
+  const canonical = TASK_STATUS_VIEW[rawStatus] ?? TASK_STATUS_VIEW[fallback]
+  return {
+    ...task,
+    status: canonical.id,
+    statusLabel: canonical.label,
+    statusTagClass: canonical.tagClass,
+    statusOptions: TASK_STATUS_OPTIONS.map((option) => ({
+      ...option,
+      selected: option.value === canonical.id
+    }))
+  }
+}
+
+const TASK_STATUS_VIEW = {
+  NotStarted: {
+    id: 'NotStarted',
+    label: 'Not started',
+    tagClass: 'govuk-tag--grey'
+  },
+  InProgress: {
+    id: 'InProgress',
+    label: 'In progress',
+    tagClass: 'govuk-tag--blue'
+  },
+  Blocked: {
+    id: 'Blocked',
+    label: 'Blocked',
+    tagClass: 'govuk-tag--red'
+  },
+  Completed: {
+    id: 'Completed',
+    label: 'Completed',
+    tagClass: 'govuk-tag--green'
+  }
+}
+
+const TASK_STATUS_OPTIONS = [
+  { value: 'NotStarted', text: 'Not started' },
+  { value: 'InProgress', text: 'In progress' },
+  { value: 'Blocked', text: 'Blocked' },
+  { value: 'Completed', text: 'Completed' }
+]
 
 function safeStringify(value) {
   try {
