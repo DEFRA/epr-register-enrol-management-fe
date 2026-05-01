@@ -162,6 +162,18 @@ function clampPositiveInt(value, fallback) {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback
 }
 
+// GOV.UK Design system tag colours for the cross-type work item State
+// column. Keys match registered state ids; unknown ids fall through to
+// the neutral grey tag.
+const STATE_TAG_CLASSES = {
+  submitted: 'govuk-tag--blue',
+  'assessment-in-progress': 'govuk-tag--light-blue',
+  'awaiting-decision': 'govuk-tag--yellow',
+  approved: 'govuk-tag--green',
+  rejected: 'govuk-tag--red',
+  withdrawn: 'govuk-tag--grey'
+}
+
 function decorate(item) {
   const type = getWorkItemType(item.typeId)
   const stateId = item.stateId
@@ -171,6 +183,7 @@ function decorate(item) {
     ...item,
     typeDisplayName: type?.displayName ?? item.typeId,
     stateDisplayName,
+    stateTagClass: STATE_TAG_CLASSES[stateId] ?? 'govuk-tag--grey',
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null
   }
 }

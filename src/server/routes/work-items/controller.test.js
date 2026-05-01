@@ -108,6 +108,72 @@ describe('#workItemListController', () => {
     expect(result).toEqual(expect.stringContaining('Re-accreditation'))
     expect(result).toEqual(expect.stringContaining('Submitted'))
     expect(result).toEqual(expect.stringContaining('frontend'))
+    // State column renders as a coloured govuk-tag matching the design
+    // tokens used by the work item detail page (epr-3x2 follow-up).
+    expect(result).toEqual(
+      expect.stringContaining(
+        'data-testid="work-item-state-tag-11111111-1111-1111-1111-111111111111"'
+      )
+    )
+    expect(result).toEqual(expect.stringContaining('govuk-tag govuk-tag--blue'))
+  })
+
+  test('Maps each registered state id to its GOV.UK tag colour', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [
+        { id: 'submitted', displayName: 'Submitted' },
+        {
+          id: 'assessment-in-progress',
+          displayName: 'Assessment in progress'
+        },
+        { id: 'awaiting-decision', displayName: 'Awaiting decision' },
+        { id: 'approved', displayName: 'Approved' },
+        { id: 'rejected', displayName: 'Rejected' },
+        { id: 'withdrawn', displayName: 'Withdrawn' }
+      ],
+      getTasksForState: () => []
+    })
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          { stateId: 'submitted' },
+          { stateId: 'assessment-in-progress' },
+          { stateId: 'awaiting-decision' },
+          { stateId: 'approved' },
+          { stateId: 'rejected' },
+          { stateId: 'withdrawn' },
+          { stateId: 'mystery' }
+        ].map((s, i) => ({
+          id: `00000000-0000-0000-0000-00000000000${i}`,
+          typeId: 're-accreditation',
+          submittedAt: '2026-04-27T10:00:00Z',
+          submittedBy: 'frontend',
+          payload: {},
+          ...s
+        })),
+        totalCount: 7
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    for (const cls of [
+      'govuk-tag--blue',
+      'govuk-tag--light-blue',
+      'govuk-tag--yellow',
+      'govuk-tag--green',
+      'govuk-tag--red',
+      'govuk-tag--grey'
+    ]) {
+      expect(result).toEqual(expect.stringContaining(cls))
+    }
   })
 
   test('Falls back to raw type id when no module is registered for the type', async () => {
