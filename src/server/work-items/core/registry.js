@@ -18,7 +18,9 @@ export function registerWorkItemType(type) {
     throw new Error('Work item type must have a non-empty string id')
   }
   if (types.has(type.id)) {
-    throw new Error(`A work item type with id "${type.id}" is already registered`)
+    throw new Error(
+      `A work item type with id "${type.id}" is already registered`
+    )
   }
   types.set(type.id, type)
 }

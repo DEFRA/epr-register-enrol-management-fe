@@ -26,9 +26,7 @@ describe('#buildNavigation', () => {
   })
 
   test('Should highlight backend status when on /backend-status', () => {
-    expect(
-      buildNavigation(mockRequest({ path: '/backend-status' }))
-    ).toEqual([
+    expect(buildNavigation(mockRequest({ path: '/backend-status' }))).toEqual([
       { current: false, text: 'Home', href: '/' },
       { current: false, text: 'About', href: '/about' },
       { current: false, text: 'Work items', href: '/work-items' },
@@ -37,9 +35,7 @@ describe('#buildNavigation', () => {
   })
 
   test('Should highlight work items when on /work-items', () => {
-    expect(
-      buildNavigation(mockRequest({ path: '/work-items' }))
-    ).toEqual([
+    expect(buildNavigation(mockRequest({ path: '/work-items' }))).toEqual([
       { current: false, text: 'Home', href: '/' },
       { current: false, text: 'About', href: '/about' },
       { current: true, text: 'Work items', href: '/work-items' },

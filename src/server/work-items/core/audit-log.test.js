@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'vitest'
-import {
-  decorateAuditLog,
-  summariseAuditEntry
-} from './audit-log.js'
+import { decorateAuditLog, summariseAuditEntry } from './audit-log.js'
 
 describe('summariseAuditEntry', () => {
   test('returns task display name for a task-completed entry', () => {
     expect(
       summariseAuditEntry({
         action: 'task-completed',
-        details: { taskId: 'check-eligibility', taskDisplayName: 'Check eligibility' }
+        details: {
+          taskId: 'check-eligibility',
+          taskDisplayName: 'Check eligibility'
+        }
       })
     ).toBe('Check eligibility')
   })
@@ -64,7 +64,10 @@ describe('summariseAuditEntry', () => {
     expect(
       summariseAuditEntry({
         action: 'unassigned',
-        details: { previousAssigneeId: 'alice-1', previousAssigneeName: 'Alice' }
+        details: {
+          previousAssigneeId: 'alice-1',
+          previousAssigneeName: 'Alice'
+        }
       })
     ).toBe('was Alice')
   })
@@ -76,7 +79,9 @@ describe('summariseAuditEntry', () => {
   })
 
   test('returns an empty string for unknown actions and bad input', () => {
-    expect(summariseAuditEntry({ action: 'something-else', details: {} })).toBe('')
+    expect(summariseAuditEntry({ action: 'something-else', details: {} })).toBe(
+      ''
+    )
     expect(summariseAuditEntry(null)).toBe('')
     expect(summariseAuditEntry({})).toBe('')
   })

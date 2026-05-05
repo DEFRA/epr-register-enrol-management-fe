@@ -108,13 +108,13 @@ when running in environments that require it.
 Configuration is managed via [`convict`](https://github.com/mozilla/node-convict).
 Notable environment variables for local integration:
 
-| Variable                  | Default                  | Description                                |
-| ------------------------- | ------------------------ | ------------------------------------------ |
-| `PORT`                    | `3000`                   | Frontend HTTP port                         |
-| `BACKEND_API_URL`         | `http://localhost:8085`  | Base URL of the case management backend    |
-| `BACKEND_API_TIMEOUT_MS`  | `5000`                   | Backend request timeout                    |
-| `SESSION_CACHE_ENGINE`    | `memory` (dev)           | `memory` or `redis`. Memory is ephemeral.  |
-| `REDIS_HOST`              | `127.0.0.1`              | Used when `SESSION_CACHE_ENGINE=redis`     |
+| Variable                 | Default                 | Description                               |
+| ------------------------ | ----------------------- | ----------------------------------------- |
+| `PORT`                   | `3000`                  | Frontend HTTP port                        |
+| `BACKEND_API_URL`        | `http://localhost:8085` | Base URL of the case management backend   |
+| `BACKEND_API_TIMEOUT_MS` | `5000`                  | Backend request timeout                   |
+| `SESSION_CACHE_ENGINE`   | `memory` (dev)          | `memory` or `redis`. Memory is ephemeral. |
+| `REDIS_HOST`             | `127.0.0.1`             | Used when `SESSION_CACHE_ENGINE=redis`    |
 
 > Session storage uses CatboxMemory by default in development; Redis is
 > only required for production-style local runs (e.g. via Compose). Both

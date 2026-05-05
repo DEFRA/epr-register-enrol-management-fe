@@ -73,16 +73,34 @@ const TRANSITIONS = [
 
 const TASKS_BY_STATE = {
   submitted: [
-    { id: 'verify-organisation-details', displayName: 'Verify organisation details' },
-    { id: 'confirm-registration-fee-paid', displayName: 'Confirm registration fee paid' }
+    {
+      id: 'verify-organisation-details',
+      displayName: 'Verify organisation details'
+    },
+    {
+      id: 'confirm-registration-fee-paid',
+      displayName: 'Confirm registration fee paid'
+    }
   ],
   'assessment-in-progress': [
-    { id: 'review-compliance-history', displayName: 'Review compliance history' },
-    { id: 'assess-technical-capacity', displayName: 'Assess technical capacity' },
-    { id: 'assess-financial-capacity', displayName: 'Assess financial capacity' }
+    {
+      id: 'review-compliance-history',
+      displayName: 'Review compliance history'
+    },
+    {
+      id: 'assess-technical-capacity',
+      displayName: 'Assess technical capacity'
+    },
+    {
+      id: 'assess-financial-capacity',
+      displayName: 'Assess financial capacity'
+    }
   ],
   'awaiting-decision': [
-    { id: 'record-decision-rationale', displayName: 'Record decision rationale' }
+    {
+      id: 'record-decision-rationale',
+      displayName: 'Record decision rationale'
+    }
   ]
 }
 

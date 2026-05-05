@@ -62,7 +62,10 @@ export function resolveDetailTemplate(typeId, templateVersion) {
  * keyed by version. Lets a module declare every shipped template version in
  * one place and have them all registered at boot.
  */
-export function registerModuleDetailTemplates(typeId, detailTemplatesByVersion) {
+export function registerModuleDetailTemplates(
+  typeId,
+  detailTemplatesByVersion
+) {
   if (!detailTemplatesByVersion) return
   for (const [version, path] of Object.entries(detailTemplatesByVersion)) {
     registerDetailTemplate(typeId, version, path)

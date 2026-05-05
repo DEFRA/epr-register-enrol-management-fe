@@ -13,7 +13,11 @@ describe('#detail template registry', () => {
   })
 
   test('Resolves a registered template for a (typeId, version) pair', () => {
-    registerDetailTemplate('re-accreditation', 'v1', 're-accreditation/detail-v1')
+    registerDetailTemplate(
+      're-accreditation',
+      'v1',
+      're-accreditation/detail-v1'
+    )
 
     expect(resolveDetailTemplate('re-accreditation', 'v1')).toBe(
       're-accreditation/detail-v1'
@@ -32,8 +36,16 @@ describe('#detail template registry', () => {
   })
 
   test('Different versions of the same type resolve to different templates', () => {
-    registerDetailTemplate('re-accreditation', 'v1', 're-accreditation/detail-v1')
-    registerDetailTemplate('re-accreditation', 'v2', 're-accreditation/detail-v2')
+    registerDetailTemplate(
+      're-accreditation',
+      'v1',
+      're-accreditation/detail-v1'
+    )
+    registerDetailTemplate(
+      're-accreditation',
+      'v2',
+      're-accreditation/detail-v2'
+    )
 
     expect(resolveDetailTemplate('re-accreditation', 'v1')).toBe(
       're-accreditation/detail-v1'
@@ -59,7 +71,9 @@ describe('#detail template registry', () => {
 
   test('Throws on missing or empty arguments', () => {
     expect(() => registerDetailTemplate('', 'v1', 'x')).toThrow(/typeId/)
-    expect(() => registerDetailTemplate('t', '', 'x')).toThrow(/templateVersion/)
+    expect(() => registerDetailTemplate('t', '', 'x')).toThrow(
+      /templateVersion/
+    )
     expect(() => registerDetailTemplate('t', 'v1', '')).toThrow(/non-empty/)
   })
 })

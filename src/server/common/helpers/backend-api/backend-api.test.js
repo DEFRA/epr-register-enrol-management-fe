@@ -161,7 +161,11 @@ describe('#getWorkItems', () => {
       fetchImpl
     })
 
-    expect(result).toEqual({ ok: false, status: 503, error: 'Backend returned 503' })
+    expect(result).toEqual({
+      ok: false,
+      status: 503,
+      error: 'Backend returned 503'
+    })
   })
 
   test('Returns ok=false when fetch throws', async () => {
@@ -215,7 +219,12 @@ describe('#getWorkItems', () => {
 
 describe('#completeWorkItemTask', () => {
   test('POSTs to the engine endpoint and returns the updated work item', async () => {
-    const workItem = { id: 'abc', stateId: 'submitted', tasks: [], availableActions: [] }
+    const workItem = {
+      id: 'abc',
+      stateId: 'submitted',
+      tasks: [],
+      availableActions: []
+    }
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -244,7 +253,11 @@ describe('#completeWorkItemTask', () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,
       status: 400,
-      json: () => Promise.resolve({ title: 'Invalid action', detail: 'Task not applicable' })
+      json: () =>
+        Promise.resolve({
+          title: 'Invalid action',
+          detail: 'Task not applicable'
+        })
     })
 
     const result = await completeWorkItemTask({
@@ -317,7 +330,11 @@ describe('#setWorkItemTaskStatus', () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,
       status: 400,
-      json: () => Promise.resolve({ title: 'Invalid status', detail: 'Unknown status value' })
+      json: () =>
+        Promise.resolve({
+          title: 'Invalid status',
+          detail: 'Unknown status value'
+        })
     })
 
     const result = await setWorkItemTaskStatus({
@@ -504,7 +521,8 @@ describe('#getWorkItems user identity headers', () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
     })
 
     await getWorkItems({
@@ -527,7 +545,8 @@ describe('#getWorkItems user identity headers', () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
     })
 
     await getWorkItems({

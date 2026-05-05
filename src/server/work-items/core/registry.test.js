@@ -53,7 +53,9 @@ describe('work item registry', () => {
 
   test('rejects a duplicate id', () => {
     registerWorkItemType(sampleType())
-    expect(() => registerWorkItemType(sampleType())).toThrow(/already registered/)
+    expect(() => registerWorkItemType(sampleType())).toThrow(
+      /already registered/
+    )
   })
 
   test('clearWorkItemRegistry removes every type', () => {

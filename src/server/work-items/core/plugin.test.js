@@ -28,7 +28,10 @@ describe('workItemsPlugin', () => {
     const server = newServer()
     const registerA = vi.fn(async () => {})
     const registerB = vi.fn(async () => {})
-    const modules = [buildModule('alpha', registerA), buildModule('beta', registerB)]
+    const modules = [
+      buildModule('alpha', registerA),
+      buildModule('beta', registerB)
+    ]
 
     await server.register(workItemsPlugin(modules))
 

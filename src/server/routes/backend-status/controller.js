@@ -12,10 +12,7 @@ export const backendStatusController = {
     return h.view('backend-status/index', {
       pageTitle: 'Backend status',
       heading: 'Backend status',
-      breadcrumbs: [
-        { text: 'Home', href: '/' },
-        { text: 'Backend status' }
-      ],
+      breadcrumbs: [{ text: 'Home', href: '/' }, { text: 'Backend status' }],
       backendUrl: config.get('backendApi.url'),
       result
     })

@@ -19,9 +19,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   addWorkItemNote: vi.fn()
 }))
 
-const { getWorkItems } = await import(
-  '#/server/common/helpers/backend-api/backend-api.js'
-)
+const { getWorkItems } =
+  await import('#/server/common/helpers/backend-api/backend-api.js')
 
 function emptyPage(overrides = {}) {
   return {

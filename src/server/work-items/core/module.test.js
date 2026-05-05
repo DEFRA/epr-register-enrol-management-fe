@@ -14,14 +14,16 @@ describe('assertValidWorkItemModule', () => {
   })
 
   test('rejects a missing module', () => {
-    expect(() => assertValidWorkItemModule(undefined)).toThrow(/must be an object/)
+    expect(() => assertValidWorkItemModule(undefined)).toThrow(
+      /must be an object/
+    )
     expect(() => assertValidWorkItemModule(null)).toThrow(/must be an object/)
   })
 
   test('rejects a module without a type', () => {
-    expect(() => assertValidWorkItemModule({ register: async () => {} })).toThrow(
-      /non-empty string id/
-    )
+    expect(() =>
+      assertValidWorkItemModule({ register: async () => {} })
+    ).toThrow(/non-empty string id/)
   })
 
   test('rejects a module with a blank type id', () => {

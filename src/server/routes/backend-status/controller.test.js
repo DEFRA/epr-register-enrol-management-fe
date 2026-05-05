@@ -15,9 +15,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   addWorkItemNote: vi.fn()
 }))
 
-const { getBackendHealth } = await import(
-  '#/server/common/helpers/backend-api/backend-api.js'
-)
+const { getBackendHealth } =
+  await import('#/server/common/helpers/backend-api/backend-api.js')
 
 describe('#backendStatusController', () => {
   let server

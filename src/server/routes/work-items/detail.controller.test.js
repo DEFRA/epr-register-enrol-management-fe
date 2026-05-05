@@ -47,7 +47,11 @@ function aWorkItem(overrides = {}) {
     templateVersion: 'v1',
     payload: { applicantName: 'Acme' },
     tasks: [
-      { taskId: 'check-eligibility', displayName: 'Check eligibility', isComplete: false }
+      {
+        taskId: 'check-eligibility',
+        displayName: 'Check eligibility',
+        isComplete: false
+      }
     ],
     availableActions: [],
     ...overrides
@@ -122,10 +126,20 @@ describe('#workItemDetailController', () => {
       ok: true,
       workItem: aWorkItem({
         tasks: [
-          { taskId: 'check-eligibility', displayName: 'Check eligibility', isComplete: true }
+          {
+            taskId: 'check-eligibility',
+            displayName: 'Check eligibility',
+            isComplete: true
+          }
         ],
         availableActions: [
-          { actionId: 'approve', displayName: 'Approve', fromStateId: 'submitted', toStateId: 'approved', requiresAllTasksComplete: true }
+          {
+            actionId: 'approve',
+            displayName: 'Approve',
+            fromStateId: 'submitted',
+            toStateId: 'approved',
+            requiresAllTasksComplete: true
+          }
         ]
       })
     })
@@ -203,7 +217,13 @@ describe('#workItemDetailController', () => {
     completeWorkItemTask.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
-        tasks: [{ taskId: 'check-eligibility', displayName: 'Check eligibility', isComplete: true }]
+        tasks: [
+          {
+            taskId: 'check-eligibility',
+            displayName: 'Check eligibility',
+            isComplete: true
+          }
+        ]
       })
     })
 
@@ -244,7 +264,14 @@ describe('#workItemDetailController', () => {
     setWorkItemTaskStatus.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
-        tasks: [{ taskId: 'check-eligibility', displayName: 'Check eligibility', isComplete: false, status: 'InProgress' }]
+        tasks: [
+          {
+            taskId: 'check-eligibility',
+            displayName: 'Check eligibility',
+            isComplete: false,
+            status: 'InProgress'
+          }
+        ]
       })
     })
 
@@ -295,7 +322,9 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.conflict)
-    expect(result).toEqual(expect.stringContaining('Task does not apply to this state'))
+    expect(result).toEqual(
+      expect.stringContaining('Task does not apply to this state')
+    )
   })
 
   test('Renders the richer task-status tag and select for an in-progress task', async () => {
@@ -322,7 +351,9 @@ describe('#workItemDetailController', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('In progress'))
     expect(result).toEqual(expect.stringContaining('govuk-tag--blue'))
-    expect(result).toEqual(expect.stringContaining('task-status-select-check-eligibility'))
+    expect(result).toEqual(
+      expect.stringContaining('task-status-select-check-eligibility')
+    )
   })
 
   test('Renders a Blocked task with the red tag and no completed badge', async () => {
@@ -516,9 +547,7 @@ describe('#workItemDetailController', () => {
       result.indexOf('Older note from Bob')
     )
     // Add-note form is always rendered.
-    expect(result).toEqual(
-      expect.stringContaining(`/work-items/${ID}/notes`)
-    )
+    expect(result).toEqual(expect.stringContaining(`/work-items/${ID}/notes`))
     expect(result).toEqual(expect.stringContaining('Add a note'))
   })
 
@@ -613,7 +642,10 @@ describe('#workItemDetailController', () => {
             id: 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
             action: 'task-completed',
             actionDisplayName: 'Task completed',
-            details: { taskId: 'check-eligibility', taskDisplayName: 'Check eligibility' },
+            details: {
+              taskId: 'check-eligibility',
+              taskDisplayName: 'Check eligibility'
+            },
             createdAt: '2026-04-27T09:00:00Z',
             createdBy: 'alice-1',
             createdByName: 'Alice Example'

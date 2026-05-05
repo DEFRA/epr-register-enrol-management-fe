@@ -52,7 +52,13 @@ export function makeCompleteTaskController({
         // clean of one-shot state.
         return h.redirect(`/work-items/${encodeURIComponent(id)}`)
       }
-      return renderDetailFromResult({ request, h, id, result, actionLabel: `mark task "${taskId}" complete` })
+      return renderDetailFromResult({
+        request,
+        h,
+        id,
+        result,
+        actionLabel: `mark task "${taskId}" complete`
+      })
     }
   }
 }
@@ -111,7 +117,13 @@ export function makeApplyActionController({
       if (result.ok) {
         return h.redirect(`/work-items/${encodeURIComponent(id)}`)
       }
-      return renderDetailFromResult({ request, h, id, result, actionLabel: actionId })
+      return renderDetailFromResult({
+        request,
+        h,
+        id,
+        result,
+        actionLabel: actionId
+      })
     }
   }
 }
@@ -153,7 +165,8 @@ export function makeAssignController({
       const directoryEntry = findAssignableUser(rawAssigneeId)
       const assigneeName =
         directoryEntry?.name ??
-        (typeof payload.assigneeName === 'string' && payload.assigneeName.trim() !== ''
+        (typeof payload.assigneeName === 'string' &&
+        payload.assigneeName.trim() !== ''
           ? payload.assigneeName.trim()
           : null)
 
@@ -278,7 +291,11 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
     decorated.templateVersion
   )
 
-  const assignment = buildAssignmentViewModel({ workItem: decorated, request, user })
+  const assignment = buildAssignmentViewModel({
+    workItem: decorated,
+    request,
+    user
+  })
 
   return h
     .view(templatePath, {
@@ -311,8 +328,7 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
 function buildAssignmentViewModel({ workItem, request, user }) {
   const canAssignAnyone = hasRole(request, ROLE_ASSIGN)
   const isUnassigned = !workItem.assignedToId
-  const callerIsAssignee =
-    user?.id != null && workItem.assignedToId === user.id
+  const callerIsAssignee = user?.id != null && workItem.assignedToId === user.id
   const canSelfAssign = !canAssignAnyone && isUnassigned && user?.id != null
 
   return {
@@ -369,10 +385,9 @@ function decorate(workItem) {
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
     payloadJson: safeStringify(workItem.payload),
-    assigneeDisplayName: workItem.assignedToName ?? workItem.assignedToId ?? null,
-    tasks: Array.isArray(workItem.tasks)
-      ? workItem.tasks.map(decorateTask)
-      : []
+    assigneeDisplayName:
+      workItem.assignedToName ?? workItem.assignedToId ?? null,
+    tasks: Array.isArray(workItem.tasks) ? workItem.tasks.map(decorateTask) : []
   }
 }
 

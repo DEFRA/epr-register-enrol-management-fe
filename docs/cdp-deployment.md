@@ -8,31 +8,31 @@ those how-tos for the authoritative platform behaviour.
 
 ## Service identity
 
-| Attribute      | Value                                           |
-| -------------- | ----------------------------------------------- |
-| Service name   | `epr-register-case-management-frontend-poc`     |
-| Runtime        | Node.js 24 (`node24`) running Hapi              |
-| Container port | `3000`                                          |
-| Health probe   | `GET /health` (anonymous, returns `200`)        |
+| Attribute      | Value                                       |
+| -------------- | ------------------------------------------- |
+| Service name   | `epr-register-case-management-frontend-poc` |
+| Runtime        | Node.js 24 (`node24`) running Hapi          |
+| Container port | `3000`                                      |
+| Health probe   | `GET /health` (anonymous, returns `200`)    |
 
 ## Required environment variables
 
-| Variable                       | Source                  | Notes                                                          |
-| ------------------------------ | ----------------------- | -------------------------------------------------------------- |
-| `PORT`                         | Container               | `3000` (matches `EXPOSE`).                                     |
-| `NODE_ENV`                     | CDP platform            | `production` in deployed environments.                         |
-| `ENVIRONMENT`                  | CDP platform            | One of `infra-dev`/`management`/`dev`/`test`/`perf-test`/`ext-test`/`prod`. |
-| `BACKEND_API_URL`              | Service config          | URL of the case-management backend in the same environment.    |
-| `BACKEND_API_COGNITO_CLIENT_ID`| Service config          | Sent as `x-cdp-cognito-client-id` to the backend.              |
-| `SESSION_CACHE_ENGINE`         | Service config          | `redis` in deployed environments.                              |
-| `REDIS_HOST`                   | CDP Redis binding       | ElastiCache hostname.                                          |
-| `REDIS_TLS`                    | Service config          | `true` in deployed environments.                               |
-| `SESSION_COOKIE_PASSWORD`      | **Secret**              | ≥32 chars, generated per environment.                          |
-| `SESSION_COOKIE_SECURE`        | Service config          | `true` in deployed environments.                               |
-| `TRACING_HEADER`               | Service config          | Defaults to `x-cdp-request-id`.                                |
-| `HTTP_PROXY` / `HTTPS_PROXY`   | CDP platform            | CDP outbound proxy.                                            |
-| `ENABLE_SECURE_CONTEXT`        | Service config          | `true` in production (loads CDP CA bundle).                    |
-| `AUTH_STUB_ENABLED`            | Service config          | `false` in `prod`, `true` elsewhere until real Cognito wired.  |
+| Variable                        | Source            | Notes                                                                       |
+| ------------------------------- | ----------------- | --------------------------------------------------------------------------- |
+| `PORT`                          | Container         | `3000` (matches `EXPOSE`).                                                  |
+| `NODE_ENV`                      | CDP platform      | `production` in deployed environments.                                      |
+| `ENVIRONMENT`                   | CDP platform      | One of `infra-dev`/`management`/`dev`/`test`/`perf-test`/`ext-test`/`prod`. |
+| `BACKEND_API_URL`               | Service config    | URL of the case-management backend in the same environment.                 |
+| `BACKEND_API_COGNITO_CLIENT_ID` | Service config    | Sent as `x-cdp-cognito-client-id` to the backend.                           |
+| `SESSION_CACHE_ENGINE`          | Service config    | `redis` in deployed environments.                                           |
+| `REDIS_HOST`                    | CDP Redis binding | ElastiCache hostname.                                                       |
+| `REDIS_TLS`                     | Service config    | `true` in deployed environments.                                            |
+| `SESSION_COOKIE_PASSWORD`       | **Secret**        | ≥32 chars, generated per environment.                                       |
+| `SESSION_COOKIE_SECURE`         | Service config    | `true` in deployed environments.                                            |
+| `TRACING_HEADER`                | Service config    | Defaults to `x-cdp-request-id`.                                             |
+| `HTTP_PROXY` / `HTTPS_PROXY`    | CDP platform      | CDP outbound proxy.                                                         |
+| `ENABLE_SECURE_CONTEXT`         | Service config    | `true` in production (loads CDP CA bundle).                                 |
+| `AUTH_STUB_ENABLED`             | Service config    | `false` in `prod`, `true` elsewhere until real Cognito wired.               |
 
 ## Required secrets (cdp-portal)
 

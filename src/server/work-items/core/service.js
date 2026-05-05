@@ -89,7 +89,12 @@ export function createWorkItemActionsService({
     async assign({ workItemId, assigneeId, assigneeName = null, user = null }) {
       assertId(workItemId, 'workItemId')
       assertId(assigneeId, 'assigneeId')
-      const result = await assign({ workItemId, assigneeId, assigneeName, user })
+      const result = await assign({
+        workItemId,
+        assigneeId,
+        assigneeName,
+        user
+      })
       return toResult(result)
     },
 
@@ -158,7 +163,9 @@ function toResult(result) {
       ok: false,
       reason: 'not-authorized',
       status: result.status,
-      message: result.problem?.detail ?? 'You are not authorised to perform this action'
+      message:
+        result.problem?.detail ??
+        'You are not authorised to perform this action'
     }
   }
   if (result.status === 409) {
@@ -185,5 +192,9 @@ function toResult(result) {
       message: result.problem?.detail ?? `Backend returned ${result.status}`
     }
   }
-  return { ok: false, reason: 'transport-error', message: result.error ?? 'Backend unreachable' }
+  return {
+    ok: false,
+    reason: 'transport-error',
+    message: result.error ?? 'Backend unreachable'
+  }
 }

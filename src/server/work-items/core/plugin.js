@@ -1,7 +1,4 @@
-import {
-  clearWorkItemRegistry,
-  registerWorkItemType
-} from './registry.js'
+import { clearWorkItemRegistry, registerWorkItemType } from './registry.js'
 import { assertValidWorkItemModule } from './module.js'
 import { clearDetailTemplateRegistry } from './templates.js'
 

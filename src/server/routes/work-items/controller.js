@@ -54,10 +54,7 @@ export const workItemListController = {
     return h.view('work-items/index', {
       pageTitle: 'Work items',
       heading: 'Work items',
-      breadcrumbs: [
-        { text: 'Home', href: '/' },
-        { text: 'Work items' }
-      ],
+      breadcrumbs: [{ text: 'Home', href: '/' }, { text: 'Work items' }],
       ok: result.ok,
       error: result.error,
       items,
@@ -95,14 +92,14 @@ function readFilters(query, user) {
     knownStateIds.has(id)
   )
 
-  const search =
-    typeof query.search === 'string' ? query.search.trim() : ''
+  const search = typeof query.search === 'string' ? query.search.trim() : ''
 
   const page = clampPositiveInt(query.page, 1)
 
   const assigneeMode = normaliseAssigneeMode(query.assigneeMode)
   const assigneeUserId =
-    typeof query.assigneeUserId === 'string' && query.assigneeUserId.trim() !== ''
+    typeof query.assigneeUserId === 'string' &&
+    query.assigneeUserId.trim() !== ''
       ? query.assigneeUserId.trim()
       : null
 
@@ -228,9 +225,7 @@ function buildAssigneeFilterOptions(filters, user) {
     },
     {
       value: ASSIGNEE_FILTER_MINE,
-      text: user?.name
-        ? `Assigned to me (${user.name})`
-        : 'Assigned to me',
+      text: user?.name ? `Assigned to me (${user.name})` : 'Assigned to me',
       checked: filters.assigneeMode === ASSIGNEE_FILTER_MINE
     },
     {
@@ -294,7 +289,10 @@ function buildHref(filters) {
   if (filters.search) params.append('search', filters.search)
   if (filters.assigneeMode && filters.assigneeMode !== ASSIGNEE_FILTER_ANY) {
     params.append('assigneeMode', filters.assigneeMode)
-    if (filters.assigneeMode === ASSIGNEE_FILTER_USER && filters.assigneeUserId) {
+    if (
+      filters.assigneeMode === ASSIGNEE_FILTER_USER &&
+      filters.assigneeUserId
+    ) {
       params.append('assigneeUserId', filters.assigneeUserId)
     }
   }
@@ -323,7 +321,10 @@ function buildFilterSummary({ filters, totalCount }) {
     parts.push('assigned to me')
   } else if (filters.assigneeMode === ASSIGNEE_FILTER_UNASSIGNED) {
     parts.push('unassigned')
-  } else if (filters.assigneeMode === ASSIGNEE_FILTER_USER && filters.assigneeUserId) {
+  } else if (
+    filters.assigneeMode === ASSIGNEE_FILTER_USER &&
+    filters.assigneeUserId
+  ) {
     parts.push(`assignee: ${filters.assigneeUserId}`)
   }
   return {

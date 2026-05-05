@@ -126,7 +126,11 @@ export async function getWorkItems({
     })
 
     if (!response.ok) {
-      return { ok: false, status: response.status, error: `Backend returned ${response.status}` }
+      return {
+        ok: false,
+        status: response.status,
+        error: `Backend returned ${response.status}`
+      }
     }
 
     const body = await response.json()
@@ -142,7 +146,10 @@ export async function getWorkItems({
   }
 }
 
-function buildWorkItemsUrl(baseUrl, { typeIds, stateIds, search, assigneeId, unassigned, page, pageSize }) {
+function buildWorkItemsUrl(
+  baseUrl,
+  { typeIds, stateIds, search, assigneeId, unassigned, page, pageSize }
+) {
   const root = `${baseUrl.replace(/\/$/, '')}/work-items`
   const params = new URLSearchParams()
 
@@ -162,7 +169,9 @@ function buildWorkItemsUrl(baseUrl, { typeIds, stateIds, search, assigneeId, una
     params.append('unassigned', 'true')
   }
   if (page != null && page !== '') params.append('page', String(page))
-  if (pageSize != null && pageSize !== '') params.append('pageSize', String(pageSize))
+  if (pageSize != null && pageSize !== '') {
+    params.append('pageSize', String(pageSize))
+  }
 
   const qs = params.toString()
   return qs === '' ? root : `${root}?${qs}`
@@ -188,9 +197,13 @@ function parseWorkItemsBody(body) {
     return {
       ok: true,
       items: body.items,
-      totalCount: typeof body.totalCount === 'number' ? body.totalCount : body.items.length,
+      totalCount:
+        typeof body.totalCount === 'number'
+          ? body.totalCount
+          : body.items.length,
       page: typeof body.page === 'number' ? body.page : 1,
-      pageSize: typeof body.pageSize === 'number' ? body.pageSize : body.items.length
+      pageSize:
+        typeof body.pageSize === 'number' ? body.pageSize : body.items.length
     }
   }
   return { ok: true, items: [], totalCount: 0, page: 1, pageSize: 0 }
@@ -228,7 +241,11 @@ export async function getWorkItem({
       return { ok: false, status: 404 }
     }
     if (!response.ok) {
-      return { ok: false, status: response.status, error: `Backend returned ${response.status}` }
+      return {
+        ok: false,
+        status: response.status,
+        error: `Backend returned ${response.status}`
+      }
     }
 
     const workItem = await response.json()
@@ -263,7 +280,13 @@ export async function completeWorkItemTask({
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/tasks/${encodeURIComponent(taskId)}/complete`
-  return postJson({ url, timeoutMs, fetchImpl, user, label: 'completeWorkItemTask' })
+  return postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'completeWorkItemTask'
+  })
 }
 
 /**
@@ -309,7 +332,13 @@ export async function applyWorkItemAction({
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/actions/${encodeURIComponent(actionId)}`
-  return postJson({ url, timeoutMs, fetchImpl, user, label: 'applyWorkItemAction' })
+  return postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'applyWorkItemAction'
+  })
 }
 
 /**
@@ -349,7 +378,13 @@ export async function unassignWorkItem({
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/unassign`
-  return postJson({ url, timeoutMs, fetchImpl, user, label: 'unassignWorkItem' })
+  return postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'unassignWorkItem'
+  })
 }
 
 /**
@@ -378,7 +413,15 @@ export async function addWorkItemNote({
   })
 }
 
-async function postJson({ url, timeoutMs, fetchImpl, user, label, body = null, method = 'POST' }) {
+async function postJson({
+  url,
+  timeoutMs,
+  fetchImpl,
+  user,
+  label,
+  body = null,
+  method = 'POST'
+}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 

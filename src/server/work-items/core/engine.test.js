@@ -21,8 +21,18 @@ const sampleType = (overrides = {}) => ({
     return []
   },
   transitions: [
-    { actionId: 'approve', displayName: 'Approve', fromStateId: 'submitted', toStateId: 'approved' },
-    { actionId: 'reject', displayName: 'Reject', fromStateId: 'submitted', toStateId: 'rejected' },
+    {
+      actionId: 'approve',
+      displayName: 'Approve',
+      fromStateId: 'submitted',
+      toStateId: 'approved'
+    },
+    {
+      actionId: 'reject',
+      displayName: 'Reject',
+      fromStateId: 'submitted',
+      toStateId: 'rejected'
+    },
     {
       actionId: 'withdraw',
       displayName: 'Withdraw',
@@ -40,7 +50,9 @@ describe('projectWorkItem', () => {
 
     expect(projection.tasks).toHaveLength(2)
     expect(projection.tasks.every((t) => t.isComplete === false)).toBe(true)
-    expect(projection.availableActions.map((a) => a.actionId)).toEqual(['withdraw'])
+    expect(projection.availableActions.map((a) => a.actionId)).toEqual([
+      'withdraw'
+    ])
   })
 
   test('makes gated actions available once every task is complete', () => {
@@ -76,20 +88,26 @@ describe('projectWorkItem', () => {
 
 describe('canApplyAction', () => {
   test('allows an action that requires no tasks regardless of progress', () => {
-    expect(canApplyAction(sampleType(), { stateId: 'submitted' }, 'withdraw')).toEqual({
+    expect(
+      canApplyAction(sampleType(), { stateId: 'submitted' }, 'withdraw')
+    ).toEqual({
       allowed: true
     })
   })
 
   test('blocks a gated action when tasks are outstanding', () => {
-    expect(canApplyAction(sampleType(), { stateId: 'submitted' }, 'approve')).toEqual({
+    expect(
+      canApplyAction(sampleType(), { stateId: 'submitted' }, 'approve')
+    ).toEqual({
       allowed: false,
       reason: 'incomplete-tasks'
     })
   })
 
   test('blocks any action in a terminal state', () => {
-    expect(canApplyAction(sampleType(), { stateId: 'approved' }, 'approve')).toEqual({
+    expect(
+      canApplyAction(sampleType(), { stateId: 'approved' }, 'approve')
+    ).toEqual({
       allowed: false,
       reason: 'terminal-state'
     })
@@ -117,7 +135,9 @@ describe('canApplyAction', () => {
   })
 
   test('rejects an unknown action id', () => {
-    expect(canApplyAction(sampleType(), { stateId: 'submitted' }, 'teleport')).toEqual({
+    expect(
+      canApplyAction(sampleType(), { stateId: 'submitted' }, 'teleport')
+    ).toEqual({
       allowed: false,
       reason: 'unknown-action'
     })

@@ -14,8 +14,14 @@ export function assertValidWorkItemModule(mod) {
   if (!mod || typeof mod !== 'object') {
     throw new Error('Work item module must be an object')
   }
-  if (!mod.type || typeof mod.type.id !== 'string' || mod.type.id.trim() === '') {
-    throw new Error('Work item module must export a `type` with a non-empty string id')
+  if (
+    !mod.type ||
+    typeof mod.type.id !== 'string' ||
+    mod.type.id.trim() === ''
+  ) {
+    throw new Error(
+      'Work item module must export a `type` with a non-empty string id'
+    )
   }
   if (typeof mod.register !== 'function') {
     throw new Error(

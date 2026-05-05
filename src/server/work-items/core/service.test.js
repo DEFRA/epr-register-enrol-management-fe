@@ -21,14 +21,20 @@ describe('createWorkItemActionsService', () => {
         taskId: 'check-eligibility',
         user: null
       })
-      expect(result).toEqual({ ok: true, workItem: { id: 'abc', stateId: 'submitted' } })
+      expect(result).toEqual({
+        ok: true,
+        workItem: { id: 'abc', stateId: 'submitted' }
+      })
     })
 
     test('translates a 404 into a not-found result', async () => {
       const completeTask = vi.fn().mockResolvedValue({ ok: false, status: 404 })
       const service = createWorkItemActionsService({ completeTask })
 
-      const result = await service.completeTask({ workItemId: 'abc', taskId: 'task' })
+      const result = await service.completeTask({
+        workItemId: 'abc',
+        taskId: 'task'
+      })
 
       expect(result).toEqual({
         ok: false,
@@ -38,10 +44,15 @@ describe('createWorkItemActionsService', () => {
     })
 
     test('translates a transport error into a transport-error result', async () => {
-      const completeTask = vi.fn().mockResolvedValue({ ok: false, error: 'ECONNREFUSED' })
+      const completeTask = vi
+        .fn()
+        .mockResolvedValue({ ok: false, error: 'ECONNREFUSED' })
       const service = createWorkItemActionsService({ completeTask })
 
-      const result = await service.completeTask({ workItemId: 'abc', taskId: 'task' })
+      const result = await service.completeTask({
+        workItemId: 'abc',
+        taskId: 'task'
+      })
 
       expect(result).toEqual({
         ok: false,
@@ -52,9 +63,9 @@ describe('createWorkItemActionsService', () => {
 
     test('rejects an empty workItemId', async () => {
       const service = createWorkItemActionsService({ completeTask: vi.fn() })
-      await expect(service.completeTask({ workItemId: '', taskId: 't' })).rejects.toThrow(
-        /workItemId/
-      )
+      await expect(
+        service.completeTask({ workItemId: '', taskId: 't' })
+      ).rejects.toThrow(/workItemId/)
     })
   })
 
@@ -79,7 +90,10 @@ describe('createWorkItemActionsService', () => {
         status: 'InProgress',
         user: { id: 'u-1' }
       })
-      expect(result).toEqual({ ok: true, workItem: { id: 'abc', stateId: 'submitted' } })
+      expect(result).toEqual({
+        ok: true,
+        workItem: { id: 'abc', stateId: 'submitted' }
+      })
     })
 
     test('rejects an unknown status without calling the backend', async () => {
@@ -99,7 +113,9 @@ describe('createWorkItemActionsService', () => {
     })
 
     test('translates a 404 into a not-found result', async () => {
-      const setTaskStatus = vi.fn().mockResolvedValue({ ok: false, status: 404 })
+      const setTaskStatus = vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 404 })
       const service = createWorkItemActionsService({ setTaskStatus })
 
       const result = await service.setTaskStatus({
@@ -118,7 +134,11 @@ describe('createWorkItemActionsService', () => {
     test('rejects an empty taskId', async () => {
       const service = createWorkItemActionsService({ setTaskStatus: vi.fn() })
       await expect(
-        service.setTaskStatus({ workItemId: 'abc', taskId: '', status: 'Blocked' })
+        service.setTaskStatus({
+          workItemId: 'abc',
+          taskId: '',
+          status: 'Blocked'
+        })
       ).rejects.toThrow(/taskId/)
     })
   })
@@ -132,7 +152,10 @@ describe('createWorkItemActionsService', () => {
       })
       const service = createWorkItemActionsService({ applyAction })
 
-      const result = await service.applyAction({ workItemId: 'abc', actionId: 'approve' })
+      const result = await service.applyAction({
+        workItemId: 'abc',
+        actionId: 'approve'
+      })
 
       expect(result).toEqual({
         ok: false,
@@ -150,7 +173,10 @@ describe('createWorkItemActionsService', () => {
       })
       const service = createWorkItemActionsService({ applyAction })
 
-      const result = await service.applyAction({ workItemId: 'abc', actionId: 'teleport' })
+      const result = await service.applyAction({
+        workItemId: 'abc',
+        actionId: 'teleport'
+      })
 
       expect(result).toEqual({
         ok: false,
@@ -167,7 +193,10 @@ describe('createWorkItemActionsService', () => {
       })
       const service = createWorkItemActionsService({ applyAction })
 
-      const result = await service.applyAction({ workItemId: 'abc', actionId: 'approve' })
+      const result = await service.applyAction({
+        workItemId: 'abc',
+        actionId: 'approve'
+      })
 
       expect(result.ok).toBe(true)
       expect(result.workItem.stateId).toBe('approved')
@@ -175,9 +204,9 @@ describe('createWorkItemActionsService', () => {
 
     test('rejects an empty actionId', async () => {
       const service = createWorkItemActionsService({ applyAction: vi.fn() })
-      await expect(service.applyAction({ workItemId: 'abc', actionId: '' })).rejects.toThrow(
-        /actionId/
-      )
+      await expect(
+        service.applyAction({ workItemId: 'abc', actionId: '' })
+      ).rejects.toThrow(/actionId/)
     })
   })
 

@@ -60,7 +60,9 @@ export function projectWorkItem(type, workItem) {
  * surface the failure in a form.
  */
 export function canApplyAction(type, workItem, actionId) {
-  const transition = (type?.transitions ?? []).find((t) => t.actionId === actionId)
+  const transition = (type?.transitions ?? []).find(
+    (t) => t.actionId === actionId
+  )
   if (!transition) {
     return { allowed: false, reason: 'unknown-action' }
   }

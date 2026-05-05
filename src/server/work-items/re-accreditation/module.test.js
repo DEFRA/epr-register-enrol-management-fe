@@ -38,7 +38,12 @@ describe('reAccreditationModule', () => {
 
   test.each([
     ['start-assessment', 'submitted', 'assessment-in-progress', true],
-    ['submit-for-decision', 'assessment-in-progress', 'awaiting-decision', true],
+    [
+      'submit-for-decision',
+      'assessment-in-progress',
+      'awaiting-decision',
+      true
+    ],
     ['approve', 'awaiting-decision', 'approved', true],
     ['reject', 'awaiting-decision', 'rejected', true],
     ['withdraw', 'submitted', 'withdrawn', false],
@@ -72,9 +77,9 @@ describe('reAccreditationModule', () => {
     ],
     ['awaiting-decision', ['record-decision-rationale']]
   ])('getTasksForState(%s) returns the expected ids', (stateId, expected) => {
-    expect(reAccreditationType.getTasksForState(stateId).map((t) => t.id)).toEqual(
-      expected
-    )
+    expect(
+      reAccreditationType.getTasksForState(stateId).map((t) => t.id)
+    ).toEqual(expected)
   })
 
   test.each(['approved', 'rejected', 'withdrawn', 'unknown'])(
@@ -100,6 +105,8 @@ describe('reAccreditationModule', () => {
 
   test('register does not throw when called with a stub server', async () => {
     const server = { route: vi.fn() }
-    await expect(reAccreditationModule.register(server)).resolves.toBeUndefined()
+    await expect(
+      reAccreditationModule.register(server)
+    ).resolves.toBeUndefined()
   })
 })

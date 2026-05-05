@@ -19,9 +19,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   addWorkItemNote: vi.fn()
 }))
 
-const { getWorkItem } = await import(
-  '#/server/common/helpers/backend-api/backend-api.js'
-)
+const { getWorkItem } =
+  await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '11111111-1111-1111-1111-111111111111'
 

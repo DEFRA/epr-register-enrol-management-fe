@@ -62,7 +62,10 @@ export const workItemAuditLogController = {
       breadcrumbs: [
         { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
-        { text: workItem.id, href: `/work-items/${encodeURIComponent(workItem.id)}` },
+        {
+          text: workItem.id,
+          href: `/work-items/${encodeURIComponent(workItem.id)}`
+        },
         { text: 'Audit log' }
       ],
       workItem: {
