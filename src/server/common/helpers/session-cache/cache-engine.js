@@ -15,8 +15,8 @@ export function getCacheEngine(engine) {
   }
 
   if (config.get('isProduction')) {
-    logger.error(
-      'Catbox Memory is for local development only, it should not be used in production!'
+    throw new Error(
+      'Invalid session cache engine in production: SESSION_CACHE_ENGINE must be set to "redis". Catbox Memory is for local development only.'
     )
   }
 
