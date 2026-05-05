@@ -416,4 +416,62 @@ describe('#workItemListController', () => {
       })
     )
   })
+
+  // ---------------------------------------------------------------- //
+  // XSS regression — epr-6fi.                                         //
+  //                                                                  //
+  // Nunjucks autoescape only kicks in for `{{ … }}` interpolations,  //
+  // not for govuk macro `html:` parameters. The list page used to    //
+  // concatenate the work-item id into a link's href / text and the   //
+  // backend error message into the notification banner — both raw —  //
+  // which let a malicious id or backend payload inject script tags.  //
+  // ---------------------------------------------------------------- //
+  test('Escapes work-item ids when rendering the list to prevent XSS', async () => {
+    clearWorkItemRegistry()
+    const malicious = '<script>alert(1)</script>'
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: malicious,
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toContain(malicious)
+    expect(result).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+    // href is URL-encoded, not just HTML-escaped, so the angle brackets
+    // are %3C / %3E rather than &lt; / &gt;.
+    expect(result).toContain(
+      'href="/work-items/%3Cscript%3Ealert(1)%3C%2Fscript%3E"'
+    )
+  })
+
+  test('Escapes the backend error message when the list banner renders', async () => {
+    const malicious = '<img src=x onerror="alert(1)">'
+    getWorkItems.mockResolvedValue({ ok: false, error: malicious })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('Could not reach the backend')
+    expect(result).not.toContain(malicious)
+    expect(result).toContain('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;')
+  })
 })

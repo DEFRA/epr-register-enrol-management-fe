@@ -8,9 +8,14 @@
     caption: "Work item " + workItemId
   }) }}
 
+  {# Render the heading via a Nunjucks capture so the backend error string #}
+  {# is auto-escaped — never concatenate raw backend output into `html:`    #}
+  {# (epr-6fi). The capture preserves the test-id hook the controller       #}
+  {# tests rely on.                                                         #}
+  {% set detailErrorHtml %}<p class="govuk-notification-banner__heading" data-testid="work-item-detail-error">{{ error or "Unknown error" }}</p>{% endset %}
   {{ govukNotificationBanner({
     titleText: "Could not reach the backend",
-    html: '<p class="govuk-notification-banner__heading" data-testid="work-item-detail-error">' + (error or "Unknown error") + '</p>'
+    html: detailErrorHtml
   }) }}
 
   <p class="govuk-body">

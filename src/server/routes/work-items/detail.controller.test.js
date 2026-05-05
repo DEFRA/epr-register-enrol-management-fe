@@ -213,6 +213,23 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
   })
 
+  // XSS regression — epr-6fi. The detail-error banner used to splice the
+  // backend error message into a govuk macro `html:` parameter raw, which
+  // would execute embedded markup. Auto-escape it via a Nunjucks capture.
+  test('Escapes the backend error message in the detail-error banner', async () => {
+    const malicious = '<script>alert(1)</script>'
+    getWorkItem.mockResolvedValue({ ok: false, error: malicious })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.badGateway)
+    expect(result).not.toContain(malicious)
+    expect(result).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+  })
+
   test('POST complete-task redirects to the detail page on success', async () => {
     completeWorkItemTask.mockResolvedValue({
       ok: true,
