@@ -30,7 +30,8 @@ those how-tos for the authoritative platform behaviour.
 | `SESSION_COOKIE_PASSWORD`       | **Secret**        | ≥32 chars, generated per environment. **Must** be supplied via Secrets Manager in every deployed env — boot fails loudly if `NODE_ENV=production` or `SESSION_COOKIE_SECURE=true` and the placeholder default is still in use. |
 | `SESSION_COOKIE_SECURE`         | Service config    | `true` in deployed environments.                                                                                                                                                                                               |
 | `TRACING_HEADER`                | Service config    | Defaults to `x-cdp-request-id`.                                                                                                                                                                                                |
-| `HTTP_PROXY` / `HTTPS_PROXY`    | CDP platform      | CDP outbound proxy.                                                                                                                                                                                                            |
+| `HTTP_PROXY`                    | CDP platform      | CDP outbound proxy for plain HTTP. Wired onto `global-agent` for legacy HTTP clients.                                                                                                                                          |
+| `HTTPS_PROXY`                   | CDP platform      | CDP outbound proxy for HTTPS (the common case — backend calls are HTTPS in deployed envs). Used by undici's global dispatcher (the `fetch` exported from `undici`). Falls back to `HTTP_PROXY` if unset.                       |
 | `ENABLE_SECURE_CONTEXT`         | Service config    | `true` in production (loads CDP CA bundle).                                                                                                                                                                                    |
 | `AUTH_STUB_ENABLED`             | Service config    | **Must** be `false` in `prod` — boot fails loudly if `NODE_ENV=production` and stub auth is enabled. `true` elsewhere until real Cognito is wired.                                                                             |
 
@@ -60,6 +61,30 @@ those how-tos for the authoritative platform behaviour.
 - `cognito-idp.eu-west-2.amazonaws.com` — Cognito hosted UI / OIDC.
 - The CDP-internal hostname of the case-management backend (resolved by
   `BACKEND_API_URL`).
+
+## Proxy / secure-context boot ordering
+
+Proxy setup is split into two halves so the CDP CA bundle is in place
+before any outbound TLS handshake (see
+[`src/server/common/helpers/proxy/setup-proxy.js`](../src/server/common/helpers/proxy/setup-proxy.js)):
+
+1. `setupProxyEnv()` runs **first**, before any plugins register. It
+   only mutates `global.GLOBAL_AGENT.HTTP_PROXY` /
+   `HTTPS_PROXY` so legacy HTTP clients constructed during plugin
+   registration see the proxy. No TLS happens here.
+2. `@defra/hapi-secure-context` is registered with the other plugins
+   when `ENABLE_SECURE_CONTEXT=true`. This loads the CDP CA bundle into
+   Node's trust store.
+3. `installProxyDispatcher()` runs **after** the `server.register([...])`
+   call. It calls `setGlobalDispatcher(new ProxyAgent(HTTPS_PROXY ??
+HTTP_PROXY))` so the `fetch` exported from `undici` (and therefore
+   the backend client) routes via the CDP proxy with the correct CA
+   trust material in place.
+
+Reversing steps 2 and 3 would make HTTPS to CDP-internal hosts (e.g.
+the backend API) fail TLS verification. The ordering is enforced by a
+structural test in
+[`src/server/server.test.js`](../src/server/server.test.js).
 
 ## Related
 

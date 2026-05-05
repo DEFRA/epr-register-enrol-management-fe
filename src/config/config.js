@@ -126,6 +126,13 @@ export const config = convict({
     default: null,
     env: 'HTTP_PROXY'
   },
+  httpsProxy: {
+    doc: 'HTTPS Proxy. Used by undici dispatcher for HTTPS calls (the common case for backend traffic in deployed envs). Falls back to HTTP_PROXY if unset.',
+    format: String,
+    nullable: true,
+    default: null,
+    env: 'HTTPS_PROXY'
+  },
   isSecureContextEnabled: {
     doc: 'Enable Secure Context',
     format: Boolean,

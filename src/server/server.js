@@ -7,7 +7,10 @@ import { config } from '#/config/config.js'
 import { pulse } from './plugins/pulse.js'
 import { catchAll } from './common/helpers/errors.js'
 import { nunjucksConfig } from '#/config/nunjucks/nunjucks.js'
-import { setupProxy } from './common/helpers/proxy/setup-proxy.js'
+import {
+  setupProxyEnv,
+  installProxyDispatcher
+} from './common/helpers/proxy/setup-proxy.js'
 import { requestTracing } from './plugins/request-tracing.js'
 import { requestLogger } from './plugins/request-logger.js'
 import { sessionCache } from './plugins/session-cache.js'
@@ -20,7 +23,10 @@ import { selectAuthPlugin } from './plugins/select-auth-plugin.js'
 import { authRoutes } from './routes/auth/index.js'
 
 export async function createServer() {
-  setupProxy()
+  // Wire HTTP_PROXY/HTTPS_PROXY env vars onto global-agent up front so
+  // any legacy HTTP client constructed during plugin registration sees
+  // them. The undici dispatcher is installed later — see below.
+  setupProxyEnv()
   const server = hapi.server({
     host: config.get('host'),
     port: config.get('port'),
@@ -74,6 +80,13 @@ export async function createServer() {
     authRoutes,
     router // Register all the controllers/routes defined in src/server/router.js
   ])
+
+  // ORDERING INVARIANT: install the undici proxy dispatcher only AFTER
+  // `@defra/hapi-secure-context` has registered (above) so the CDP CA
+  // bundle is loaded into Node's trust store before any outbound TLS
+  // handshake occurs. Reversing this would break HTTPS to CDP-internal
+  // hosts (e.g. the backend API) when running in deployed environments.
+  installProxyDispatcher()
 
   server.ext('onPreResponse', catchAll)
 
