@@ -1,9 +1,7 @@
 import process from 'node:process'
 
-import { startServer } from '#/server/common/helpers/start-server.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
-
-await startServer()
+import { startServer } from '#/server/common/helpers/start-server.js'
 
 process.on('unhandledRejection', (error) => {
   const logger = createLogger()
@@ -11,3 +9,12 @@ process.on('unhandledRejection', (error) => {
   logger.error(error)
   process.exitCode = 1
 })
+
+process.on('uncaughtException', (error) => {
+  const logger = createLogger()
+  logger.info('Uncaught exception')
+  logger.error(error)
+  process.exitCode = 1
+})
+
+await startServer()
