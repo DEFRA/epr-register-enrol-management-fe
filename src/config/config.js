@@ -382,3 +382,37 @@ if (config.get('isProduction') && !config.get('auth.stubEnabled')) {
     )
   }
 }
+
+// 4. REDIS_HOST / REDIS_USERNAME / REDIS_PASSWORD: convict defaults
+//    target local dev (host=127.0.0.1, empty username/password). In a
+//    deployed env the cache must point at Elasticache over TLS with
+//    real credentials. The redis client in
+//    src/server/common/helpers/redis-client.js silently drops
+//    credentials when the username is empty, so a missing
+//    REDIS_USERNAME would cause REDIS_PASSWORD to be ignored too.
+//    Fail loudly at boot whenever production OR TLS is active.
+const redisUseTLS = config.get('redis.useTLS')
+if (config.get('isProduction') || redisUseTLS) {
+  const redisHost = config.get('redis.host')
+  if (!redisHost || redisHost === 'localhost' || redisHost === '127.0.0.1') {
+    throw new Error(
+      'REDIS_HOST (redis.host) must be set to a routable Elasticache ' +
+        'endpoint in production or when REDIS_TLS is true. Localhost / ' +
+        '127.0.0.1 / empty values are not permitted.'
+    )
+  }
+  if (!config.get('redis.username')) {
+    throw new Error(
+      'REDIS_USERNAME (redis.username) must be set in production or when ' +
+        'REDIS_TLS is true. The redis client treats an empty username as ' +
+        '"no auth" and silently drops REDIS_PASSWORD. Wire the value via ' +
+        'Secrets Manager.'
+    )
+  }
+  if (!config.get('redis.password')) {
+    throw new Error(
+      'REDIS_PASSWORD (redis.password) must be set in production or when ' +
+        'REDIS_TLS is true. Wire the value via Secrets Manager.'
+    )
+  }
+}

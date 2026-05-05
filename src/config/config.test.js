@@ -60,6 +60,9 @@ describe('config production hardening', () => {
     process.env.AUTH_STUB_ENABLED = 'false'
     process.env.AZURE_CLIENT_ID = 'azure-client-id'
     process.env.AZURE_CLIENT_SECRET = 'azure-client-secret'
+    process.env.REDIS_HOST = 'redis.example.internal'
+    process.env.REDIS_USERNAME = 'redis-user'
+    process.env.REDIS_PASSWORD = 'redis-password'
 
     const mod = await import('./config.js')
     expect(mod.config.get('isProduction')).toBe(true)
@@ -145,5 +148,85 @@ describe('config production hardening', () => {
 
     const mod = await import('./config.js')
     expect(mod.config.get('session.cookie.password')).toBe(secret)
+  })
+
+  // Helper: a production env with all earlier-gated checks (cookie
+  // secret, stub auth, Azure creds) satisfied so we can isolate the
+  // redis hardening assertions.
+  function setProdEnvWithRedisDeps() {
+    process.env.NODE_ENV = 'production'
+    process.env.ENVIRONMENT = 'prod'
+    process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
+    process.env.AUTH_STUB_ENABLED = 'false'
+    process.env.AZURE_CLIENT_ID = 'azure-client-id'
+    process.env.AZURE_CLIENT_SECRET = 'azure-client-secret'
+  }
+
+  test('production boot rejects empty REDIS_PASSWORD', async () => {
+    setProdEnvWithRedisDeps()
+    process.env.REDIS_HOST = 'redis.example.internal'
+    process.env.REDIS_USERNAME = 'redis-user'
+    delete process.env.REDIS_PASSWORD
+
+    await expect(import('./config.js')).rejects.toThrow(/REDIS_PASSWORD/)
+  })
+
+  test('production boot rejects REDIS_HOST=127.0.0.1', async () => {
+    setProdEnvWithRedisDeps()
+    process.env.REDIS_HOST = '127.0.0.1'
+    process.env.REDIS_USERNAME = 'redis-user'
+    process.env.REDIS_PASSWORD = 'redis-password'
+
+    await expect(import('./config.js')).rejects.toThrow(/REDIS_HOST/)
+  })
+
+  test('production boot rejects REDIS_HOST=localhost', async () => {
+    setProdEnvWithRedisDeps()
+    process.env.REDIS_HOST = 'localhost'
+    process.env.REDIS_USERNAME = 'redis-user'
+    process.env.REDIS_PASSWORD = 'redis-password'
+
+    await expect(import('./config.js')).rejects.toThrow(/REDIS_HOST/)
+  })
+
+  test('production boot rejects empty REDIS_USERNAME (would silently drop password)', async () => {
+    setProdEnvWithRedisDeps()
+    process.env.REDIS_HOST = 'redis.example.internal'
+    delete process.env.REDIS_USERNAME
+    process.env.REDIS_PASSWORD = 'redis-password'
+
+    await expect(import('./config.js')).rejects.toThrow(/REDIS_USERNAME/)
+  })
+
+  test('non-production boot with defaults does not throw on redis config', async () => {
+    process.env.NODE_ENV = 'development'
+    process.env.ENVIRONMENT = 'local'
+    delete process.env.SESSION_COOKIE_PASSWORD
+    delete process.env.SESSION_COOKIE_SECURE
+    delete process.env.AUTH_STUB_ENABLED
+    delete process.env.REDIS_HOST
+    delete process.env.REDIS_USERNAME
+    delete process.env.REDIS_PASSWORD
+    delete process.env.REDIS_TLS
+
+    const mod = await import('./config.js')
+    expect(mod.config.get('redis.host')).toBe('127.0.0.1')
+    expect(mod.config.get('redis.username')).toBe('')
+    expect(mod.config.get('redis.password')).toBe('')
+    expect(mod.config.get('redis.useTLS')).toBe(false)
+  })
+
+  test('non-production boot with REDIS_TLS=true and empty password throws', async () => {
+    process.env.NODE_ENV = 'development'
+    process.env.ENVIRONMENT = 'local'
+    delete process.env.SESSION_COOKIE_PASSWORD
+    delete process.env.SESSION_COOKIE_SECURE
+    delete process.env.AUTH_STUB_ENABLED
+    process.env.REDIS_TLS = 'true'
+    process.env.REDIS_HOST = 'redis.example.internal'
+    process.env.REDIS_USERNAME = 'redis-user'
+    delete process.env.REDIS_PASSWORD
+
+    await expect(import('./config.js')).rejects.toThrow(/REDIS_PASSWORD/)
   })
 })
