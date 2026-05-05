@@ -18,24 +18,63 @@ const USER_ROLES_HEADER = 'x-cdp-user-roles'
 const BACKEND_CASE_WORKER_ROLE = 'case-worker'
 
 /**
+ * Defence-in-depth guard against HTTP header injection (CRLF). User-supplied
+ * data (id, name, roles) flows from the session into outbound headers via
+ * {@link buildHeaders}; undici will normally reject CR/LF in header values
+ * but we must not rely on that as our only defence. Throws fast on any
+ * non-string or any string containing CR or LF so the request fails before
+ * reaching the network — the surrounding try/catch maps the failure to a
+ * `{ ok: false, error }` result which controllers turn into a 500.
+ *
+ * @param {unknown} value
+ */
+export function assertSafeHeaderValue(value) {
+  if (typeof value !== 'string') {
+    throw new TypeError(
+      `Outbound header value must be a string, got ${typeof value}`
+    )
+  }
+  if (/[\r\n]/.test(value)) {
+    throw new Error(
+      'Outbound header value contains CR or LF (possible header injection)'
+    )
+  }
+}
+
+/**
  * Build the headers attached to every backend call. The Cognito client id
  * identifies the BFF *as a service* and is required (CDP itself adds it on
  * service-to-service calls); the optional user-* headers forward the
  * acting end-user's identity and role membership so the backend can make
  * role-based decisions and produce useful audit lines.
+ *
+ * Every forwarded value is run through {@link assertSafeHeaderValue} so a
+ * malicious session payload cannot smuggle additional headers via CRLF.
  */
 function buildHeaders(extra = {}, user = null) {
   const headers = { ...extra }
   const clientId = config.get('backendApi.cognitoClientId')
   if (clientId) {
+    assertSafeHeaderValue(clientId)
     headers[COGNITO_CLIENT_ID_HEADER] = clientId
   }
   if (user) {
-    if (user.id) headers[USER_ID_HEADER] = String(user.id)
-    if (user.name) headers[USER_NAME_HEADER] = String(user.name)
-    const roles = Array.isArray(user.roles) ? [...user.roles] : []
+    if (user.id) {
+      const id = String(user.id)
+      assertSafeHeaderValue(id)
+      headers[USER_ID_HEADER] = id
+    }
+    if (user.name) {
+      const name = String(user.name)
+      assertSafeHeaderValue(name)
+      headers[USER_NAME_HEADER] = name
+    }
+    const roles = Array.isArray(user.roles) ? user.roles.map(String) : []
     if (!roles.includes(BACKEND_CASE_WORKER_ROLE)) {
       roles.push(BACKEND_CASE_WORKER_ROLE)
+    }
+    for (const role of roles) {
+      assertSafeHeaderValue(role)
     }
     headers[USER_ROLES_HEADER] = roles.join(',')
   }

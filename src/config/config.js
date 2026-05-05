@@ -22,6 +22,18 @@ const isDevelopment = process.env.NODE_ENV === 'development'
 export const PLACEHOLDER_SESSION_COOKIE_PASSWORD =
   'the-password-must-be-at-least-32-characters-long'
 
+// Pino redaction paths applied to logs in production. Keep this list in
+// one place so it is easy to audit. Includes the user-identity headers
+// the BFF forwards to the backend (epr-zld) — these can carry PII (full
+// name, internal user id) and must not land in shipped logs.
+export const PRODUCTION_LOG_REDACT_PATHS = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["x-cdp-user-id"]',
+  'req.headers["x-cdp-user-name"]',
+  'res.headers'
+]
+
 convict.addFormats(convictFormatWithValidator)
 
 export const config = convict({
@@ -103,9 +115,7 @@ export const config = convict({
     redact: {
       doc: 'Log paths to redact',
       format: Array,
-      default: isProduction
-        ? ['req.headers.authorization', 'req.headers.cookie', 'res.headers']
-        : [],
+      default: isProduction ? PRODUCTION_LOG_REDACT_PATHS : [],
       env: 'LOG_REDACT'
     }
   },

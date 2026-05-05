@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from 'vitest'
 import {
   addWorkItemNote,
   applyWorkItemAction,
+  assertSafeHeaderValue,
   assignWorkItem,
   completeWorkItemTask,
   getBackendHealth,
@@ -709,5 +710,115 @@ describe('#addWorkItemNote', () => {
       status: 400,
       problem: { detail: 'Note text is required.' }
     })
+  })
+})
+
+describe('#assertSafeHeaderValue (epr-zld)', () => {
+  test('Accepts a normal string', () => {
+    expect(() => assertSafeHeaderValue('Alice Example')).not.toThrow()
+  })
+
+  test('Rejects strings containing CR', () => {
+    expect(() => assertSafeHeaderValue('Alice\rX-Injected: yes')).toThrow(
+      /CR or LF/
+    )
+  })
+
+  test('Rejects strings containing LF', () => {
+    expect(() => assertSafeHeaderValue('Alice\nX-Injected: yes')).toThrow(
+      /CR or LF/
+    )
+  })
+
+  test('Rejects strings containing CRLF', () => {
+    expect(() => assertSafeHeaderValue('Alice\r\nX-Injected: yes')).toThrow(
+      /CR or LF/
+    )
+  })
+
+  test('Rejects non-string values', () => {
+    expect(() => assertSafeHeaderValue(42)).toThrow(TypeError)
+    expect(() => assertSafeHeaderValue(null)).toThrow(TypeError)
+    expect(() => assertSafeHeaderValue(undefined)).toThrow(TypeError)
+    expect(() => assertSafeHeaderValue(['a', 'b'])).toThrow(TypeError)
+    expect(() => assertSafeHeaderValue({})).toThrow(TypeError)
+  })
+})
+
+describe('#buildHeaders header injection guards (epr-zld)', () => {
+  test('Rejects a CR-containing user name before reaching fetch', async () => {
+    const fetchImpl = vi.fn()
+
+    const result = await getWorkItems({
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: {
+        id: 'u-1',
+        name: 'Alice\r\nX-Injected: yes',
+        roles: ['standard']
+      }
+    })
+
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/CR or LF/)
+  })
+
+  test('Rejects a CR-containing user id before reaching fetch', async () => {
+    const fetchImpl = vi.fn()
+
+    const result = await getWorkItems({
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1\rEvil: yes', name: 'Alice', roles: ['standard'] }
+    })
+
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/CR or LF/)
+  })
+
+  test('Rejects an array of roles where one entry contains CR', async () => {
+    const fetchImpl = vi.fn()
+
+    const result = await getWorkItems({
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: {
+        id: 'u-1',
+        name: 'Alice',
+        roles: ['standard', 'assign\r\nX-Injected: yes']
+      }
+    })
+
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/CR or LF/)
+  })
+
+  test('A clean user passes through and headers are forwarded', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    const result = await getWorkItems({
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice', roles: ['standard'] }
+    })
+
+    expect(result.ok).toBe(true)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    const headers = fetchImpl.mock.calls[0][1].headers
+    expect(headers['x-cdp-user-id']).toBe('u-1')
+    expect(headers['x-cdp-user-name']).toBe('Alice')
+    expect(headers['x-cdp-user-roles']).toBe('standard,case-worker')
   })
 })

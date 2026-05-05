@@ -67,4 +67,23 @@ describe('#backendStatusController', () => {
     expect(result).toEqual(expect.stringContaining('Unreachable'))
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
   })
+
+  test('is reachable without authentication (epr-zld, auth: false)', async () => {
+    getBackendHealth.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: 'Healthy'
+    })
+
+    const { request, statusCode } = await server.inject({
+      method: 'GET',
+      url: '/backend-status'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // The route opts out of auth entirely (parallel to /health) so Hapi
+    // does not populate credentials, even with the test stub auth scheme
+    // installed.
+    expect(request.auth.isAuthenticated).toBe(false)
+  })
 })
