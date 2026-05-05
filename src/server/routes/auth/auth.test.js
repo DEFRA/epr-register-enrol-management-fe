@@ -1,5 +1,6 @@
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
+import { injectWithCrumb } from '#/test-helpers/csrf.js'
 
 describe('auth', () => {
   let server
@@ -62,7 +63,7 @@ describe('auth', () => {
   })
 
   test('stub login POST without selection returns 400', async () => {
-    const { statusCode } = await server.inject({
+    const { statusCode } = await injectWithCrumb(server, {
       method: 'POST',
       url: '/auth/stub/login',
       payload: {}
@@ -72,7 +73,7 @@ describe('auth', () => {
   })
 
   test('stub login POST with valid user redirects to /', async () => {
-    const { statusCode, headers } = await server.inject({
+    const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: '/auth/stub/login',
       payload: { userId: 'stub-standard-1' }

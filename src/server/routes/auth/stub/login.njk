@@ -20,6 +20,7 @@
       {% endif %}
 
       <form method="POST" action="/auth/stub/login">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
         <div class="govuk-form-group">
           <fieldset class="govuk-fieldset">
             <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">

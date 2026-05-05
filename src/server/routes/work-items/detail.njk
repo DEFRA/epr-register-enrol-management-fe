@@ -60,6 +60,7 @@
                 action="/work-items/{{ workItem.id }}/assign"
                 class="govuk-!-margin-bottom-3"
                 novalidate>
+            <input type="hidden" name="crumb" value="{{ crumb }}" />
             {{ govukSelect({
               id: "assign-assignee-id",
               name: "assigneeId",
@@ -82,6 +83,7 @@
             <form method="post"
                   action="/work-items/{{ workItem.id }}/unassign"
                   novalidate>
+              <input type="hidden" name="crumb" value="{{ crumb }}" />
               {{ govukButton({
                 text: "Unassign",
                 classes: "govuk-button--secondary",
@@ -93,6 +95,7 @@
           <form method="post"
                 action="/work-items/{{ workItem.id }}/assign"
                 novalidate>
+            <input type="hidden" name="crumb" value="{{ crumb }}" />
             <input type="hidden" name="assigneeId" value="{{ assignment.selfAssignUserId }}" />
             {% if assignment.selfAssignUserName %}
               <input type="hidden" name="assigneeName" value="{{ assignment.selfAssignUserName }}" />
@@ -137,6 +140,7 @@
                       action="/work-items/{{ workItem.id }}/tasks/{{ task.taskId }}/status"
                       class="govuk-!-display-block"
                       novalidate>
+                  <input type="hidden" name="crumb" value="{{ crumb }}" />
                   <div class="govuk-form-group govuk-!-margin-bottom-2">
                     {{ govukSelect({
                       id: "task-status-" + task.taskId,
@@ -175,6 +179,7 @@
                   action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
                   class="govuk-!-display-inline-block"
                   novalidate>
+              <input type="hidden" name="crumb" value="{{ crumb }}" />
               {{ govukButton({
                 text: action.displayName,
                 classes: action.actionId == 'reject' and 'govuk-button--warning' or '',
@@ -201,6 +206,7 @@
             action="/work-items/{{ workItem.id }}/notes"
             class="govuk-!-margin-bottom-6"
             novalidate>
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
         {{ govukCharacterCount({
           id: "note-text",
           name: "text",

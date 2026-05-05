@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
+import { injectWithCrumb } from '#/test-helpers/csrf.js'
 import {
   clearWorkItemRegistry,
   registerWorkItemType
@@ -244,7 +245,7 @@ describe('#workItemDetailController', () => {
       })
     })
 
-    const { statusCode, headers } = await server.inject({
+    const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/tasks/check-eligibility/complete`
     })
@@ -267,7 +268,7 @@ describe('#workItemDetailController', () => {
     })
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    const { statusCode, result } = await server.inject({
+    const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/tasks/x/complete`
     })
@@ -292,7 +293,7 @@ describe('#workItemDetailController', () => {
       })
     })
 
-    const { statusCode, headers } = await server.inject({
+    const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/tasks/check-eligibility/status`,
       payload: { status: 'InProgress' }
@@ -312,7 +313,7 @@ describe('#workItemDetailController', () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    const { statusCode, result } = await server.inject({
+    const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/tasks/check-eligibility/status`,
       payload: { status: 'bogus' }
@@ -332,7 +333,7 @@ describe('#workItemDetailController', () => {
     })
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    const { statusCode, result } = await server.inject({
+    const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/tasks/check-eligibility/status`,
       payload: { status: 'Blocked' }
@@ -405,7 +406,7 @@ describe('#workItemDetailController', () => {
       workItem: aWorkItem({ stateId: 'approved' })
     })
 
-    const { statusCode, headers } = await server.inject({
+    const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/actions/approve`
     })
@@ -423,7 +424,7 @@ describe('#workItemDetailController', () => {
     })
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    const { statusCode, result } = await server.inject({
+    const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/actions/approve`
     })
@@ -442,7 +443,7 @@ describe('#workItemDetailController', () => {
       })
     })
 
-    const { statusCode, headers } = await server.inject({
+    const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/assign`,
       payload: 'assigneeId=stub-standard-1',
@@ -468,7 +469,7 @@ describe('#workItemDetailController', () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    const { statusCode, result } = await server.inject({
+    const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/assign`,
       payload: '',
@@ -491,7 +492,7 @@ describe('#workItemDetailController', () => {
     })
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    const { statusCode, result } = await server.inject({
+    const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/assign`,
       payload: 'assigneeId=stub-standard-1',
@@ -511,7 +512,7 @@ describe('#workItemDetailController', () => {
       workItem: aWorkItem({ assignedToId: null, assignedToName: null })
     })
 
-    const { statusCode, headers } = await server.inject({
+    const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/unassign`
     })
@@ -592,7 +593,7 @@ describe('#workItemDetailController', () => {
       workItem: aWorkItem()
     })
 
-    const { statusCode, headers } = await server.inject({
+    const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/notes`,
       payload: 'text=  Spoke to applicant.  ',
@@ -614,7 +615,7 @@ describe('#workItemDetailController', () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    const { statusCode, result } = await server.inject({
+    const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/notes`,
       payload: 'text=   ',
@@ -636,7 +637,7 @@ describe('#workItemDetailController', () => {
     })
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    const { statusCode, result } = await server.inject({
+    const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/notes`,
       payload: 'text=non-empty-but-rejected-by-backend',
