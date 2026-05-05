@@ -17,7 +17,9 @@ describe('getAzureEntraIdConfig', () => {
         'https://login.microsoftonline.com/tenant-123/oauth2/v2.0/authorize',
       tokenUrl:
         'https://login.microsoftonline.com/tenant-123/oauth2/v2.0/token',
-      profileUrl: 'https://graph.microsoft.com/v1.0/me',
+      jwksUri:
+        'https://login.microsoftonline.com/tenant-123/discovery/v2.0/keys',
+      issuer: 'https://login.microsoftonline.com/tenant-123/v2.0',
       scopes: ['openid', 'profile', 'email'],
       clientId: 'client-abc',
       clientSecret: 'secret',
