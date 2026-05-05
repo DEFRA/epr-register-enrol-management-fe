@@ -686,4 +686,70 @@ describe('#workItemDetailController', () => {
     // view.
     expect(result).not.toEqual(expect.stringContaining('Task completed'))
   })
+
+  // epr-pbk: assignment role gating must derive from the credentials
+  // scope (which mirrors the route-level `requireAssign`), not from a
+  // separate in-handler role lookup.
+  test('Hides the assign picker for a standard-role user (canAssignAnyone false)', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ assignedToId: null, assignedToName: null })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`,
+      headers: { 'x-test-user-role': 'standard' }
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // The assign-anyone <select> is gated behind canAssignAnyone; standard
+    // users only see the self-assign affordance.
+    expect(result).not.toEqual(expect.stringContaining('assign-select'))
+    expect(result).not.toEqual(expect.stringContaining('unassign-submit'))
+  })
+
+  test('Shows the assign picker for an assign-role user (canAssignAnyone true)', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ assignedToId: null, assignedToName: null })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`,
+      headers: { 'x-test-user-role': 'assign' }
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('assign-select'))
+  })
+
+  test('POST /assign as a standard user is rejected by Hapi with 403 before the handler runs', async () => {
+    const { statusCode } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/assign`,
+      payload: 'assigneeId=stub-standard-1',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'standard'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
+    expect(assignWorkItem).not.toHaveBeenCalled()
+  })
+
+  test('POST /unassign as a standard user is rejected by Hapi with 403 before the handler runs', async () => {
+    const { statusCode } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/unassign`,
+      headers: { 'x-test-user-role': 'standard' }
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
+    expect(unassignWorkItem).not.toHaveBeenCalled()
+  })
 })

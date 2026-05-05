@@ -6,7 +6,7 @@ import {
   findAssignableUser,
   getAssignableUsers
 } from '#/server/work-items/core/assignees.js'
-import { getUser, hasRole } from '#/server/common/helpers/auth/get-user.js'
+import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { ROLE_ASSIGN } from '#/server/common/helpers/auth/auth-scopes.js'
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -326,7 +326,12 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
  * permission logic.
  */
 function buildAssignmentViewModel({ workItem, request, user }) {
-  const canAssignAnyone = hasRole(request, ROLE_ASSIGN)
+  // Mirror the route-level scope check (`requireAssign`) so the UI only
+  // surfaces affordances the caller can actually use. Reading from
+  // `credentials.scope` matches what Hapi enforces on the assign /
+  // unassign POST routes.
+  const scope = request.auth?.credentials?.scope ?? []
+  const canAssignAnyone = scope.includes(ROLE_ASSIGN)
   const isUnassigned = !workItem.assignedToId
   const callerIsAssignee = user?.id != null && workItem.assignedToId === user.id
   const canSelfAssign = !canAssignAnyone && isUnassigned && user?.id != null

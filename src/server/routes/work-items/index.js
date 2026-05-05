@@ -9,6 +9,7 @@ import {
   workItemDetailController
 } from './detail.controller.js'
 import { workItemAuditLogController } from './audit-log.controller.js'
+import { requireAssign } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
  * Routes for the cross-type work item list (RA-93) plus the detail view,
@@ -66,19 +67,21 @@ export const workItems = {
           ...makeApplyActionController()
         },
         {
-          // Assign / re-assign / self-assign. Open to any authenticated
-          // user; the backend rejects writes the caller is not allowed to
-          // make (e.g. a standard user assigning to someone else).
+          // Assign / re-assign / self-assign. Gated declaratively at the
+          // route level (RA-95): only `assign`-role users can reach the
+          // handler. The backend enforces the same rule independently and
+          // remains the source of truth.
           method: 'POST',
           path: '/work-items/{id}/assign',
+          options: requireAssign,
           ...makeAssignController()
         },
         {
-          // Unassign requires the assign role on the backend. Surfacing the
-          // 403 inline (via the controller's error notice path) keeps the
-          // UX consistent with all the other action errors.
+          // Unassign requires the assign role; gated declaratively at the
+          // route level so Hapi returns 403 before the handler runs.
           method: 'POST',
           path: '/work-items/{id}/unassign',
+          options: requireAssign,
           ...makeUnassignController()
         },
         {
