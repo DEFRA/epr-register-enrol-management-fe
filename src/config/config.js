@@ -359,3 +359,26 @@ if (config.get('isProduction') && config.get('auth.stubEnabled')) {
       'provider bypasses real OAuth and auto-authenticates every request.'
   )
 }
+
+// 3. AZURE_CLIENT_ID / AZURE_CLIENT_SECRET: when real OAuth is in use
+//    (production with stub disabled) the Azure Entra ID credentials must
+//    be supplied. The convict defaults are empty strings so dev/test
+//    work without secrets; an empty value reaching production means a
+//    missing Secrets Manager wiring and would fail opaquely on first
+//    login. Fail loudly at boot instead.
+if (config.get('isProduction') && !config.get('auth.stubEnabled')) {
+  if (!config.get('auth.azureEntraId.clientId')) {
+    throw new Error(
+      'AZURE_CLIENT_ID (auth.azureEntraId.clientId) must be set in ' +
+        'production when AUTH_STUB_ENABLED is false. Wire the value via ' +
+        'Secrets Manager.'
+    )
+  }
+  if (!config.get('auth.azureEntraId.clientSecret')) {
+    throw new Error(
+      'AZURE_CLIENT_SECRET (auth.azureEntraId.clientSecret) must be set ' +
+        'in production when AUTH_STUB_ENABLED is false. Wire the value ' +
+        'via Secrets Manager.'
+    )
+  }
+}
