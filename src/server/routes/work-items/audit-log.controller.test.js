@@ -156,6 +156,127 @@ describe('#workItemAuditLogController', () => {
     )
   })
 
+  test('Exposes the body of a note-added entry inside a "Show details" disclosure, preserving line breaks and escaping HTML', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        auditLog: [
+          {
+            id: 'cccc3333-cccc-cccc-cccc-cccccccccccc',
+            action: 'note-added',
+            actionDisplayName: 'Note added',
+            details: {
+              noteId: 'n-1',
+              noteText: 'First line\nSecond <script>evil</script>'
+            },
+            createdAt: '2026-04-27T09:00:00Z',
+            createdBy: 'alice-1',
+            createdByName: 'Alice Example'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Disclosure wrapper rather than the note rendered inline — keeps
+    // the timeline scannable when entries carry long detail bodies.
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-details"')
+    )
+    expect(result).toEqual(expect.stringContaining('Show details'))
+    expect(result).toEqual(expect.stringContaining('Note'))
+    expect(result).toEqual(expect.stringContaining('First line'))
+    // Each newline becomes its own paragraph rather than collapsing into
+    // a single run of text.
+    expect(result).not.toEqual(expect.stringContaining('First line\nSecond'))
+    // HTML in the note body is escaped — never rendered as live markup.
+    expect(result).toEqual(
+      expect.stringContaining('Second &lt;script&gt;evil&lt;/script&gt;')
+    )
+    expect(result).not.toEqual(expect.stringContaining('<script>evil</script>'))
+  })
+
+  test('Reuses the disclosure to surface the from/to status on a task-status-changed entry', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        auditLog: [
+          {
+            id: 'dddd4444-dddd-dddd-dddd-dddddddddddd',
+            action: 'task-status-changed',
+            actionDisplayName: 'Task status changed',
+            details: {
+              taskId: 'check-eligibility',
+              taskDisplayName: 'Check eligibility',
+              stateId: 'submitted',
+              fromStatus: 'NotStarted',
+              toStatus: 'InProgress'
+            },
+            createdAt: '2026-04-27T09:00:00Z',
+            createdBy: 'alice-1',
+            createdByName: 'Alice Example'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-details"')
+    )
+    expect(result).toEqual(expect.stringContaining('Show details'))
+    expect(result).toEqual(expect.stringContaining('Task'))
+    expect(result).toEqual(expect.stringContaining('Check eligibility'))
+    expect(result).toEqual(expect.stringContaining('Previous status'))
+    expect(result).toEqual(expect.stringContaining('NotStarted'))
+    expect(result).toEqual(expect.stringContaining('New status'))
+    expect(result).toEqual(expect.stringContaining('InProgress'))
+  })
+
+  test('Omits the disclosure entirely when an entry has no extra detail rows worth showing', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        auditLog: [
+          {
+            id: 'eeee5555-eeee-eeee-eeee-eeeeeeeeeeee',
+            // Unknown action with no actor and no useful details: the
+            // helper returns no detail rows so the template must skip
+            // the disclosure rather than render an empty one.
+            action: 'something-else',
+            actionDisplayName: 'Something else',
+            details: {},
+            createdAt: '2026-04-27T09:00:00Z'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-details"')
+    )
+    expect(result).not.toEqual(expect.stringContaining('Show details'))
+  })
+
   test('Renders 404 page when the backend reports no such work item', async () => {
     getWorkItem.mockResolvedValue({ ok: false, status: 404 })
 

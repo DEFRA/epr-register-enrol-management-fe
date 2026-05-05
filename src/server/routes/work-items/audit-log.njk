@@ -27,9 +27,34 @@
                   — {{ entry.summary }}
                 {% endif %}
               </p>
-              <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-0">
+              <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-1">
                 {{ entry.createdByName or entry.createdBy or "System" }} — {{ entry.createdAt }}
               </p>
+              {% if entry.detailRows and entry.detailRows.length > 0 %}
+                <details class="govuk-details govuk-!-margin-top-1 govuk-!-margin-bottom-0" data-testid="work-item-audit-entry-details">
+                  <summary class="govuk-details__summary">
+                    <span class="govuk-details__summary-text">Show details</span>
+                  </summary>
+                  <div class="govuk-details__text">
+                    <dl class="govuk-summary-list govuk-summary-list--no-border govuk-!-margin-bottom-0">
+                      {% for row in entry.detailRows %}
+                        <div class="govuk-summary-list__row">
+                          <dt class="govuk-summary-list__key">{{ row.key }}</dt>
+                          <dd class="govuk-summary-list__value">
+                            {% if row.multiline %}
+                              {% for line in row.value.split('\n') %}
+                                <p class="govuk-body govuk-!-margin-bottom-1">{{ line }}</p>
+                              {% endfor %}
+                            {% else %}
+                              {{ row.value }}
+                            {% endif %}
+                          </dd>
+                        </div>
+                      {% endfor %}
+                    </dl>
+                  </div>
+                </details>
+              {% endif %}
             </li>
           {% endfor %}
         </ol>
