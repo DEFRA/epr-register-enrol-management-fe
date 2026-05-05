@@ -16,8 +16,7 @@ import { secureContext } from '@defra/hapi-secure-context'
 import { contentSecurityPolicy } from './plugins/content-security-policy.js'
 import { csrfProtection } from './plugins/csrf.js'
 import { metrics } from '@defra/cdp-metrics'
-import { authPlugin } from './common/helpers/auth/auth-plugin.js'
-import { stubAuthPlugin } from './common/helpers/auth/stub-auth-plugin.js'
+import { selectAuthPlugin } from './plugins/select-auth-plugin.js'
 import { authRoutes } from './routes/auth/index.js'
 
 export async function createServer() {
@@ -58,10 +57,7 @@ export async function createServer() {
       strictHeader: false
     }
   })
-  const authToRegister =
-    config.get('auth.stubEnabled') || config.get('isTest')
-      ? stubAuthPlugin
-      : authPlugin
+  const authToRegister = selectAuthPlugin()
 
   await server.register([
     requestLogger,

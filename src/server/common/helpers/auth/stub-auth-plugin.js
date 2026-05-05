@@ -42,8 +42,20 @@ export const stubAuthPlugin = {
       if (config.get('isTest')) {
         server.auth.scheme('test-bypass', () => ({
           authenticate(request, h) {
-            const role = request.headers['x-test-user-role'] ?? 'assign'
-            const user = TEST_USERS[role] ?? TEST_ASSIGN_USER
+            const headerRole = request.headers['x-test-user-role']
+            // Default (header omitted) is the assign user so tests have
+            // full access without needing to opt in. If the header is
+            // explicitly set, only the documented values are accepted —
+            // unknown values must fail loudly rather than silently
+            // falling back and masking test bugs.
+            if (headerRole !== undefined && !(headerRole in TEST_USERS)) {
+              return h.unauthenticated(
+                Boom.badRequest(
+                  `Invalid x-test-user-role '${headerRole}'. Expected one of: ${Object.keys(TEST_USERS).join(', ')}.`
+                )
+              )
+            }
+            const user = TEST_USERS[headerRole] ?? TEST_ASSIGN_USER
             return h.authenticated({ credentials: user })
           }
         }))

@@ -21,6 +21,11 @@ export const sessionCache = {
       password: sessionConfig.cookie.password,
       ttl: sessionConfig.cookie.ttl,
       isSecure: config.get('session.cookie.secure'),
+      isHttpOnly: true,
+      // Lax is required because the regulator OAuth callback is a
+      // cross-site 302 from Microsoft and the session cookie must be
+      // sent on that top-level navigation.
+      isSameSite: 'Lax',
       clearInvalid: true
     }
   }
