@@ -23,7 +23,7 @@ export function buildRedisClient(redisConfig) {
           username: redisConfig.username,
           password: redisConfig.password
         }
-  const tls = redisConfig.useTLS ? { tls: {} } : {}
+  const tls = redisConfig.useTLS ? { tls: { rejectUnauthorized: true } } : {}
 
   if (redisConfig.useSingleInstanceCache) {
     redisClient = new Redis({

@@ -16,6 +16,11 @@ vi.mock('ioredis', () => ({
 }))
 
 describe('#buildRedisClient', () => {
+  beforeEach(() => {
+    Redis.mockClear()
+    Cluster.mockClear()
+  })
+
   describe('When Redis Single InstanceCache is requested', () => {
     beforeEach(() => {
       buildRedisClient(config.get('redis'))
@@ -28,6 +33,25 @@ describe('#buildRedisClient', () => {
         keyPrefix: 'epr-register-case-management:',
         port: 6379
       })
+    })
+
+    test('Should not pass a tls option when useTLS is false', () => {
+      const args = Redis.mock.calls[0][0]
+      expect(args.tls).toBeUndefined()
+    })
+  })
+
+  describe('When a Redis single instance is requested with TLS', () => {
+    beforeEach(() => {
+      buildRedisClient({
+        ...config.get('redis'),
+        useTLS: true
+      })
+    })
+
+    test('Should pass tls with rejectUnauthorized: true', () => {
+      const args = Redis.mock.calls[0][0]
+      expect(args.tls).toEqual({ rejectUnauthorized: true })
     })
   })
 
@@ -48,10 +72,32 @@ describe('#buildRedisClient', () => {
         {
           dnsLookup: expect.any(Function),
           keyPrefix: 'epr-register-case-management:',
-          redisOptions: { db: 0, password: 'pass', tls: {}, username: 'user' },
+          redisOptions: {
+            db: 0,
+            password: 'pass',
+            tls: { rejectUnauthorized: true },
+            username: 'user'
+          },
           slotsRefreshTimeout: 10000
         }
       )
+    })
+  })
+
+  describe('When a Redis Cluster is requested without TLS', () => {
+    beforeEach(() => {
+      buildRedisClient({
+        ...config.get('redis'),
+        useSingleInstanceCache: false,
+        useTLS: false,
+        username: 'user',
+        password: 'pass'
+      })
+    })
+
+    test('Should not pass a tls option in redisOptions', () => {
+      const args = Cluster.mock.calls[0][1]
+      expect(args.redisOptions.tls).toBeUndefined()
     })
   })
 })
