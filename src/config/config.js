@@ -36,6 +36,19 @@ export const PRODUCTION_LOG_REDACT_PATHS = [
 
 convict.addFormats(convictFormatWithValidator)
 
+// Custom format that enforces @hapi/iron's minimum key length (32 chars)
+// at convict validation time, regardless of environment. This catches
+// short secrets at boot rather than waiting for the first request to
+// hit @hapi/iron's runtime check.
+convict.addFormat({
+  name: 'session-cookie-password',
+  validate(value) {
+    if (typeof value !== 'string' || value.length < 32) {
+      throw new Error('must be a string of at least 32 characters')
+    }
+  }
+})
+
 export const config = convict({
   serviceVersion: {
     doc: 'The service version, this variable is injected into your docker container in CDP environments',
@@ -169,7 +182,7 @@ export const config = convict({
       },
       password: {
         doc: 'session cookie password',
-        format: String,
+        format: 'session-cookie-password',
         default: 'the-password-must-be-at-least-32-characters-long',
         env: 'SESSION_COOKIE_PASSWORD',
         sensitive: true

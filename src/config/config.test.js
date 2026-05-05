@@ -64,4 +64,26 @@ describe('config production hardening', () => {
     expect(mod.config.get('auth.stubEnabled')).toBe(false)
     expect(mod.config.get('session.cookie.password')).toBe(REAL_SECRET)
   })
+
+  test('boot rejects a SESSION_COOKIE_PASSWORD shorter than 32 chars (any env)', async () => {
+    process.env.NODE_ENV = 'development'
+    process.env.ENVIRONMENT = 'local'
+    process.env.SESSION_COOKIE_PASSWORD = 'a'.repeat(31)
+    delete process.env.SESSION_COOKIE_SECURE
+    delete process.env.AUTH_STUB_ENABLED
+
+    await expect(import('./config.js')).rejects.toThrow(/32 characters/)
+  })
+
+  test('boot accepts a SESSION_COOKIE_PASSWORD of exactly 32 chars', async () => {
+    process.env.NODE_ENV = 'development'
+    process.env.ENVIRONMENT = 'local'
+    const secret = 'a'.repeat(32)
+    process.env.SESSION_COOKIE_PASSWORD = secret
+    delete process.env.SESSION_COOKIE_SECURE
+    delete process.env.AUTH_STUB_ENABLED
+
+    const mod = await import('./config.js')
+    expect(mod.config.get('session.cookie.password')).toBe(secret)
+  })
 })
