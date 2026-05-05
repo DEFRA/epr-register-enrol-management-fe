@@ -66,11 +66,15 @@ export function canApplyAction(type, workItem, actionId) {
   if (!transition) {
     return { allowed: false, reason: 'unknown-action' }
   }
-  const currentState = type.states?.find((s) => s.id === workItem.stateId)
+  const stateId = workItem?.stateId
+  if (!stateId) {
+    return { allowed: false, reason: 'invalid-work-item' }
+  }
+  const currentState = type.states?.find((s) => s.id === stateId)
   if (currentState?.isTerminal) {
     return { allowed: false, reason: 'terminal-state' }
   }
-  if (transition.fromStateId !== workItem.stateId) {
+  if (transition.fromStateId !== stateId) {
     return { allowed: false, reason: 'invalid-transition' }
   }
   if (transition.requiresAllTasksComplete !== false) {

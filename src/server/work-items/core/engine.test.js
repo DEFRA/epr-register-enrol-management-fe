@@ -142,4 +142,18 @@ describe('canApplyAction', () => {
       reason: 'unknown-action'
     })
   })
+
+  test('rejects a null work item without throwing', () => {
+    expect(canApplyAction(sampleType(), null, 'approve')).toEqual({
+      allowed: false,
+      reason: 'invalid-work-item'
+    })
+  })
+
+  test('rejects an undefined work item without throwing', () => {
+    expect(canApplyAction(sampleType(), undefined, 'approve')).toEqual({
+      allowed: false,
+      reason: 'invalid-work-item'
+    })
+  })
 })
