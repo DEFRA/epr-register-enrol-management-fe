@@ -12,8 +12,10 @@ const buildModule = (id, registerSpy = vi.fn()) => ({
   type: {
     id,
     displayName: id,
+    templateVersion: 'v1',
     initialState: { id: 'submitted', displayName: 'Submitted' },
     states: [{ id: 'submitted', displayName: 'Submitted' }],
+    transitions: [],
     getTasksForState: () => []
   },
   register: registerSpy
