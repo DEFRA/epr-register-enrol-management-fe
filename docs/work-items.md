@@ -247,6 +247,15 @@ and `findAssignableUser(id)`. For the PoC this re-uses the stub-auth
 in via the stub login all share the same ids. A real deployment will
 replace this with an Entra ID directory lookup.
 
+The directory is gated on `auth.stubEnabled`: when stub auth is disabled
+(any environment using real OAuth) `getAssignableUsers()` returns an
+empty array and `findAssignableUser()` returns `null` for every id, so
+the PoC stub identities cannot leak into a production environment via
+the assign UI. Returned arrays are fresh per call and the per-user
+entries are frozen, so callers can sort/filter the result without
+affecting other callers and accidental property writes throw in strict
+mode.
+
 ### List filters
 
 The list page exposes an "Assignment" filter with four mutually-exclusive
