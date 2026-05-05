@@ -39,7 +39,9 @@ services:
   ################################################################################
 
   case-management-frontend:
-    build: ./
+    build:
+      context: ./
+      target: development
     container_name: case-management-frontend
     ports:
       - '3000:3000'
@@ -58,7 +60,11 @@ services:
       - 'compose/aws.env'
     environment:
       PORT: 3000
-      NODE_ENV: production
+      # Local docker compose runs the dev profile: stub auth, placeholder
+      # session cookie password, no Redis TLS. The hardening assertions in
+      # src/config/config.js reject those defaults whenever NODE_ENV is
+      # production, so keep this as development locally.
+      NODE_ENV: development
       REDIS_HOST: redis
       LOG_FORMAT: pino-pretty
       SESSION_COOKIE_SECURE: false
