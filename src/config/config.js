@@ -13,6 +13,15 @@ const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test'
 const isDevelopment = process.env.NODE_ENV === 'development'
 
+// Public placeholder shipped as the development default for
+// SESSION_COOKIE_PASSWORD. It is intentionally well-known so that local
+// dev works out of the box; it MUST never be used in any environment
+// where the cookie is treated as secure (i.e. anywhere we'd be relying on
+// it to sign/encrypt session data). The hardening assertion below rejects
+// it whenever the cookie is configured as secure or we're in production.
+export const PLACEHOLDER_SESSION_COOKIE_PASSWORD =
+  'the-password-must-be-at-least-32-characters-long'
+
 convict.addFormats(convictFormatWithValidator)
 
 export const config = convict({
@@ -286,3 +295,37 @@ export const config = convict({
 })
 
 config.validate({ allowed: 'strict' })
+
+// Production hardening: refuse to boot with insecure defaults.
+//
+// 1. SESSION_COOKIE_PASSWORD: convict only validates the length (>=32),
+//    not that the operator actually supplied a unique secret. If the env
+//    var is missing in a deployed env we'd silently fall back to the
+//    publicly known placeholder default, signing/encrypting session data
+//    with a key anyone can read on GitHub.
+// 2. AUTH_STUB_ENABLED: the stub auth provider auto-authenticates every
+//    request as a fixed test user and bypasses real OAuth — it must
+//    never be enabled in production.
+//
+// Both checks throw at module-load time so the process fails loudly
+// during boot rather than serving traffic with a known-bad config.
+const sessionCookieSecure = config.get('session.cookie.secure')
+const sessionCookiePassword = config.get('session.cookie.password')
+
+if (
+  (config.get('isProduction') || sessionCookieSecure) &&
+  sessionCookiePassword === PLACEHOLDER_SESSION_COOKIE_PASSWORD
+) {
+  throw new Error(
+    'SESSION_COOKIE_PASSWORD must be set to a unique per-environment secret ' +
+      '(>=32 chars) via Secrets Manager. The placeholder default is not ' +
+      'permitted when SESSION_COOKIE_SECURE is true or NODE_ENV=production.'
+  )
+}
+
+if (config.get('isProduction') && config.get('auth.stubEnabled')) {
+  throw new Error(
+    'AUTH_STUB_ENABLED must be false in production. The stub auth ' +
+      'provider bypasses real OAuth and auto-authenticates every request.'
+  )
+}

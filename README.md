@@ -120,6 +120,16 @@ Notable environment variables for local integration:
 > only required for production-style local runs (e.g. via Compose). Both
 > are intentionally ephemeral — the frontend holds no persistent data.
 
+> **Production secrets.** `SESSION_COOKIE_PASSWORD` must be set to a
+> unique ≥32-char secret per environment (provisioned via AWS Secrets
+> Manager — see [`docs/cdp-deployment.md`](docs/cdp-deployment.md)). The
+> public placeholder default ships only for local dev convenience; boot
+> fails loudly if it is still in use when `NODE_ENV=production` or
+> `SESSION_COOKIE_SECURE=true`. Likewise, `AUTH_STUB_ENABLED` must be
+> `false` in `prod` — the stub auth provider auto-authenticates every
+> request and bypasses real OAuth, so boot fails loudly if it is enabled
+> in production.
+
 See [`src/config/config.js`](src/config/config.js) for the full schema.
 
 ## Testing
