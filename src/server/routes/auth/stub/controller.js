@@ -1,5 +1,6 @@
 import {
   ROLE_ASSIGN,
+  ROLE_DECISION_MAKER,
   ROLE_STANDARD
 } from '#/server/common/helpers/auth/auth-scopes.js'
 
@@ -15,6 +16,12 @@ export const STUB_USERS = [
     name: 'Stub Assign User',
     email: 'assign@stub.example',
     roles: [ROLE_STANDARD, ROLE_ASSIGN]
+  },
+  {
+    id: 'stub-decision-maker-1',
+    name: 'Stub Decision Maker',
+    email: 'decision-maker@stub.example',
+    roles: [ROLE_STANDARD, ROLE_DECISION_MAKER]
   }
 ]
 
