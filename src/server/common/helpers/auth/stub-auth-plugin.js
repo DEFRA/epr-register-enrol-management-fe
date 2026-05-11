@@ -2,7 +2,11 @@ import Boom from '@hapi/boom'
 
 import { config } from '#/config/config.js'
 import { redirectToLogin } from './auth-redirect.js'
-import { ROLE_ASSIGN, ROLE_DECISION_MAKER, ROLE_STANDARD } from './auth-scopes.js'
+import {
+  ROLE_ASSIGN,
+  ROLE_DECISION_MAKER,
+  ROLE_STANDARD
+} from './auth-scopes.js'
 
 export const TEST_STANDARD_USER = {
   id: 'test-standard-id',
