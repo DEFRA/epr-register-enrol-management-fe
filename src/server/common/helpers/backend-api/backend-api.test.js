@@ -6,6 +6,7 @@ import {
   assertSafeHeaderValue,
   assignWorkItem,
   completeWorkItemTask,
+  createWorkItem,
   getBackendHealth,
   getWorkItem,
   getWorkItems,
@@ -820,5 +821,185 @@ describe('#buildHeaders header injection guards (epr-zld)', () => {
     expect(headers['x-cdp-user-id']).toBe('u-1')
     expect(headers['x-cdp-user-name']).toBe('Alice')
     expect(headers['x-cdp-user-roles']).toBe('standard,case-worker')
+  })
+})
+
+describe('#createWorkItem (RA-127)', () => {
+  const baseArgs = () => ({
+    baseUrl: 'http://backend:8085',
+    timeoutMs: 1000,
+    typeId: 're-accreditation',
+    payload: { applicationReference: 'REF-001' }
+  })
+
+  test('POSTs the envelope as JSON to /work-items and returns the created item on 201', async () => {
+    const workItem = { id: 'wi-1', typeId: 're-accreditation' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 201,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await createWorkItem({
+      ...baseArgs(),
+      user: { id: 'u-1', name: 'Alice', roles: ['standard'] },
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchImpl.mock.calls[0]
+    expect(url).toBe('http://backend:8085/work-items')
+    expect(init.method).toBe('POST')
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+    expect(init.headers['accept']).toBe('application/json')
+    expect(init.headers['content-type']).toBe('application/json')
+    expect(init.headers['x-cdp-user-id']).toBe('u-1')
+    expect(init.headers['x-cdp-user-roles']).toBe('standard,case-worker')
+    expect(JSON.parse(init.body)).toEqual({
+      typeId: 're-accreditation',
+      payload: { applicationReference: 'REF-001' }
+    })
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('strips a trailing slash from baseUrl', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 201,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+    await createWorkItem({
+      ...baseArgs(),
+      baseUrl: 'http://backend:8085/',
+      fetchImpl
+    })
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://backend:8085/work-items')
+  })
+
+  test('400 with RFC 7807 problem-details body becomes invalid + fieldErrors', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 400,
+      json: () =>
+        Promise.resolve({
+          title: 'Validation failed',
+          detail: 'One or more fields are invalid',
+          errors: { applicationReference: ['Required'] }
+        })
+    })
+
+    const result = await createWorkItem({ ...baseArgs(), fetchImpl })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid',
+      status: 400,
+      message: 'One or more fields are invalid',
+      fieldErrors: { applicationReference: ['Required'] }
+    })
+  })
+
+  test('400 with an unparseable body becomes invalid with a default message', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 400,
+      json: () => Promise.reject(new Error('not json'))
+    })
+
+    const result = await createWorkItem({ ...baseArgs(), fetchImpl })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid',
+      status: 400,
+      message: 'Backend returned 400'
+    })
+    expect(result.fieldErrors).toBeUndefined()
+  })
+
+  test('401 maps to unauthorized', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 401,
+      json: () => Promise.resolve({ detail: 'Sign in' })
+    })
+    const result = await createWorkItem({ ...baseArgs(), fetchImpl })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'unauthorized',
+      status: 401,
+      message: 'Sign in'
+    })
+  })
+
+  test('403 maps to forbidden', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 403,
+      json: () => Promise.resolve({ title: 'Nope' })
+    })
+    const result = await createWorkItem({ ...baseArgs(), fetchImpl })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'forbidden',
+      status: 403,
+      message: 'Nope'
+    })
+  })
+
+  test('5xx maps to server with the upstream status', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 503,
+      json: () => Promise.resolve({ detail: 'Down' })
+    })
+    const result = await createWorkItem({ ...baseArgs(), fetchImpl })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'server',
+      status: 503,
+      message: 'Down'
+    })
+  })
+
+  test('other 4xx maps to server', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 418,
+      json: () => Promise.resolve(null)
+    })
+    const result = await createWorkItem({ ...baseArgs(), fetchImpl })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'server',
+      status: 418,
+      message: 'Backend returned 418'
+    })
+  })
+
+  test('AbortError → network with timeout message', async () => {
+    const abort = new Error('aborted')
+    abort.name = 'AbortError'
+    const fetchImpl = vi.fn().mockRejectedValue(abort)
+    const result = await createWorkItem({ ...baseArgs(), fetchImpl })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'Request timed out'
+    })
+  })
+
+  test('thrown error → network with the error message', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+    const result = await createWorkItem({ ...baseArgs(), fetchImpl })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'ECONNREFUSED'
+    })
+  })
+
+  test('omits user-* headers when no user is supplied', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 201,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+    await createWorkItem({ ...baseArgs(), fetchImpl })
+    const headers = fetchImpl.mock.calls[0][1].headers
+    expect(headers['x-cdp-user-id']).toBeUndefined()
+    expect(headers['x-cdp-user-name']).toBeUndefined()
+    expect(headers['x-cdp-user-roles']).toBeUndefined()
   })
 })

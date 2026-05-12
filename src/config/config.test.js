@@ -229,4 +229,42 @@ describe('config production hardening', () => {
 
     await expect(import('./config.js')).rejects.toThrow(/REDIS_PASSWORD/)
   })
+
+  describe('RA-127 featureFlags.workItemCreationEnabled', () => {
+    test('defaults to false', async () => {
+      process.env.NODE_ENV = 'development'
+      process.env.ENVIRONMENT = 'local'
+      delete process.env.SESSION_COOKIE_PASSWORD
+      delete process.env.SESSION_COOKIE_SECURE
+      delete process.env.AUTH_STUB_ENABLED
+      delete process.env.WORK_ITEM_CREATION_ENABLED
+
+      const mod = await import('./config.js')
+      expect(mod.config.get('featureFlags.workItemCreationEnabled')).toBe(false)
+    })
+
+    test('WORK_ITEM_CREATION_ENABLED=true enables the flag', async () => {
+      process.env.NODE_ENV = 'development'
+      process.env.ENVIRONMENT = 'local'
+      delete process.env.SESSION_COOKIE_PASSWORD
+      delete process.env.SESSION_COOKIE_SECURE
+      delete process.env.AUTH_STUB_ENABLED
+      process.env.WORK_ITEM_CREATION_ENABLED = 'true'
+
+      const mod = await import('./config.js')
+      expect(mod.config.get('featureFlags.workItemCreationEnabled')).toBe(true)
+    })
+
+    test('WORK_ITEM_CREATION_ENABLED=false keeps the flag off', async () => {
+      process.env.NODE_ENV = 'development'
+      process.env.ENVIRONMENT = 'local'
+      delete process.env.SESSION_COOKIE_PASSWORD
+      delete process.env.SESSION_COOKIE_SECURE
+      delete process.env.AUTH_STUB_ENABLED
+      process.env.WORK_ITEM_CREATION_ENABLED = 'false'
+
+      const mod = await import('./config.js')
+      expect(mod.config.get('featureFlags.workItemCreationEnabled')).toBe(false)
+    })
+  })
 })

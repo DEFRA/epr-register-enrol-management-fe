@@ -1,4 +1,6 @@
+import { config } from '#/config/config.js'
 import { registerModuleDetailTemplates } from '../core/templates.js'
+import { buildCreateWorkItemRoutes } from './create/routes.js'
 
 /**
  * Re-accreditation work item module (RA-98).
@@ -118,12 +120,20 @@ export const reAccreditationType = {
 
 export const reAccreditationModule = {
   type: reAccreditationType,
-  async register(_server) {
+  async register(server) {
     // Mount the type-specific detail template so the framework's detail
     // controller picks it for `(re-accreditation, v1)` work items. All
     // other UI for this type goes through the framework's generic routes.
     registerModuleDetailTemplates('re-accreditation', {
       v1: 're-accreditation/detail-v1'
     })
+
+    // RA-127. The create-work-item demo form is feature-flagged so it
+    // can be hidden in production. When the flag is off the routes are
+    // not mounted at all — the page is a 404 rather than an explicit
+    // "feature disabled" page.
+    if (config.get('featureFlags.workItemCreationEnabled')) {
+      server.route(buildCreateWorkItemRoutes())
+    }
   }
 }

@@ -289,6 +289,14 @@ export const config = convict({
     default: 'local',
     env: 'ENVIRONMENT'
   },
+  featureFlags: {
+    workItemCreationEnabled: {
+      doc: 'RA-127. Enable the demo "create a work item" form. Disabled by default; opt-in via WORK_ITEM_CREATION_ENABLED=true.',
+      format: Boolean,
+      default: false,
+      env: 'WORK_ITEM_CREATION_ENABLED'
+    }
+  },
   auth: {
     stubEnabled: {
       doc: 'Enable stub auth (bypasses real OAuth). Defaults true for non-prod.',

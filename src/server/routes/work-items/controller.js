@@ -5,6 +5,7 @@ import {
 } from '#/server/work-items/core/registry.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { config } from '#/config/config.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -69,6 +70,8 @@ export const workItemListController = {
       totalPages,
       pagination: buildPagination({ page, totalPages, filters }),
       filterSummary: buildFilterSummary({ filters, totalCount }),
+      // RA-127. Surface the create button only when the demo flag is on.
+      showCreateWorkItem: config.get('featureFlags.workItemCreationEnabled'),
       hasFilters:
         filters.typeIds.length > 0 ||
         filters.stateIds.length > 0 ||

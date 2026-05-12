@@ -752,4 +752,21 @@ describe('#workItemDetailController', () => {
     expect(statusCode).toBe(statusCodes.forbidden)
     expect(unassignWorkItem).not.toHaveBeenCalled()
   })
+
+  describe('RA-127 success banner from yar.flash', () => {
+    test('does not render the success banner when no flash is present', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="work-item-success-banner"')
+      )
+    })
+  })
 })

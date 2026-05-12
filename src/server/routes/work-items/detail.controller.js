@@ -297,6 +297,14 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
     user
   })
 
+  // RA-127. Single-shot success banner. `request.yar.flash(name)` returns
+  // an array of every value flashed under that key and clears it; we keep
+  // the first entry (creation only flashes once per redirect) and ignore
+  // anything else for forward-compat.
+  const flashed = request.yar?.flash?.('successBanner') ?? []
+  const successBanner =
+    Array.isArray(flashed) && flashed.length > 0 ? flashed[0] : null
+
   return h
     .view(templatePath, {
       pageTitle: `Work item ${decorated.id}`,
@@ -308,7 +316,8 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       ],
       workItem: decorated,
       assignment,
-      notice
+      notice,
+      successBanner
     })
     .code(statusCode)
 }

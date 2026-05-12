@@ -1,7 +1,8 @@
-import { vi } from 'vitest'
+import { vi, beforeEach, afterEach } from 'vitest'
 
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
+import { config } from '#/config/config.js'
 import {
   clearWorkItemRegistry,
   registerWorkItemType
@@ -473,5 +474,41 @@ describe('#workItemListController', () => {
     expect(result).toContain('Could not reach the backend')
     expect(result).not.toContain(malicious)
     expect(result).toContain('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;')
+  })
+
+  describe('RA-127 create-work-item button', () => {
+    const flagKey = 'featureFlags.workItemCreationEnabled'
+    let originalFlag
+
+    beforeEach(() => {
+      originalFlag = config.get(flagKey)
+      getWorkItems.mockResolvedValue(emptyPage())
+    })
+
+    afterEach(() => {
+      config.set(flagKey, originalFlag)
+    })
+
+    test('renders the button when the flag is on', async () => {
+      config.set(flagKey, true)
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="work-items-create-link"')
+      )
+    })
+
+    test('hides the button when the flag is off', async () => {
+      config.set(flagKey, false)
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="work-items-create-link"')
+      )
+    })
   })
 })
