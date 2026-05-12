@@ -1,6 +1,7 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest'
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import hapi from '@hapi/hapi'
 
+import { config } from '#/config/config.js'
 import { reAccreditationModule, reAccreditationType } from './module.js'
 import { assertValidWorkItemModule } from '../core/module.js'
 import {
@@ -96,7 +97,17 @@ describe('reAccreditationModule', () => {
     )
 
     const server = hapi.server()
-    await reAccreditationModule.register(server)
+    // The bare hapi server has no auth strategy, so disable the
+    // RA-127 create routes (which require `requireStandard`) for this
+    // test — we only care that the detail template gets registered.
+    const flagKey = 'featureFlags.workItemCreationEnabled'
+    const previous = config.get(flagKey)
+    config.set(flagKey, false)
+    try {
+      await reAccreditationModule.register(server)
+    } finally {
+      config.set(flagKey, previous)
+    }
 
     expect(resolveDetailTemplate('re-accreditation', 'v1')).toBe(
       're-accreditation/detail-v1'
@@ -108,5 +119,37 @@ describe('reAccreditationModule', () => {
     await expect(
       reAccreditationModule.register(server)
     ).resolves.toBeUndefined()
+  })
+
+  describe('RA-127 create-work-item routes (feature-flagged)', () => {
+    const flagKey = 'featureFlags.workItemCreationEnabled'
+    let originalFlag
+
+    beforeEach(() => {
+      originalFlag = config.get(flagKey)
+    })
+
+    afterEach(() => {
+      config.set(flagKey, originalFlag)
+    })
+
+    test('mounts the GET + POST create routes when the flag is on', async () => {
+      config.set(flagKey, true)
+      const server = { route: vi.fn() }
+      await reAccreditationModule.register(server)
+      expect(server.route).toHaveBeenCalledTimes(1)
+      const routes = server.route.mock.calls[0][0]
+      expect(routes).toHaveLength(2)
+      const methods = routes.map((r) => `${r.method} ${r.path}`)
+      expect(methods).toContain('GET /work-items/re-accreditation/new')
+      expect(methods).toContain('POST /work-items/re-accreditation/new')
+    })
+
+    test('does not mount any routes when the flag is off', async () => {
+      config.set(flagKey, false)
+      const server = { route: vi.fn() }
+      await reAccreditationModule.register(server)
+      expect(server.route).not.toHaveBeenCalled()
+    })
   })
 })
