@@ -18,20 +18,18 @@
         caption: "All work items currently in the case management system"
       }) }}
     </div>
-    {% if showCreateWorkItem %}
-      <div class="govuk-grid-column-one-third govuk-!-text-align-right">
-        {{ govukButton({
-          text: "Create work item",
-          href: "/work-items/re-accreditation/new",
-          classes: "govuk-button--secondary",
-          attributes: { "data-testid": "work-items-create-link" }
-        }) }}
-      </div>
-    {% endif %}
   </div>
 
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-one-third">
+      {% if showCreateWorkItem %}
+        {{ govukButton({
+          text: "Create work item",
+          href: "/work-items/re-accreditation/new",
+          classes: "govuk-button--start",
+          attributes: { "data-testid": "work-items-create-link" }
+        }) }}
+      {% endif %}
       <form method="get" action="/work-items" novalidate data-testid="work-items-filter-form">
         <h2 class="govuk-heading-m">Filter</h2>
 
