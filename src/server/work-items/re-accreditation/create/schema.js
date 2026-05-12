@@ -108,15 +108,6 @@ export const createReAccreditationSchema = Joi.object({
       'any.required': 'Select a tonnage band',
       'string.empty': 'Select a tonnage band',
       'any.only': 'Select a tonnage band from the list'
-    }),
-  submittedByEmail: Joi.string()
-    .trim()
-    .required()
-    .email({ tlds: false })
-    .messages({
-      'any.required': "Enter the submitter's email address",
-      'string.empty': "Enter the submitter's email address",
-      'string.email': 'Enter an email address in the correct format'
     })
 })
 

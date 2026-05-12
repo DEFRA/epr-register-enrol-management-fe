@@ -106,7 +106,6 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
     expect(service.create).toHaveBeenCalledTimes(1)
     const call = service.create.mock.calls[0][0]
     expect(call.user).toEqual({ id: 'u-1', email: 'user@example.com' })
-    expect(call.formValues.submittedByEmail).toBe('user@example.com')
     expect(call.formValues.siteAddress).toEqual({
       line1: '1 Road',
       line2: '',
@@ -167,7 +166,7 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
     expect(captured.viewModel.pageTitle).toMatch(/^Error:/)
   })
 
-  test('renders 502 with a top-level error when the backend errors with no field errors', async () => {
+  test('renders 502 with the backend message in the error summary when the backend errors with no field errors', async () => {
     const service = {
       create: vi.fn().mockResolvedValue({
         ok: false,
@@ -181,10 +180,10 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
     await ctl.handler(makeRequest(), h)
 
     expect(captured.code).toBe(502)
-    expect(captured.viewModel.topLevelError).toBe('Backend exploded')
     expect(captured.viewModel.errorSummary.items).toEqual([
       { text: 'Backend exploded' }
     ])
+    expect(captured.viewModel.topLevelError).toBeUndefined()
   })
 
   test('renders 400 when the service says invalid but provides no per-field errors', async () => {
@@ -197,7 +196,7 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
     const { h, captured } = makeH()
     await ctl.handler(makeRequest(), h)
     expect(captured.code).toBe(400)
-    expect(captured.viewModel.topLevelError).toBe('Bad')
+    expect(captured.viewModel.errorSummary.items).toEqual([{ text: 'Bad' }])
   })
 
   test('falls back to a default top-level message when the backend gives none', async () => {
@@ -208,9 +207,9 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
     const { h, captured } = makeH()
     await ctl.handler(makeRequest(), h)
     expect(captured.code).toBe(502)
-    expect(captured.viewModel.topLevelError).toBe(
-      'Could not create the work item.'
-    )
+    expect(captured.viewModel.errorSummary.items).toEqual([
+      { text: 'Could not create the work item.' }
+    ])
   })
 
   test('uses the default service when none is injected', () => {

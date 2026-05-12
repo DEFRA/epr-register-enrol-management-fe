@@ -12,8 +12,7 @@ const validForm = () => ({
     postcode: 'AB1 2CD'
   },
   material: 'plastic',
-  tonnageBand: '500-5000',
-  submittedByEmail: 'duly@example.com'
+  tonnageBand: '500-5000'
 })
 
 describe('#createReAccreditationService.create (RA-127)', () => {

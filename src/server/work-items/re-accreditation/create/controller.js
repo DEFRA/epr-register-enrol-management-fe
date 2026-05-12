@@ -21,19 +21,12 @@ function buildOptions(selected, options) {
 
 function renderForm(
   h,
-  {
-    values = {},
-    fieldErrors = {},
-    errorSummary = null,
-    topLevelError = null,
-    statusCode = 200
-  } = {}
+  { values = {}, fieldErrors = {}, errorSummary = null, statusCode = 200 } = {}
 ) {
   const site = values.siteAddress ?? {}
   return h
     .view(VIEW_PATH, {
-      pageTitle:
-        errorSummary || topLevelError ? `Error: ${PAGE_TITLE}` : PAGE_TITLE,
+      pageTitle: errorSummary ? `Error: ${PAGE_TITLE}` : PAGE_TITLE,
       heading: PAGE_TITLE,
       breadcrumbs: BREADCRUMBS,
       values: {
@@ -50,7 +43,6 @@ function renderForm(
       },
       fieldErrors,
       errorSummary,
-      topLevelError,
       materialOptions: buildOptions(values.material, MATERIAL_OPTIONS),
       tonnageBandOptions: buildOptions(values.tonnageBand, TONNAGE_BAND_OPTIONS)
     })
@@ -124,7 +116,6 @@ function reshapeFormPayload(payload) {
     },
     material: p.material,
     tonnageBand: p.tonnageBand
-    // submittedByEmail is injected from the authenticated user in the POST handler
   }
 }
 
@@ -143,7 +134,6 @@ export function makeSubmitCreateWorkItemController({
     async handler(request, h) {
       const user = getUser(request)
       const formValues = reshapeFormPayload(request.payload)
-      formValues.submittedByEmail = user?.email ?? ''
       const result = await service.create({
         formValues,
         user
@@ -168,12 +158,12 @@ export function makeSubmitCreateWorkItemController({
       }
 
       // Backend rejection (server/network/auth) or invalid without
-      // per-field errors — surface the message at the top of the form.
+      // per-field errors — surface the message via the error summary at
+      // the top of the form.
       const message = result.message ?? 'Could not create the work item.'
       const statusCode = result.reason === 'invalid' ? 400 : 502
       return renderForm(h, {
         values: formValues,
-        topLevelError: message,
         errorSummary: {
           titleText: 'There is a problem',
           items: [{ text: message }]

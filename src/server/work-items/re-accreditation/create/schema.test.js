@@ -17,8 +17,7 @@ const validForm = () => ({
     postcode: 'AB1 2CD'
   },
   material: 'plastic',
-  tonnageBand: '500-5000',
-  submittedByEmail: 'duly@example.com'
+  tonnageBand: '500-5000'
 })
 
 describe('#createReAccreditationSchema (RA-127)', () => {
@@ -36,7 +35,6 @@ describe('#createReAccreditationSchema (RA-127)', () => {
     form.applicationReference = '  REF-002  '
     form.organisationName = '  Trim Me  '
     form.siteAddress.line1 = '  10 Road  '
-    form.submittedByEmail = '  user@example.com  '
     const { error, value } = createReAccreditationSchema.validate(form, {
       abortEarly: false
     })
@@ -44,7 +42,6 @@ describe('#createReAccreditationSchema (RA-127)', () => {
     expect(value.applicationReference).toBe('REF-002')
     expect(value.organisationName).toBe('Trim Me')
     expect(value.siteAddress.line1).toBe('10 Road')
-    expect(value.submittedByEmail).toBe('user@example.com')
   })
 
   test('rejects an entirely empty payload with a friendly message per field', () => {
@@ -58,7 +55,6 @@ describe('#createReAccreditationSchema (RA-127)', () => {
     expect(errors.organisationName).toBe('Enter the organisation name')
     expect(errors.material).toBe('Select a material')
     expect(errors.tonnageBand).toBe('Select a tonnage band')
-    expect(errors.submittedByEmail).toBe("Enter the submitter's email address")
     expect(errors.siteAddress).toBe('Enter the site address')
   })
 
@@ -80,12 +76,7 @@ describe('#createReAccreditationSchema (RA-127)', () => {
       'Organisation name must be 200 characters or fewer'
     ],
     ['material', 'gold', 'Select a material from the list'],
-    ['tonnageBand', 'huge', 'Select a tonnage band from the list'],
-    [
-      'submittedByEmail',
-      'not-an-email',
-      'Enter an email address in the correct format'
-    ]
+    ['tonnageBand', 'huge', 'Select a tonnage band from the list']
   ])('rejects %s = %j with %s', (field, value, message) => {
     const form = validForm()
     form[field] = value

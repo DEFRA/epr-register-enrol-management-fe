@@ -16,6 +16,11 @@
         <li>
           <a class="govuk-link" href="/work-items" data-testid="home-work-items-link">View work items</a>
         </li>
+        {% if showCreateWorkItem %}
+          <li>
+            <a class="govuk-link" href="/work-items/re-accreditation/new" data-testid="home-create-work-item-link">Create a work item</a>
+          </li>
+        {% endif %}
       </ul>
     </div>
   </div>
