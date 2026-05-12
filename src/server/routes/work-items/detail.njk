@@ -25,6 +25,15 @@
     caption: "Work item " + workItem.id
   }) }}
 
+  {% if successBanner %}
+    {{ govukNotificationBanner({
+      type: 'success',
+      titleText: 'Work item created — ' + successBanner.reference,
+      text: 'Reference: ' + successBanner.reference,
+      attributes: { "data-testid": "work-item-success-banner" }
+    }) }}
+  {% endif %}
+
   {% if notice %}
     {% if notice.kind == 'error' %}
       {{ govukErrorSummary({

@@ -11,10 +11,24 @@
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 
 {% block content %}
-  {{ appHeading({
-    text: heading,
-    caption: "All work items currently in the case management system"
-  }) }}
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      {{ appHeading({
+        text: heading,
+        caption: "All work items currently in the case management system"
+      }) }}
+    </div>
+    {% if showCreateWorkItem %}
+      <div class="govuk-grid-column-one-third govuk-!-text-align-right">
+        {{ govukButton({
+          text: "Create work item",
+          href: "/work-items/re-accreditation/new",
+          classes: "govuk-button--secondary",
+          attributes: { "data-testid": "work-items-create-link" }
+        }) }}
+      </div>
+    {% endif %}
+  </div>
 
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-one-third">
