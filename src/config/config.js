@@ -291,9 +291,9 @@ export const config = convict({
   },
   featureFlags: {
     workItemCreationEnabled: {
-      doc: 'RA-127. Enable the demo "create a work item" form. Disabled by default in production (NODE_ENV=production or ENVIRONMENT=prod).',
+      doc: 'RA-127. Enable the demo "create a work item" form. Disabled by default; opt-in via WORK_ITEM_CREATION_ENABLED=true.',
       format: Boolean,
-      default: !(isProduction || process.env.ENVIRONMENT === 'prod'),
+      default: false,
       env: 'WORK_ITEM_CREATION_ENABLED'
     }
   },

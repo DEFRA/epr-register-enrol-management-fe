@@ -231,7 +231,7 @@ describe('config production hardening', () => {
   })
 
   describe('RA-127 featureFlags.workItemCreationEnabled', () => {
-    test('defaults to true in non-production', async () => {
+    test('defaults to false', async () => {
       process.env.NODE_ENV = 'development'
       process.env.ENVIRONMENT = 'local'
       delete process.env.SESSION_COOKIE_PASSWORD
@@ -240,26 +240,22 @@ describe('config production hardening', () => {
       delete process.env.WORK_ITEM_CREATION_ENABLED
 
       const mod = await import('./config.js')
-      expect(mod.config.get('featureFlags.workItemCreationEnabled')).toBe(true)
-    })
-
-    test('defaults to false in production', async () => {
-      process.env.NODE_ENV = 'production'
-      process.env.ENVIRONMENT = 'prod'
-      process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
-      process.env.AUTH_STUB_ENABLED = 'false'
-      process.env.AZURE_CLIENT_ID = 'azure-client-id'
-      process.env.AZURE_CLIENT_SECRET = 'azure-client-secret'
-      process.env.REDIS_HOST = 'redis.example.internal'
-      process.env.REDIS_USERNAME = 'redis-user'
-      process.env.REDIS_PASSWORD = 'redis-password'
-      delete process.env.WORK_ITEM_CREATION_ENABLED
-
-      const mod = await import('./config.js')
       expect(mod.config.get('featureFlags.workItemCreationEnabled')).toBe(false)
     })
 
-    test('WORK_ITEM_CREATION_ENABLED env var overrides the default', async () => {
+    test('WORK_ITEM_CREATION_ENABLED=true enables the flag', async () => {
+      process.env.NODE_ENV = 'development'
+      process.env.ENVIRONMENT = 'local'
+      delete process.env.SESSION_COOKIE_PASSWORD
+      delete process.env.SESSION_COOKIE_SECURE
+      delete process.env.AUTH_STUB_ENABLED
+      process.env.WORK_ITEM_CREATION_ENABLED = 'true'
+
+      const mod = await import('./config.js')
+      expect(mod.config.get('featureFlags.workItemCreationEnabled')).toBe(true)
+    })
+
+    test('WORK_ITEM_CREATION_ENABLED=false keeps the flag off', async () => {
       process.env.NODE_ENV = 'development'
       process.env.ENVIRONMENT = 'local'
       delete process.env.SESSION_COOKIE_PASSWORD
