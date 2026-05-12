@@ -1,0 +1,141 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/input/macro.njk" import govukInput %}
+{% from "govuk/components/select/macro.njk" import govukSelect %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+{% from "govuk/components/fieldset/macro.njk" import govukFieldset %}
+
+{% macro errorMessage(field, fieldErrors) %}
+  {% if fieldErrors[field] %}
+    { text: fieldErrors[field] }
+  {% else %}
+    null
+  {% endif %}
+{% endmacro %}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Demo: post a re-accreditation work item to the case management backend"
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "create-work-item-error-summary" }
+        }) }}
+      {% endif %}
+
+      <form method="post"
+            action="/work-items/re-accreditation/new"
+            novalidate
+            data-testid="create-work-item-form">
+
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+        {{ govukInput({
+          id: "field-applicationReference",
+          name: "applicationReference",
+          label: { text: "Application reference", classes: "govuk-label--s" },
+          hint: { text: "The unique reference issued for this re-accreditation" },
+          value: values.applicationReference,
+          autocomplete: "off",
+          spellcheck: false,
+          errorMessage: { text: fieldErrors["applicationReference"] } if fieldErrors["applicationReference"] else null
+        }) }}
+
+        {{ govukInput({
+          id: "field-organisationName",
+          name: "organisationName",
+          label: { text: "Organisation name", classes: "govuk-label--s" },
+          value: values.organisationName,
+          autocomplete: "organization",
+          errorMessage: { text: fieldErrors["organisationName"] } if fieldErrors["organisationName"] else null
+        }) }}
+
+        <fieldset class="govuk-fieldset">
+          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
+            <h2 class="govuk-fieldset__heading">Site address</h2>
+          </legend>
+
+          {{ govukInput({
+            id: "field-siteAddress-line1",
+            name: "siteAddressLine1",
+            label: { text: "Address line 1" },
+            value: values.siteAddress.line1,
+            autocomplete: "address-line1",
+            errorMessage: { text: fieldErrors["siteAddress.line1"] } if fieldErrors["siteAddress.line1"] else null
+          }) }}
+
+          {{ govukInput({
+            id: "field-siteAddress-line2",
+            name: "siteAddressLine2",
+            label: { text: "Address line 2 (optional)" },
+            value: values.siteAddress.line2,
+            autocomplete: "address-line2",
+            errorMessage: { text: fieldErrors["siteAddress.line2"] } if fieldErrors["siteAddress.line2"] else null
+          }) }}
+
+          {{ govukInput({
+            id: "field-siteAddress-town",
+            name: "siteAddressTown",
+            label: { text: "Town or city" },
+            classes: "govuk-!-width-two-thirds",
+            value: values.siteAddress.town,
+            autocomplete: "address-level2",
+            errorMessage: { text: fieldErrors["siteAddress.town"] } if fieldErrors["siteAddress.town"] else null
+          }) }}
+
+          {{ govukInput({
+            id: "field-siteAddress-postcode",
+            name: "siteAddressPostcode",
+            label: { text: "Postcode" },
+            classes: "govuk-input--width-10",
+            value: values.siteAddress.postcode,
+            autocomplete: "postal-code",
+            errorMessage: { text: fieldErrors["siteAddress.postcode"] } if fieldErrors["siteAddress.postcode"] else null
+          }) }}
+        </fieldset>
+
+        {{ govukSelect({
+          id: "field-material",
+          name: "material",
+          label: { text: "Material", classes: "govuk-label--s" },
+          items: materialOptions,
+          errorMessage: { text: fieldErrors["material"] } if fieldErrors["material"] else null
+        }) }}
+
+        {{ govukSelect({
+          id: "field-tonnageBand",
+          name: "tonnageBand",
+          label: { text: "Tonnage band", classes: "govuk-label--s" },
+          items: tonnageBandOptions,
+          errorMessage: { text: fieldErrors["tonnageBand"] } if fieldErrors["tonnageBand"] else null
+        }) }}
+
+        {{ govukInput({
+          id: "field-submittedByEmail",
+          name: "submittedByEmail",
+          label: { text: "Submitted by (email address)", classes: "govuk-label--s" },
+          value: values.submittedByEmail,
+          autocomplete: "email",
+          spellcheck: false,
+          type: "email",
+          errorMessage: { text: fieldErrors["submittedByEmail"] } if fieldErrors["submittedByEmail"] else null
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Create work item",
+            attributes: { "data-testid": "create-work-item-submit" }
+          }) }}
+          <a class="govuk-link" href="/work-items">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
