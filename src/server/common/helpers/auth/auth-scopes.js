@@ -22,6 +22,7 @@
 
 export const ROLE_STANDARD = 'standard'
 export const ROLE_ASSIGN = 'assign'
+export const ROLE_DECISION_MAKER = 'reaccreditation-decision-maker'
 
 export const ALL_ROLES = [ROLE_STANDARD, ROLE_ASSIGN]
 

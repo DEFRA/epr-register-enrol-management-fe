@@ -1,6 +1,7 @@
 {% extends 'layouts/page.njk' %}
 
 {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
 {% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
 {% from "govuk/components/task-list/macro.njk" import govukTaskList %}
 {% from "govuk/components/button/macro.njk" import govukButton %}
@@ -25,11 +26,18 @@
   }) }}
 
   {% if notice %}
-    {{ govukNotificationBanner({
-      type: notice.kind == 'error' and 'important' or 'success',
-      titleText: notice.title or (notice.kind == 'error' and 'There was a problem' or 'Success'),
-      text: notice.message
-    }) }}
+    {% if notice.kind == 'error' %}
+      {{ govukErrorSummary({
+        titleText: notice.title or "There is a problem",
+        errorList: [{ text: notice.message }]
+      }) }}
+    {% else %}
+      {{ govukNotificationBanner({
+        type: 'success',
+        titleText: notice.title or 'Success',
+        text: notice.message
+      }) }}
+    {% endif %}
   {% endif %}
 
   <div class="govuk-grid-row">
