@@ -452,6 +452,110 @@ export async function addWorkItemNote({
   })
 }
 
+/**
+ * Submit a brand-new work item of the given type (RA-127).
+ *
+ * Wraps `POST /work-items` on the backend. The backend wraps every
+ * `payload` as opaque BSON so the per-type shape lives in the
+ * type-specific service object (Joi schema + form mapping); this client
+ * just forwards the envelope `{ typeId, payload }` and translates the
+ * response to a typed result.
+ *
+ * Result shape:
+ *  - 201 → { ok: true, workItem }
+ *  - 400 → { ok: false, reason: 'invalid', status: 400, message, fieldErrors? }
+ *  - 401 → { ok: false, reason: 'unauthorized', status: 401, message }
+ *  - 403 → { ok: false, reason: 'forbidden', status: 403, message }
+ *  - 5xx → { ok: false, reason: 'server', status, message }
+ *  - other → { ok: false, reason: 'server', status, message }
+ *  - network → { ok: false, reason: 'network', message }
+ */
+export async function createWorkItem({
+  typeId,
+  payload,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: buildHeaders(
+        {
+          accept: 'application/json',
+          'content-type': 'application/json'
+        },
+        user
+      ),
+      body: JSON.stringify({ typeId, payload })
+    })
+
+    if (response.status === 201) {
+      const workItem = await response.json()
+      return { ok: true, workItem }
+    }
+
+    const problem = await safeReadJson(response)
+    const detail =
+      (problem && (problem.detail || problem.title)) ||
+      `Backend returned ${response.status}`
+    const fieldErrors =
+      problem && typeof problem.errors === 'object' && problem.errors !== null
+        ? problem.errors
+        : undefined
+
+    if (response.status === 400) {
+      return {
+        ok: false,
+        reason: 'invalid',
+        status: 400,
+        message: detail,
+        ...(fieldErrors ? { fieldErrors } : {})
+      }
+    }
+    if (response.status === 401) {
+      return {
+        ok: false,
+        reason: 'unauthorized',
+        status: 401,
+        message: detail
+      }
+    }
+    if (response.status === 403) {
+      return { ok: false, reason: 'forbidden', status: 403, message: detail }
+    }
+    return {
+      ok: false,
+      reason: 'server',
+      status: response.status,
+      message: detail
+    }
+  } catch (error) {
+    logger.warn({ err: error, url }, 'Backend API createWorkItem failed')
+    return {
+      ok: false,
+      reason: 'network',
+      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function safeReadJson(response) {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
 async function postJson({
   url,
   timeoutMs,
