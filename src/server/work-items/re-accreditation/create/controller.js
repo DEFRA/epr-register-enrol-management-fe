@@ -46,8 +46,7 @@ function renderForm(
           postcode: site.postcode ?? ''
         },
         material: values.material ?? '',
-        tonnageBand: values.tonnageBand ?? '',
-        submittedByEmail: values.submittedByEmail ?? ''
+        tonnageBand: values.tonnageBand ?? ''
       },
       fieldErrors,
       errorSummary,
@@ -66,8 +65,7 @@ const FIELD_ORDER = [
   'siteAddress.town',
   'siteAddress.postcode',
   'material',
-  'tonnageBand',
-  'submittedByEmail'
+  'tonnageBand'
 ]
 
 function buildErrorSummary(fieldErrors) {
@@ -112,8 +110,8 @@ function reshapeFormPayload(payload) {
       postcode: p.siteAddressPostcode
     },
     material: p.material,
-    tonnageBand: p.tonnageBand,
-    submittedByEmail: p.submittedByEmail
+    tonnageBand: p.tonnageBand
+    // submittedByEmail is injected from the authenticated user in the POST handler
   }
 }
 
@@ -130,10 +128,12 @@ export function makeSubmitCreateWorkItemController({
 } = {}) {
   return {
     async handler(request, h) {
+      const user = getUser(request)
       const formValues = reshapeFormPayload(request.payload)
+      formValues.submittedByEmail = user?.email ?? ''
       const result = await service.create({
         formValues,
-        user: getUser(request)
+        user
       })
 
       if (result.ok) {

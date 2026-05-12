@@ -27,7 +27,10 @@ function makeH() {
   return { h, captured }
 }
 
-function makeRequest({ payload = {}, user = { id: 'u-1' } } = {}) {
+function makeRequest({
+  payload = {},
+  user = { id: 'u-1', email: 'user@example.com' }
+} = {}) {
   const flashCalls = []
   return {
     payload,
@@ -80,8 +83,7 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
         siteAddressTown: 'Town',
         siteAddressPostcode: 'AB1 2CD',
         material: 'plastic',
-        tonnageBand: '500-5000',
-        submittedByEmail: 'a@b.test'
+        tonnageBand: '500-5000'
       }
     })
     const { h, captured } = makeH()
@@ -90,7 +92,8 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
 
     expect(service.create).toHaveBeenCalledTimes(1)
     const call = service.create.mock.calls[0][0]
-    expect(call.user).toEqual({ id: 'u-1' })
+    expect(call.user).toEqual({ id: 'u-1', email: 'user@example.com' })
+    expect(call.formValues.submittedByEmail).toBe('user@example.com')
     expect(call.formValues.siteAddress).toEqual({
       line1: '1 Road',
       line2: '',

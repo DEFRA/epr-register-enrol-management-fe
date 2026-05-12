@@ -117,17 +117,6 @@
           errorMessage: { text: fieldErrors["tonnageBand"] } if fieldErrors["tonnageBand"] else null
         }) }}
 
-        {{ govukInput({
-          id: "field-submittedByEmail",
-          name: "submittedByEmail",
-          label: { text: "Submitted by (email address)", classes: "govuk-label--s" },
-          value: values.submittedByEmail,
-          autocomplete: "email",
-          spellcheck: false,
-          type: "email",
-          errorMessage: { text: fieldErrors["submittedByEmail"] } if fieldErrors["submittedByEmail"] else null
-        }) }}
-
         <div class="govuk-button-group">
           {{ govukButton({
             text: "Create work item",
