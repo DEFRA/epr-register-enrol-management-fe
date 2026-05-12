@@ -45,20 +45,33 @@ function makeRequest({
 }
 
 describe('#makeCreateWorkItemController (RA-127)', () => {
-  test('GET renders the empty form with placeholder options', () => {
+  test('GET renders the form pre-filled with demo values', () => {
     const ctl = makeCreateWorkItemController()
     const { h, captured } = makeH()
     ctl.handler(makeRequest(), h)
     expect(captured.view).toBe('re-accreditation/create/index')
     expect(captured.code).toBe(200)
     expect(captured.viewModel.heading).toBe('Create a work item')
-    expect(captured.viewModel.values.applicationReference).toBe('')
-    expect(captured.viewModel.materialOptions[0]).toEqual({
-      value: '',
-      text: 'Choose…',
-      selected: true
+    expect(captured.viewModel.values.applicationReference).toBe('RA-2024-00123')
+    expect(captured.viewModel.values.organisationName).toBe(
+      'Acme Recycling Ltd'
+    )
+    expect(captured.viewModel.values.siteAddress).toEqual({
+      line1: '12 Industrial Way',
+      line2: 'Parkside Estate',
+      town: 'Bristol',
+      postcode: 'BS1 4DJ'
     })
-    expect(captured.viewModel.tonnageBandOptions[0].selected).toBe(true)
+    // material and tonnageBand demo values should be selected in the dropdowns
+    expect(
+      captured.viewModel.materialOptions.find((o) => o.value === 'plastic')
+        .selected
+    ).toBe(true)
+    expect(captured.viewModel.materialOptions[0].selected).toBe(false)
+    expect(
+      captured.viewModel.tonnageBandOptions.find((o) => o.value === '500-5000')
+        .selected
+    ).toBe(true)
     expect(captured.viewModel.fieldErrors).toEqual({})
     expect(captured.viewModel.errorSummary).toBeNull()
   })

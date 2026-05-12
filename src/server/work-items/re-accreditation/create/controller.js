@@ -82,12 +82,25 @@ function buildErrorSummary(fieldErrors) {
 }
 
 /**
- * GET /work-items/re-accreditation/new — render an empty create form.
+ * GET /work-items/re-accreditation/new — render the create form pre-filled with demo data.
  */
+const DEMO_VALUES = {
+  applicationReference: 'RA-2024-00123',
+  organisationName: 'Acme Recycling Ltd',
+  siteAddress: {
+    line1: '12 Industrial Way',
+    line2: 'Parkside Estate',
+    town: 'Bristol',
+    postcode: 'BS1 4DJ'
+  },
+  material: 'plastic',
+  tonnageBand: '500-5000'
+}
+
 export function makeCreateWorkItemController() {
   return {
     handler(_request, h) {
-      return renderForm(h)
+      return renderForm(h, { values: DEMO_VALUES })
     }
   }
 }
