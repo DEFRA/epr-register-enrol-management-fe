@@ -1,5 +1,6 @@
 import {
   addWorkItemNote,
+  addWorkItemTaskNote,
   applyWorkItemAction,
   assignWorkItem,
   completeWorkItemTask,
@@ -32,7 +33,8 @@ export function createWorkItemActionsService({
   applyAction = applyWorkItemAction,
   assign = assignWorkItem,
   unassign = unassignWorkItem,
-  addNote = addWorkItemNote
+  addNote = addWorkItemNote,
+  addTaskNote = addWorkItemTaskNote
 } = {}) {
   return {
     /**
@@ -124,6 +126,31 @@ export function createWorkItemActionsService({
         }
       }
       const result = await addNote({ workItemId, text: text.trim(), user })
+      return toResult(result)
+    },
+
+    /**
+     * Append a free-text note scoped to a task (RA-129). Same contract as
+     * {@link addNote} but routed to the task-scoped backend endpoint so the
+     * note carries a `taskId` and the audit timeline records it as
+     * `task-note-added`.
+     */
+    async addTaskNote({ workItemId, taskId, text, user = null }) {
+      assertId(workItemId, 'workItemId')
+      assertId(taskId, 'taskId')
+      if (typeof text !== 'string' || text.trim() === '') {
+        return {
+          ok: false,
+          reason: 'invalid',
+          message: 'Note text is required.'
+        }
+      }
+      const result = await addTaskNote({
+        workItemId,
+        taskId,
+        text: text.trim(),
+        user
+      })
       return toResult(result)
     }
   }

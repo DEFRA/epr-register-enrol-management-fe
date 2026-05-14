@@ -353,3 +353,129 @@ describe('detailRowsForAuditEntry', () => {
     ])
   })
 })
+
+describe('task-note-added (RA-129)', () => {
+  test('summariseAuditEntry shows task and quoted excerpt when both present', () => {
+    expect(
+      summariseAuditEntry({
+        action: 'task-note-added',
+        details: {
+          taskId: 'check-eligibility',
+          taskDisplayName: 'Check eligibility',
+          excerpt: 'looks good'
+        }
+      })
+    ).toBe('Check eligibility \u2014 \u201clooks good\u201d')
+  })
+
+  test('summariseAuditEntry falls back to taskId when no display name', () => {
+    expect(
+      summariseAuditEntry({
+        action: 'task-note-added',
+        details: { taskId: 'check-eligibility', excerpt: '  ' }
+      })
+    ).toBe('check-eligibility')
+  })
+
+  test('summariseAuditEntry returns just the quoted excerpt when no task', () => {
+    expect(
+      summariseAuditEntry({
+        action: 'task-note-added',
+        details: { excerpt: 'orphan' }
+      })
+    ).toBe('\u201corphan\u201d')
+  })
+
+  test('summariseAuditEntry returns empty string when neither task nor excerpt', () => {
+    expect(
+      summariseAuditEntry({ action: 'task-note-added', details: {} })
+    ).toBe('')
+  })
+
+  test('detailRowsForAuditEntry projects task, actor and multiline excerpt', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'task-note-added',
+        createdBy: 'bob-1',
+        createdByName: 'Bob Builder',
+        details: {
+          taskId: 'check-eligibility',
+          taskDisplayName: 'Check eligibility',
+          excerpt: 'looks good\nmore detail'
+        }
+      })
+    ).toEqual([
+      { key: 'Task', value: 'Check eligibility' },
+      { key: 'Added by', value: 'Bob Builder' },
+      { key: 'Excerpt', value: 'looks good\nmore detail', multiline: true }
+    ])
+  })
+
+  test('detailRowsForAuditEntry falls back to id and createdBy when names are missing', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'task-note-added',
+        createdBy: 'bob-1',
+        details: { taskId: 'check-eligibility', excerpt: 'x' }
+      })
+    ).toEqual([
+      { key: 'Task', value: 'check-eligibility' },
+      { key: 'Added by', value: 'bob-1' },
+      { key: 'Excerpt', value: 'x', multiline: true }
+    ])
+  })
+
+  test('detailRowsForAuditEntry returns no rows when details are empty', () => {
+    expect(detailRowsForAuditEntry({ action: 'task-note-added' })).toEqual([])
+  })
+})
+
+describe('decorateAuditLog (RA-129)', () => {
+  test('returns empty array when entries is not an array', () => {
+    expect(decorateAuditLog(null)).toEqual([])
+    expect(decorateAuditLog(undefined)).toEqual([])
+    expect(decorateAuditLog('nope')).toEqual([])
+  })
+
+  test('uses backend actionDisplayName when present and non-blank', () => {
+    const [decorated] = decorateAuditLog([
+      {
+        action: 'task-note-added',
+        actionDisplayName: 'Custom label',
+        details: {}
+      }
+    ])
+    expect(decorated.actionDisplayName).toBe('Custom label')
+  })
+
+  test('falls back to the lookup when backend actionDisplayName is missing', () => {
+    const [decorated] = decorateAuditLog([
+      { action: 'task-note-added', details: {} }
+    ])
+    expect(decorated.actionDisplayName).toBe('Task note added')
+  })
+
+  test('falls back to the action id when there is no lookup entry', () => {
+    const [decorated] = decorateAuditLog([{ action: 'unknown-action' }])
+    expect(decorated.actionDisplayName).toBe('unknown-action')
+  })
+
+  test('treats blank backend actionDisplayName as missing', () => {
+    const [decorated] = decorateAuditLog([
+      { action: 'task-note-added', actionDisplayName: '   ', details: {} }
+    ])
+    expect(decorated.actionDisplayName).toBe('Task note added')
+  })
+
+  test('falls back to empty string when both backend label and action are missing', () => {
+    const [decorated] = decorateAuditLog([{ details: {} }])
+    expect(decorated.actionDisplayName).toBe('')
+  })
+
+  test('handles a null entry within the array gracefully', () => {
+    const [decorated] = decorateAuditLog([null])
+    expect(decorated.actionDisplayName).toBe('')
+    expect(decorated.summary).toBe('')
+    expect(decorated.detailRows).toEqual([])
+  })
+})
