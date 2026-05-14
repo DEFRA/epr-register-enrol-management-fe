@@ -8,6 +8,7 @@ import {
 } from '#/server/work-items/core/assignees.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { ROLE_ASSIGN } from '#/server/common/helpers/auth/auth-scopes.js'
+import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
@@ -413,13 +414,6 @@ function computeTaskProgress(tasks) {
   const total = list.length
   const completed = list.filter((task) => isTaskComplete(task)).length
   return { total, completed }
-}
-
-function isTaskComplete(task) {
-  if (task == null) return false
-  if (task.status === 'Completed') return true
-  if (task.status == null && task.isComplete === true) return true
-  return false
 }
 
 /**

@@ -2,6 +2,7 @@ import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
@@ -192,7 +193,7 @@ async function renderTasks({
 
 function projectTask(task, notes) {
   const rawStatus = typeof task?.status === 'string' ? task.status : null
-  const fallback = task?.isComplete ? 'Completed' : 'NotStarted'
+  const fallback = isTaskComplete(task) ? 'Completed' : 'NotStarted'
   const canonical = TASK_STATUS_VIEW[rawStatus] ?? TASK_STATUS_VIEW[fallback]
   return {
     taskId: task?.taskId,
