@@ -11,6 +11,7 @@ import {
   clearDetailTemplateRegistry,
   registerDetailTemplate
 } from '#/server/work-items/core/templates.js'
+import { makeSelfAssignController } from './detail.controller.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   assignWorkItem: vi.fn(),
@@ -751,6 +752,189 @@ describe('#workItemDetailController', () => {
 
     expect(statusCode).toBe(statusCodes.forbidden)
     expect(unassignWorkItem).not.toHaveBeenCalled()
+  })
+
+  describe('POST /work-items/{id}/self-assign (RA-153)', () => {
+    test('Standard user GET on an unassigned work item posts to /self-assign (not /assign)', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ assignedToId: null, assignedToName: null })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'standard' }
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(expect.stringContaining('self-assign-submit'))
+      expect(result).toEqual(
+        expect.stringContaining(`action="/work-items/${ID}/self-assign"`)
+      )
+      expect(result).not.toEqual(
+        expect.stringContaining(`action="/work-items/${ID}/assign"`)
+      )
+      // The assignee is now derived from the session; the form must not
+      // carry the previously-required hidden inputs.
+      expect(result).not.toEqual(expect.stringContaining('name="assigneeId"'))
+      expect(result).not.toEqual(expect.stringContaining('name="assigneeName"'))
+    })
+
+    test('Standard user self-assigns and is redirected to the detail page', async () => {
+      registerReaccreditation()
+      assignWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          assignedToId: 'test-standard-id',
+          assignedToName: 'Test Standard User'
+        })
+      })
+
+      const { statusCode, headers } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/${ID}/self-assign`,
+        payload: '',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-test-user-role': 'standard'
+        }
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(`/work-items/${ID}`)
+      expect(assignWorkItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ID,
+          assigneeId: 'test-standard-id',
+          assigneeName: 'Test Standard User',
+          user: expect.objectContaining({
+            id: 'test-standard-id',
+            name: 'Test Standard User'
+          })
+        })
+      )
+    })
+
+    test('Assign-role user can also self-assign (the route is gated at requireStandard which assign users also have)', async () => {
+      registerReaccreditation()
+      assignWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          assignedToId: 'test-assign-id',
+          assignedToName: 'Test Assign User'
+        })
+      })
+
+      const { statusCode, headers } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/${ID}/self-assign`,
+        payload: '',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-test-user-role': 'assign'
+        }
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(`/work-items/${ID}`)
+      expect(assignWorkItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ID,
+          assigneeId: 'test-assign-id',
+          assigneeName: 'Test Assign User'
+        })
+      )
+    })
+
+    test('Re-renders the detail page inline when the backend rejects the self-assign', async () => {
+      registerReaccreditation()
+      assignWorkItem.mockResolvedValue({
+        ok: false,
+        status: 403,
+        problem: { detail: 'Not allowed to self-assign right now' }
+      })
+      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+      const { statusCode, result } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/${ID}/self-assign`,
+        payload: '',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-test-user-role': 'standard'
+        }
+      })
+
+      expect(statusCode).toBe(statusCodes.forbidden)
+      expect(result).toEqual(
+        expect.stringContaining('Could not self-assign work item')
+      )
+      expect(result).toEqual(
+        expect.stringContaining('Not allowed to self-assign right now')
+      )
+    })
+
+    test('Re-renders the detail page inline when the backend reports the work item is missing', async () => {
+      registerReaccreditation()
+      assignWorkItem.mockResolvedValue({
+        ok: false,
+        status: 404,
+        problem: { detail: 'Work item not found' }
+      })
+      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+      const { statusCode, result } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/${ID}/self-assign`,
+        payload: '',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-test-user-role': 'standard'
+        }
+      })
+
+      // Service maps 404 to reason 'not-found' which falls through to the
+      // generic 400 status path in renderDetailFromResult.
+      expect(statusCode).toBe(statusCodes.badRequest)
+      expect(result).toEqual(
+        expect.stringContaining('Could not self-assign work item')
+      )
+      expect(result).toEqual(expect.stringContaining('Work item not found'))
+    })
+
+    test('Defensive: when the credential has no id, the handler renders the detail page and does not call the backend', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+      const stubService = { assign: vi.fn() }
+      const controller = makeSelfAssignController({ service: stubService })
+
+      const view = vi
+        .fn()
+        .mockReturnValue({ code: vi.fn((c) => ({ code: c })) })
+      const h = { view, redirect: vi.fn() }
+      const request = {
+        params: { id: ID },
+        payload: {},
+        auth: { credentials: { name: 'No Id User' } },
+        yar: { flash: () => [] }
+      }
+
+      await controller.handler(request, h)
+
+      expect(stubService.assign).not.toHaveBeenCalled()
+      expect(h.redirect).not.toHaveBeenCalled()
+      expect(view).toHaveBeenCalled()
+      const [, viewModel] = view.mock.calls[0]
+      expect(viewModel.notice).toEqual(
+        expect.objectContaining({
+          kind: 'error',
+          title: 'Could not self-assign work item',
+          message: 'Could not identify the current user.'
+        })
+      )
+    })
   })
 
   describe('RA-127 success banner from yar.flash', () => {

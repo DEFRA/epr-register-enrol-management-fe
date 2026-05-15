@@ -4,6 +4,7 @@ import {
   makeApplyActionController,
   makeAssignController,
   makeCompleteTaskController,
+  makeSelfAssignController,
   makeSetTaskStatusController,
   makeUnassignController,
   workItemDetailController
@@ -13,7 +14,10 @@ import {
   makeAddTaskNoteController,
   workItemTasksController
 } from './tasks.controller.js'
-import { requireAssign } from '#/server/common/helpers/auth/auth-scopes.js'
+import {
+  requireAssign,
+  requireStandard
+} from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
  * Routes for the cross-type work item list (RA-93) plus the detail view,
@@ -99,6 +103,18 @@ export const workItems = {
           path: '/work-items/{id}/unassign',
           options: requireAssign,
           ...makeUnassignController()
+        },
+        {
+          // RA-153. Self-assign: a standard-role user claims an unassigned
+          // work item for themselves. Gated at `requireStandard` (assign
+          // users also have the standard scope) so the obvious "Take this
+          // work item" affordance never returns a 403. The handler derives
+          // the assignee from the authenticated session — the form carries
+          // no assigneeId / assigneeName.
+          method: 'POST',
+          path: '/work-items/{id}/self-assign',
+          options: requireStandard,
+          ...makeSelfAssignController()
         },
         {
           // Add a note (RA-96). Open to any authenticated user; the backend
