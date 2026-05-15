@@ -512,4 +512,197 @@ describe('#workItemListController', () => {
       )
     })
   })
+
+  // ---------------------------------------------------------------- //
+  // RA-125 — Nation filter                                            //
+  // ---------------------------------------------------------------- //
+  describe('RA-125 nation filter', () => {
+    test('Forwards nation query params to the backend', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?nation=England&nation=Scotland'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ nations: ['England', 'Scotland'] })
+      )
+    })
+
+    test('Drops invalid nation values', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?nation=England&nation=Atlantis'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ nations: ['England'] })
+      )
+    })
+
+    test('Defaults to user nation role when user has exactly one nation role', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { 'x-test-user-role': 'nation-scotland' }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ nations: ['Scotland'] })
+      )
+    })
+
+    test('No default nation when user has no nation roles', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      // Default assign user has no nation roles.
+      await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ nations: [] })
+      )
+    })
+
+    test('Explicit query param overrides role-based nation default', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?nation=Wales',
+        headers: { 'x-test-user-role': 'nation-england' }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ nations: ['Wales'] })
+      )
+    })
+
+    test('Nation checkboxes appear in the rendered page', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('filter-nation')
+      expect(result).toContain('England')
+      expect(result).toContain('Scotland')
+      expect(result).toContain('Wales')
+      expect(result).toContain('Northern Ireland')
+    })
+
+    test('Nation checkboxes reflect the active filter', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?nation=Wales'
+      })
+
+      // The Wales checkbox must actually carry the checked attribute, and
+      // the unchecked nations must not. Match on the name="nation" inputs
+      // emitted by the govukCheckboxes macro.
+      const inputRe = /<input[^>]*name="nation"[^>]*>/g
+      const inputs = result.match(inputRe) ?? []
+      expect(inputs).toHaveLength(4)
+      const walesInput = inputs.find((i) => i.includes('value="Wales"'))
+      const englandInput = inputs.find((i) => i.includes('value="England"'))
+      expect(walesInput).toMatch(/\bchecked\b/)
+      expect(englandInput).not.toMatch(/\bchecked\b/)
+    })
+
+    test('Form submission with no nation boxes ticked clears the role-based default', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      // Nation-england user submits the filter form (filtersApplied=1) with
+      // no nation boxes ticked: they want to see all nations, not be locked
+      // back into England by the default-resolution path.
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1',
+        headers: { 'x-test-user-role': 'nation-england' }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ nations: [] })
+      )
+    })
+
+    test('Bare GET still applies the role-based nation default', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      // No filtersApplied marker on the URL — this is a fresh navigation,
+      // so the regulator's own queue should still be pre-selected.
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { 'x-test-user-role': 'nation-england' }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ nations: ['England'] })
+      )
+    })
+
+    test('Pagination links preserve filtersApplied so defaults do not silently re-apply', async () => {
+      // Pagination is only rendered when at least one item is present, so
+      // register a minimal type and return one item across multiple pages.
+      clearWorkItemRegistry()
+      registerWorkItemType({
+        id: 're-accreditation',
+        displayName: 'Re-accreditation',
+        initialState: { id: 'submitted', displayName: 'Submitted' },
+        states: [{ id: 'submitted', displayName: 'Submitted' }],
+        getTasksForState: () => []
+      })
+      getWorkItems.mockResolvedValue({
+        ok: true,
+        items: [
+          {
+            id: '44444444-4444-4444-4444-444444444444',
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 100,
+        page: 1,
+        pageSize: 20
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1',
+        headers: { 'x-test-user-role': 'nation-england' }
+      })
+
+      // The 'next' link (and any numbered page links) must carry the
+      // filtersApplied marker so paginating doesn't snap back to the
+      // role-based nation default. Allow either '&' or HTML-escaped '&amp;'.
+      expect(result).toMatch(/href="[^"]*filtersApplied=1[^"]*"/)
+    })
+
+    test('hasFilters is true when nations filter is active', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?nation=England'
+      })
+
+      // The "Clear filters" link is only rendered when hasFilters=true.
+      expect(result).toContain('Clear filters')
+    })
+  })
 })

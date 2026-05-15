@@ -5,9 +5,17 @@ import {
 } from '#/server/work-items/core/registry.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { config } from '#/config/config.js'
 
 const DEFAULT_PAGE_SIZE = 20
+
+/**
+ * Valid nation values accepted by the backend (RA-125). Derived from
+ * NATION_ROLE_MAP so the role->nation mapping stays the single source of
+ * truth and the two lists cannot drift apart.
+ */
+const VALID_NATIONS = Object.values(NATION_ROLE_MAP)
 
 const ASSIGNEE_FILTER_ANY = 'any'
 const ASSIGNEE_FILTER_MINE = 'mine'
@@ -39,6 +47,7 @@ export const workItemListController = {
       search: filters.search,
       assigneeId: filters.backendAssigneeId,
       unassigned: filters.backendUnassignedOnly,
+      nations: filters.nations,
       page: filters.page,
       pageSize: DEFAULT_PAGE_SIZE,
       user
@@ -62,6 +71,7 @@ export const workItemListController = {
       filters,
       typeOptions: buildTypeOptions(filters.typeIds),
       stateOptions: buildStateOptions(filters.stateIds),
+      nationOptions: buildNationOptions(filters.nations),
       assigneeFilterOptions: buildAssigneeFilterOptions(filters, user),
       assigneeUserOptions: buildAssigneeUserOptions(filters.assigneeUserId),
       totalCount,
@@ -76,7 +86,9 @@ export const workItemListController = {
         filters.typeIds.length > 0 ||
         filters.stateIds.length > 0 ||
         filters.search !== '' ||
-        filters.assigneeMode !== ASSIGNEE_FILTER_ANY
+        filters.assigneeMode !== ASSIGNEE_FILTER_ANY ||
+        filters.nations.length > 0,
+      filtersApplied: filters.filtersApplied
     })
   }
 }
@@ -119,6 +131,12 @@ function readFilters(query, user) {
     backendAssigneeId = assigneeUserId
   }
 
+  // Hidden form marker that lets the controller distinguish 'user
+  // submitted the filter form' from 'fresh GET of /work-items'. Without
+  // this, role-based defaults (e.g. nation) would silently re-apply when
+  // the user explicitly cleared them (RA-125).
+  const filtersApplied = query.filtersApplied === '1'
+
   return {
     typeIds,
     stateIds,
@@ -127,8 +145,45 @@ function readFilters(query, user) {
     assigneeMode,
     assigneeUserId,
     backendAssigneeId,
-    backendUnassignedOnly
+    backendUnassignedOnly,
+    nations: resolveNations(query.nation, user, filtersApplied),
+    filtersApplied
   }
+}
+
+/**
+ * Resolve the active nation filter.
+ *
+ * If the query string supplies explicit nation values, use those (validated
+ * against the known set). Otherwise, if the authenticated user has exactly
+ * one nation role *and* the request is not an explicit form submission,
+ * default to that nation so regulators see their own queue first without
+ * having to manually apply the filter every time. When the user submits
+ * the filter form with no nation boxes ticked we honour that empty
+ * selection so they can see all nations or another nation's queue (RA-125).
+ */
+function resolveNations(nationParam, user, filtersApplied) {
+  const explicit = uniqueStringList(nationParam).filter((n) =>
+    VALID_NATIONS.includes(n)
+  )
+  if (explicit.length > 0) {
+    return explicit
+  }
+
+  // The user submitted the filter form with every nation unchecked --
+  // respect that and don't fall through to the role-based default.
+  if (filtersApplied) {
+    return []
+  }
+
+  // No explicit filter — check for a single nation role on the user.
+  const userRoles = user?.roles ?? []
+  const nationRoles = userRoles.filter((r) => Object.hasOwn(NATION_ROLE_MAP, r))
+  if (nationRoles.length === 1) {
+    return [NATION_ROLE_MAP[nationRoles[0]]]
+  }
+
+  return []
 }
 
 function normaliseAssigneeMode(value) {
@@ -216,6 +271,15 @@ function buildStateOptions(selectedStateIds) {
   }))
 }
 
+function buildNationOptions(selectedNations) {
+  const selected = new Set(selectedNations)
+  return VALID_NATIONS.map((nation) => ({
+    value: nation,
+    text: nation === 'NorthernIreland' ? 'Northern Ireland' : nation,
+    checked: selected.has(nation)
+  }))
+}
+
 function buildAssigneeFilterOptions(filters, user) {
   // The radio options the user picks between. "Mine" is only meaningful
   // for an authenticated user, but we always include it so the same
@@ -289,6 +353,10 @@ function buildHref(filters) {
   const params = new URLSearchParams()
   for (const id of filters.typeIds ?? []) params.append('typeId', id)
   for (const id of filters.stateIds ?? []) params.append('stateId', id)
+  for (const n of filters.nations ?? []) params.append('nation', n)
+  // Carry the form-submission marker through pagination/back-links so
+  // role-based defaults don't silently re-apply mid-paging (RA-125).
+  if (filters.filtersApplied) params.append('filtersApplied', '1')
   if (filters.search) params.append('search', filters.search)
   if (filters.assigneeMode && filters.assigneeMode !== ASSIGNEE_FILTER_ANY) {
     params.append('assigneeMode', filters.assigneeMode)
@@ -316,6 +384,12 @@ function buildFilterSummary({ filters, totalCount }) {
   }
   if (filters.stateIds.length > 0) {
     parts.push(`state: ${filters.stateIds.join(', ')}`)
+  }
+  if (filters.nations.length > 0) {
+    const labels = filters.nations.map((n) =>
+      n === 'NorthernIreland' ? 'Northern Ireland' : n
+    )
+    parts.push(`nation: ${labels.join(', ')}`)
   }
   if (filters.search) {
     parts.push(`search: "${filters.search}"`)

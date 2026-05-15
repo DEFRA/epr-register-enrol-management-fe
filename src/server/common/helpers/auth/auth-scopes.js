@@ -24,6 +24,23 @@ export const ROLE_STANDARD = 'standard'
 export const ROLE_ASSIGN = 'assign'
 export const ROLE_DECISION_MAKER = 'reaccreditation-decision-maker'
 
+/**
+ * Nation-scoped roles. A user with exactly one of these roles is
+ * automatically defaulted to that nation's filter on the worklist (RA-125).
+ */
+export const ROLE_NATION_ENGLAND = 'role:nation-england'
+export const ROLE_NATION_SCOTLAND = 'role:nation-scotland'
+export const ROLE_NATION_WALES = 'role:nation-wales'
+export const ROLE_NATION_NORTHERN_IRELAND = 'role:nation-northern-ireland'
+
+/** Map from role string to the nation value used in backend query params. */
+export const NATION_ROLE_MAP = {
+  [ROLE_NATION_ENGLAND]: 'England',
+  [ROLE_NATION_SCOTLAND]: 'Scotland',
+  [ROLE_NATION_WALES]: 'Wales',
+  [ROLE_NATION_NORTHERN_IRELAND]: 'NorthernIreland'
+}
+
 export const ALL_ROLES = [ROLE_STANDARD, ROLE_ASSIGN]
 
 export const requireStandard = { auth: { scope: [ROLE_STANDARD] } }

@@ -31,6 +31,10 @@
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-one-third">
       <form method="get" action="/work-items" novalidate data-testid="work-items-filter-form">
+        {# Hidden marker so the controller can tell a real form submission #}
+        {# (possibly with everything unchecked) apart from a fresh GET of the #}
+        {# page, and decide whether to apply role-based filter defaults (RA-125). #}
+        <input type="hidden" name="filtersApplied" value="1">
         <h2 class="govuk-heading-m">Filter</h2>
 
         {{ govukInput({
@@ -60,6 +64,16 @@
             classes: "govuk-checkboxes--small",
             fieldset: { legend: { text: "State", classes: "govuk-fieldset__legend--s" } },
             items: stateOptions
+          }) }}
+        {% endif %}
+
+        {% if nationOptions.length > 0 %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-nation",
+            name: "nation",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "Nation", classes: "govuk-fieldset__legend--s" } },
+            items: nationOptions
           }) }}
         {% endif %}
 
