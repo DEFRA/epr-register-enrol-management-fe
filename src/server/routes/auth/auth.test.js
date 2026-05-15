@@ -76,7 +76,7 @@ describe('auth', () => {
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: '/auth/stub/login',
-      payload: { userId: 'stub-standard-1' }
+      payload: { role: 'standard' }
     })
 
     expect(statusCode).toBe(302)
