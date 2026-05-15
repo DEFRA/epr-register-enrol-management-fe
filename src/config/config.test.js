@@ -231,7 +231,7 @@ describe('config production hardening', () => {
   })
 
   describe('RA-127 featureFlags.workItemCreationEnabled', () => {
-    test('defaults to false', async () => {
+    test('defaults to true', async () => {
       process.env.NODE_ENV = 'development'
       process.env.ENVIRONMENT = 'local'
       delete process.env.SESSION_COOKIE_PASSWORD
@@ -240,7 +240,7 @@ describe('config production hardening', () => {
       delete process.env.WORK_ITEM_CREATION_ENABLED
 
       const mod = await import('./config.js')
-      expect(mod.config.get('featureFlags.workItemCreationEnabled')).toBe(false)
+      expect(mod.config.get('featureFlags.workItemCreationEnabled')).toBe(true)
     })
 
     test('WORK_ITEM_CREATION_ENABLED=true enables the flag', async () => {

@@ -1,0 +1,174 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/select/macro.njk" import govukSelect %}
+{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+
+{# ---------------------------------------------------------------- #}
+{# Tasks & notes page (RA-129).                                      #}
+{#                                                                   #}
+{# Type-agnostic page that owns task progression (status / quick-    #}
+{# complete) and per-task notes. Lifted off the summary page so the  #}
+{# detail view stays focused on envelope, assignment, actions and    #}
+{# the audit log.                                                    #}
+{# ---------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItem.id + " — " + workItem.typeDisplayName
+  }) }}
+
+  {% if notice %}
+    {% if notice.kind == 'error' %}
+      {{ govukErrorSummary({
+        titleText: notice.title or "There is a problem",
+        errorList: [{ text: notice.message }]
+      }) }}
+    {% else %}
+      {{ govukNotificationBanner({
+        type: 'success',
+        titleText: notice.title or 'Success',
+        text: notice.message
+      }) }}
+    {% endif %}
+  {% endif %}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {# ------------------------- Work item notes ---------------------- #}
+      <h2 class="govuk-heading-m" id="work-item-notes">Work item notes</h2>
+      {% if workItem.workItemNotes and workItem.workItemNotes.length > 0 %}
+        <ol class="govuk-list" data-testid="work-item-notes">
+          {% for note in workItem.workItemNotes %}
+            <li class="govuk-!-margin-bottom-4" data-testid="work-item-note-{{ note.id }}">
+              <p class="govuk-body govuk-!-margin-bottom-1" style="white-space: pre-wrap">{{ note.text }}</p>
+              <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-0">
+                {{ note.createdByName or note.createdBy or "Unknown" }} — {{ note.createdAt }}
+              </p>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="govuk-body" data-testid="work-item-no-notes">
+          No work item notes have been added.
+        </p>
+      {% endif %}
+
+      {# ------------------------------ Tasks --------------------------- #}
+      <h2 class="govuk-heading-m">Tasks</h2>
+
+      {% if not workItem.hasTasks %}
+        <p class="govuk-body" data-testid="work-item-no-tasks">
+          No tasks are required for this work item in its current state.
+        </p>
+      {% endif %}
+
+      {% for group in workItem.groups %}
+        <h3 class="govuk-heading-s" data-testid="task-group-{{ group.statusId }}">
+          {{ group.label }}
+          {{ govukTag({ text: group.tasks.length|string, classes: group.tagClass }) }}
+        </h3>
+        <ul class="govuk-list">
+          {% for task in group.tasks %}
+            <li id="task-{{ task.taskId | urlencode }}"
+                class="govuk-!-margin-bottom-6"
+                data-testid="work-item-task-{{ task.taskId }}">
+
+              <div class="govuk-!-margin-bottom-2">
+                <span class="govuk-!-margin-right-2"><strong>{{ task.displayName }}</strong></span>
+                {{ govukTag({
+                  text: task.statusLabel,
+                  classes: task.statusTagClass,
+                  attributes: { "data-testid": "task-status-tag-" + task.taskId }
+                }) }}
+              </div>
+
+              {% if not task.isComplete %}
+                <form method="post"
+                      action="/work-items/{{ workItem.id }}/tasks/{{ task.taskId }}/status"
+                      class="govuk-!-margin-bottom-3"
+                      novalidate>
+                  <input type="hidden" name="crumb" value="{{ crumb }}" />
+                  <input type="hidden" name="returnTo" value="/work-items/{{ workItem.id }}/tasks" />
+                  <div class="govuk-form-group govuk-!-margin-bottom-2">
+                    {{ govukSelect({
+                      id: "task-status-" + task.taskId,
+                      name: "status",
+                      label: { text: "Set status", classes: "govuk-label--s" },
+                      items: task.statusOptions,
+                      attributes: { "data-testid": "task-status-select-" + task.taskId }
+                    }) }}
+                  </div>
+                  {{ govukButton({
+                    text: "Update status",
+                    classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+                    attributes: { "data-testid": "set-task-status-" + task.taskId }
+                  }) }}
+                </form>
+
+                <form method="post"
+                      action="/work-items/{{ workItem.id }}/tasks/{{ task.taskId }}/complete"
+                      class="govuk-!-margin-bottom-4"
+                      novalidate>
+                  <input type="hidden" name="crumb" value="{{ crumb }}" />
+                  <input type="hidden" name="returnTo" value="/work-items/{{ workItem.id }}/tasks" />
+                  {{ govukButton({
+                    text: "Mark complete",
+                    attributes: { "data-testid": "complete-task-" + task.taskId }
+                  }) }}
+                </form>
+              {% endif %}
+
+              <form method="post"
+                    action="/work-items/{{ workItem.id }}/tasks/{{ task.taskId }}/notes"
+                    class="govuk-!-margin-bottom-3"
+                    novalidate>
+                <input type="hidden" name="crumb" value="{{ crumb }}" />
+                {{ govukCharacterCount({
+                  id: "task-note-text-" + task.taskId,
+                  name: "text",
+                  maxlength: 4000,
+                  rows: 3,
+                  label: { text: "Add a task note", classes: "govuk-label--s" },
+                  value: (errorTaskId == task.taskId) and errorTaskText or "",
+                  attributes: { "data-testid": "task-note-text-" + task.taskId }
+                }) }}
+                {{ govukButton({
+                  text: "Add note",
+                  classes: "govuk-button--secondary",
+                  attributes: { "data-testid": "add-task-note-" + task.taskId }
+                }) }}
+              </form>
+
+              {% if task.notes and task.notes.length > 0 %}
+                <ol class="govuk-list" data-testid="task-notes-{{ task.taskId }}">
+                  {% for note in task.notes %}
+                    <li class="govuk-!-margin-bottom-3" data-testid="task-note-{{ note.id }}">
+                      <p class="govuk-body govuk-!-margin-bottom-1" style="white-space: pre-wrap">{{ note.text }}</p>
+                      <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-0">
+                        {{ note.createdByName or note.createdBy or "Unknown" }} — {{ note.createdAt }}
+                      </p>
+                    </li>
+                  {% endfor %}
+                </ol>
+              {% else %}
+                <p class="govuk-body-s govuk-hint" data-testid="task-no-notes-{{ task.taskId }}">
+                  No notes have been added to this task.
+                </p>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% endfor %}
+
+      <p class="govuk-body">
+        <a class="govuk-link" href="/work-items/{{ workItem.id }}">Back to work item</a>
+      </p>
+    </div>
+  </div>
+{% endblock %}

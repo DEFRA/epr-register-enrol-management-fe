@@ -9,6 +9,10 @@ import {
   workItemDetailController
 } from './detail.controller.js'
 import { workItemAuditLogController } from './audit-log.controller.js'
+import {
+  makeAddTaskNoteController,
+  workItemTasksController
+} from './tasks.controller.js'
 import { requireAssign } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
@@ -45,6 +49,18 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}/audit-log',
           ...workItemAuditLogController
+        },
+        {
+          // RA-129. Dedicated tasks & notes page; type-agnostic.
+          method: 'GET',
+          path: '/work-items/{id}/tasks',
+          ...workItemTasksController
+        },
+        {
+          // RA-129. Add a task-scoped note. Open to any authenticated user.
+          method: 'POST',
+          path: '/work-items/{id}/tasks/{taskId}/notes',
+          ...makeAddTaskNoteController()
         },
         {
           method: 'POST',

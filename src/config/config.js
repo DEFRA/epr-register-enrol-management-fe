@@ -291,9 +291,9 @@ export const config = convict({
   },
   featureFlags: {
     workItemCreationEnabled: {
-      doc: 'RA-127. Enable the demo "create a work item" form. Disabled by default; opt-in via WORK_ITEM_CREATION_ENABLED=true.',
+      doc: 'RA-127. Enable the demo "create a work item" form. Enabled by default; opt-out via WORK_ITEM_CREATION_ENABLED=false.',
       format: Boolean,
-      default: false,
+      default: true,
       env: 'WORK_ITEM_CREATION_ENABLED'
     }
   },

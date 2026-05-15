@@ -21,9 +21,38 @@ export function decorateAuditLog(entries) {
   }
   return entries.map((entry) => ({
     ...entry,
+    actionDisplayName: actionDisplayNameFor(entry),
     summary: summariseAuditEntry(entry),
     detailRows: detailRowsForAuditEntry(entry)
   }))
+}
+
+/**
+ * Humanised label for the audit timeline. Falls back to a per-action
+ * lookup when the backend hasn't supplied an `actionDisplayName` (e.g.
+ * for newer audit actions added before the backend humaniser caught up,
+ * such as RA-129's `task-note-added`).
+ */
+const ACTION_DISPLAY_NAMES = {
+  'work-item-submitted': 'Work item submitted',
+  'task-completed': 'Task completed',
+  'task-status-changed': 'Task status changed',
+  'action-applied': 'Action applied',
+  assigned: 'Assigned',
+  unassigned: 'Unassigned',
+  'note-added': 'Note added',
+  'task-note-added': 'Task note added'
+}
+
+function actionDisplayNameFor(entry) {
+  if (entry == null || typeof entry !== 'object') return ''
+  if (
+    typeof entry.actionDisplayName === 'string' &&
+    entry.actionDisplayName.trim() !== ''
+  ) {
+    return entry.actionDisplayName
+  }
+  return ACTION_DISPLAY_NAMES[entry.action] ?? entry.action ?? ''
 }
 
 /**
@@ -59,6 +88,14 @@ export function summariseAuditEntry(entry) {
     }
     case 'note-added':
       return ''
+    case 'task-note-added': {
+      const task = details.taskDisplayName ?? details.taskId
+      const excerpt =
+        typeof details.excerpt === 'string' ? details.excerpt.trim() : ''
+      if (task && excerpt) return `${task} \u2014 \u201c${excerpt}\u201d`
+      if (task) return task
+      return excerpt ? `\u201c${excerpt}\u201d` : ''
+    }
     default:
       return ''
   }
@@ -123,6 +160,18 @@ export function detailRowsForAuditEntry(entry) {
       const text = details.noteText
       if (typeof text === 'string' && text.length > 0) {
         rows.push({ key: 'Note', value: text, multiline: true })
+      }
+      return rows
+    }
+    case 'task-note-added': {
+      const rows = []
+      const task = details.taskDisplayName ?? details.taskId
+      if (task) rows.push({ key: 'Task', value: task })
+      const actor = entry.createdByName ?? entry.createdBy
+      if (actor) rows.push({ key: 'Added by', value: actor })
+      const excerpt = details.excerpt
+      if (typeof excerpt === 'string' && excerpt.length > 0) {
+        rows.push({ key: 'Excerpt', value: excerpt, multiline: true })
       }
       return rows
     }

@@ -138,51 +138,29 @@
       </div>
 
       {# ------------------------------ Tasks ------------------------------ #}
+      {# RA-129. Task progression + per-task notes live on a dedicated      #}
+      {# /tasks page so the summary stays focused on envelope, assignment,  #}
+      {# available actions and the audit log. The summary keeps a read-only #}
+      {# progress indicator + a deep link.                                  #}
       <h2 class="govuk-heading-m">Tasks</h2>
 
-      {% if workItem.tasks and workItem.tasks.length > 0 %}
-        <ul class="govuk-list" data-testid="work-item-tasks">
-          {% for task in workItem.tasks %}
-            <li class="govuk-!-margin-bottom-4" data-testid="work-item-task-{{ task.taskId }}">
-              <div class="govuk-!-margin-bottom-2">
-                <span class="govuk-!-margin-right-2">{{ task.displayName }}</span>
-                {{ govukTag({
-                  text: task.statusLabel,
-                  classes: task.statusTagClass,
-                  attributes: { "data-testid": "task-status-tag-" + task.taskId }
-                }) }}
-              </div>
-              {% if not task.isComplete %}
-                <form method="post"
-                      action="/work-items/{{ workItem.id }}/tasks/{{ task.taskId }}/status"
-                      class="govuk-!-display-block"
-                      novalidate>
-                  <input type="hidden" name="crumb" value="{{ crumb }}" />
-                  <div class="govuk-form-group govuk-!-margin-bottom-2">
-                    {{ govukSelect({
-                      id: "task-status-" + task.taskId,
-                      name: "status",
-                      label: {
-                        text: "Set status",
-                        classes: "govuk-label--s govuk-visually-hidden"
-                      },
-                      items: task.statusOptions,
-                      attributes: { "data-testid": "task-status-select-" + task.taskId }
-                    }) }}
-                  </div>
-                  {{ govukButton({
-                    text: "Update status",
-                    classes: "govuk-button--secondary govuk-!-margin-bottom-0",
-                    attributes: { "data-testid": "set-task-status-" + task.taskId }
-                  }) }}
-                </form>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
+      {% if workItem.taskProgress.total > 0 %}
+        <p class="govuk-body" data-testid="work-item-task-progress">
+          {{ workItem.taskProgress.completed }} of {{ workItem.taskProgress.total }} tasks complete.
+        </p>
+        <p class="govuk-body">
+          <a class="govuk-link"
+             data-testid="work-item-tasks-link"
+             href="/work-items/{{ workItem.id }}/tasks">Tasks &amp; notes ({{ workItem.taskProgress.total }})</a>
+        </p>
       {% else %}
         <p class="govuk-body" data-testid="work-item-no-tasks">
           No tasks are required for this work item in its current state.
+        </p>
+        <p class="govuk-body">
+          <a class="govuk-link"
+             data-testid="work-item-tasks-link"
+             href="/work-items/{{ workItem.id }}/tasks">Tasks &amp; notes</a>
         </p>
       {% endif %}
 
@@ -208,56 +186,6 @@
       {% else %}
         <p class="govuk-body" data-testid="work-item-no-actions">
           No actions are currently available for this work item.
-        </p>
-      {% endif %}
-
-      {# ------------------------------ Notes ----------------------------- #}
-      {# RA-96. Notes are an append-only audit narrative attached to every #}
-      {# work item by the framework. Any authenticated user can add one;   #}
-      {# the backend snapshots author identity onto the note. Existing     #}
-      {# notes are projected newest-first by the backend so we render      #}
-      {# them in the order received.                                       #}
-      <h2 class="govuk-heading-m" id="notes">Notes</h2>
-
-      <form method="post"
-            action="/work-items/{{ workItem.id }}/notes"
-            class="govuk-!-margin-bottom-6"
-            novalidate>
-        <input type="hidden" name="crumb" value="{{ crumb }}" />
-        {{ govukCharacterCount({
-          id: "note-text",
-          name: "text",
-          maxlength: 4000,
-          rows: 5,
-          label: {
-            text: "Add a note",
-            classes: "govuk-label--s"
-          },
-          hint: {
-            text: "Notes are visible to anyone who can see this work item and cannot be edited or deleted."
-          },
-          attributes: { "data-testid": "note-text" }
-        }) }}
-        {{ govukButton({
-          text: "Add note",
-          attributes: { "data-testid": "add-note-submit" }
-        }) }}
-      </form>
-
-      {% if workItem.notes and workItem.notes.length > 0 %}
-        <ol class="govuk-list" data-testid="work-item-notes">
-          {% for note in workItem.notes %}
-            <li class="govuk-!-margin-bottom-4" data-testid="work-item-note-{{ note.id }}">
-              <p class="govuk-body govuk-!-margin-bottom-1" style="white-space: pre-wrap">{{ note.text }}</p>
-              <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-0">
-                {{ note.createdByName or note.createdBy or "Unknown" }} — {{ note.createdAt }}
-              </p>
-            </li>
-          {% endfor %}
-        </ol>
-      {% else %}
-        <p class="govuk-body" data-testid="work-item-no-notes">
-          No notes have been added to this work item.
         </p>
       {% endif %}
 

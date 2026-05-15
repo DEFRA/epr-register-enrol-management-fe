@@ -374,4 +374,82 @@ describe('createWorkItemActionsService', () => {
       ).rejects.toThrow(/workItemId/)
     })
   })
+
+  describe('addTaskNote (RA-129)', () => {
+    test('forwards trimmed text + taskId + user to the client', async () => {
+      const addTaskNote = vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: {
+          id: 'abc',
+          notes: [{ id: 'n-1', text: 'hello', taskId: 'check' }]
+        }
+      })
+      const service = createWorkItemActionsService({ addTaskNote })
+
+      const result = await service.addTaskNote({
+        workItemId: 'abc',
+        taskId: 'check',
+        text: '  hello  ',
+        user: { id: 'alice-1', name: 'Alice' }
+      })
+
+      expect(addTaskNote).toHaveBeenCalledWith({
+        workItemId: 'abc',
+        taskId: 'check',
+        text: 'hello',
+        user: { id: 'alice-1', name: 'Alice' }
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    test('rejects blank text locally without calling the client', async () => {
+      const addTaskNote = vi.fn()
+      const service = createWorkItemActionsService({ addTaskNote })
+
+      const result = await service.addTaskNote({
+        workItemId: 'abc',
+        taskId: 'check',
+        text: ''
+      })
+
+      expect(addTaskNote).not.toHaveBeenCalled()
+      expect(result).toEqual({
+        ok: false,
+        reason: 'invalid',
+        message: 'Note text is required.'
+      })
+    })
+
+    test('translates a 400 from the backend into an invalid result', async () => {
+      const addTaskNote = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        problem: { detail: 'Task not applicable.' }
+      })
+      const service = createWorkItemActionsService({ addTaskNote })
+
+      const result = await service.addTaskNote({
+        workItemId: 'abc',
+        taskId: 'unknown',
+        text: 'hi'
+      })
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'invalid',
+        status: 400,
+        message: 'Task not applicable.'
+      })
+    })
+
+    test('rejects empty workItemId / taskId', async () => {
+      const service = createWorkItemActionsService({ addTaskNote: vi.fn() })
+      await expect(
+        service.addTaskNote({ workItemId: '', taskId: 'check', text: 'x' })
+      ).rejects.toThrow(/workItemId/)
+      await expect(
+        service.addTaskNote({ workItemId: 'abc', taskId: '', text: 'x' })
+      ).rejects.toThrow(/taskId/)
+    })
+  })
 })

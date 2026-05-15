@@ -21,7 +21,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   completeWorkItemTask: vi.fn(),
   setWorkItemTaskStatus: vi.fn(),
   applyWorkItemAction: vi.fn(),
-  addWorkItemNote: vi.fn()
+  addWorkItemNote: vi.fn(),
+  addWorkItemTaskNote: vi.fn()
 }))
 
 const {
@@ -114,9 +115,12 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
     expect(result).toEqual(expect.stringContaining('Re-accreditation'))
     expect(result).toEqual(expect.stringContaining('Submitted'))
-    expect(result).toEqual(expect.stringContaining('Check eligibility'))
-    expect(result).toEqual(expect.stringContaining('Not started'))
-    expect(result).toEqual(expect.stringContaining('Update status'))
+    // RA-129. Detail page is now a read-only progress summary; the task
+    // list, status select and quick-complete button moved to the tasks page.
+    expect(result).toEqual(expect.stringContaining('0 of 1 tasks complete'))
+    expect(result).toEqual(expect.stringContaining('Tasks &amp; notes (1)'))
+    expect(result).toEqual(expect.stringContaining(`/work-items/${ID}/tasks`))
+    expect(result).not.toEqual(expect.stringContaining('Update status'))
     expect(result).toEqual(expect.stringContaining('Acme'))
     expect(result).toEqual(expect.stringContaining('v1'))
   })
@@ -151,7 +155,9 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Completed'))
+    // RA-129. Per-task forms moved to the tasks page; the summary just
+    // shows the progress count + an Approve action when available.
+    expect(result).toEqual(expect.stringContaining('1 of 1 tasks complete'))
     expect(result).not.toEqual(expect.stringContaining('Update status'))
     expect(result).toEqual(expect.stringContaining('Approve'))
     expect(result).toEqual(
@@ -345,7 +351,7 @@ describe('#workItemDetailController', () => {
     )
   })
 
-  test('Renders the richer task-status tag and select for an in-progress task', async () => {
+  test('Summary page no longer renders per-task status select even for in-progress tasks (RA-129)', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -367,14 +373,14 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('In progress'))
-    expect(result).toEqual(expect.stringContaining('govuk-tag--blue'))
-    expect(result).toEqual(
+    expect(result).not.toEqual(
       expect.stringContaining('task-status-select-check-eligibility')
     )
+    expect(result).not.toEqual(expect.stringContaining('Update status'))
+    expect(result).toEqual(expect.stringContaining('Tasks &amp; notes (1)'))
   })
 
-  test('Renders a Blocked task with the red tag and no completed badge', async () => {
+  test('Summary page does not render the per-task UI for a Blocked task (RA-129)', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -396,8 +402,8 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Blocked'))
-    expect(result).toEqual(expect.stringContaining('govuk-tag--red'))
+    expect(result).not.toEqual(expect.stringContaining('govuk-tag--red'))
+    expect(result).not.toEqual(expect.stringContaining('govuk-tag--blue'))
   })
 
   test('POST action redirects to the detail page on success', async () => {
@@ -527,7 +533,7 @@ describe('#workItemDetailController', () => {
     )
   })
 
-  test('Renders the notes section with existing notes newest-first as projected by the backend', async () => {
+  test('Summary page no longer shows the notes list or add-note form (RA-129)', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -539,13 +545,6 @@ describe('#workItemDetailController', () => {
             createdAt: '2026-04-27T11:00:00Z',
             createdBy: 'alice-1',
             createdByName: 'Alice Example'
-          },
-          {
-            id: '33333333-3333-3333-3333-333333333333',
-            text: 'Older note from Bob',
-            createdAt: '2026-04-27T09:00:00Z',
-            createdBy: 'bob-2',
-            createdByName: 'Bob Example'
           }
         ]
       })
@@ -557,19 +556,14 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Newer note from Alice'))
-    expect(result).toEqual(expect.stringContaining('Older note from Bob'))
-    expect(result).toEqual(expect.stringContaining('Alice Example'))
-    // Newest-first ordering: newer note's text appears before the older one.
-    expect(result.indexOf('Newer note from Alice')).toBeLessThan(
-      result.indexOf('Older note from Bob')
+    expect(result).not.toEqual(expect.stringContaining('Newer note from Alice'))
+    expect(result).not.toEqual(expect.stringContaining('Add a note'))
+    expect(result).not.toEqual(
+      expect.stringContaining(`action="/work-items/${ID}/notes"`)
     )
-    // Add-note form is always rendered.
-    expect(result).toEqual(expect.stringContaining(`/work-items/${ID}/notes`))
-    expect(result).toEqual(expect.stringContaining('Add a note'))
   })
 
-  test('Renders an empty-notes message when no notes exist', async () => {
+  test('Summary page shows the read-only progress count and link to the tasks page (RA-129)', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -583,7 +577,13 @@ describe('#workItemDetailController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(
-      expect.stringContaining('No notes have been added to this work item')
+      expect.stringContaining('data-testid="work-item-task-progress"')
+    )
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-tasks-link"')
+    )
+    expect(result).toEqual(
+      expect.stringContaining(`href="/work-items/${ID}/tasks"`)
     )
   })
 

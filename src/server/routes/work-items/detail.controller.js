@@ -8,6 +8,7 @@ import {
 } from '#/server/work-items/core/assignees.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { ROLE_ASSIGN } from '#/server/common/helpers/auth/auth-scopes.js'
+import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
@@ -50,7 +51,7 @@ export function makeCompleteTaskController({
       if (result.ok) {
         // PRG: redirect-after-post so refresh is harmless and the URL stays
         // clean of one-shot state.
-        return h.redirect(`/work-items/${encodeURIComponent(id)}`)
+        return h.redirect(successRedirect(request, id))
       }
       return renderDetailFromResult({
         request,
@@ -89,7 +90,7 @@ export function makeSetTaskStatusController({
       })
 
       if (result.ok) {
-        return h.redirect(`/work-items/${encodeURIComponent(id)}`)
+        return h.redirect(successRedirect(request, id))
       }
       return renderDetailFromResult({
         request,
@@ -401,8 +402,18 @@ function decorate(workItem) {
     payloadJson: safeStringify(workItem.payload),
     assigneeDisplayName:
       workItem.assignedToName ?? workItem.assignedToId ?? null,
-    tasks: Array.isArray(workItem.tasks) ? workItem.tasks.map(decorateTask) : []
+    tasks: Array.isArray(workItem.tasks)
+      ? workItem.tasks.map(decorateTask)
+      : [],
+    taskProgress: computeTaskProgress(workItem.tasks)
   }
+}
+
+function computeTaskProgress(tasks) {
+  const list = Array.isArray(tasks) ? tasks : []
+  const total = list.length
+  const completed = list.filter((task) => isTaskComplete(task)).length
+  return { total, completed }
 }
 
 /**
@@ -463,4 +474,21 @@ function safeStringify(value) {
   } catch {
     return ''
   }
+}
+
+/**
+ * Resolve the success redirect target for a task-level POST. The tasks
+ * page (RA-129) passes a hidden `returnTo` field on every form so the
+ * status / quick-complete actions PRG-redirect back to the tasks page
+ * the user submitted from. We only honour same-origin paths under
+ * `/work-items/{id}` so a malicious form cannot use the field as an
+ * open-redirect.
+ */
+function successRedirect(request, id) {
+  const detail = `/work-items/${encodeURIComponent(id)}`
+  const tasks = `${detail}/tasks`
+  const payload = request.payload ?? {}
+  const candidate = typeof payload.returnTo === 'string' ? payload.returnTo : ''
+  if (candidate === tasks) return tasks
+  return detail
 }
