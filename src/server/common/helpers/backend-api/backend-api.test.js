@@ -217,6 +217,45 @@ describe('#getWorkItems', () => {
       pageSize: 0
     })
   })
+
+  test('Appends multiple nation values as repeated query string params', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      nations: ['England', 'Scotland'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const calledUrl = fetchImpl.mock.calls[0][0]
+    expect(calledUrl).toContain('nation=England')
+    expect(calledUrl).toContain('nation=Scotland')
+  })
+
+  test('Omits the nation param when nations is empty', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      nations: [],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const calledUrl = fetchImpl.mock.calls[0][0]
+    expect(calledUrl).not.toContain('nation=')
+  })
 })
 
 describe('#completeWorkItemTask', () => {

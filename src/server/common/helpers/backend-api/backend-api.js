@@ -136,6 +136,7 @@ export async function getBackendHealth({
 export async function getWorkItems({
   typeIds,
   stateIds,
+  nations,
   search,
   assigneeId,
   unassigned,
@@ -149,6 +150,7 @@ export async function getWorkItems({
   const url = buildWorkItemsUrl(baseUrl, {
     typeIds,
     stateIds,
+    nations,
     search,
     assigneeId,
     unassigned,
@@ -187,7 +189,7 @@ export async function getWorkItems({
 
 function buildWorkItemsUrl(
   baseUrl,
-  { typeIds, stateIds, search, assigneeId, unassigned, page, pageSize }
+  { typeIds, stateIds, nations, search, assigneeId, unassigned, page, pageSize }
 ) {
   const root = `${baseUrl.replace(/\/$/, '')}/work-items`
   const params = new URLSearchParams()
@@ -197,6 +199,9 @@ function buildWorkItemsUrl(
   }
   for (const stateId of toArray(stateIds)) {
     if (stateId) params.append('stateId', stateId)
+  }
+  for (const nation of toArray(nations)) {
+    if (nation) params.append('nation', nation)
   }
   if (search && String(search).trim() !== '') {
     params.append('search', String(search).trim())

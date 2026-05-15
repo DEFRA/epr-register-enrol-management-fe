@@ -5,6 +5,10 @@ import { redirectToLogin } from './auth-redirect.js'
 import {
   ROLE_ASSIGN,
   ROLE_DECISION_MAKER,
+  ROLE_NATION_ENGLAND,
+  ROLE_NATION_SCOTLAND,
+  ROLE_NATION_WALES,
+  ROLE_NATION_NORTHERN_IRELAND,
   ROLE_STANDARD
 } from './auth-scopes.js'
 
@@ -32,10 +36,46 @@ export const TEST_DECISION_MAKER_USER = {
   scope: [ROLE_STANDARD, ROLE_DECISION_MAKER]
 }
 
+export const TEST_NATION_ENGLAND_USER = {
+  id: 'test-nation-england-id',
+  email: 'england@test.example',
+  name: 'Test England User',
+  roles: [ROLE_STANDARD, ROLE_NATION_ENGLAND],
+  scope: [ROLE_STANDARD, ROLE_NATION_ENGLAND]
+}
+
+export const TEST_NATION_SCOTLAND_USER = {
+  id: 'test-nation-scotland-id',
+  email: 'scotland@test.example',
+  name: 'Test Scotland User',
+  roles: [ROLE_STANDARD, ROLE_NATION_SCOTLAND],
+  scope: [ROLE_STANDARD, ROLE_NATION_SCOTLAND]
+}
+
+export const TEST_NATION_WALES_USER = {
+  id: 'test-nation-wales-id',
+  email: 'wales@test.example',
+  name: 'Test Wales User',
+  roles: [ROLE_STANDARD, ROLE_NATION_WALES],
+  scope: [ROLE_STANDARD, ROLE_NATION_WALES]
+}
+
+export const TEST_NATION_NORTHERN_IRELAND_USER = {
+  id: 'test-nation-northern-ireland-id',
+  email: 'northern-ireland@test.example',
+  name: 'Test Northern Ireland User',
+  roles: [ROLE_STANDARD, ROLE_NATION_NORTHERN_IRELAND],
+  scope: [ROLE_STANDARD, ROLE_NATION_NORTHERN_IRELAND]
+}
+
 const TEST_USERS = {
   standard: TEST_STANDARD_USER,
   assign: TEST_ASSIGN_USER,
-  'decision-maker': TEST_DECISION_MAKER_USER
+  'decision-maker': TEST_DECISION_MAKER_USER,
+  'nation-england': TEST_NATION_ENGLAND_USER,
+  'nation-scotland': TEST_NATION_SCOTLAND_USER,
+  'nation-wales': TEST_NATION_WALES_USER,
+  'nation-northern-ireland': TEST_NATION_NORTHERN_IRELAND_USER
 }
 
 /**

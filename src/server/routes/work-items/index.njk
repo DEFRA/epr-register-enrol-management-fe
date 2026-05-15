@@ -63,6 +63,16 @@
           }) }}
         {% endif %}
 
+        {% if nationOptions.length > 0 %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-nation",
+            name: "nation",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "Nation", classes: "govuk-fieldset__legend--s" } },
+            items: nationOptions
+          }) }}
+        {% endif %}
+
         {# Assignee filter (RA-95). The "Specific user…" radio reveals a #}
         {# select listing the assignable-users directory. Same options are #}
         {# offered to every user; only the assign *write* is role-gated. #}
