@@ -192,6 +192,56 @@ export function makeAssignController({
   }
 }
 
+/**
+ * Self-assign a work item: a standard-role user claims an unassigned
+ * item for themselves. Distinct from `makeAssignController` so the route
+ * can be gated declaratively at `requireStandard` rather than
+ * `requireAssign` (RA-153). The handler derives the assignee from the
+ * authenticated session, so the form carries no `assigneeId` /
+ * `assigneeName` payload at all.
+ */
+export function makeSelfAssignController({
+  service = createWorkItemActionsService()
+} = {}) {
+  return {
+    async handler(request, h) {
+      const id = request.params.id
+      const user = getUser(request)
+      if (user?.id == null) {
+        return renderDetailFromResult({
+          request,
+          h,
+          id,
+          result: {
+            ok: false,
+            reason: 'invalid',
+            message: 'Could not identify the current user.'
+          },
+          actionLabel: 'self-assign work item'
+        })
+      }
+
+      const result = await service.assign({
+        workItemId: id,
+        assigneeId: user.id,
+        assigneeName: user.name ?? null,
+        user
+      })
+
+      if (result.ok) {
+        return h.redirect(`/work-items/${encodeURIComponent(id)}`)
+      }
+      return renderDetailFromResult({
+        request,
+        h,
+        id,
+        result,
+        actionLabel: 'self-assign work item'
+      })
+    }
+  }
+}
+
 export function makeUnassignController({
   service = createWorkItemActionsService()
 } = {}) {
@@ -362,9 +412,7 @@ function buildAssignmentViewModel({ workItem, request, user }) {
           text: u.name ?? u.id,
           selected: u.id === workItem.assignedToId
         }))
-      : [],
-    selfAssignUserId: user?.id ?? null,
-    selfAssignUserName: user?.name ?? null
+      : []
   }
 }
 

@@ -110,13 +110,9 @@
           {% endif %}
         {% elif assignment.canSelfAssign %}
           <form method="post"
-                action="/work-items/{{ workItem.id }}/assign"
+                action="/work-items/{{ workItem.id }}/self-assign"
                 novalidate>
             <input type="hidden" name="crumb" value="{{ crumb }}" />
-            <input type="hidden" name="assigneeId" value="{{ assignment.selfAssignUserId }}" />
-            {% if assignment.selfAssignUserName %}
-              <input type="hidden" name="assigneeName" value="{{ assignment.selfAssignUserName }}" />
-            {% endif %}
             {{ govukButton({
               text: "Take this work item",
               attributes: { "data-testid": "self-assign-submit" }
