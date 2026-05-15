@@ -10,8 +10,12 @@ import { config } from '#/config/config.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
-/** Valid nation values accepted by the backend (RA-125). */
-const VALID_NATIONS = ['England', 'Scotland', 'Wales', 'NorthernIreland']
+/**
+ * Valid nation values accepted by the backend (RA-125). Derived from
+ * NATION_ROLE_MAP so the role->nation mapping stays the single source of
+ * truth and the two lists cannot drift apart.
+ */
+const VALID_NATIONS = Object.values(NATION_ROLE_MAP)
 
 const ASSIGNEE_FILTER_ANY = 'any'
 const ASSIGNEE_FILTER_MINE = 'mine'
@@ -83,7 +87,8 @@ export const workItemListController = {
         filters.stateIds.length > 0 ||
         filters.search !== '' ||
         filters.assigneeMode !== ASSIGNEE_FILTER_ANY ||
-        filters.nations.length > 0
+        filters.nations.length > 0,
+      filtersApplied: filters.filtersApplied
     })
   }
 }
@@ -126,6 +131,12 @@ function readFilters(query, user) {
     backendAssigneeId = assigneeUserId
   }
 
+  // Hidden form marker that lets the controller distinguish 'user
+  // submitted the filter form' from 'fresh GET of /work-items'. Without
+  // this, role-based defaults (e.g. nation) would silently re-apply when
+  // the user explicitly cleared them (RA-125).
+  const filtersApplied = query.filtersApplied === '1'
+
   return {
     typeIds,
     stateIds,
@@ -135,7 +146,8 @@ function readFilters(query, user) {
     assigneeUserId,
     backendAssigneeId,
     backendUnassignedOnly,
-    nations: resolveNations(query.nation, user)
+    nations: resolveNations(query.nation, user, filtersApplied),
+    filtersApplied
   }
 }
 
@@ -144,10 +156,13 @@ function readFilters(query, user) {
  *
  * If the query string supplies explicit nation values, use those (validated
  * against the known set). Otherwise, if the authenticated user has exactly
- * one nation role, default to that nation so regulators see their own queue
- * first without having to manually apply the filter every time (RA-125).
+ * one nation role *and* the request is not an explicit form submission,
+ * default to that nation so regulators see their own queue first without
+ * having to manually apply the filter every time. When the user submits
+ * the filter form with no nation boxes ticked we honour that empty
+ * selection so they can see all nations or another nation's queue (RA-125).
  */
-function resolveNations(nationParam, user) {
+function resolveNations(nationParam, user, filtersApplied) {
   const explicit = uniqueStringList(nationParam).filter((n) =>
     VALID_NATIONS.includes(n)
   )
@@ -155,9 +170,15 @@ function resolveNations(nationParam, user) {
     return explicit
   }
 
+  // The user submitted the filter form with every nation unchecked --
+  // respect that and don't fall through to the role-based default.
+  if (filtersApplied) {
+    return []
+  }
+
   // No explicit filter — check for a single nation role on the user.
   const userRoles = user?.roles ?? []
-  const nationRoles = userRoles.filter((r) => r in NATION_ROLE_MAP)
+  const nationRoles = userRoles.filter((r) => Object.hasOwn(NATION_ROLE_MAP, r))
   if (nationRoles.length === 1) {
     return [NATION_ROLE_MAP[nationRoles[0]]]
   }
@@ -333,6 +354,9 @@ function buildHref(filters) {
   for (const id of filters.typeIds ?? []) params.append('typeId', id)
   for (const id of filters.stateIds ?? []) params.append('stateId', id)
   for (const n of filters.nations ?? []) params.append('nation', n)
+  // Carry the form-submission marker through pagination/back-links so
+  // role-based defaults don't silently re-apply mid-paging (RA-125).
+  if (filters.filtersApplied) params.append('filtersApplied', '1')
   if (filters.search) params.append('search', filters.search)
   if (filters.assigneeMode && filters.assigneeMode !== ASSIGNEE_FILTER_ANY) {
     params.append('assigneeMode', filters.assigneeMode)
