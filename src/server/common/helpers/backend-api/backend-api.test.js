@@ -1,5 +1,6 @@
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import { config } from '#/config/config.js'
 import {
   addWorkItemNote,
   applyWorkItemAction,
@@ -1112,5 +1113,38 @@ describe('#createWorkItem (RA-127)', () => {
     expect(headers['x-cdp-user-id']).toBeUndefined()
     expect(headers['x-cdp-user-name']).toBeUndefined()
     expect(headers['x-cdp-user-roles']).toBeUndefined()
+  })
+})
+
+describe('#buildHeaders signing integration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test('attaches x-cdp-auth-* signing headers to outbound requests when AUTH_SHARED_SECRET is set', async () => {
+    const realGet = config.get.bind(config)
+    vi.spyOn(config, 'get').mockImplementation((key) =>
+      key === 'auth.sharedSecret' ? 'integration-test-secret' : realGet(key)
+    )
+
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const headers = fetchImpl.mock.calls[0][1].headers
+    expect(headers['x-cdp-auth-timestamp']).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
+    )
+    expect(headers['x-cdp-auth-nonce']).toMatch(/^[A-Za-z0-9_-]+$/)
+    expect(headers['x-cdp-auth-signature']).toBeDefined()
   })
 })

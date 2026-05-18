@@ -310,6 +310,13 @@ export const config = convict({
       default: 'http://localhost:3000',
       env: 'AUTH_CALLBACK_BASE_URL'
     },
+    sharedSecret: {
+      doc: 'HMAC-SHA256 shared secret for backend request signing (AUTH_SHARED_SECRET). Empty string disables signing (local dev).',
+      format: String,
+      default: '',
+      env: 'AUTH_SHARED_SECRET',
+      sensitive: true
+    },
     azureEntraId: {
       clientId: {
         format: String,
@@ -391,7 +398,20 @@ if (config.get('isProduction') && !config.get('auth.stubEnabled')) {
   }
 }
 
-// 4. REDIS_HOST / REDIS_USERNAME / REDIS_PASSWORD: convict defaults
+// 4. AUTH_SHARED_SECRET: the HMAC key used to sign outbound backend requests.
+//    Without it the backend rejects every call with 401 in all non-local
+//    environments. The default is an empty string so local dev works without
+//    secrets, but an empty value in a deployed environment means missing
+//    Secrets Manager wiring and would fail opaquely at request time.
+if (config.get('environment') !== 'local' && !config.get('auth.sharedSecret')) {
+  throw new Error(
+    'AUTH_SHARED_SECRET must be set via Secrets Manager in deployed ' +
+      'environments. The backend will reject all requests with 401 without ' +
+      'a valid HMAC signature.'
+  )
+}
+
+// 5. REDIS_HOST / REDIS_USERNAME / REDIS_PASSWORD: convict defaults
 //    target local dev (host=127.0.0.1, empty username/password). In a
 //    deployed env the cache must point at Elasticache over TLS with
 //    real credentials. The redis client in
