@@ -1,17 +1,27 @@
 {# ------------------------------------------------------------------- #}
-{# Re-accreditation detail template (v1) — RA-98.                       #}
+{# Re-accreditation detail template (v1) — RA-98 + RA-132.              #}
 {#                                                                      #}
 {# Type-specific view selected by the framework's detail controller     #}
 {# whenever a work item's `(typeId, templateVersion)` is                 #}
 {# `(re-accreditation, v1)`. Extends the generic detail template to     #}
-{# inherit summary, tasks, actions, notes and audit log rendering, and  #}
-{# layers a re-accreditation-specific tagline on top so it is obvious   #}
-{# this is the type-specific view rather than the generic fallback.     #}
+{# inherit envelope summary, assignment, tasks and audit log rendering, #}
+{# and overrides the narrow blocks the generic template exposes to add  #}
+{# re-accreditation-specific behaviour:                                  #}
+{#                                                                      #}
+{#  - RA-132 "Approve" CTA in `primaryActions`, gated by the controller #}
+{#    via `workItem.canApproveDirectly`.                                #}
+{#  - Terminal-state read-only mode: when the work item is approved,    #}
+{#    rejected or withdrawn, suppress the decision action panel and     #}
+{#    render a status tag + (for approvals) the issued accreditation    #}
+{#    metadata in `summaryListExtra`.                                   #}
 {# ------------------------------------------------------------------- #}
 
 {% extends 'work-items/detail.njk' %}
 
 {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+{% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
 
 {% block content %}
   <div data-testid="re-accreditation-detail">
@@ -21,4 +31,69 @@
     }) }}
     {{ super() }}
   </div>
+{% endblock %}
+
+{# RA-132. Primary "Approve" CTA — controller decorates the workItem     #}
+{# with `canApproveDirectly` after applying the assessment-in-progress   #}
+{# + (assignee or decision-maker role) rules.                            #}
+{% block primaryActions %}
+  {% if workItem.canApproveDirectly %}
+    <div class="govuk-button-group"
+         data-testid="re-accreditation-approve-cta">
+      {{ govukButton({
+        text: "Approve",
+        href: workItem.approveHref,
+        attributes: { "data-testid": "re-accreditation-approve-button" }
+      }) }}
+    </div>
+  {% endif %}
+{% endblock %}
+
+{# RA-132. Once the work item reaches a terminal state, suppress the     #}
+{# generic action panel — those would be either no-op or rejected by     #}
+{# the backend, which is confusing. Show the status as a govuk tag so    #}
+{# the read-only nature is obvious.                                      #}
+{% block actionsPanel %}
+  {% if workItem.isReadOnlyState %}
+    <h2 class="govuk-heading-m">Outcome</h2>
+    <p class="govuk-body" data-testid="re-accreditation-readonly-actions">
+      This work item is in a final state. No further decision actions are available.
+    </p>
+    {{ govukTag({
+      text: workItem.stateDisplayName,
+      classes: workItem.stateTagClasses,
+      attributes: { "data-testid": "re-accreditation-state-tag" }
+    }) }}
+  {% else %}
+    {{ super() }}
+  {% endif %}
+{% endblock %}
+
+{# RA-132. When the work item has been approved, surface the issued     #}
+{# accreditation metadata from the backend (`payload.accreditationId`,  #}
+{# `payload.accreditationStartDate`) in the envelope summary so it is   #}
+{# the first thing the user sees.                                       #}
+{% block summaryListExtra %}
+  {% if workItem.decisionMetadata %}
+    {{ govukSummaryList({
+      attributes: { "data-testid": "re-accreditation-decision-metadata" },
+      rows: [
+        {
+          key: { text: "Accreditation ID" },
+          value: {
+            html: '<span data-testid="re-accreditation-accreditation-id">'
+                  + workItem.decisionMetadata.accreditationId + '</span>'
+          }
+        },
+        {
+          key: { text: "Accreditation start date" },
+          value: {
+            html: '<span data-testid="re-accreditation-accreditation-start-date">'
+                  + workItem.decisionMetadata.accreditationStartDateFormatted
+                  + '</span>'
+          }
+        }
+      ]
+    }) }}
+  {% endif %}
 {% endblock %}

@@ -97,9 +97,15 @@ describe('reAccreditationModule', () => {
     )
 
     const server = hapi.server()
-    // The bare hapi server has no auth strategy, so disable the
-    // RA-127 create routes (which require `requireStandard`) for this
-    // test — we only care that the detail template gets registered.
+    // The bare hapi server has no auth strategy, so wire up a permissive
+    // stub for the auth-scoped routes (approval + create) and disable
+    // the RA-127 create routes for this test — we only care that the
+    // detail template gets registered.
+    server.auth.scheme('stub', () => ({
+      authenticate: (_request, h) => h.authenticated({ credentials: {} })
+    }))
+    server.auth.strategy('session', 'stub')
+    server.auth.default('session')
     const flagKey = 'featureFlags.workItemCreationEnabled'
     const previous = config.get(flagKey)
     config.set(flagKey, false)
@@ -137,19 +143,49 @@ describe('reAccreditationModule', () => {
       config.set(flagKey, true)
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
-      expect(server.route).toHaveBeenCalledTimes(1)
-      const routes = server.route.mock.calls[0][0]
-      expect(routes).toHaveLength(2)
-      const methods = routes.map((r) => `${r.method} ${r.path}`)
+      // Approval routes (RA-132) are always mounted; create routes
+      // (RA-127) are only mounted when the flag is on.
+      expect(server.route).toHaveBeenCalledTimes(2)
+      const createCall = server.route.mock.calls.find(([routes]) =>
+        routes.some((r) => r.path === '/work-items/re-accreditation/new')
+      )
+      expect(createCall).toBeDefined()
+      const methods = createCall[0].map((r) => `${r.method} ${r.path}`)
       expect(methods).toContain('GET /work-items/re-accreditation/new')
       expect(methods).toContain('POST /work-items/re-accreditation/new')
     })
 
-    test('does not mount any routes when the flag is off', async () => {
+    test('always mounts the RA-132 approve-determination routes regardless of the create flag', async () => {
+      for (const flag of [true, false]) {
+        config.set(flagKey, flag)
+        const server = { route: vi.fn() }
+        await reAccreditationModule.register(server)
+        const approvalCall = server.route.mock.calls.find(([routes]) =>
+          routes.some(
+            (r) => r.path === '/work-items/re-accreditation/{id}/approve'
+          )
+        )
+        expect(approvalCall).toBeDefined()
+        const methods = approvalCall[0].map((r) => `${r.method} ${r.path}`)
+        expect(methods).toContain(
+          'GET /work-items/re-accreditation/{id}/approve'
+        )
+        expect(methods).toContain(
+          'POST /work-items/re-accreditation/{id}/approve'
+        )
+      }
+    })
+
+    test('does not mount the create routes when the flag is off', async () => {
       config.set(flagKey, false)
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
-      expect(server.route).not.toHaveBeenCalled()
+      // Only the always-on approval routes (RA-132) are mounted.
+      expect(server.route).toHaveBeenCalledTimes(1)
+      const [routes] = server.route.mock.calls[0]
+      expect(
+        routes.every((r) => r.path !== '/work-items/re-accreditation/new')
+      ).toBe(true)
     })
   })
 })
