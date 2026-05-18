@@ -92,25 +92,39 @@ describe('config production hardening', () => {
     await expect(import('./config.js')).rejects.toThrow(/AZURE_CLIENT_SECRET/)
   })
 
-  test('production boot does not surface Azure creds error when stub auth enabled (stub-in-prod check fires first)', async () => {
-    // The existing hardening forbids stub auth in production, so this
-    // combination always throws — what matters here is that it throws
-    // for AUTH_STUB_ENABLED, NOT for the empty Azure creds. That proves
-    // the Azure guard is correctly gated on `!stubEnabled`.
+  test('production boot with ENVIRONMENT=dev allows AUTH_STUB_ENABLED=true', async () => {
     process.env.NODE_ENV = 'production'
     process.env.ENVIRONMENT = 'dev'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
     process.env.AUTH_STUB_ENABLED = 'true'
     delete process.env.AZURE_CLIENT_ID
     delete process.env.AZURE_CLIENT_SECRET
+    process.env.REDIS_HOST = 'redis.example.internal'
+    process.env.REDIS_USERNAME = 'redis-user'
+    process.env.REDIS_PASSWORD = 'redis-password'
+
+    const mod = await import('./config.js')
+    expect(mod.config.get('auth.stubEnabled')).toBe(true)
+    expect(mod.config.get('isProduction')).toBe(true)
+  })
+
+  test('Azure creds are not required when AUTH_STUB_ENABLED=true in non-prod ENVIRONMENT', async () => {
+    // Proves the Azure creds guard is gated on !stubEnabled, not on isProduction.
+    process.env.NODE_ENV = 'production'
+    process.env.ENVIRONMENT = 'dev'
+    process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
+    process.env.AUTH_STUB_ENABLED = 'true'
+    delete process.env.AZURE_CLIENT_ID
+    delete process.env.AZURE_CLIENT_SECRET
+    process.env.REDIS_HOST = 'redis.example.internal'
+    process.env.REDIS_USERNAME = 'redis-user'
+    process.env.REDIS_PASSWORD = 'redis-password'
 
     const err = await import('./config.js').then(
       () => null,
       (e) => e
     )
-    expect(err).toBeInstanceOf(Error)
-    expect(err.message).toMatch(/AUTH_STUB_ENABLED/)
-    expect(err.message).not.toMatch(/AZURE_CLIENT/)
+    expect(err).toBeNull()
   })
 
   test('non-production boot accepts empty Azure creds', async () => {

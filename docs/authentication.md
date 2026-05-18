@@ -4,11 +4,11 @@ This service authenticates regulator users via Defra Azure Entra ID (OIDC) and e
 
 ## Modes
 
-| Mode            | When                                              | Behaviour                                                                      |
-| --------------- | ------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **Real OAuth**  | `ENVIRONMENT=prod` (or `AUTH_STUB_ENABLED=false`) | Redirects to Azure Entra ID; stores user profile in the yar session            |
-| **Stub (dev)**  | All other deployments and `npm run dev`           | Local chooser at `/auth/stub/login` lets you select a fake regulator user      |
-| **Test bypass** | `NODE_ENV=test`                                   | Every request auto-authenticates; override role with `x-test-user-role` header |
+| Mode            | When                                                      | Behaviour                                                                      |
+| --------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Real OAuth**  | `AUTH_STUB_ENABLED=false` (forced when `ENVIRONMENT=prod`) | Redirects to Azure Entra ID; stores user profile in the yar session            |
+| **Stub (dev)**  | `AUTH_STUB_ENABLED=true` (default when `ENVIRONMENT != prod`) | Local chooser at `/auth/stub/login` lets you select a fake regulator user |
+| **Test bypass** | `NODE_ENV=test`                                           | Every request auto-authenticates; override role with `x-test-user-role` header |
 
 All routes are protected by `server.auth.default('session')`. Public routes (health, static assets, login pages) opt out with `auth: false`.
 

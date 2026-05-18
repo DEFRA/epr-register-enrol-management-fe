@@ -1,7 +1,6 @@
 import { vi } from 'vitest'
 
 const configValues = {
-  isProduction: true,
   isTest: false,
   'auth.stubEnabled': false
 }
@@ -22,49 +21,24 @@ function setConfig(overrides) {
 }
 
 describe('selectAuthPlugin', () => {
-  test('selects the production authPlugin when isProduction is true', () => {
-    setConfig({
-      isProduction: true,
-      isTest: false,
-      'auth.stubEnabled': false
-    })
+  test('selects authPlugin when stub is disabled and not in test mode', () => {
+    setConfig({ isTest: false, 'auth.stubEnabled': false })
     expect(selectAuthPlugin()).toBe(authPlugin)
     expect(selectAuthPlugin()).not.toBe(stubAuthPlugin)
   })
 
-  test('production never selects the stub even if stubEnabled is true', () => {
-    setConfig({
-      isProduction: true,
-      isTest: false,
-      'auth.stubEnabled': true
-    })
-    expect(selectAuthPlugin()).toBe(authPlugin)
-  })
-
-  test('selects the stub plugin when stubEnabled is true outside prod', () => {
-    setConfig({
-      isProduction: false,
-      isTest: false,
-      'auth.stubEnabled': true
-    })
+  test('selects stub plugin when stubEnabled is true', () => {
+    setConfig({ isTest: false, 'auth.stubEnabled': true })
     expect(selectAuthPlugin()).toBe(stubAuthPlugin)
   })
 
-  test('selects the stub plugin when isTest is true', () => {
-    setConfig({
-      isProduction: false,
-      isTest: true,
-      'auth.stubEnabled': false
-    })
+  test('selects stub plugin when isTest is true', () => {
+    setConfig({ isTest: true, 'auth.stubEnabled': false })
     expect(selectAuthPlugin()).toBe(stubAuthPlugin)
   })
 
   test('falls back to authPlugin when neither stubEnabled nor isTest is true', () => {
-    setConfig({
-      isProduction: false,
-      isTest: false,
-      'auth.stubEnabled': false
-    })
+    setConfig({ isTest: false, 'auth.stubEnabled': false })
     expect(selectAuthPlugin()).toBe(authPlugin)
   })
 })

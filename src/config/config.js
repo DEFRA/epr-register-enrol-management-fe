@@ -361,9 +361,9 @@ if (
   )
 }
 
-if (config.get('isProduction') && config.get('auth.stubEnabled')) {
+if (config.get('environment') === 'prod' && config.get('auth.stubEnabled')) {
   throw new Error(
-    'AUTH_STUB_ENABLED must be false in production. The stub auth ' +
+    'AUTH_STUB_ENABLED must be false when ENVIRONMENT=prod. The stub auth ' +
       'provider bypasses real OAuth and auto-authenticates every request.'
   )
 }
