@@ -403,10 +403,7 @@ if (config.get('isProduction') && !config.get('auth.stubEnabled')) {
 //    environments. The default is an empty string so local dev works without
 //    secrets, but an empty value in a deployed environment means missing
 //    Secrets Manager wiring and would fail opaquely at request time.
-if (
-  config.get('environment') !== 'local' &&
-  !config.get('auth.sharedSecret')
-) {
+if (config.get('environment') !== 'local' && !config.get('auth.sharedSecret')) {
   throw new Error(
     'AUTH_SHARED_SECRET must be set via Secrets Manager in deployed ' +
       'environments. The backend will reject all requests with 401 without ' +
