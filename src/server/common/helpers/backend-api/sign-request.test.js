@@ -38,6 +38,12 @@ describe('signRequestHeaders', () => {
     expect(result['x-cdp-auth-timestamp']).toBe(timestamp)
     expect(result['x-cdp-auth-nonce']).toBe(nonce)
     expect(result['x-cdp-auth-signature']).toBe(expectedSig)
+    // Hard-coded reference value guards against systematic payload reordering
+    // bugs that would change both sides of the dynamic assertion equally.
+    // Computed with: printf 'v2\n...' | openssl dgst -sha256 -hmac '...' -binary | base64
+    expect(result['x-cdp-auth-signature']).toBe(
+      'npHjUO2Pha5yBjDzKloEXodqx8oJMPMCOtKQRS2fYtE='
+    )
   })
 
   test('uses empty strings for absent optional identity fields', () => {

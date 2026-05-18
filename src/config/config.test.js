@@ -60,6 +60,7 @@ describe('config production hardening', () => {
     process.env.AUTH_STUB_ENABLED = 'false'
     process.env.AZURE_CLIENT_ID = 'azure-client-id'
     process.env.AZURE_CLIENT_SECRET = 'azure-client-secret'
+    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
@@ -99,6 +100,7 @@ describe('config production hardening', () => {
     process.env.AUTH_STUB_ENABLED = 'true'
     delete process.env.AZURE_CLIENT_ID
     delete process.env.AZURE_CLIENT_SECRET
+    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
@@ -116,6 +118,7 @@ describe('config production hardening', () => {
     process.env.AUTH_STUB_ENABLED = 'true'
     delete process.env.AZURE_CLIENT_ID
     delete process.env.AZURE_CLIENT_SECRET
+    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
@@ -125,6 +128,31 @@ describe('config production hardening', () => {
       (e) => e
     )
     expect(err).toBeNull()
+  })
+
+  test('deployed boot rejects missing AUTH_SHARED_SECRET in non-local environments', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.ENVIRONMENT = 'dev'
+    process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
+    process.env.AUTH_STUB_ENABLED = 'true'
+    delete process.env.AUTH_SHARED_SECRET
+    process.env.REDIS_HOST = 'redis.example.internal'
+    process.env.REDIS_USERNAME = 'redis-user'
+    process.env.REDIS_PASSWORD = 'redis-password'
+
+    await expect(import('./config.js')).rejects.toThrow(/AUTH_SHARED_SECRET/)
+  })
+
+  test('local boot succeeds without AUTH_SHARED_SECRET', async () => {
+    process.env.NODE_ENV = 'development'
+    process.env.ENVIRONMENT = 'local'
+    delete process.env.AUTH_SHARED_SECRET
+    delete process.env.SESSION_COOKIE_PASSWORD
+    delete process.env.SESSION_COOKIE_SECURE
+    delete process.env.AUTH_STUB_ENABLED
+
+    const mod = await import('./config.js')
+    expect(mod.config.get('auth.sharedSecret')).toBe('')
   })
 
   test('non-production boot accepts empty Azure creds', async () => {
@@ -164,8 +192,8 @@ describe('config production hardening', () => {
     expect(mod.config.get('session.cookie.password')).toBe(secret)
   })
 
-  // Helper: a production env with all earlier-gated checks (cookie
-  // secret, stub auth, Azure creds) satisfied so we can isolate the
+  // Helper: a production env with all earlier-gated checks (cookie secret,
+  // stub auth, Azure creds, shared secret) satisfied so we can isolate the
   // redis hardening assertions.
   function setProdEnvWithRedisDeps() {
     process.env.NODE_ENV = 'production'
@@ -174,6 +202,7 @@ describe('config production hardening', () => {
     process.env.AUTH_STUB_ENABLED = 'false'
     process.env.AZURE_CLIENT_ID = 'azure-client-id'
     process.env.AZURE_CLIENT_SECRET = 'azure-client-secret'
+    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
   }
 
   test('production boot rejects empty REDIS_PASSWORD', async () => {
