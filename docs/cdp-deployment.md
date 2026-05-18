@@ -33,7 +33,7 @@ those how-tos for the authoritative platform behaviour.
 | `HTTP_PROXY`                    | CDP platform      | CDP outbound proxy for plain HTTP. Wired onto `global-agent` for legacy HTTP clients.                                                                                                                                                                     |
 | `HTTPS_PROXY`                   | CDP platform      | CDP outbound proxy for HTTPS (the common case — backend calls are HTTPS in deployed envs). Used by undici's global dispatcher (the `fetch` exported from `undici`). Falls back to `HTTP_PROXY` if unset.                                                  |
 | `ENABLE_SECURE_CONTEXT`         | Service config    | `true` in production (loads CDP CA bundle).                                                                                                                                                                                                               |
-| `AUTH_STUB_ENABLED`             | Service config    | **Must** be `false` in `prod` — boot fails loudly if `NODE_ENV=production` and stub auth is enabled. `true` elsewhere until real Cognito is wired.                                                                                                        |
+| `AUTH_STUB_ENABLED`             | Service config    | **Must** be `false` when `ENVIRONMENT=prod` — boot fails loudly if both conditions are true. Can be set to `true` in other deployed environments (e.g. `dev`, `test`) to bypass OAuth while real auth is being wired up.                                  |
 | `WORK_ITEM_CREATION_ENABLED`    | Service config    | RA-127 demo. Toggles the "Create work item" form (`GET`/`POST /work-items/re-accreditation/new`) and the entry points on the home and worklist pages. Defaults to `true` outside production and `false` when `NODE_ENV=production` or `ENVIRONMENT=prod`. |
 
 ## Required secrets (cdp-portal)
@@ -45,9 +45,9 @@ those how-tos for the authoritative platform behaviour.
   process if this is missing (i.e. still set to the public placeholder
   default) when the cookie is configured as secure or `NODE_ENV=production`.
 - `COGNITO_CLIENT_SECRET` — once real Cognito auth is wired up (currently
-  stubbed in non-prod). `AUTH_STUB_ENABLED` **must** remain `false` in
-  `prod`; the same hardening assertion fails boot if stub auth is ever
-  enabled in production.
+  stubbed in non-prod environments). `AUTH_STUB_ENABLED` **must** remain
+  `false` when `ENVIRONMENT=prod`; the boot-time hardening assertion fails
+  if stub auth is enabled in that environment.
 
 ## AWS resources to provision
 
