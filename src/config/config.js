@@ -310,6 +310,13 @@ export const config = convict({
       default: 'http://localhost:3000',
       env: 'AUTH_CALLBACK_BASE_URL'
     },
+    sharedSecret: {
+      doc: 'HMAC-SHA256 shared secret for backend request signing (AUTH_SHARED_SECRET). Empty string disables signing (local dev).',
+      format: String,
+      default: '',
+      env: 'AUTH_SHARED_SECRET',
+      sensitive: true
+    },
     azureEntraId: {
       clientId: {
         format: String,

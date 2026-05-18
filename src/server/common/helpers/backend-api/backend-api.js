@@ -2,6 +2,7 @@ import { fetch } from 'undici'
 
 import { config } from '#/config/config.js'
 import { createLogger } from '../logging/logger.js'
+import { signRequestHeaders } from './sign-request.js'
 
 const logger = createLogger()
 
@@ -78,7 +79,7 @@ function buildHeaders(extra = {}, user = null) {
     }
     headers[USER_ROLES_HEADER] = roles.join(',')
   }
-  return headers
+  return { ...headers, ...signRequestHeaders(headers) }
 }
 
 /**
@@ -98,7 +99,10 @@ export async function getBackendHealth({
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const response = await fetchImpl(url, { signal: controller.signal })
+    const response = await fetchImpl(url, {
+      signal: controller.signal,
+      headers: buildHeaders()
+    })
     const body = await response.text()
 
     return {
