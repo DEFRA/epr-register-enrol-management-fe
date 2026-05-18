@@ -14,9 +14,9 @@ export function getCacheEngine(engine) {
     return new CatboxRedis({ client: redisClient })
   }
 
-  if (config.get('isProduction')) {
+  if (config.get('isDeployed')) {
     throw new Error(
-      'Invalid session cache engine in production: SESSION_CACHE_ENGINE must be set to "redis". Catbox Memory is for local development only.'
+      'Invalid session cache engine in a deployed CDP environment: SESSION_CACHE_ENGINE must be set to "redis". Catbox Memory is for local development only.'
     )
   }
 

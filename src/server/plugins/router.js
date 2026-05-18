@@ -26,7 +26,7 @@ export const router = {
       await server.register(workItemsPlugin(workItemModules))
 
       // Static assets
-      if (!config.get('isProduction') && !config.get('isTest')) {
+      if (!config.get('isDeployed') && !config.get('isTest')) {
         await (async () => {
           const createViteServer = (await import('vite')).createServer
           const vite = await createViteServer({
