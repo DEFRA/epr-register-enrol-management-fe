@@ -130,9 +130,22 @@ describe('config production hardening', () => {
     expect(err).toBeNull()
   })
 
-  test('deployed boot rejects missing AUTH_SHARED_SECRET in non-local environments', async () => {
+  test('deployed boot rejects missing AUTH_SHARED_SECRET when ENVIRONMENT is non-local', async () => {
     process.env.NODE_ENV = 'production'
     process.env.ENVIRONMENT = 'dev'
+    process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
+    process.env.AUTH_STUB_ENABLED = 'true'
+    delete process.env.AUTH_SHARED_SECRET
+    process.env.REDIS_HOST = 'redis.example.internal'
+    process.env.REDIS_USERNAME = 'redis-user'
+    process.env.REDIS_PASSWORD = 'redis-password'
+
+    await expect(import('./config.js')).rejects.toThrow(/AUTH_SHARED_SECRET/)
+  })
+
+  test('deployed boot rejects missing AUTH_SHARED_SECRET when NODE_ENV=production even if ENVIRONMENT is unset', async () => {
+    process.env.NODE_ENV = 'production'
+    delete process.env.ENVIRONMENT // defaults to 'local' — guard must still fire via isProduction
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
     process.env.AUTH_STUB_ENABLED = 'true'
     delete process.env.AUTH_SHARED_SECRET
