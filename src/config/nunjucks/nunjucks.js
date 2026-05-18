@@ -42,7 +42,7 @@ export const nunjucksConfig = {
     },
     relativeTo: path.resolve(dirname, '../..'),
     path: 'server/routes',
-    isCached: config.get('isProduction'),
+    isCached: config.get('isDeployed'),
     context
   }
 }

@@ -92,7 +92,7 @@ describe('config production hardening', () => {
     await expect(import('./config.js')).rejects.toThrow(/AZURE_CLIENT_SECRET/)
   })
 
-  test('production boot with ENVIRONMENT=dev allows AUTH_STUB_ENABLED=true', async () => {
+  test('CDP non-prod deployed env (NODE_ENV=production, ENVIRONMENT=dev) allows AUTH_STUB_ENABLED=true and isProduction is false', async () => {
     process.env.NODE_ENV = 'production'
     process.env.ENVIRONMENT = 'dev'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
@@ -105,11 +105,16 @@ describe('config production hardening', () => {
 
     const mod = await import('./config.js')
     expect(mod.config.get('auth.stubEnabled')).toBe(true)
-    expect(mod.config.get('isProduction')).toBe(true)
+    // isProduction is strict: requires ENVIRONMENT=prod as well.
+    expect(mod.config.get('isProduction')).toBe(false)
+    // isDeployed is true everywhere NODE_ENV=production, including CDP dev/test.
+    expect(mod.config.get('isDeployed')).toBe(true)
   })
 
-  test('Azure creds are not required when AUTH_STUB_ENABLED=true in non-prod ENVIRONMENT', async () => {
-    // Proves the Azure creds guard is gated on !stubEnabled, not on isProduction.
+  test('Azure creds are not required when AUTH_STUB_ENABLED=true in CDP non-prod deployed env', async () => {
+    // Proves the Azure creds guard is gated on `isProduction && !stubEnabled`.
+    // In CDP dev (NODE_ENV=production, ENVIRONMENT=dev) isProduction is
+    // false, so the guard does not fire even with empty Azure creds.
     process.env.NODE_ENV = 'production'
     process.env.ENVIRONMENT = 'dev'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
@@ -279,6 +284,85 @@ describe('config production hardening', () => {
 
       const mod = await import('./config.js')
       expect(mod.config.get('featureFlags.workItemCreationEnabled')).toBe(false)
+    })
+  })
+
+  describe('isProduction vs isDeployed semantics', () => {
+    // Helper: a fully-wired deployed env so the redis/session hardening
+    // assertions don't trip while we're isolating the prod-vs-deployed
+    // flag behaviour.
+    function setDeployedEnv() {
+      process.env.NODE_ENV = 'production'
+      process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
+      process.env.REDIS_HOST = 'redis.example.internal'
+      process.env.REDIS_USERNAME = 'redis-user'
+      process.env.REDIS_PASSWORD = 'redis-password'
+    }
+
+    test('local dev (NODE_ENV=development): isProduction=false, isDeployed=false', async () => {
+      process.env.NODE_ENV = 'development'
+      process.env.ENVIRONMENT = 'local'
+      delete process.env.SESSION_COOKIE_PASSWORD
+      delete process.env.SESSION_COOKIE_SECURE
+      delete process.env.AUTH_STUB_ENABLED
+
+      const mod = await import('./config.js')
+      expect(mod.config.get('isProduction')).toBe(false)
+      expect(mod.config.get('isDeployed')).toBe(false)
+    })
+
+    test('CDP dev (NODE_ENV=production, ENVIRONMENT=dev): isProduction=false, isDeployed=true', async () => {
+      setDeployedEnv()
+      process.env.ENVIRONMENT = 'dev'
+      process.env.AUTH_STUB_ENABLED = 'true'
+
+      const mod = await import('./config.js')
+      expect(mod.config.get('isProduction')).toBe(false)
+      expect(mod.config.get('isDeployed')).toBe(true)
+    })
+
+    test('CDP test (NODE_ENV=production, ENVIRONMENT=test): isProduction=false, isDeployed=true', async () => {
+      setDeployedEnv()
+      process.env.ENVIRONMENT = 'test'
+      process.env.AUTH_STUB_ENABLED = 'true'
+
+      const mod = await import('./config.js')
+      expect(mod.config.get('isProduction')).toBe(false)
+      expect(mod.config.get('isDeployed')).toBe(true)
+    })
+
+    test('CDP prod (NODE_ENV=production, ENVIRONMENT=prod): isProduction=true, isDeployed=true', async () => {
+      setDeployedEnv()
+      process.env.ENVIRONMENT = 'prod'
+      process.env.AUTH_STUB_ENABLED = 'false'
+      process.env.AZURE_CLIENT_ID = 'azure-client-id'
+      process.env.AZURE_CLIENT_SECRET = 'azure-client-secret'
+
+      const mod = await import('./config.js')
+      expect(mod.config.get('isProduction')).toBe(true)
+      expect(mod.config.get('isDeployed')).toBe(true)
+    })
+
+    test('deployed-default secure cookie, redis engine, TLS and ECS logs hold in CDP dev', async () => {
+      setDeployedEnv()
+      process.env.ENVIRONMENT = 'dev'
+      process.env.AUTH_STUB_ENABLED = 'true'
+      delete process.env.SESSION_COOKIE_SECURE
+      delete process.env.SESSION_CACHE_ENGINE
+      delete process.env.REDIS_TLS
+      delete process.env.LOG_FORMAT
+      delete process.env.LOG_REDACT
+      delete process.env.ENABLE_SECURE_CONTEXT
+      delete process.env.USE_SINGLE_INSTANCE_CACHE
+
+      const mod = await import('./config.js')
+      expect(mod.config.get('session.cookie.secure')).toBe(true)
+      expect(mod.config.get('session.cache.engine')).toBe('redis')
+      expect(mod.config.get('redis.useTLS')).toBe(true)
+      expect(mod.config.get('redis.useSingleInstanceCache')).toBe(false)
+      expect(mod.config.get('isSecureContextEnabled')).toBe(true)
+      expect(mod.config.get('log.format')).toBe('ecs')
+      expect(mod.config.get('log.redact').length).toBeGreaterThan(0)
     })
   })
 })

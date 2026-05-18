@@ -19,7 +19,7 @@ vi.mock(import('#/config/config.js'), async (importOriginal) => {
   return {
     config: {
       get(key) {
-        if (key === 'isProduction') return true
+        if (key === 'isDeployed') return true
         return originalModule.config.get(key)
       }
     }

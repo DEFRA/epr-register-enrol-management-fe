@@ -9,7 +9,21 @@ const dirname = path.dirname(fileURLToPath(import.meta.url))
 const fourHoursMs = 14400000
 const oneWeekMs = 604800000
 
-const isProduction = process.env.NODE_ENV === 'production'
+// `isDeployed` = running as the built artifact inside a CDP container.
+// True for every deployed environment (dev / test / perf-test / ext-test /
+// prod), so it drives behaviour that has to hold whenever we're NOT on a
+// developer laptop: ECS log format, PII redaction, TLS, secure cookies,
+// Redis cache, CDP CA bundle, built Vite assets, etc.
+//
+// `isProduction` = the live production environment specifically. It is
+// deliberately stricter than NODE_ENV alone because CDP runs the same
+// production-mode artifact in dev/test/prod, differentiated only by the
+// `ENVIRONMENT` env var. Use this ONLY for guards that must hold in
+// real prod and NOT in CDP dev/test (e.g. "stub auth is forbidden",
+// "Azure OAuth creds must be wired"). For deployed-vs-local checks, use
+// `isDeployed` instead.
+const isDeployed = process.env.NODE_ENV === 'production'
+const isProduction = isDeployed && process.env.ENVIRONMENT === 'prod'
 const isTest = process.env.NODE_ENV === 'test'
 const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -92,9 +106,14 @@ export const config = convict({
     env: 'ASSET_PATH'
   },
   isProduction: {
-    doc: 'If this application running in the production environment',
+    doc: 'True only in the live production environment (NODE_ENV=production AND ENVIRONMENT=prod). Use this for guards that must hold in real prod and NOT in CDP dev/test (e.g. stub auth forbidden, Azure OAuth creds required). For deployed-vs-local distinctions use `isDeployed`.',
     format: Boolean,
     default: isProduction
+  },
+  isDeployed: {
+    doc: 'True whenever the service is running as a built artifact inside a CDP container (NODE_ENV=production), regardless of ENVIRONMENT. Drives behaviour that must hold in every deployed env (ECS logs, PII redaction, TLS, secure cookies, Redis cache, CDP CA bundle, built assets).',
+    format: Boolean,
+    default: isDeployed
   },
   isDevelopment: {
     doc: 'If this application running in the development environment',
@@ -122,13 +141,13 @@ export const config = convict({
     format: {
       doc: 'Format to output logs in.',
       format: ['ecs', 'pino-pretty'],
-      default: isProduction ? 'ecs' : 'pino-pretty',
+      default: isDeployed ? 'ecs' : 'pino-pretty',
       env: 'LOG_FORMAT'
     },
     redact: {
       doc: 'Log paths to redact',
       format: Array,
-      default: isProduction ? PRODUCTION_LOG_REDACT_PATHS : [],
+      default: isDeployed ? PRODUCTION_LOG_REDACT_PATHS : [],
       env: 'LOG_REDACT'
     }
   },
@@ -149,7 +168,7 @@ export const config = convict({
   isSecureContextEnabled: {
     doc: 'Enable Secure Context',
     format: Boolean,
-    default: isProduction,
+    default: isDeployed,
     env: 'ENABLE_SECURE_CONTEXT'
   },
   session: {
@@ -157,7 +176,7 @@ export const config = convict({
       engine: {
         doc: 'backend cache is written to',
         format: ['redis', 'memory'],
-        default: isProduction ? 'redis' : 'memory',
+        default: isDeployed ? 'redis' : 'memory',
         env: 'SESSION_CACHE_ENGINE'
       },
       name: {
@@ -190,7 +209,7 @@ export const config = convict({
       secure: {
         doc: 'set secure flag on cookie',
         format: Boolean,
-        default: isProduction,
+        default: isDeployed,
         env: 'SESSION_COOKIE_SECURE'
       }
     }
@@ -224,13 +243,13 @@ export const config = convict({
     useSingleInstanceCache: {
       doc: 'Connect to a single instance of redis instead of a cluster.',
       format: Boolean,
-      default: !isProduction,
+      default: !isDeployed,
       env: 'USE_SINGLE_INSTANCE_CACHE'
     },
     useTLS: {
       doc: 'Connect to redis using TLS',
       format: Boolean,
-      default: isProduction,
+      default: isDeployed,
       env: 'REDIS_TLS'
     }
   },
@@ -351,7 +370,7 @@ const sessionCookieSecure = config.get('session.cookie.secure')
 const sessionCookiePassword = config.get('session.cookie.password')
 
 if (
-  (config.get('isProduction') || sessionCookieSecure) &&
+  (config.get('isDeployed') || sessionCookieSecure) &&
   sessionCookiePassword === PLACEHOLDER_SESSION_COOKIE_PASSWORD
 ) {
   throw new Error(
@@ -361,10 +380,11 @@ if (
   )
 }
 
-if (config.get('environment') === 'prod' && config.get('auth.stubEnabled')) {
+if (config.get('isProduction') && config.get('auth.stubEnabled')) {
   throw new Error(
-    'AUTH_STUB_ENABLED must be false when ENVIRONMENT=prod. The stub auth ' +
-      'provider bypasses real OAuth and auto-authenticates every request.'
+    'AUTH_STUB_ENABLED must be false in production (NODE_ENV=production ' +
+      'AND ENVIRONMENT=prod). The stub auth provider bypasses real OAuth ' +
+      'and auto-authenticates every request.'
   )
 }
 
@@ -400,7 +420,7 @@ if (config.get('isProduction') && !config.get('auth.stubEnabled')) {
 //    REDIS_USERNAME would cause REDIS_PASSWORD to be ignored too.
 //    Fail loudly at boot whenever production OR TLS is active.
 const redisUseTLS = config.get('redis.useTLS')
-if (config.get('isProduction') || redisUseTLS) {
+if (config.get('isDeployed') || redisUseTLS) {
   const redisHost = config.get('redis.host')
   if (!redisHost || redisHost === 'localhost' || redisHost === '127.0.0.1') {
     throw new Error(

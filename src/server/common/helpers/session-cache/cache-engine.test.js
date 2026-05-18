@@ -57,13 +57,13 @@ describe('#getCacheEngine', () => {
     })
   })
 
-  describe('When In memory cache engine has been requested in Production', () => {
+  describe('When In memory cache engine has been requested in a deployed env', () => {
     beforeEach(() => {
-      config.set('isProduction', true)
+      config.set('isDeployed', true)
     })
 
     afterEach(() => {
-      config.set('isProduction', false)
+      config.set('isDeployed', false)
     })
 
     test('Should throw an error naming the env var and required value', () => {
