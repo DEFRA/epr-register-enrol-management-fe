@@ -82,14 +82,14 @@
           key: { text: "Accreditation ID" },
           value: {
             html: '<span data-testid="re-accreditation-accreditation-id">'
-                  + workItem.decisionMetadata.accreditationId + '</span>'
+                  + (workItem.decisionMetadata.accreditationId | escape) + '</span>'
           }
         },
         {
           key: { text: "Accreditation start date" },
           value: {
             html: '<span data-testid="re-accreditation-accreditation-start-date">'
-                  + workItem.decisionMetadata.accreditationStartDateFormatted
+                  + (workItem.decisionMetadata.accreditationStartDateFormatted | escape)
                   + '</span>'
           }
         }

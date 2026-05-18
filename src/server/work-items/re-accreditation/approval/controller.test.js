@@ -48,6 +48,7 @@ function buildHapi(overrides = {}) {
     params: { id: 'wi-1' },
     payload: {},
     yar: { flash: vi.fn() },
+    auth: { credentials: { scope: ['reaccreditation-decision-maker'] } },
     ...overrides
   }
   return { request, h, captured }
@@ -85,6 +86,47 @@ describe('makeShowApprovalController', () => {
       'flashBanner',
       expect.objectContaining({ type: 'error' })
     )
+  })
+
+  test('redirects with an error flash when the caller is neither assignee nor decision-maker', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: {
+        id: 'wi-1',
+        stateId: 'assessment-in-progress',
+        assignedToId: 'someone-else'
+      }
+    })
+    const { request, h, captured } = buildHapi({
+      auth: { credentials: { scope: [] } }
+    })
+    await makeShowApprovalController().handler(request, h)
+
+    expect(captured.redirectTo).toBe('/work-items/wi-1')
+    expect(request.yar.flash).toHaveBeenCalledWith(
+      'flashBanner',
+      expect.objectContaining({
+        type: 'error',
+        text: expect.stringMatching(/permission/i)
+      })
+    )
+  })
+
+  test('renders the interstitial when the caller is the assignee even without the decision-maker role', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: {
+        id: 'wi-1',
+        stateId: 'assessment-in-progress',
+        assignedToId: 'u-1'
+      }
+    })
+    const { request, h, captured } = buildHapi({
+      auth: { credentials: { scope: [] } }
+    })
+    await makeShowApprovalController().handler(request, h)
+
+    expect(captured.viewPath).toBe('re-accreditation/approval/index')
   })
 
   test('renders the not-found view with HTTP 404 when the backend returns 404', async () => {

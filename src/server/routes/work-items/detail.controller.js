@@ -13,6 +13,9 @@ import {
 } from '#/server/common/helpers/auth/auth-scopes.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
+
+const logger = createLogger()
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
@@ -521,10 +524,14 @@ function buildDecisionMetadata(workItem) {
         accreditationStartDate,
         'd MMMM yyyy'
       )
-    } catch {
+    } catch (err) {
       // Backend produced a value we can't parse; fall back to the raw
       // ISO string so the user still sees something rather than a
-      // template render error.
+      // template render error. Log it so ops can spot bad data.
+      logger.warn(
+        { err, accreditationStartDate, workItemId: workItem.id },
+        'Re-accreditation accreditationStartDate could not be formatted'
+      )
       accreditationStartDateFormatted = String(accreditationStartDate)
     }
   }
