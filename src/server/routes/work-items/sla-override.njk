@@ -1,0 +1,93 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/input/macro.njk" import govukInput %}
+{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+
+{# RA-131: Override SLA clock #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItem.id
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "sla-override-error-summary" }
+        }) }}
+      {% endif %}
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="sla-override-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {{ govukCharacterCount({
+          id: "field-reason",
+          name: "reason",
+          maxlength: reasonMaxLength,
+          label: {
+            text: "Reason for overriding the SLA",
+            classes: "govuk-label--s"
+          },
+          hint: {
+            text: "Explain why the SLA clock needs to be manually overridden."
+          },
+          value: values.reason,
+          errorMessage: { text: fieldErrors["reason"] } if fieldErrors["reason"] else null,
+          attributes: { "data-testid": "sla-override-reason" }
+        }) }}
+
+        {{ govukInput({
+          id: "field-newTargetDays",
+          name: "newTargetDays",
+          label: {
+            text: "New target duration (days)",
+            classes: "govuk-label--s"
+          },
+          hint: {
+            text: "Enter the new total duration in whole days."
+          },
+          value: values.newTargetDays,
+          inputmode: "numeric",
+          classes: "govuk-input--width-5",
+          errorMessage: { text: fieldErrors["newTargetDays"] } if fieldErrors["newTargetDays"] else null,
+          attributes: { "data-testid": "sla-override-target-days" }
+        }) }}
+
+        {{ govukInput({
+          id: "field-newStartedAt",
+          name: "newStartedAt",
+          label: {
+            text: "New start date and time (ISO 8601, e.g. 2024-01-15T09:00:00Z)",
+            classes: "govuk-label--s"
+          },
+          hint: {
+            text: "Enter the date and time when the SLA clock should be considered to have started."
+          },
+          value: values.newStartedAt,
+          errorMessage: { text: fieldErrors["newStartedAt"] } if fieldErrors["newStartedAt"] else null,
+          attributes: { "data-testid": "sla-override-started-at" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Override SLA",
+            attributes: { "data-testid": "sla-override-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="sla-override-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

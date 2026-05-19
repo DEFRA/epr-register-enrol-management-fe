@@ -15,6 +15,12 @@ import {
   workItemTasksController
 } from './tasks.controller.js'
 import {
+  makeShowExtendController,
+  makeSubmitExtendController,
+  makeShowOverrideController,
+  makeSubmitOverrideController
+} from './sla.controller.js'
+import {
   requireAssign,
   requireStandard
 } from '#/server/common/helpers/auth/auth-scopes.js'
@@ -122,6 +128,46 @@ export const workItems = {
           method: 'POST',
           path: '/work-items/{id}/notes',
           ...makeAddNoteController()
+        },
+        {
+          // RA-131. Extend SLA clock. Requires standard auth; BE enforces team-leader role.
+          method: 'GET',
+          path: '/work-items/{id}/sla/extend',
+          options: requireStandard,
+          ...makeShowExtendController()
+        },
+        {
+          method: 'POST',
+          path: '/work-items/{id}/sla/extend',
+          options: {
+            ...requireStandard,
+            payload: {
+              parse: true,
+              allow: 'application/x-www-form-urlencoded',
+              maxBytes: 10 * 1024
+            }
+          },
+          ...makeSubmitExtendController()
+        },
+        {
+          // RA-131. Override SLA clock.
+          method: 'GET',
+          path: '/work-items/{id}/sla/override',
+          options: requireStandard,
+          ...makeShowOverrideController()
+        },
+        {
+          method: 'POST',
+          path: '/work-items/{id}/sla/override',
+          options: {
+            ...requireStandard,
+            payload: {
+              parse: true,
+              allow: 'application/x-www-form-urlencoded',
+              maxBytes: 10 * 1024
+            }
+          },
+          ...makeSubmitOverrideController()
         }
       ])
     }
