@@ -6,14 +6,16 @@ import {
   findAssignableUser,
   getAssignableUsers
 } from '#/server/work-items/core/assignees.js'
-import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { getUser, hasRole } from '#/server/common/helpers/auth/get-user.js'
 import {
   ROLE_ASSIGN,
-  ROLE_DECISION_MAKER
+  ROLE_DECISION_MAKER,
+  ROLE_TEAM_LEADER
 } from '#/server/common/helpers/auth/auth-scopes.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { config } from '#/config/config.js'
 
 const logger = createLogger()
 
@@ -381,6 +383,10 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       ? flashedBanners[0]
       : null
 
+  // RA-131. Team-leader SLA management affordances.
+  const canManageSla = hasRole(request, ROLE_TEAM_LEADER)
+  const slaMaxDays = config.get('workItems.sla.maxExtensionDays')
+
   return h
     .view(templatePath, {
       pageTitle: `Work item ${enriched.id}`,
@@ -394,7 +400,10 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       assignment,
       notice,
       successBanner,
-      flashBanner
+      flashBanner,
+      canManageSla,
+      slaMaxDays,
+      reasonMaxLength: 500
     })
     .code(statusCode)
 }
