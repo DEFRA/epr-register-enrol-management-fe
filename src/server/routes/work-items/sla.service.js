@@ -97,29 +97,30 @@ export function createSlaService({
           message: 'Target duration must be a whole number of at least 1'
         }
       }
+      // newStartedAt is optional: when omitted the BE defaults to today
+      // (BA confirmed RA-131).
       const trimmedStartedAt =
         typeof newStartedAt === 'string' ? newStartedAt.trim() : ''
-      if (!trimmedStartedAt) {
-        return {
-          ok: false,
-          outcome: 'invalid',
-          message: 'Start date is required'
+      let resolvedStartedAt
+      if (trimmedStartedAt) {
+        const startedAtDate = new Date(trimmedStartedAt)
+        if (isNaN(startedAtDate.getTime())) {
+          return {
+            ok: false,
+            outcome: 'invalid',
+            message: 'Start date is not a valid date'
+          }
         }
-      }
-      const startedAtDate = new Date(trimmedStartedAt)
-      if (isNaN(startedAtDate.getTime())) {
-        return {
-          ok: false,
-          outcome: 'invalid',
-          message: 'Start date is not a valid date'
-        }
+        resolvedStartedAt = startedAtDate.toISOString()
       }
       const newTargetDuration = `P${days}D`
       const result = await override({
         workItemId,
         reason: trimmedReason,
         newTargetDuration,
-        newStartedAt: startedAtDate.toISOString(),
+        ...(resolvedStartedAt !== undefined
+          ? { newStartedAt: resolvedStartedAt }
+          : {}),
         user
       })
       if (result.ok) return { ok: true, workItem: result.workItem }

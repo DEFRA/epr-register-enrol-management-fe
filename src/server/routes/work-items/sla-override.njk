@@ -67,11 +67,11 @@
           id: "field-newStartedAt",
           name: "newStartedAt",
           label: {
-            text: "New start date and time (ISO 8601, e.g. 2024-01-15T09:00:00Z)",
+            text: "New start date and time (ISO 8601, e.g. 2024-01-15T09:00:00Z) — optional",
             classes: "govuk-label--s"
           },
           hint: {
-            text: "Enter the date and time when the SLA clock should be considered to have started."
+            text: "Leave blank to default to today. If provided, must be an ISO 8601 date-time and must not be in the future."
           },
           value: values.newStartedAt,
           errorMessage: { text: fieldErrors["newStartedAt"] } if fieldErrors["newStartedAt"] else null,

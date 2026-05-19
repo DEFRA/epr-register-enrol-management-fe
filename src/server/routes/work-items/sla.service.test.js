@@ -300,19 +300,21 @@ describe('createSlaService', () => {
       expect(result.outcome).toBe('invalid')
     })
 
-    it('returns invalid when newStartedAt is empty', async () => {
-      const result = await service.overrideSla({
+    it('omits newStartedAt from BE call when not provided (BA confirmed: BE defaults to today)', async () => {
+      const workItem = { id: 'abc' }
+      override.mockResolvedValue({ ok: true, workItem })
+
+      await service.overrideSla({
         workItemId: 'abc',
         reason: 'valid reason',
         newTargetDays: '30',
         newStartedAt: '',
         user: null
       })
-      expect(result).toEqual({
-        ok: false,
-        outcome: 'invalid',
-        message: 'Start date is required'
-      })
+
+      expect(override).toHaveBeenCalledWith(
+        expect.not.objectContaining({ newStartedAt: expect.anything() })
+      )
     })
 
     it('returns invalid when newStartedAt is not a valid date', async () => {
