@@ -7,8 +7,15 @@ import {
   getAssignableUsers
 } from '#/server/work-items/core/assignees.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { ROLE_ASSIGN } from '#/server/common/helpers/auth/auth-scopes.js'
+import {
+  ROLE_ASSIGN,
+  ROLE_DECISION_MAKER
+} from '#/server/common/helpers/auth/auth-scopes.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
+import { formatDate } from '#/config/nunjucks/filters/format-date.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
+
+const logger = createLogger()
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
@@ -337,13 +344,23 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   }
 
   const decorated = decorate(result.workItem)
+  // RA-132. Layer in re-accreditation-specific UI hints (Approve button
+  // visibility, terminal-state read-only mode, issued-accreditation
+  // metadata) without leaking type logic into the generic decorator. The
+  // backend is still the source of truth for authorisation — this only
+  // controls which affordances render.
+  const enriched = applyReAccreditationViewModel({
+    workItem: decorated,
+    request,
+    user
+  })
   const templatePath = resolveDetailTemplate(
-    decorated.typeId,
-    decorated.templateVersion
+    enriched.typeId,
+    enriched.templateVersion
   )
 
   const assignment = buildAssignmentViewModel({
-    workItem: decorated,
+    workItem: enriched,
     request,
     user
   })
@@ -356,19 +373,28 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   const successBanner =
     Array.isArray(flashed) && flashed.length > 0 ? flashed[0] : null
 
+  // RA-132. Generic single-shot banner used by approve / decision-making
+  // handlers. Same one-shot read-and-clear semantics as `successBanner`.
+  const flashedBanners = request.yar?.flash?.('flashBanner') ?? []
+  const flashBanner =
+    Array.isArray(flashedBanners) && flashedBanners.length > 0
+      ? flashedBanners[0]
+      : null
+
   return h
     .view(templatePath, {
-      pageTitle: `Work item ${decorated.id}`,
-      heading: decorated.typeDisplayName,
+      pageTitle: `Work item ${enriched.id}`,
+      heading: enriched.typeDisplayName,
       breadcrumbs: [
         { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
-        { text: decorated.id }
+        { text: enriched.id }
       ],
-      workItem: decorated,
+      workItem: enriched,
       assignment,
       notice,
-      successBanner
+      successBanner,
+      flashBanner
     })
     .code(statusCode)
 }
@@ -413,6 +439,107 @@ function buildAssignmentViewModel({ workItem, request, user }) {
           selected: u.id === workItem.assignedToId
         }))
       : []
+  }
+}
+
+// RA-132. ----------------------------------------------------------------
+// Re-accreditation-specific UI decoration.
+//
+// The generic decorator stays free of per-type rules. This helper layers
+// in three things on top of an already-decorated work item, only when its
+// `typeId` is `re-accreditation`:
+//
+//  - `canApproveDirectly` — whether the primary "Approve" CTA should
+//    render. Mirrors the backend's eligibility checks: state must be
+//    `assessment-in-progress` and the caller must either be the current
+//    assignee or hold the decision-maker role. The backend remains
+//    authoritative; a forged POST is still rejected there.
+//  - `approveHref` — link target for the CTA.
+//  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
+//    a terminal state (approved / rejected / withdrawn), the template
+//    suppresses the generic action panel and shows a status tag.
+//  - `decisionMetadata` — for approved work items, the issued
+//    accreditation id + a GOV.UK formatted start date for display.
+// -----------------------------------------------------------------------
+
+const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
+const RE_ACCREDITATION_ELIGIBLE_STATE = 'assessment-in-progress'
+const RE_ACCREDITATION_TERMINAL_STATES = new Set([
+  'approved',
+  'rejected',
+  'withdrawn'
+])
+const RE_ACCREDITATION_STATE_TAG_CLASSES = {
+  approved: 'govuk-tag--green',
+  rejected: 'govuk-tag--red',
+  withdrawn: 'govuk-tag--grey'
+}
+
+function applyReAccreditationViewModel({ workItem, request, user }) {
+  if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
+    return workItem
+  }
+
+  const scope = request.auth?.credentials?.scope ?? []
+  const hasDecisionMakerRole = scope.includes(ROLE_DECISION_MAKER)
+  const callerIsAssignee = user?.id != null && workItem.assignedToId === user.id
+
+  const canApproveDirectly =
+    workItem.stateId === RE_ACCREDITATION_ELIGIBLE_STATE &&
+    (callerIsAssignee || hasDecisionMakerRole)
+
+  const isReadOnlyState = RE_ACCREDITATION_TERMINAL_STATES.has(workItem.stateId)
+  const stateTagClasses =
+    RE_ACCREDITATION_STATE_TAG_CLASSES[workItem.stateId] ?? ''
+
+  const decisionMetadata = buildDecisionMetadata(workItem)
+
+  return {
+    ...workItem,
+    canApproveDirectly,
+    approveHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/approve`,
+    isReadOnlyState,
+    stateTagClasses,
+    decisionMetadata
+  }
+}
+
+function buildDecisionMetadata(workItem) {
+  if (workItem.stateId !== 'approved') {
+    return null
+  }
+
+  const payload = workItem.payload ?? {}
+  const accreditationId = payload.accreditationId ?? null
+  const accreditationStartDate = payload.accreditationStartDate ?? null
+
+  if (!accreditationId && !accreditationStartDate) {
+    return null
+  }
+
+  let accreditationStartDateFormatted = '—'
+  if (accreditationStartDate) {
+    try {
+      accreditationStartDateFormatted = formatDate(
+        accreditationStartDate,
+        'd MMMM yyyy'
+      )
+    } catch (err) {
+      // Backend produced a value we can't parse; fall back to the raw
+      // ISO string so the user still sees something rather than a
+      // template render error. Log it so ops can spot bad data.
+      logger.warn(
+        { err, accreditationStartDate, workItemId: workItem.id },
+        'Re-accreditation accreditationStartDate could not be formatted'
+      )
+      accreditationStartDateFormatted = String(accreditationStartDate)
+    }
+  }
+
+  return {
+    accreditationId: accreditationId ?? '—',
+    accreditationStartDate,
+    accreditationStartDateFormatted
   }
 }
 

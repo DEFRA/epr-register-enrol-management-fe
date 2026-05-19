@@ -25,6 +25,18 @@
     caption: "Work item " + workItem.id
   }) }}
 
+  {# RA-132. Generic flash-banner rendered above the existing per-feature  #}
+  {# banners. Set by handlers via `request.yar.flash('flashBanner', ...)`  #}
+  {# with shape `{type: 'success' | 'error', title?, text}`.                #}
+  {% if flashBanner %}
+    {{ govukNotificationBanner({
+      type: flashBanner.type,
+      titleText: flashBanner.title or (flashBanner.type == 'success' and 'Success' or 'There is a problem'),
+      text: flashBanner.text,
+      attributes: { "data-testid": "work-item-flash-banner" }
+    }) }}
+  {% endif %}
+
   {% if successBanner %}
     {{ govukNotificationBanner({
       type: 'success',
@@ -64,6 +76,16 @@
           { key: { text: "Assigned to" }, value: { text: assignment.assignedToName or "Unassigned" } }
         ]
       }) }}
+
+      {# Block for type-specific summary content rendered immediately below #}
+      {# the generic envelope summary — used by RA-132 for the accredited   #}
+      {# determination metadata once a re-accreditation reaches `approved`. #}
+      {% block summaryListExtra %}{% endblock %}
+
+      {# Block for type-specific primary actions rendered above the         #}
+      {# assignment / tasks / actions panels — used by RA-132 to host the   #}
+      {# "Approve" CTA on the re-accreditation detail page.                 #}
+      {% block primaryActions %}{% endblock %}
 
       {# --------------------------- Assignment --------------------------- #}
       {# RA-95. Assign-role users see a picker and re-assign / unassign    #}
@@ -161,6 +183,10 @@
       {% endif %}
 
       {# ---------------------------- Actions ----------------------------- #}
+      {# Wrapped in an override-able block so type-specific templates can   #}
+      {# replace the generic action list — used by RA-132 to suppress      #}
+      {# decision actions once a re-accreditation reaches a terminal state.#}
+      {% block actionsPanel %}
       <h2 class="govuk-heading-m">Actions</h2>
 
       {% if workItem.availableActions and workItem.availableActions.length > 0 %}
@@ -184,6 +210,7 @@
           No actions are currently available for this work item.
         </p>
       {% endif %}
+      {% endblock %}
 
       {# --------------------------- Audit log ---------------------------- #}
       {# RA-97. The audit log lives on its own page (`/work-items/{id}/    #}

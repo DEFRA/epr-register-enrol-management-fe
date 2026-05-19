@@ -491,6 +491,84 @@ export async function addWorkItemTaskNote({
 }
 
 /**
+ * Approve a re-accreditation work item via the type-specific endpoint
+ * (RA-132).
+ *
+ * Wraps `POST /work-items/re-accreditation/{id}/approve` on the backend.
+ * No request body. The backend enforces actor identity, decision-maker
+ * role membership, tenant filtering and the `assessment-in-progress`
+ * state precondition; this client just forwards the call and the acting
+ * user's identity / roles via the standard headers.
+ *
+ * Result shape mirrors {@link createWorkItem}:
+ *  - 200 → { ok: true, workItem }
+ *  - 400 → { ok: false, reason: 'invalid', status: 400, message }
+ *  - 401 → { ok: false, reason: 'unauthorized', status: 401, message }
+ *  - 403 → { ok: false, reason: 'forbidden', status: 403, message }
+ *  - 404 → { ok: false, reason: 'not-found', status: 404, message }
+ *  - 409 → { ok: false, reason: 'conflict', status: 409, message }
+ *  - other → { ok: false, reason: 'server', status, message }
+ *  - network → { ok: false, reason: 'network', message }
+ */
+export async function approveReAccreditation({
+  workItemId,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/approve`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: buildHeaders({ accept: 'application/json' }, user)
+    })
+
+    if (response.ok) {
+      const workItem = await response.json()
+      return { ok: true, workItem }
+    }
+
+    const problem = await safeReadJson(response)
+    const detail =
+      (problem && (problem.detail || problem.title)) ||
+      `Backend returned ${response.status}`
+
+    const reason = APPROVE_REASON_BY_STATUS[response.status] ?? 'server'
+    return {
+      ok: false,
+      reason,
+      status: response.status,
+      message: detail
+    }
+  } catch (error) {
+    logger.warn(
+      { err: error, url },
+      'Backend API approveReAccreditation failed'
+    )
+    return {
+      ok: false,
+      reason: 'network',
+      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+const APPROVE_REASON_BY_STATUS = {
+  400: 'invalid',
+  401: 'unauthorized',
+  403: 'forbidden',
+  404: 'not-found',
+  409: 'conflict'
+}
+
+/**
  * Submit a brand-new work item of the given type (RA-127).
  *
  * Wraps `POST /work-items` on the backend. The backend wraps every

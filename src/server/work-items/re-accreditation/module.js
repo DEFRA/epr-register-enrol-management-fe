@@ -1,5 +1,6 @@
 import { config } from '#/config/config.js'
 import { registerModuleDetailTemplates } from '../core/templates.js'
+import { buildApprovalRoutes } from './approval/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
 
 /**
@@ -127,6 +128,12 @@ export const reAccreditationModule = {
     registerModuleDetailTemplates('re-accreditation', {
       v1: 're-accreditation/detail-v1'
     })
+
+    // RA-132. Approve-determination flow: confirmation interstitial + POST
+    // handler that hits the type-specific backend endpoint. Always mounted
+    // — the FE button only renders when the work item is eligible, and
+    // the backend is the source of truth for authorisation.
+    server.route(buildApprovalRoutes())
 
     // RA-127. The create-work-item demo form is feature-flagged so it
     // can be hidden in production. When the flag is off the routes are
