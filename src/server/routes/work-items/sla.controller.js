@@ -10,9 +10,11 @@
  * Both flows use PRG — redirect back to work item detail with flash banner.
  */
 
-import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { getUser, hasRole } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
-import { REASON_MAX_LENGTH, MAX_DAYS, createSlaService } from './sla.service.js'
+import { REASON_MAX_LENGTH, createSlaService } from './sla.service.js'
+import { ROLE_TEAM_LEADER } from '#/server/common/helpers/auth/auth-scopes.js'
+import { config } from '#/config/config.js'
 
 const EXTEND_VIEW = 'work-items/sla-extend'
 const OVERRIDE_VIEW = 'work-items/sla-override'
@@ -39,7 +41,11 @@ function breadcrumbs(id, action) {
 export function makeShowExtendController() {
   return {
     async handler(request, h) {
+      if (!hasRole(request, ROLE_TEAM_LEADER)) {
+        return h.response('Forbidden').code(403)
+      }
       const id = request.params.id
+      const maxDays = config.get('workItems.sla.maxExtensionDays')
       return h.view(EXTEND_VIEW, {
         pageTitle: 'Extend SLA',
         heading: 'Extend SLA',
@@ -48,7 +54,7 @@ export function makeShowExtendController() {
         formAction: `/work-items/${encodeURIComponent(id)}/sla/extend`,
         cancelHref: detailHref(id),
         reasonMaxLength: REASON_MAX_LENGTH,
-        maxDays: MAX_DAYS,
+        maxDays,
         values: { reason: '', additionalDays: '' },
         errorSummary: null,
         fieldErrors: {}
@@ -62,6 +68,9 @@ export function makeSubmitExtendController({
 } = {}) {
   return {
     async handler(request, h) {
+      if (!hasRole(request, ROLE_TEAM_LEADER)) {
+        return h.response('Forbidden').code(403)
+      }
       const id = request.params.id
       const user = getUser(request)
       const payload = request.payload ?? {}
@@ -95,7 +104,7 @@ export function makeSubmitExtendController({
             formAction: `/work-items/${encodeURIComponent(id)}/sla/extend`,
             cancelHref: detailHref(id),
             reasonMaxLength: REASON_MAX_LENGTH,
-            maxDays: MAX_DAYS,
+            maxDays: config.get('workItems.sla.maxExtensionDays'),
             values: { reason, additionalDays },
             errorSummary: {
               titleText: 'There is a problem',
@@ -119,6 +128,9 @@ export function makeSubmitExtendController({
 export function makeShowOverrideController() {
   return {
     async handler(request, h) {
+      if (!hasRole(request, ROLE_TEAM_LEADER)) {
+        return h.response('Forbidden').code(403)
+      }
       const id = request.params.id
       return h.view(OVERRIDE_VIEW, {
         pageTitle: 'Override SLA',
@@ -141,6 +153,9 @@ export function makeSubmitOverrideController({
 } = {}) {
   return {
     async handler(request, h) {
+      if (!hasRole(request, ROLE_TEAM_LEADER)) {
+        return h.response('Forbidden').code(403)
+      }
       const id = request.params.id
       const user = getUser(request)
       const payload = request.payload ?? {}

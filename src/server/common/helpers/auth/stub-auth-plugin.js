@@ -9,7 +9,8 @@ import {
   ROLE_NATION_SCOTLAND,
   ROLE_NATION_WALES,
   ROLE_NATION_NORTHERN_IRELAND,
-  ROLE_STANDARD
+  ROLE_STANDARD,
+  ROLE_TEAM_LEADER
 } from './auth-scopes.js'
 
 export const TEST_STANDARD_USER = {
@@ -34,6 +35,14 @@ export const TEST_DECISION_MAKER_USER = {
   name: 'Test Decision Maker',
   roles: [ROLE_STANDARD, ROLE_DECISION_MAKER],
   scope: [ROLE_STANDARD, ROLE_DECISION_MAKER]
+}
+
+export const TEST_TEAM_LEADER_USER = {
+  id: 'test-team-leader-id',
+  email: 'team-leader@test.example',
+  name: 'Test Team Leader',
+  roles: [ROLE_STANDARD, ROLE_TEAM_LEADER],
+  scope: [ROLE_STANDARD, ROLE_TEAM_LEADER]
 }
 
 export const TEST_NATION_ENGLAND_USER = {
@@ -72,6 +81,7 @@ const TEST_USERS = {
   standard: TEST_STANDARD_USER,
   assign: TEST_ASSIGN_USER,
   'decision-maker': TEST_DECISION_MAKER_USER,
+  'team-leader': TEST_TEAM_LEADER_USER,
   'nation-england': TEST_NATION_ENGLAND_USER,
   'nation-scotland': TEST_NATION_SCOTLAND_USER,
   'nation-wales': TEST_NATION_WALES_USER,

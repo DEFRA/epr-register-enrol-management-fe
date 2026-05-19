@@ -9,8 +9,9 @@
  * Outcomes: 'invalid', 'forbidden', 'not-found', 'conflict', 'server', 'network'
  */
 
+import { config } from '#/config/config.js'
+
 export const REASON_MAX_LENGTH = 500
-export const MAX_DAYS = 31
 
 async function defaultExtend(args) {
   const mod = await import('#/server/common/helpers/backend-api/backend-api.js')
@@ -24,7 +25,8 @@ async function defaultOverride(args) {
 
 export function createSlaService({
   extend = defaultExtend,
-  override = defaultOverride
+  override = defaultOverride,
+  maxDays = config.get('workItems.sla.maxExtensionDays')
 } = {}) {
   return {
     async extendSla({ workItemId, reason, additionalDays, user }) {
@@ -47,11 +49,11 @@ export function createSlaService({
           message: 'Additional days must be a whole number of at least 1'
         }
       }
-      if (days > MAX_DAYS) {
+      if (days > maxDays) {
         return {
           ok: false,
           outcome: 'invalid',
-          message: `Additional days must be ${MAX_DAYS} or fewer`
+          message: `Additional days must be ${maxDays} or fewer`
         }
       }
       const additionalDuration = `P${days}D`

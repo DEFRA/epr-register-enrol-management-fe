@@ -22,7 +22,8 @@ import {
 } from './sla.controller.js'
 import {
   requireAssign,
-  requireStandard
+  requireStandard,
+  requireTeamLeader
 } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
@@ -130,17 +131,18 @@ export const workItems = {
           ...makeAddNoteController()
         },
         {
-          // RA-131. Extend SLA clock. Requires standard auth; BE enforces team-leader role.
+          // RA-131. Extend SLA clock. Gated to team-leader at both FE route
+          // and controller level. BE independently enforces the role.
           method: 'GET',
           path: '/work-items/{id}/sla/extend',
-          options: requireStandard,
+          options: requireTeamLeader,
           ...makeShowExtendController()
         },
         {
           method: 'POST',
           path: '/work-items/{id}/sla/extend',
           options: {
-            ...requireStandard,
+            ...requireTeamLeader,
             payload: {
               parse: true,
               allow: 'application/x-www-form-urlencoded',
@@ -150,17 +152,17 @@ export const workItems = {
           ...makeSubmitExtendController()
         },
         {
-          // RA-131. Override SLA clock.
+          // RA-131. Override SLA clock. Gated to team-leader.
           method: 'GET',
           path: '/work-items/{id}/sla/override',
-          options: requireStandard,
+          options: requireTeamLeader,
           ...makeShowOverrideController()
         },
         {
           method: 'POST',
           path: '/work-items/{id}/sla/override',
           options: {
-            ...requireStandard,
+            ...requireTeamLeader,
             payload: {
               parse: true,
               allow: 'application/x-www-form-urlencoded',

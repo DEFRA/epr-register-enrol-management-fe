@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { REASON_MAX_LENGTH, MAX_DAYS, createSlaService } from './sla.service.js'
+import { REASON_MAX_LENGTH, createSlaService } from './sla.service.js'
 
 describe('createSlaService', () => {
   describe('#extendSla', () => {
@@ -8,7 +8,7 @@ describe('createSlaService', () => {
 
     beforeEach(() => {
       extend = vi.fn()
-      service = createSlaService({ extend })
+      service = createSlaService({ extend, maxDays: 31 })
     })
 
     it('returns invalid when reason is empty', async () => {
@@ -104,13 +104,13 @@ describe('createSlaService', () => {
       const result = await service.extendSla({
         workItemId: 'abc',
         reason: 'valid reason',
-        additionalDays: String(MAX_DAYS + 1),
+        additionalDays: String(31 + 1),
         user: null
       })
       expect(result).toEqual({
         ok: false,
         outcome: 'invalid',
-        message: `Additional days must be ${MAX_DAYS} or fewer`
+        message: `Additional days must be ${31} or fewer`
       })
       expect(extend).not.toHaveBeenCalled()
     })
@@ -243,7 +243,7 @@ describe('createSlaService', () => {
 
     beforeEach(() => {
       override = vi.fn()
-      service = createSlaService({ override })
+      service = createSlaService({ override, maxDays: 31 })
     })
 
     it('returns invalid when reason is empty', async () => {

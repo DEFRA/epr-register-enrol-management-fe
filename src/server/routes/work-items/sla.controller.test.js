@@ -36,16 +36,27 @@ describe('#makeShowExtendController', () => {
     await server.stop({ timeout: 0 })
   })
 
-  test('GET renders the extend SLA form', async () => {
+  test('GET renders the extend SLA form for team-leader', async () => {
     const { statusCode, result } = await server.inject({
       method: 'GET',
-      url: `/work-items/${ID}/sla/extend`
+      url: `/work-items/${ID}/sla/extend`,
+      headers: { 'x-test-user-role': 'team-leader' }
     })
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('Extend SLA'))
     expect(result).toEqual(expect.stringContaining('sla-extend-form'))
     expect(result).toEqual(expect.stringContaining(ID))
+  })
+
+  test('GET returns 403 for non-team-leader', async () => {
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/sla/extend`,
+      headers: { 'x-test-user-role': 'standard' }
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
   })
 })
 
@@ -76,7 +87,8 @@ describe('#makeSubmitExtendController', () => {
       url: `/work-items/${ID}/sla/extend`,
       payload: `reason=Need+more+time&additionalDays=7`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
@@ -97,7 +109,8 @@ describe('#makeSubmitExtendController', () => {
       url: `/work-items/${ID}/sla/extend`,
       payload: `reason=&additionalDays=7`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
@@ -113,12 +126,28 @@ describe('#makeSubmitExtendController', () => {
       url: `/work-items/${ID}/sla/extend`,
       payload: `reason=Some+reason&additionalDays=notanumber`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
     expect(statusCode).toBe(statusCodes.badRequest)
     expect(result).toEqual(expect.stringContaining('There is a problem'))
+    expect(extendWorkItemSla).not.toHaveBeenCalled()
+  })
+
+  test('POST returns 403 for non-team-leader', async () => {
+    const { statusCode } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload: `reason=Some+reason&additionalDays=7`,
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'standard'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
     expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 
@@ -135,7 +164,8 @@ describe('#makeSubmitExtendController', () => {
       url: `/work-items/${ID}/sla/extend`,
       payload: `reason=Some+reason&additionalDays=3`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
@@ -156,7 +186,8 @@ describe('#makeSubmitExtendController', () => {
       url: `/work-items/${ID}/sla/extend`,
       payload: `reason=Some+reason&additionalDays=3`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
@@ -177,16 +208,27 @@ describe('#makeShowOverrideController', () => {
     await server.stop({ timeout: 0 })
   })
 
-  test('GET renders the override SLA form', async () => {
+  test('GET renders the override SLA form for team-leader', async () => {
     const { statusCode, result } = await server.inject({
       method: 'GET',
-      url: `/work-items/${ID}/sla/override`
+      url: `/work-items/${ID}/sla/override`,
+      headers: { 'x-test-user-role': 'team-leader' }
     })
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('Override SLA'))
     expect(result).toEqual(expect.stringContaining('sla-override-form'))
     expect(result).toEqual(expect.stringContaining(ID))
+  })
+
+  test('GET returns 403 for non-team-leader', async () => {
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/sla/override`,
+      headers: { 'x-test-user-role': 'standard' }
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
   })
 })
 
@@ -217,7 +259,8 @@ describe('#makeSubmitOverrideController', () => {
       url: `/work-items/${ID}/sla/override`,
       payload: `reason=Reset+clock&newTargetDays=30&newStartedAt=2024-01-15T09%3A00%3A00Z`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
@@ -238,7 +281,8 @@ describe('#makeSubmitOverrideController', () => {
       url: `/work-items/${ID}/sla/override`,
       payload: `reason=&newTargetDays=30&newStartedAt=2024-01-15T09%3A00%3A00Z`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
@@ -254,7 +298,8 @@ describe('#makeSubmitOverrideController', () => {
       url: `/work-items/${ID}/sla/override`,
       payload: `reason=Some+reason&newTargetDays=abc&newStartedAt=2024-01-15T09%3A00%3A00Z`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
@@ -269,12 +314,28 @@ describe('#makeSubmitOverrideController', () => {
       url: `/work-items/${ID}/sla/override`,
       payload: `reason=Some+reason&newTargetDays=30&newStartedAt=not-a-date`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
     expect(statusCode).toBe(statusCodes.badRequest)
     expect(result).toEqual(expect.stringContaining('There is a problem'))
+    expect(overrideWorkItemSla).not.toHaveBeenCalled()
+  })
+
+  test('POST returns 403 for non-team-leader', async () => {
+    const { statusCode } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/override`,
+      payload: `reason=Some+reason&newTargetDays=30&newStartedAt=2024-01-15T09%3A00%3A00Z`,
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'standard'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
     expect(overrideWorkItemSla).not.toHaveBeenCalled()
   })
 
@@ -291,7 +352,8 @@ describe('#makeSubmitOverrideController', () => {
       url: `/work-items/${ID}/sla/override`,
       payload: `reason=Some+reason&newTargetDays=30&newStartedAt=2024-01-15T09%3A00%3A00Z`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
@@ -312,7 +374,8 @@ describe('#makeSubmitOverrideController', () => {
       url: `/work-items/${ID}/sla/override`,
       payload: `reason=Some+reason&newTargetDays=30&newStartedAt=2024-01-15T09%3A00%3A00Z`,
       headers: {
-        'content-type': 'application/x-www-form-urlencoded'
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-test-user-role': 'team-leader'
       }
     })
 
