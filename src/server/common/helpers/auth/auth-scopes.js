@@ -23,6 +23,7 @@
 export const ROLE_STANDARD = 'standard'
 export const ROLE_ASSIGN = 'assign'
 export const ROLE_DECISION_MAKER = 'reaccreditation-decision-maker'
+export const ROLE_TEAM_LEADER = 'team-leader'
 
 /**
  * Nation-scoped roles. A user with exactly one of these roles is
@@ -46,3 +47,5 @@ export const ALL_ROLES = [ROLE_STANDARD, ROLE_ASSIGN]
 export const requireStandard = { auth: { scope: [ROLE_STANDARD] } }
 
 export const requireAssign = { auth: { scope: [ROLE_ASSIGN] } }
+
+export const requireTeamLeader = { auth: { scope: [ROLE_TEAM_LEADER] } }

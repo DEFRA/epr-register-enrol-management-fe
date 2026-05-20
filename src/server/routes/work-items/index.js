@@ -15,8 +15,15 @@ import {
   workItemTasksController
 } from './tasks.controller.js'
 import {
+  makeShowExtendController,
+  makeSubmitExtendController,
+  makeShowOverrideController,
+  makeSubmitOverrideController
+} from './sla.controller.js'
+import {
   requireAssign,
-  requireStandard
+  requireStandard,
+  requireTeamLeader
 } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
@@ -122,6 +129,47 @@ export const workItems = {
           method: 'POST',
           path: '/work-items/{id}/notes',
           ...makeAddNoteController()
+        },
+        {
+          // RA-131. Extend SLA clock. Gated to team-leader at both FE route
+          // and controller level. BE independently enforces the role.
+          method: 'GET',
+          path: '/work-items/{id}/sla/extend',
+          options: requireTeamLeader,
+          ...makeShowExtendController()
+        },
+        {
+          method: 'POST',
+          path: '/work-items/{id}/sla/extend',
+          options: {
+            ...requireTeamLeader,
+            payload: {
+              parse: true,
+              allow: 'application/x-www-form-urlencoded',
+              maxBytes: 10 * 1024
+            }
+          },
+          ...makeSubmitExtendController()
+        },
+        {
+          // RA-131. Override SLA clock. Gated to team-leader.
+          method: 'GET',
+          path: '/work-items/{id}/sla/override',
+          options: requireTeamLeader,
+          ...makeShowOverrideController()
+        },
+        {
+          method: 'POST',
+          path: '/work-items/{id}/sla/override',
+          options: {
+            ...requireTeamLeader,
+            payload: {
+              parse: true,
+              allow: 'application/x-www-form-urlencoded',
+              maxBytes: 10 * 1024
+            }
+          },
+          ...makeSubmitOverrideController()
         }
       ])
     }

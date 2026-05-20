@@ -1,0 +1,75 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/warning-text/macro.njk" import govukWarningText %}
+{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+
+{# ----------------------------------------------------------------- #}
+{# Approve-determination confirmation interstitial (RA-132).          #}
+{#                                                                    #}
+{# Reached from the primary "Approve" button on the re-accreditation  #}
+{# detail page. Posts back to its own URL — the controller forwards   #}
+{# the optional decision note to the notes endpoint and then calls    #}
+{# the type-specific approve endpoint, redirecting back to the detail #}
+{# page with a flash banner in every branch.                          #}
+{# ----------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItem.id
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "approval-error-summary" }
+        }) }}
+      {% endif %}
+
+      {{ govukWarningText({
+        text: "This will issue the accreditation and notify the applicant.",
+        iconFallbackText: "Warning",
+        attributes: { "data-testid": "approval-warning" }
+      }) }}
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="approval-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {{ govukCharacterCount({
+          id: "field-decisionNote",
+          name: "decisionNote",
+          maxlength: decisionNoteMaxLength,
+          label: {
+            text: "Decision note (optional)",
+            classes: "govuk-label--s"
+          },
+          hint: {
+            text: "Add any context that should appear in the audit log alongside the approval."
+          },
+          value: values.decisionNote,
+          errorMessage: { text: fieldErrors["decisionNote"] } if fieldErrors["decisionNote"] else null,
+          attributes: { "data-testid": "approval-decision-note" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Approve determination",
+            attributes: { "data-testid": "approval-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="approval-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

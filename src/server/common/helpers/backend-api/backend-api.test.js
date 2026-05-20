@@ -1,15 +1,19 @@
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import { config } from '#/config/config.js'
 import {
   addWorkItemNote,
   applyWorkItemAction,
+  approveReAccreditation,
   assertSafeHeaderValue,
   assignWorkItem,
   completeWorkItemTask,
   createWorkItem,
+  extendWorkItemSla,
   getBackendHealth,
   getWorkItem,
   getWorkItems,
+  overrideWorkItemSla,
   setWorkItemTaskStatus,
   unassignWorkItem
 } from './backend-api.js'
@@ -1112,5 +1116,424 @@ describe('#createWorkItem (RA-127)', () => {
     expect(headers['x-cdp-user-id']).toBeUndefined()
     expect(headers['x-cdp-user-name']).toBeUndefined()
     expect(headers['x-cdp-user-roles']).toBeUndefined()
+  })
+})
+
+describe('#buildHeaders signing integration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test('attaches x-cdp-auth-* signing headers to outbound requests when AUTH_SHARED_SECRET is set', async () => {
+    const realGet = config.get.bind(config)
+    vi.spyOn(config, 'get').mockImplementation((key) =>
+      key === 'auth.sharedSecret' ? 'integration-test-secret' : realGet(key)
+    )
+
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const headers = fetchImpl.mock.calls[0][1].headers
+    expect(headers['x-cdp-auth-timestamp']).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
+    )
+    expect(headers['x-cdp-auth-nonce']).toMatch(/^[A-Za-z0-9_-]+$/)
+    expect(headers['x-cdp-auth-signature']).toBeDefined()
+  })
+})
+
+describe('#approveReAccreditation (RA-132)', () => {
+  test('POSTs to the type-specific approve endpoint and returns the work item on 200', async () => {
+    const workItem = { id: 'wi-1', stateId: 'approved' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await approveReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi-1/approve',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          accept: 'application/json',
+          'x-cdp-user-id': 'u-1',
+          'x-cdp-user-name': 'Alice'
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test.each([
+    [400, 'invalid'],
+    [401, 'unauthorized'],
+    [403, 'forbidden'],
+    [404, 'not-found'],
+    [409, 'conflict'],
+    [500, 'server']
+  ])(
+    'maps HTTP %s to reason %s with the problem detail',
+    async (status, reason) => {
+      const fetchImpl = vi.fn().mockResolvedValue({
+        ok: false,
+        status,
+        json: () => Promise.resolve({ detail: `boom ${status}` })
+      })
+
+      const result = await approveReAccreditation({
+        workItemId: 'wi-1',
+        baseUrl: 'http://backend:8085',
+        timeoutMs: 1000,
+        fetchImpl
+      })
+
+      expect(result).toEqual({
+        ok: false,
+        reason,
+        status,
+        message: `boom ${status}`
+      })
+    }
+  )
+
+  test('falls back to a generic message when the problem body has neither detail nor title', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve({})
+    })
+
+    const result = await approveReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'server',
+      status: 503,
+      message: 'Backend returned 503'
+    })
+  })
+
+  test('returns a network reason and the abort message when the request times out', async () => {
+    const abortError = Object.assign(new Error('aborted'), {
+      name: 'AbortError'
+    })
+    const fetchImpl = vi.fn().mockRejectedValue(abortError)
+
+    const result = await approveReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'Request timed out'
+    })
+  })
+
+  test('returns a network reason and the underlying error message on other transport errors', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('connection refused'))
+
+    const result = await approveReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'connection refused'
+    })
+  })
+})
+
+describe('#extendWorkItemSla (RA-131)', () => {
+  test('returns ok=true with workItem on 200', async () => {
+    const workItem = { id: 'wi-1', stateId: 'submitted' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await extendWorkItemSla({
+      workItemId: 'wi-1',
+      reason: 'Need more time',
+      additionalDuration: 'P7D',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/sla/extend',
+      expect.objectContaining({
+        method: 'POST',
+        signal: expect.any(AbortSignal)
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('sends correct JSON body', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await extendWorkItemSla({
+      workItemId: 'wi-1',
+      reason: 'Test reason',
+      additionalDuration: 'P14D',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [, init] = fetchImpl.mock.calls[0]
+    const body = JSON.parse(init.body)
+    expect(body).toEqual({ reason: 'Test reason', additionalDuration: 'P14D' })
+  })
+
+  test('returns forbidden on 403', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ title: 'Forbidden' })
+    })
+
+    const result = await extendWorkItemSla({
+      workItemId: 'wi-1',
+      reason: 'reason',
+      additionalDuration: 'P7D',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'forbidden',
+      status: 403,
+      message: 'Forbidden'
+    })
+  })
+
+  test('returns not-found on 404', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ detail: 'Work item not found' })
+    })
+
+    const result = await extendWorkItemSla({
+      workItemId: 'wi-1',
+      reason: 'reason',
+      additionalDuration: 'P7D',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'not-found',
+      status: 404,
+      message: 'Work item not found'
+    })
+  })
+
+  test('returns conflict on 409', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ title: 'Conflict' })
+    })
+
+    const result = await extendWorkItemSla({
+      workItemId: 'wi-1',
+      reason: 'reason',
+      additionalDuration: 'P7D',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      message: 'Conflict'
+    })
+  })
+
+  test('returns network reason on AbortError', async () => {
+    const abortError = new Error('aborted')
+    abortError.name = 'AbortError'
+    const fetchImpl = vi.fn().mockRejectedValue(abortError)
+
+    const result = await extendWorkItemSla({
+      workItemId: 'wi-1',
+      reason: 'reason',
+      additionalDuration: 'P7D',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'Request timed out'
+    })
+  })
+
+  test('returns network reason on transport error', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+
+    const result = await extendWorkItemSla({
+      workItemId: 'wi-1',
+      reason: 'reason',
+      additionalDuration: 'P7D',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'ECONNREFUSED'
+    })
+  })
+})
+
+describe('#overrideWorkItemSla (RA-131)', () => {
+  test('returns ok=true with workItem on 200', async () => {
+    const workItem = { id: 'wi-2' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await overrideWorkItemSla({
+      workItemId: 'wi-2',
+      reason: 'Reset clock',
+      newTargetDuration: 'P30D',
+      newStartedAt: '2024-01-15T09:00:00.000Z',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-2/sla/override',
+      expect.objectContaining({
+        method: 'POST',
+        signal: expect.any(AbortSignal)
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('sends correct JSON body', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-2' })
+    })
+
+    await overrideWorkItemSla({
+      workItemId: 'wi-2',
+      reason: 'Override reason',
+      newTargetDuration: 'P90D',
+      newStartedAt: '2024-03-01T00:00:00.000Z',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [, init] = fetchImpl.mock.calls[0]
+    const body = JSON.parse(init.body)
+    expect(body).toEqual({
+      reason: 'Override reason',
+      newTargetDuration: 'P90D',
+      newStartedAt: '2024-03-01T00:00:00.000Z'
+    })
+  })
+
+  test('returns invalid on 422', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: () => Promise.resolve({ detail: 'Unprocessable entity' })
+    })
+
+    const result = await overrideWorkItemSla({
+      workItemId: 'wi-2',
+      reason: 'reason',
+      newTargetDuration: 'P30D',
+      newStartedAt: '2024-01-15T09:00:00.000Z',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid',
+      status: 422,
+      message: 'Unprocessable entity'
+    })
+  })
+
+  test('returns network reason on transport error', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('connection refused'))
+
+    const result = await overrideWorkItemSla({
+      workItemId: 'wi-2',
+      reason: 'reason',
+      newTargetDuration: 'P30D',
+      newStartedAt: '2024-01-15T09:00:00.000Z',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'connection refused'
+    })
   })
 })
