@@ -22,6 +22,7 @@ import { buildCreateWorkItemRoutes } from './create/routes.js'
 
 const STATES = [
   { id: 'submitted', displayName: 'Submitted' },
+  { id: 'duly-made', displayName: 'Duly made' },
   { id: 'assessment-in-progress', displayName: 'Assessment in progress' },
   { id: 'awaiting-decision', displayName: 'Awaiting decision' },
   { id: 'approved', displayName: 'Approved', isTerminal: true },
@@ -31,11 +32,25 @@ const STATES = [
 
 const TRANSITIONS = [
   {
-    actionId: 'start-assessment',
-    displayName: 'Start assessment',
+    actionId: 'duly-make',
+    displayName: 'Mark as duly made',
     fromStateId: 'submitted',
+    toStateId: 'duly-made',
+    requiresAllTasksComplete: true
+  },
+  {
+    actionId: 'payment-received',
+    displayName: 'Payment received',
+    fromStateId: 'duly-made',
     toStateId: 'assessment-in-progress',
     requiresAllTasksComplete: true
+  },
+  {
+    actionId: 'sla-extend',
+    displayName: 'Extend SLA',
+    fromStateId: 'assessment-in-progress',
+    toStateId: 'assessment-in-progress',
+    requiresAllTasksComplete: false
   },
   {
     actionId: 'submit-for-decision',
@@ -66,9 +81,23 @@ const TRANSITIONS = [
     requiresAllTasksComplete: false
   },
   {
+    actionId: 'withdraw-during-duly-made',
+    displayName: 'Withdraw',
+    fromStateId: 'duly-made',
+    toStateId: 'withdrawn',
+    requiresAllTasksComplete: false
+  },
+  {
     actionId: 'withdraw-during-assessment',
     displayName: 'Withdraw',
     fromStateId: 'assessment-in-progress',
+    toStateId: 'withdrawn',
+    requiresAllTasksComplete: false
+  },
+  {
+    actionId: 'withdraw-during-decision',
+    displayName: 'Withdraw',
+    fromStateId: 'awaiting-decision',
     toStateId: 'withdrawn',
     requiresAllTasksComplete: false
   }
@@ -80,6 +109,12 @@ const TASKS_BY_STATE = {
       id: 'verify-organisation-details',
       displayName: 'Verify organisation details'
     },
+    {
+      id: 'confirm-application-completeness',
+      displayName: 'Confirm application is duly made'
+    }
+  ],
+  'duly-made': [
     {
       id: 'confirm-registration-fee-paid',
       displayName: 'Confirm registration fee paid'
@@ -110,7 +145,7 @@ const TASKS_BY_STATE = {
 export const reAccreditationType = {
   id: 're-accreditation',
   displayName: 'Re-accreditation',
-  templateVersion: 'v1',
+  templateVersion: 'v4',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS,
@@ -125,8 +160,12 @@ export const reAccreditationModule = {
     // Mount the type-specific detail template so the framework's detail
     // controller picks it for `(re-accreditation, v1)` work items. All
     // other UI for this type goes through the framework's generic routes.
+    // v2: added duly-made state; v3: notify hook; v4: SLA clock
     registerModuleDetailTemplates('re-accreditation', {
-      v1: 're-accreditation/detail-v1'
+      v1: 're-accreditation/detail-v1',
+      v2: 're-accreditation/detail-v1',
+      v3: 're-accreditation/detail-v1',
+      v4: 're-accreditation/detail-v1'
     })
 
     // RA-132. Approve-determination flow: confirmation interstitial + POST

@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v1')
+    expect(reAccreditationType.templateVersion).toBe('v4')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -38,7 +38,9 @@ describe('reAccreditationModule', () => {
   })
 
   test.each([
-    ['start-assessment', 'submitted', 'assessment-in-progress', true],
+    ['duly-make', 'submitted', 'duly-made', true],
+    ['payment-received', 'duly-made', 'assessment-in-progress', true],
+    ['sla-extend', 'assessment-in-progress', 'assessment-in-progress', false],
     [
       'submit-for-decision',
       'assessment-in-progress',
@@ -48,7 +50,14 @@ describe('reAccreditationModule', () => {
     ['approve', 'awaiting-decision', 'approved', true],
     ['reject', 'awaiting-decision', 'rejected', true],
     ['withdraw', 'submitted', 'withdrawn', false],
-    ['withdraw-during-assessment', 'assessment-in-progress', 'withdrawn', false]
+    ['withdraw-during-duly-made', 'duly-made', 'withdrawn', false],
+    [
+      'withdraw-during-assessment',
+      'assessment-in-progress',
+      'withdrawn',
+      false
+    ],
+    ['withdraw-during-decision', 'awaiting-decision', 'withdrawn', false]
   ])(
     'declares transition %s: %s -> %s (requires=%s)',
     (actionId, fromStateId, toStateId, requires) => {
@@ -66,8 +75,9 @@ describe('reAccreditationModule', () => {
   test.each([
     [
       'submitted',
-      ['verify-organisation-details', 'confirm-registration-fee-paid']
+      ['verify-organisation-details', 'confirm-application-completeness']
     ],
+    ['duly-made', ['confirm-registration-fee-paid']],
     [
       'assessment-in-progress',
       [
@@ -90,9 +100,9 @@ describe('reAccreditationModule', () => {
     }
   )
 
-  test('register registers a v1 detail template resolvable from the framework', async () => {
+  test('register registers detail templates for all versions (v1–v4) resolvable from the framework', async () => {
     // Resolve falls back to the generic detail before register runs.
-    expect(resolveDetailTemplate('re-accreditation', 'v1')).toBe(
+    expect(resolveDetailTemplate('re-accreditation', 'v4')).toBe(
       'work-items/detail'
     )
 
@@ -115,9 +125,11 @@ describe('reAccreditationModule', () => {
       config.set(flagKey, previous)
     }
 
-    expect(resolveDetailTemplate('re-accreditation', 'v1')).toBe(
-      're-accreditation/detail-v1'
-    )
+    for (const version of ['v1', 'v2', 'v3', 'v4']) {
+      expect(resolveDetailTemplate('re-accreditation', version)).toBe(
+        're-accreditation/detail-v1'
+      )
+    }
   })
 
   test('register does not throw when called with a stub server', async () => {
