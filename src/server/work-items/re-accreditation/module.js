@@ -160,6 +160,7 @@ export const reAccreditationModule = {
     // Mount the type-specific detail template so the framework's detail
     // controller picks it for `(re-accreditation, v1)` work items. All
     // other UI for this type goes through the framework's generic routes.
+    // v2: added duly-made state; v3: notify hook; v4: SLA clock
     registerModuleDetailTemplates('re-accreditation', {
       v1: 're-accreditation/detail-v1',
       v2: 're-accreditation/detail-v1',
