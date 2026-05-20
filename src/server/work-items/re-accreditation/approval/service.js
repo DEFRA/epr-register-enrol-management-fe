@@ -6,7 +6,7 @@
  *      the existing notes endpoint so the audit log captures it before
  *      the state transition.
  *   2. Call the type-specific approve endpoint, which transitions the
- *      work item from `assessment-in-progress` to `approved` and stamps
+ *      work item from `awaiting-decision` to `approved` and stamps
  *      the issued `accreditationId` + `accreditationStartDate` onto the
  *      payload.
  *
