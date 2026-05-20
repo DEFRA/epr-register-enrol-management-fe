@@ -229,17 +229,57 @@ const STATE_TAG_CLASSES = {
   withdrawn: 'govuk-tag--grey'
 }
 
+const SLA_TAG = {
+  OnTrack: { text: 'On track', classes: 'govuk-tag--green' },
+  AtRisk: { text: 'At risk', classes: 'govuk-tag--yellow' },
+  Breached: { text: 'Breached', classes: 'govuk-tag--red' }
+}
+
+/**
+ * Parse the integer day count from a .NET "c" format TimeSpan string.
+ * Format: [-][d.]hh:mm:ss[.fraction]  e.g. "84.00:00:00", "14.12:30:00".
+ * Returns null when the value is absent or not parseable.
+ */
+function parseDotNetTimeSpanDays(value) {
+  if (!value || typeof value !== 'string') return null
+  const negative = value.startsWith('-')
+  const s = negative ? value.slice(1) : value
+  const dotIdx = s.indexOf('.')
+  const colonIdx = s.indexOf(':')
+  if (dotIdx !== -1 && dotIdx < colonIdx) {
+    const days = parseInt(s.slice(0, dotIdx), 10)
+    return negative ? -days : days
+  }
+  return 0
+}
+
+function formatSlaRemaining(slaRemaining) {
+  const days = parseDotNetTimeSpanDays(slaRemaining)
+  if (days === null || days <= 0) return null
+  return days === 1 ? '1 day remaining' : `${days} days remaining`
+}
+
 function decorate(item) {
   const type = getWorkItemType(item.typeId)
   const stateId = item.stateId
   const stateDisplayName =
     type?.states?.find((state) => state.id === stateId)?.displayName ?? stateId
+
+  const slaTag = item.slaState ? SLA_TAG[item.slaState] : null
+  const slaRemainingText =
+    item.slaState && item.slaState !== 'Breached'
+      ? formatSlaRemaining(item.slaRemaining)
+      : null
+
   return {
     ...item,
     typeDisplayName: type?.displayName ?? item.typeId,
     stateDisplayName,
     stateTagClass: STATE_TAG_CLASSES[stateId] ?? 'govuk-tag--grey',
-    assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null
+    assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
+    slaTagText: slaTag?.text ?? null,
+    slaTagClass: slaTag?.classes ?? null,
+    slaRemainingText
   }
 }
 
