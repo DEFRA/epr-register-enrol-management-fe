@@ -41,12 +41,22 @@ describe('reAccreditationModule', () => {
     ['duly-make', 'submitted', 'duly-made', true],
     ['payment-received', 'duly-made', 'assessment-in-progress', true],
     ['sla-extend', 'assessment-in-progress', 'assessment-in-progress', false],
-    ['submit-for-decision', 'assessment-in-progress', 'awaiting-decision', true],
+    [
+      'submit-for-decision',
+      'assessment-in-progress',
+      'awaiting-decision',
+      true
+    ],
     ['approve', 'awaiting-decision', 'approved', true],
     ['reject', 'awaiting-decision', 'rejected', true],
     ['withdraw', 'submitted', 'withdrawn', false],
     ['withdraw-during-duly-made', 'duly-made', 'withdrawn', false],
-    ['withdraw-during-assessment', 'assessment-in-progress', 'withdrawn', false],
+    [
+      'withdraw-during-assessment',
+      'assessment-in-progress',
+      'withdrawn',
+      false
+    ],
     ['withdraw-during-decision', 'awaiting-decision', 'withdrawn', false]
   ])(
     'declares transition %s: %s -> %s (requires=%s)',

@@ -1,8 +1,57 @@
 ---
-description: "Use for any work in lib/epr-register-enrol-management-fe — the EPR Register case management Node.js 24 / Hapi 21 BFF frontend (GOV.UK Design System, Nunjucks templates, work-item module framework, yar-session auth, CDP deployment). Trigger words: management-fe, case management frontend, BFF, Hapi, Nunjucks, GOV.UK, govuk-frontend, work-items frontend, workItemModules, reAccreditationModule, registerDetailTemplate, createWorkItemActionsService, requireAssign, yar-session, stub auth, vitest, neostandard, hapi-secure-context, undici fetch, backend-api.js, BACKEND_API_URL, x-cdp-user-id."
-name: "EPR Management Frontend"
-tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, execute/runNotebookCell, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/createAndRunTask, execute/runInTerminal, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/terminalSelection, read/terminalLastCommand, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/textSearch, search/usages, web/fetch, web/githubRepo, browser/openBrowserPage, browser/readPage, browser/screenshotPage, browser/navigatePage, browser/clickElement, browser/dragElement, browser/hoverElement, browser/typeInPage, browser/runPlaywrightCode, browser/handleDialog, todo]
-argument-hint: "Describe the change you want to make in lib/epr-register-enrol-management-fe"
+description: 'Use for any work in lib/epr-register-enrol-management-fe — the EPR Register case management Node.js 24 / Hapi 21 BFF frontend (GOV.UK Design System, Nunjucks templates, work-item module framework, yar-session auth, CDP deployment). Trigger words: management-fe, case management frontend, BFF, Hapi, Nunjucks, GOV.UK, govuk-frontend, work-items frontend, workItemModules, reAccreditationModule, registerDetailTemplate, createWorkItemActionsService, requireAssign, yar-session, stub auth, vitest, neostandard, hapi-secure-context, undici fetch, backend-api.js, BACKEND_API_URL, x-cdp-user-id.'
+name: 'EPR Management Frontend'
+tools:
+  [
+    vscode/getProjectSetupInfo,
+    vscode/installExtension,
+    vscode/memory,
+    vscode/newWorkspace,
+    vscode/resolveMemoryFileUri,
+    vscode/runCommand,
+    vscode/vscodeAPI,
+    vscode/extensions,
+    vscode/askQuestions,
+    execute/runNotebookCell,
+    execute/getTerminalOutput,
+    execute/killTerminal,
+    execute/sendToTerminal,
+    execute/createAndRunTask,
+    execute/runInTerminal,
+    read/getNotebookSummary,
+    read/problems,
+    read/readFile,
+    read/viewImage,
+    read/terminalSelection,
+    read/terminalLastCommand,
+    agent/runSubagent,
+    edit/createDirectory,
+    edit/createFile,
+    edit/createJupyterNotebook,
+    edit/editFiles,
+    edit/editNotebook,
+    edit/rename,
+    search/changes,
+    search/codebase,
+    search/fileSearch,
+    search/listDirectory,
+    search/textSearch,
+    search/usages,
+    web/fetch,
+    web/githubRepo,
+    browser/openBrowserPage,
+    browser/readPage,
+    browser/screenshotPage,
+    browser/navigatePage,
+    browser/clickElement,
+    browser/dragElement,
+    browser/hoverElement,
+    browser/typeInPage,
+    browser/runPlaywrightCode,
+    browser/handleDialog,
+    todo
+  ]
+argument-hint: 'Describe the change you want to make in lib/epr-register-enrol-management-fe'
 ---
 
 You are the maintainer of `lib/epr-register-enrol-management-fe`, the EPR
@@ -17,7 +66,8 @@ before changing the work-item framework. The sibling backend at
 state/transition/task ids in lock-step.
 
 The repo-wide [`AGENTS.md`](../../AGENTS.md) (beads workflow, feature-branch
-+ PR workflow, non-interactive shell flags) still applies on top of this.
+
+- PR workflow, non-interactive shell flags) still applies on top of this.
 
 > **Never commit to `main`.** Always work on `feat/<issue-id>-slug` and open
 > a PR with `gh pr create --base main` when done.
@@ -140,11 +190,11 @@ The generic routes under `src/server/routes/work-items/` render any work
 item, regardless of type, by reading the projection returned by the
 backend. The same controller handles three operations:
 
-| Method | Route | Purpose |
-| --- | --- | --- |
-| `GET`  | `/work-items/{id}` | Detail view (envelope, tasks, actions). |
+| Method | Route                                      | Purpose                                                                    |
+| ------ | ------------------------------------------ | -------------------------------------------------------------------------- |
+| `GET`  | `/work-items/{id}`                         | Detail view (envelope, tasks, actions).                                    |
 | `POST` | `/work-items/{id}/tasks/{taskId}/complete` | Complete task → PRG redirect. Engine failure renders in place with banner. |
-| `POST` | `/work-items/{id}/actions/{actionId}` | Apply named action → PRG redirect. Same in-place error rendering. |
+| `POST` | `/work-items/{id}/actions/{actionId}`      | Apply named action → PRG redirect. Same in-place error rendering.          |
 
 Templates live next to the controller and use **only GOV.UK Design
 System macros — no JavaScript** (RA-94). Type-specific detail templates
