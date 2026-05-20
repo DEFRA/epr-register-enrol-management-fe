@@ -62,7 +62,7 @@ describe('makeShowApprovalController', () => {
   test('renders the interstitial for an eligible work item', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: { id: 'wi-1', stateId: 'assessment-in-progress' }
+      workItem: { id: 'wi-1', stateId: 'awaiting-decision' }
     })
     const { request, h, captured } = buildHapi()
     await makeShowApprovalController().handler(request, h)
@@ -93,7 +93,7 @@ describe('makeShowApprovalController', () => {
       ok: true,
       workItem: {
         id: 'wi-1',
-        stateId: 'assessment-in-progress',
+        stateId: 'awaiting-decision',
         assignedToId: 'someone-else'
       }
     })
@@ -117,7 +117,7 @@ describe('makeShowApprovalController', () => {
       ok: true,
       workItem: {
         id: 'wi-1',
-        stateId: 'assessment-in-progress',
+        stateId: 'awaiting-decision',
         assignedToId: 'u-1'
       }
     })

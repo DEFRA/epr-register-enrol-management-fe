@@ -460,7 +460,7 @@ function buildAssignmentViewModel({ workItem, request, user }) {
 //
 //  - `canApproveDirectly` — whether the primary "Approve" CTA should
 //    render. Mirrors the backend's eligibility checks: state must be
-//    `assessment-in-progress` and the caller must either be the current
+//    `awaiting-decision` and the caller must either be the current
 //    assignee or hold the decision-maker role. The backend remains
 //    authoritative; a forged POST is still rejected there.
 //  - `approveHref` — link target for the CTA.
@@ -472,7 +472,7 @@ function buildAssignmentViewModel({ workItem, request, user }) {
 // -----------------------------------------------------------------------
 
 const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
-const RE_ACCREDITATION_ELIGIBLE_STATE = 'assessment-in-progress'
+const RE_ACCREDITATION_ELIGIBLE_STATE = 'awaiting-decision'
 const RE_ACCREDITATION_TERMINAL_STATES = new Set([
   'approved',
   'rejected',
