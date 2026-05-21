@@ -188,7 +188,7 @@
               { text: item.submittedBy or "—" },
               { text: item.assigneeDisplayName or "Unassigned" },
               { html: slaTagHtml },
-              { text: item.archivedAt or "—" }
+              { text: item.archivedAt or "—", attributes: { "data-testid": "work-item-archived-at-" + item.id } }
             ]) %}
           {% endfor %}
 

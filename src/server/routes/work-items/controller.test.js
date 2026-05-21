@@ -705,4 +705,173 @@ describe('#workItemListController', () => {
       expect(result).toContain('Clear filters')
     })
   })
+
+  // ---------------------------------------------------------------- //
+  // RA-136 — Archive filter                                           //
+  // ---------------------------------------------------------------- //
+  describe('RA-136 archive filter', () => {
+    test('Forwards includeArchived=true to the backend when the query param is set', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ includeArchived: true })
+      )
+    })
+
+    test('Sends includeArchived=false when the query param is absent', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({ method: 'GET', url: '/work-items' })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ includeArchived: false })
+      )
+    })
+
+    test('hasFilters is true when includeArchived is set', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      expect(result).toContain('Clear filters')
+    })
+
+    test('Renders the Archived column header in the work-items table', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('Archived')
+    })
+
+    test('Renders archivedAt from extended-JSON $date shape as a human-readable date', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+              typeId: 'unknown-type',
+              stateId: 'approved',
+              submittedAt: '2026-04-01T10:00:00Z',
+              submittedBy: null,
+              payload: { archivedAt: { $date: '2026-05-01T12:00:00Z' } }
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      expect(result).toContain('1 May 2026')
+      expect(result).toContain(
+        'data-testid="work-item-archived-at-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"'
+      )
+    })
+
+    test('Renders archivedAt from a plain ISO-8601 string as a human-readable date', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+              typeId: 'unknown-type',
+              stateId: 'approved',
+              submittedAt: '2026-04-01T10:00:00Z',
+              submittedBy: null,
+              payload: { archivedAt: '2026-05-01T12:00:00Z' }
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      expect(result).toContain('1 May 2026')
+      expect(result).toContain(
+        'data-testid="work-item-archived-at-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"'
+      )
+    })
+
+    test('Renders an em-dash for items with no archivedAt value', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+              typeId: 'unknown-type',
+              stateId: 'submitted',
+              submittedAt: '2026-04-01T10:00:00Z',
+              submittedBy: null,
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      // The Nunjucks `item.archivedAt or "—"` renders a dash when null.
+      expect(result).toContain('—')
+    })
+
+    test('Pagination links preserve includeArchived so the filter survives page changes', async () => {
+      clearWorkItemRegistry()
+      registerWorkItemType({
+        id: 're-accreditation',
+        displayName: 'Re-accreditation',
+        initialState: { id: 'submitted', displayName: 'Submitted' },
+        states: [{ id: 'submitted', displayName: 'Submitted' }],
+        getTasksForState: () => []
+      })
+      getWorkItems.mockResolvedValue({
+        ok: true,
+        items: [
+          {
+            id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-04-01T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 100,
+        page: 1,
+        pageSize: 20
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true&filtersApplied=1'
+      })
+
+      expect(result).toMatch(/href="[^"]*includeArchived=true[^"]*"/)
+    })
+  })
 })
