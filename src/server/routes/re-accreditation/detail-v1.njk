@@ -22,6 +22,7 @@
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 {% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
+{% from "govuk/components/panel/macro.njk" import govukPanel %}
 
 {% block content %}
   <div data-testid="re-accreditation-detail">
@@ -34,7 +35,7 @@
 {% endblock %}
 
 {# RA-132. Primary "Approve" CTA — controller decorates the workItem     #}
-{# with `canApproveDirectly` after applying the assessment-in-progress   #}
+{# with `canApproveDirectly` after applying the awaiting-decision        #}
 {# + (assignee or decision-maker role) rules.                            #}
 {% block primaryActions %}
   {% if workItem.canApproveDirectly %}
@@ -43,7 +44,7 @@
       {{ govukButton({
         text: "Approve",
         href: workItem.approveHref,
-        attributes: { "data-testid": "re-accreditation-approve-button" }
+        attributes: { "data-testid": "action-approve" }
       }) }}
     </div>
   {% endif %}
@@ -69,12 +70,20 @@
   {% endif %}
 {% endblock %}
 
-{# RA-132. When the work item has been approved, surface the issued     #}
-{# accreditation metadata from the backend (`payload.accreditationId`,  #}
-{# `payload.accreditationStartDate`) in the envelope summary so it is   #}
-{# the first thing the user sees.                                       #}
+{# RA-132 / RA-133. When the work item has been approved, surface the  #}
+{# issued accreditation metadata from the backend                       #}
+{# (`payload.accreditationId`, `payload.accreditationStartDate`,        #}
+{# `payload.accreditationYear`) above the envelope summary as a         #}
+{# confirmation panel + a summary list so it is the first thing the     #}
+{# user sees after approving.                                           #}
 {% block summaryListExtra %}
   {% if workItem.decisionMetadata %}
+    {{ govukPanel({
+      titleText: "Accreditation issued",
+      html: 'Accreditation ID<br><strong data-testid="re-accreditation-approval-panel-id">'
+            + (workItem.decisionMetadata.accreditationId | escape) + '</strong>',
+      attributes: { "data-testid": "re-accreditation-approval-panel" }
+    }) }}
     {{ govukSummaryList({
       attributes: { "data-testid": "re-accreditation-decision-metadata" },
       rows: [
@@ -90,6 +99,14 @@
           value: {
             html: '<span data-testid="re-accreditation-accreditation-start-date">'
                   + (workItem.decisionMetadata.accreditationStartDateFormatted | escape)
+                  + '</span>'
+          }
+        },
+        {
+          key: { text: "Accreditation year" },
+          value: {
+            html: '<span data-testid="re-accreditation-accreditation-year">'
+                  + ((workItem.decisionMetadata.accreditationYear or '—') | escape)
                   + '</span>'
           }
         }

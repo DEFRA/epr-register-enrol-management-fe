@@ -62,13 +62,15 @@ describe('makeShowApprovalController', () => {
   test('renders the interstitial for an eligible work item', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: { id: 'wi-1', stateId: 'assessment-in-progress' }
+      workItem: { id: 'wi-1', stateId: 'awaiting-decision' }
     })
     const { request, h, captured } = buildHapi()
     await makeShowApprovalController().handler(request, h)
 
     expect(captured.viewPath).toBe('re-accreditation/approval/index')
-    expect(captured.viewCtx.formAction).toBe('/work-items/wi-1/approve')
+    expect(captured.viewCtx.formAction).toBe(
+      '/work-items/re-accreditation/wi-1/approve'
+    )
     expect(captured.viewCtx.cancelHref).toBe('/work-items/wi-1')
     expect(captured.viewCtx.decisionNoteMaxLength).toBeGreaterThan(0)
   })
@@ -93,7 +95,7 @@ describe('makeShowApprovalController', () => {
       ok: true,
       workItem: {
         id: 'wi-1',
-        stateId: 'assessment-in-progress',
+        stateId: 'awaiting-decision',
         assignedToId: 'someone-else'
       }
     })
@@ -117,7 +119,7 @@ describe('makeShowApprovalController', () => {
       ok: true,
       workItem: {
         id: 'wi-1',
-        stateId: 'assessment-in-progress',
+        stateId: 'awaiting-decision',
         assignedToId: 'u-1'
       }
     })
