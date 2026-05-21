@@ -1051,7 +1051,7 @@ describe('#workItemDetailController', () => {
       expect(result).toEqual(expect.stringContaining('not-a-real-date'))
     })
 
-    test('hides the year row content when only id/start date are present', async () => {
+    test('renders year row with em-dash fallback when accreditationYear absent', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,

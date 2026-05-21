@@ -532,7 +532,7 @@ function buildDecisionMetadata(workItem) {
   if (
     !accreditationId &&
     !accreditationStartDate &&
-    accreditationYear == null
+    accreditationYear === null
   ) {
     return null
   }
