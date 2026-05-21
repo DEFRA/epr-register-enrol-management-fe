@@ -35,7 +35,7 @@
 {% endblock %}
 
 {# RA-132. Primary "Approve" CTA — controller decorates the workItem     #}
-{# with `canApproveDirectly` after applying the assessment-in-progress   #}
+{# with `canApproveDirectly` after applying the awaiting-decision        #}
 {# + (assignee or decision-maker role) rules.                            #}
 {% block primaryActions %}
   {% if workItem.canApproveDirectly %}
@@ -44,7 +44,7 @@
       {{ govukButton({
         text: "Approve",
         href: workItem.approveHref,
-        attributes: { "data-testid": "re-accreditation-approve-button" }
+        attributes: { "data-testid": "action-approve" }
       }) }}
     </div>
   {% endif %}

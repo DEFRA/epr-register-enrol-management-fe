@@ -472,7 +472,7 @@ function buildAssignmentViewModel({ workItem, request, user }) {
 // -----------------------------------------------------------------------
 
 const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
-const RE_ACCREDITATION_ELIGIBLE_STATE = 'assessment-in-progress'
+const RE_ACCREDITATION_ELIGIBLE_STATE = 'awaiting-decision'
 const RE_ACCREDITATION_TERMINAL_STATES = new Set([
   'approved',
   'rejected',

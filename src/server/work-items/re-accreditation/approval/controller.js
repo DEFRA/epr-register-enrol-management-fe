@@ -31,7 +31,7 @@ const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
 
 const PAGE_TITLE = 'Approve this re-accreditation determination'
-const ELIGIBLE_STATE_ID = 'assessment-in-progress'
+const ELIGIBLE_STATE_ID = 'awaiting-decision'
 
 const logger = createLogger()
 

@@ -1080,4 +1080,100 @@ describe('#workItemDetailController', () => {
       expect(result).toEqual(expect.stringContaining('>—<'))
     })
   })
+
+  describe('RA-133 approve CTA eligibility (canApproveDirectly)', () => {
+    function registerReaccreditationWithDetailV1() {
+      registerReaccreditation()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+    }
+
+    test('renders the Approve CTA for a decision-maker when item is in awaiting-decision state', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'awaiting-decision' })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'decision-maker' }
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-approve"')
+      )
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="re-accreditation-approve-cta"')
+      )
+    })
+
+    test('does not render the Approve CTA when item is NOT in awaiting-decision state', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'submitted' })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'decision-maker' }
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-approve"')
+      )
+    })
+
+    test('does not render the Approve CTA for a standard user who is not the assignee', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          assignedToId: 'someone-else'
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'standard' }
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-approve"')
+      )
+    })
+
+    test('renders the Approve CTA when caller is the assignee even without decision-maker role', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          assignedToId: 'test-standard-id'
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'standard' }
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-approve"')
+      )
+    })
+  })
 })
