@@ -48,6 +48,7 @@ export const workItemListController = {
       assigneeId: filters.backendAssigneeId,
       unassigned: filters.backendUnassignedOnly,
       nations: filters.nations,
+      includeArchived: filters.includeArchived,
       page: filters.page,
       pageSize: DEFAULT_PAGE_SIZE,
       user
@@ -87,7 +88,8 @@ export const workItemListController = {
         filters.stateIds.length > 0 ||
         filters.search !== '' ||
         filters.assigneeMode !== ASSIGNEE_FILTER_ANY ||
-        filters.nations.length > 0,
+        filters.nations.length > 0 ||
+        filters.includeArchived,
       filtersApplied: filters.filtersApplied
     })
   }
@@ -137,6 +139,9 @@ function readFilters(query, user) {
   // the user explicitly cleared them (RA-125).
   const filtersApplied = query.filtersApplied === '1'
 
+  const includeArchived =
+    query.includeArchived === 'true' || query.includeArchived === '1'
+
   return {
     typeIds,
     stateIds,
@@ -147,6 +152,7 @@ function readFilters(query, user) {
     backendAssigneeId,
     backendUnassignedOnly,
     nations: resolveNations(query.nation, user, filtersApplied),
+    includeArchived,
     filtersApplied
   }
 }
@@ -271,6 +277,9 @@ function decorate(item) {
       ? formatSlaRemaining(item.slaRemaining)
       : null
 
+  const archivedAtRaw = item.payload?.archivedAt
+  const archivedAt = formatArchivedAt(archivedAtRaw)
+
   return {
     ...item,
     typeDisplayName: type?.displayName ?? item.typeId,
@@ -279,8 +288,34 @@ function decorate(item) {
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
     slaTagText: slaTag?.text ?? null,
     slaTagClass: slaTag?.classes ?? null,
-    slaRemainingText
+    slaRemainingText,
+    archivedAt
   }
+}
+
+/**
+ * Format the archivedAt value from the payload. The backend serialises
+ * BsonDateTime values in relaxed extended JSON as `{ "$date": "ISO-8601" }`,
+ * so we handle both that shape and a plain ISO-8601 string.
+ */
+function formatArchivedAt(value) {
+  if (!value) return null
+  const iso =
+    typeof value === 'object' &&
+    value !== null &&
+    typeof value.$date === 'string'
+      ? value.$date
+      : typeof value === 'string'
+        ? value
+        : null
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })
 }
 
 function buildTypeOptions(selectedTypeIds) {
@@ -397,6 +432,7 @@ function buildHref(filters) {
   // Carry the form-submission marker through pagination/back-links so
   // role-based defaults don't silently re-apply mid-paging (RA-125).
   if (filters.filtersApplied) params.append('filtersApplied', '1')
+  if (filters.includeArchived) params.append('includeArchived', 'true')
   if (filters.search) params.append('search', filters.search)
   if (filters.assigneeMode && filters.assigneeMode !== ASSIGNEE_FILTER_ANY) {
     params.append('assigneeMode', filters.assigneeMode)

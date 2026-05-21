@@ -116,6 +116,21 @@
           items: assigneeRadioItems
         }) }}
 
+        {{ govukCheckboxes({
+          idPrefix: "filter-include-archived",
+          name: "includeArchived",
+          classes: "govuk-checkboxes--small",
+          fieldset: { legend: { text: "Archived", classes: "govuk-fieldset__legend--s" } },
+          items: [
+            {
+              value: "true",
+              text: "Show archived",
+              checked: filters.includeArchived,
+              attributes: { "data-testid": "work-items-filter-include-archived" }
+            }
+          ]
+        }) }}
+
         <div class="govuk-button-group">
           {{ govukButton({ text: "Apply filters", attributes: { "data-testid": "work-items-filter-apply" } }) }}
           {% if hasFilters %}
@@ -172,7 +187,8 @@
               { text: item.submittedAt },
               { text: item.submittedBy or "—" },
               { text: item.assigneeDisplayName or "Unassigned" },
-              { html: slaTagHtml }
+              { html: slaTagHtml },
+              { text: item.archivedAt or "—" }
             ]) %}
           {% endfor %}
 
@@ -184,7 +200,8 @@
               { text: "Submitted" },
               { text: "Submitted by" },
               { text: "Assigned to" },
-              { text: "SLA" }
+              { text: "SLA" },
+              { text: "Archived" }
             ],
             rows: rows,
             attributes: { "data-testid": "work-items-table" }
