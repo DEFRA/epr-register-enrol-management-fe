@@ -40,7 +40,7 @@ function detailHref(id) {
 }
 
 function approveHref(id) {
-  return `${detailHref(id)}/approve`
+  return `/work-items/re-accreditation/${encodeURIComponent(id)}/approve`
 }
 
 function breadcrumbs(id) {

@@ -68,7 +68,9 @@ describe('makeShowApprovalController', () => {
     await makeShowApprovalController().handler(request, h)
 
     expect(captured.viewPath).toBe('re-accreditation/approval/index')
-    expect(captured.viewCtx.formAction).toBe('/work-items/wi-1/approve')
+    expect(captured.viewCtx.formAction).toBe(
+      '/work-items/re-accreditation/wi-1/approve'
+    )
     expect(captured.viewCtx.cancelHref).toBe('/work-items/wi-1')
     expect(captured.viewCtx.decisionNoteMaxLength).toBeGreaterThan(0)
   })
