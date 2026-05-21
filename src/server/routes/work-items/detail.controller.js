@@ -521,8 +521,19 @@ function buildDecisionMetadata(workItem) {
   const payload = workItem.payload ?? {}
   const accreditationId = payload.accreditationId ?? null
   const accreditationStartDate = payload.accreditationStartDate ?? null
+  // RA-133: backend now stamps the accreditation year alongside the id
+  // and start date so the UI can display the year independently of the
+  // (locally-formatted) start date.
+  const accreditationYear =
+    typeof payload.accreditationYear === 'number'
+      ? payload.accreditationYear
+      : null
 
-  if (!accreditationId && !accreditationStartDate) {
+  if (
+    !accreditationId &&
+    !accreditationStartDate &&
+    accreditationYear == null
+  ) {
     return null
   }
 
@@ -548,7 +559,8 @@ function buildDecisionMetadata(workItem) {
   return {
     accreditationId: accreditationId ?? '—',
     accreditationStartDate,
-    accreditationStartDateFormatted
+    accreditationStartDateFormatted,
+    accreditationYear
   }
 }
 

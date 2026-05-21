@@ -953,4 +953,131 @@ describe('#workItemDetailController', () => {
       )
     })
   })
+
+  describe('RA-133 decision metadata rendering', () => {
+    function registerReaccreditationWithDetailV1() {
+      registerReaccreditation()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+    }
+
+    test('renders the confirmation panel, ID, formatted start date and year when approved', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'approved',
+          payload: {
+            accreditationId: 'ACC-2027-P-AB12CD34',
+            accreditationStartDate: '2027-01-01',
+            accreditationYear: 2027
+          }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="re-accreditation-approval-panel"')
+      )
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="re-accreditation-approval-panel-id"'
+        )
+      )
+      expect(result).toEqual(expect.stringContaining('ACC-2027-P-AB12CD34'))
+      expect(result).toEqual(expect.stringContaining('1 January 2027'))
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="re-accreditation-accreditation-year"'
+        )
+      )
+      expect(result).toEqual(expect.stringContaining('>2027<'))
+    })
+
+    test('omits decision metadata when payload has no accreditation fields', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'approved',
+          payload: { applicantName: 'Acme' }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="re-accreditation-approval-panel"')
+      )
+      expect(result).not.toEqual(
+        expect.stringContaining(
+          'data-testid="re-accreditation-decision-metadata"'
+        )
+      )
+    })
+
+    test('falls back to the raw start date when it cannot be parsed', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'approved',
+          payload: {
+            accreditationId: 'ACC-2027-P-AB12CD34',
+            accreditationStartDate: 'not-a-real-date',
+            accreditationYear: 2027
+          }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(expect.stringContaining('not-a-real-date'))
+    })
+
+    test('hides the year row content when only id/start date are present', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'approved',
+          payload: {
+            accreditationId: 'ACC-2027-P-AB12CD34',
+            accreditationStartDate: '2027-01-01'
+          }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      // The row renders but the value falls back to an em-dash because
+      // the backend has not stamped a numeric accreditationYear yet.
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="re-accreditation-accreditation-year"'
+        )
+      )
+      expect(result).toEqual(expect.stringContaining('>—<'))
+    })
+  })
 })
