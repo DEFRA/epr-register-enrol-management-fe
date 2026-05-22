@@ -144,6 +144,7 @@ export async function getWorkItems({
   search,
   assigneeId,
   unassigned,
+  includeArchived,
   page,
   pageSize,
   user = null,
@@ -158,6 +159,7 @@ export async function getWorkItems({
     search,
     assigneeId,
     unassigned,
+    includeArchived,
     page,
     pageSize
   })
@@ -193,7 +195,17 @@ export async function getWorkItems({
 
 function buildWorkItemsUrl(
   baseUrl,
-  { typeIds, stateIds, nations, search, assigneeId, unassigned, page, pageSize }
+  {
+    typeIds,
+    stateIds,
+    nations,
+    search,
+    assigneeId,
+    unassigned,
+    includeArchived,
+    page,
+    pageSize
+  }
 ) {
   const root = `${baseUrl.replace(/\/$/, '')}/work-items`
   const params = new URLSearchParams()
@@ -215,6 +227,9 @@ function buildWorkItemsUrl(
   }
   if (unassigned === true) {
     params.append('unassigned', 'true')
+  }
+  if (includeArchived === true) {
+    params.append('includeArchived', 'true')
   }
   if (page != null && page !== '') params.append('page', String(page))
   if (pageSize != null && pageSize !== '') {
