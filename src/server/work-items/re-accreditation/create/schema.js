@@ -58,6 +58,21 @@ export const createReAccreditationSchema = Joi.object({
       'string.pattern.base':
         'Application reference can only include letters, numbers and hyphens'
     }),
+  // RA-172: pre-filled, editable email captured against the work item.
+  // Joi's built-in email rule is good enough for the demo; the operator's
+  // real identity service will do strict checking downstream.
+  email: Joi.string()
+    .trim()
+    .required()
+    .max(254)
+    .email({ tlds: false })
+    .messages({
+      'any.required': 'Enter an email address',
+      'string.empty': 'Enter an email address',
+      'string.max': 'Email address must be 254 characters or fewer',
+      'string.email':
+        'Enter an email address in the correct format, like name@example.com'
+    }),
   organisationName: Joi.string().trim().required().max(200).messages({
     'any.required': 'Enter the organisation name',
     'string.empty': 'Enter the organisation name',

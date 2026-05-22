@@ -41,11 +41,25 @@
           id: "field-applicationReference",
           name: "applicationReference",
           label: { text: "Application reference", classes: "govuk-label--s" },
-          hint: { text: "The unique reference issued for this re-accreditation" },
+          hint: { text: "Auto-generated for this re-accreditation. You cannot edit this value." },
           value: values.applicationReference,
           autocomplete: "off",
           spellcheck: false,
+          attributes: { readonly: true, "data-testid": "create-work-item-applicationReference" },
           errorMessage: { text: fieldErrors["applicationReference"] } if fieldErrors["applicationReference"] else null
+        }) }}
+
+        {{ govukInput({
+          id: "field-email",
+          name: "email",
+          type: "email",
+          label: { text: "Email address", classes: "govuk-label--s" },
+          hint: { text: "We'll use this to contact you about the application" },
+          value: values.email,
+          autocomplete: "email",
+          spellcheck: false,
+          attributes: { "data-testid": "create-work-item-email" },
+          errorMessage: { text: fieldErrors["email"] } if fieldErrors["email"] else null
         }) }}
 
         {{ govukInput({

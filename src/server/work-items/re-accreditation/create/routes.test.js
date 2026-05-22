@@ -31,6 +31,7 @@ const { createWorkItem, getWorkItem, getWorkItems } =
 const validForm = () =>
   [
     'applicationReference=REF-1',
+    'email=test%40defra.gov.uk',
     'organisationName=Acme',
     'siteAddressLine1=1%20Road',
     'siteAddressLine2=',
@@ -75,6 +76,40 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
     )
   })
 
+  test('GET seeds a random application reference (readonly) and default email (RA-172)', async () => {
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: '/work-items/re-accreditation/new'
+    })
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toMatch(/value="RA-\d{9}"/)
+    expect(result).toEqual(expect.stringContaining('readonly'))
+    expect(result).toEqual(expect.stringContaining('value="test@defra.gov.uk"'))
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="create-work-item-email"')
+    )
+  })
+
+  test('POST with invalid email returns 400 with inline error (RA-172)', async () => {
+    const payload = validForm().replace(
+      'email=test%40defra.gov.uk',
+      'email=not-an-email'
+    )
+    const res = await injectWithCrumb(server, {
+      method: 'POST',
+      url: '/work-items/re-accreditation/new',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.result).toEqual(
+      expect.stringContaining(
+        'Enter an email address in the correct format, like name@example.com'
+      )
+    )
+    expect(createWorkItem).not.toHaveBeenCalled()
+  })
+
   test('POST with empty body returns 400 with the error summary', async () => {
     const res = await injectWithCrumb(server, {
       method: 'POST',
@@ -109,6 +144,7 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
     const arg = createWorkItem.mock.calls[0][0]
     expect(arg.typeId).toBe('re-accreditation')
     expect(arg.payload.applicationReference).toBe('REF-1')
+    expect(arg.payload.email).toBe('test@defra.gov.uk')
     expect(arg.payload.siteAddress).toEqual({
       line1: '1 Road',
       line2: '',
