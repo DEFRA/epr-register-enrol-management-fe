@@ -57,7 +57,7 @@ describe('#makeCreateWorkItemController (RA-127, RA-172)', () => {
     expect(captured.code).toBe(200)
     expect(captured.viewModel.heading).toBe('Create a work item')
     expect(captured.viewModel.values.applicationReference).toBe('RA-GEN-1')
-    expect(captured.viewModel.values.email).toBe(DEFAULT_EMAIL)
+    expect(captured.viewModel.values.operatorEmail).toBe(DEFAULT_EMAIL)
     expect(captured.viewModel.values.organisationName).toBe(
       'Acme Recycling Ltd'
     )
@@ -85,7 +85,7 @@ describe('#makeCreateWorkItemController (RA-127, RA-172)', () => {
     const ctl = makeCreateWorkItemController()
     const { h, captured } = makeH()
     ctl.handler(makeRequest(), h)
-    expect(captured.viewModel.values.email).toBe(DEFAULT_EMAIL)
+    expect(captured.viewModel.values.operatorEmail).toBe(DEFAULT_EMAIL)
     expect(captured.viewModel.values.applicationReference).toMatch(/^RA-\d{9}$/)
   })
 
@@ -96,7 +96,7 @@ describe('#makeCreateWorkItemController (RA-127, RA-172)', () => {
     })
     const { h, captured } = makeH()
     ctl.handler(makeRequest(), h)
-    expect(captured.viewModel.values.email).toBe('override@example.org')
+    expect(captured.viewModel.values.operatorEmail).toBe('override@example.org')
   })
 })
 

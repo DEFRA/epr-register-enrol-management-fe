@@ -51,15 +51,15 @@
 
         {{ govukInput({
           id: "field-email",
-          name: "email",
+          name: "operatorEmail",
           type: "email",
           label: { text: "Email address", classes: "govuk-label--s" },
           hint: { text: "We'll use this to contact you about the application" },
-          value: values.email,
+          value: values.operatorEmail,
           autocomplete: "email",
           spellcheck: false,
           attributes: { "data-testid": "create-work-item-email" },
-          errorMessage: { text: fieldErrors["email"] } if fieldErrors["email"] else null
+          errorMessage: { text: fieldErrors["operatorEmail"] } if fieldErrors["operatorEmail"] else null
         }) }}
 
         {{ govukInput({
