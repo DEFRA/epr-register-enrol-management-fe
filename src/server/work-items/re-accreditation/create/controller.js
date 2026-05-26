@@ -6,6 +6,31 @@ import { createReAccreditationService } from './service.js'
 const VIEW_PATH = 're-accreditation/create/index'
 const PAGE_TITLE = 'Create a work item'
 
+/**
+ * Default email pre-filled into the create form (RA-172). The field is
+ * editable; this is just a sensible demo seed so journey tests do not
+ * have to type one in every run.
+ */
+export const DEFAULT_EMAIL = 'test@defra.gov.uk'
+
+/**
+ * RA-172: build a fresh, random application reference for each GET of
+ * the create form. The field is rendered read-only so the user cannot
+ * tweak it — the value still travels back to the backend on POST via a
+ * standard input element (read-only inputs are submitted; disabled ones
+ * are not, which would defeat the purpose).
+ *
+ * Format: `RA-<9-digit-number>` — long enough that collisions across a
+ * demo session are vanishingly rare, and within the schema's 50-char /
+ * `[A-Za-z0-9-]+` constraints.
+ */
+export function generateApplicationReference() {
+  const min = 100_000_000
+  const max = 999_999_999
+  const n = Math.floor(Math.random() * (max - min + 1)) + min
+  return `RA-${n}`
+}
+
 const BREADCRUMBS = [
   { text: 'Home', href: '/' },
   { text: 'Work items', href: '/work-items' },
@@ -31,6 +56,7 @@ function renderForm(
       breadcrumbs: BREADCRUMBS,
       values: {
         applicationReference: values.applicationReference ?? '',
+        email: values.email ?? '',
         organisationName: values.organisationName ?? '',
         siteAddress: {
           line1: site.line1 ?? '',
@@ -51,6 +77,7 @@ function renderForm(
 
 const FIELD_ORDER = [
   'applicationReference',
+  'email',
   'organisationName',
   'siteAddress.line1',
   'siteAddress.line2',
@@ -75,9 +102,13 @@ function buildErrorSummary(fieldErrors) {
 
 /**
  * GET /work-items/re-accreditation/new — render the create form pre-filled with demo data.
+ *
+ * RA-172: `applicationReference` is generated per-request (read-only in
+ * the template) and `email` is seeded with the default operator address.
+ * Both can be overridden by the caller in tests via `generateReference`
+ * and `defaultEmail` injection.
  */
 const DEMO_VALUES = {
-  applicationReference: 'RA-2024-00123',
   organisationName: 'Acme Recycling Ltd',
   siteAddress: {
     line1: '12 Industrial Way',
@@ -89,10 +120,19 @@ const DEMO_VALUES = {
   tonnageBand: '500-5000'
 }
 
-export function makeCreateWorkItemController() {
+export function makeCreateWorkItemController({
+  generateReference = generateApplicationReference,
+  defaultEmail = DEFAULT_EMAIL
+} = {}) {
   return {
     handler(_request, h) {
-      return renderForm(h, { values: DEMO_VALUES })
+      return renderForm(h, {
+        values: {
+          ...DEMO_VALUES,
+          applicationReference: generateReference(),
+          email: defaultEmail
+        }
+      })
     }
   }
 }
@@ -107,6 +147,7 @@ function reshapeFormPayload(payload) {
   const p = payload ?? {}
   return {
     applicationReference: p.applicationReference,
+    email: p.email,
     organisationName: p.organisationName,
     siteAddress: {
       line1: p.siteAddressLine1,

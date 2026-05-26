@@ -1,6 +1,8 @@
 import { describe, expect, test, vi } from 'vitest'
 
 import {
+  DEFAULT_EMAIL,
+  generateApplicationReference,
   makeCreateWorkItemController,
   makeSubmitCreateWorkItemController
 } from './controller.js'
@@ -44,15 +46,18 @@ function makeRequest({
   }
 }
 
-describe('#makeCreateWorkItemController (RA-127)', () => {
-  test('GET renders the form pre-filled with demo values', () => {
-    const ctl = makeCreateWorkItemController()
+describe('#makeCreateWorkItemController (RA-127, RA-172)', () => {
+  test('GET renders the form with a generated reference and default email', () => {
+    const ctl = makeCreateWorkItemController({
+      generateReference: () => 'RA-GEN-1'
+    })
     const { h, captured } = makeH()
     ctl.handler(makeRequest(), h)
     expect(captured.view).toBe('re-accreditation/create/index')
     expect(captured.code).toBe(200)
     expect(captured.viewModel.heading).toBe('Create a work item')
-    expect(captured.viewModel.values.applicationReference).toBe('RA-2024-00123')
+    expect(captured.viewModel.values.applicationReference).toBe('RA-GEN-1')
+    expect(captured.viewModel.values.email).toBe(DEFAULT_EMAIL)
     expect(captured.viewModel.values.organisationName).toBe(
       'Acme Recycling Ltd'
     )
@@ -74,6 +79,39 @@ describe('#makeCreateWorkItemController (RA-127)', () => {
     ).toBe(true)
     expect(captured.viewModel.fieldErrors).toEqual({})
     expect(captured.viewModel.errorSummary).toBeNull()
+  })
+
+  test('uses defaults when no factory options are passed', () => {
+    const ctl = makeCreateWorkItemController()
+    const { h, captured } = makeH()
+    ctl.handler(makeRequest(), h)
+    expect(captured.viewModel.values.email).toBe(DEFAULT_EMAIL)
+    expect(captured.viewModel.values.applicationReference).toMatch(/^RA-\d{9}$/)
+  })
+
+  test('accepts a custom defaultEmail override', () => {
+    const ctl = makeCreateWorkItemController({
+      generateReference: () => 'RA-X',
+      defaultEmail: 'override@example.org'
+    })
+    const { h, captured } = makeH()
+    ctl.handler(makeRequest(), h)
+    expect(captured.viewModel.values.email).toBe('override@example.org')
+  })
+})
+
+describe('#generateApplicationReference (RA-172)', () => {
+  test('returns a value matching the RA-<9 digit> pattern', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(generateApplicationReference()).toMatch(/^RA-\d{9}$/)
+    }
+  })
+
+  test('returns different values across calls (random)', () => {
+    const set = new Set()
+    for (let i = 0; i < 20; i++) set.add(generateApplicationReference())
+    // Vanishingly unlikely 20 random 9-digit numbers all collide.
+    expect(set.size).toBeGreaterThan(1)
   })
 })
 
