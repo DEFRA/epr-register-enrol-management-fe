@@ -31,7 +31,7 @@ const { createWorkItem, getWorkItem, getWorkItems } =
 const validForm = () =>
   [
     'applicationReference=REF-1',
-    'email=test%40defra.gov.uk',
+    'operatorEmail=test%40defra.gov.uk',
     'organisationName=Acme',
     'siteAddressLine1=1%20Road',
     'siteAddressLine2=',
@@ -92,8 +92,8 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
 
   test('POST with invalid email returns 400 with inline error (RA-172)', async () => {
     const payload = validForm().replace(
-      'email=test%40defra.gov.uk',
-      'email=not-an-email'
+      'operatorEmail=test%40defra.gov.uk',
+      'operatorEmail=not-an-email'
     )
     const res = await injectWithCrumb(server, {
       method: 'POST',
@@ -144,7 +144,7 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
     const arg = createWorkItem.mock.calls[0][0]
     expect(arg.typeId).toBe('re-accreditation')
     expect(arg.payload.applicationReference).toBe('REF-1')
-    expect(arg.payload.email).toBe('test@defra.gov.uk')
+    expect(arg.payload.operatorEmail).toBe('test@defra.gov.uk')
     expect(arg.payload.siteAddress).toEqual({
       line1: '1 Road',
       line2: '',

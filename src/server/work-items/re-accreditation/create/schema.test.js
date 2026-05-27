@@ -9,7 +9,7 @@ import {
 
 const validForm = () => ({
   applicationReference: 'REF-001',
-  email: 'test@defra.gov.uk',
+  operatorEmail: 'test@defra.gov.uk',
   organisationName: 'Acme Recycling Ltd',
   siteAddress: {
     line1: '1 Test Way',
@@ -53,7 +53,7 @@ describe('#createReAccreditationSchema (RA-127)', () => {
     expect(error).toBeDefined()
     const errors = joiDetailsToFieldErrors(error.details)
     expect(errors.applicationReference).toBe('Enter the application reference')
-    expect(errors.email).toBe('Enter an email address')
+    expect(errors.operatorEmail).toBe('Enter an email address')
     expect(errors.organisationName).toBe('Enter the organisation name')
     expect(errors.material).toBe('Select a material')
     expect(errors.tonnageBand).toBe('Select a tonnage band')
@@ -72,9 +72,9 @@ describe('#createReAccreditationSchema (RA-127)', () => {
       'has space!',
       'Application reference can only include letters, numbers and hyphens'
     ],
-    ['email', '', 'Enter an email address'],
+    ['operatorEmail', '', 'Enter an email address'],
     [
-      'email',
+      'operatorEmail',
       'not-an-email',
       'Enter an email address in the correct format, like name@example.com'
     ],
@@ -128,13 +128,13 @@ describe('#createReAccreditationSchema (RA-127)', () => {
     // 60-char local part + '@' + 195-char domain = 256 chars total but
     // syntactically valid, so the `string.max` rule is what fires.
     const form = validForm()
-    form.email = `${'a'.repeat(60)}@${'b'.repeat(191)}.uk`
+    form.operatorEmail = `${'a'.repeat(60)}@${'b'.repeat(191)}.uk`
     const { error } = createReAccreditationSchema.validate(form, {
       abortEarly: false
     })
     expect(error).toBeDefined()
     const messages = error.details
-      .filter((d) => d.path[0] === 'email')
+      .filter((d) => d.path[0] === 'operatorEmail')
       .map((d) => d.message)
     expect(messages).toContain('Email address must be 254 characters or fewer')
   })

@@ -56,7 +56,7 @@ function renderForm(
       breadcrumbs: BREADCRUMBS,
       values: {
         applicationReference: values.applicationReference ?? '',
-        email: values.email ?? '',
+        operatorEmail: values.operatorEmail ?? '',
         organisationName: values.organisationName ?? '',
         siteAddress: {
           line1: site.line1 ?? '',
@@ -77,7 +77,7 @@ function renderForm(
 
 const FIELD_ORDER = [
   'applicationReference',
-  'email',
+  'operatorEmail',
   'organisationName',
   'siteAddress.line1',
   'siteAddress.line2',
@@ -104,7 +104,7 @@ function buildErrorSummary(fieldErrors) {
  * GET /work-items/re-accreditation/new — render the create form pre-filled with demo data.
  *
  * RA-172: `applicationReference` is generated per-request (read-only in
- * the template) and `email` is seeded with the default operator address.
+ * the template) and `operatorEmail` is seeded with the default operator address.
  * Both can be overridden by the caller in tests via `generateReference`
  * and `defaultEmail` injection.
  */
@@ -130,7 +130,7 @@ export function makeCreateWorkItemController({
         values: {
           ...DEMO_VALUES,
           applicationReference: generateReference(),
-          email: defaultEmail
+          operatorEmail: defaultEmail
         }
       })
     }
@@ -147,7 +147,7 @@ function reshapeFormPayload(payload) {
   const p = payload ?? {}
   return {
     applicationReference: p.applicationReference,
-    email: p.email,
+    operatorEmail: p.operatorEmail,
     organisationName: p.organisationName,
     siteAddress: {
       line1: p.siteAddressLine1,

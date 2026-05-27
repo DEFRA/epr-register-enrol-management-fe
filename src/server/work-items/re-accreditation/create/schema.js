@@ -61,7 +61,7 @@ export const createReAccreditationSchema = Joi.object({
   // RA-172: pre-filled, editable email captured against the work item.
   // Joi's built-in email rule is good enough for the demo; the operator's
   // real identity service will do strict checking downstream.
-  email: Joi.string()
+  operatorEmail: Joi.string()
     .trim()
     .required()
     .max(254)
