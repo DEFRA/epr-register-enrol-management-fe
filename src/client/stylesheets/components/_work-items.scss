@@ -10,12 +10,6 @@
 
 // Wider page container for the work items list.
 //
-// The default govuk-width-container caps at 960 px. On wider monitors this
-// leaves large empty gutters on both sides. Applying this extra class to the
-// container (passed from the controller so govuk/template.njk picks it up)
-// raises the cap to 1200 px while keeping the standard margin: 0 auto
-// centring so the content stays symmetrically placed on the screen.
-
 .app-width-container--wide {
   max-width: 1450px;
 }
