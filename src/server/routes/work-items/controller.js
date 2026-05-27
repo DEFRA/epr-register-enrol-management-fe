@@ -66,6 +66,11 @@ export const workItemListController = {
       pageTitle: 'Work items',
       heading: 'Work items',
       breadcrumbs: [{ text: 'Home', href: '/' }, { text: 'Work items' }],
+      // Widen the govuk-width-container to 1200 px so the filter sidebar and
+      // table have enough room and the page centres symmetrically on screen.
+      // Passed here (not via {% set %} in the template) so hapi-vision injects
+      // it directly into the Nunjucks context, where govuk/template.njk reads it.
+      containerClasses: 'app-width-container--wide',
       ok: result.ok,
       error: result.error,
       items,

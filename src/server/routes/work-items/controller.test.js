@@ -119,6 +119,110 @@ describe('#workItemListController', () => {
     expect(result).toEqual(expect.stringContaining('govuk-tag govuk-tag--blue'))
   })
 
+  // ---------------------------------------------------------------- //
+  // Work items list usability improvements                            //
+  //                                                                  //
+  // AC1: "ID" column header renamed to "Application ref"             //
+  // AC2: Submitted date rendered in GDS date-time format             //
+  // AC3: Table is in a govuk-grid-column-full section                //
+  // ---------------------------------------------------------------- //
+  test('Renders "Application ref" as the first column header (not "ID")', async () => {
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('Application ref')
+    // The old "ID" header must not appear as an isolated table heading.
+    // (The string "ID" may still appear inside GDS component markup, so
+    // we specifically check the govukTable head cell text.)
+    const tableSection = result.slice(
+      result.indexOf('data-testid="work-items-table"')
+    )
+    expect(tableSection).not.toMatch(/<th[^>]*>\s*ID\s*<\/th>/)
+  })
+
+  test('Renders the submitted timestamp in GDS date-time format', async () => {
+    // Use a January date (UK GMT = UTC+0) for timezone-stable assertions.
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    // Formatted GDS date-time must appear; raw ISO string must not.
+    expect(result).toContain('15 January 2026 at 10:00am')
+    expect(result).not.toContain('2026-01-15T10:00:00Z')
+  })
+
+  test('Renders with a wider container, narrow filter sidebar left and wider table right', async () => {
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-1111-1111-1111-111111111111',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    // Controller must inject containerClasses so govuk/template.njk widens
+    // the govuk-width-container from 960 px to 1200 px, giving equal margins
+    // on both sides of the screen and more room for the table.
+    expect(result).toContain('app-width-container--wide')
+    // Filter sidebar uses the narrower one-quarter column (25% of 1200 px = 300 px).
+    expect(result).toContain('govuk-grid-column-one-quarter')
+    // Results area uses three-quarters (75% of 1200 px ≈ 900 px).
+    expect(result).toContain('govuk-grid-column-three-quarters')
+    // Filter form must appear before the results table in document order.
+    const filterIdx = result.indexOf('data-testid="work-items-filter-form"')
+    const tableIdx = result.indexOf('data-testid="work-items-table"')
+    expect(filterIdx).toBeGreaterThan(-1)
+    expect(tableIdx).toBeGreaterThan(filterIdx)
+  })
+
   test('Maps each registered state id to its GOV.UK tag colour', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
