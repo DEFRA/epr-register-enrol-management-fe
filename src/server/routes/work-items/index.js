@@ -17,7 +17,6 @@ import {
 import {
   makeShowExtendController,
   makeSubmitExtendController,
-  makeConfirmExtendController,
   makeShowOverrideController,
   makeSubmitOverrideController
 } from './sla.controller.js'
@@ -151,22 +150,6 @@ export const workItems = {
             }
           },
           ...makeSubmitExtendController()
-        },
-        {
-          // RA-131. Two-step extend flow: this is the "confirm" step that
-          // actually applies the change. The first POST renders a review
-          // page; this one forwards to the backend.
-          method: 'POST',
-          path: '/work-items/{id}/sla/extend/confirm',
-          options: {
-            ...requireTeamLeader,
-            payload: {
-              parse: true,
-              allow: 'application/x-www-form-urlencoded',
-              maxBytes: 10 * 1024
-            }
-          },
-          ...makeConfirmExtendController()
         },
         {
           // RA-131. Override SLA clock. Gated to team-leader.

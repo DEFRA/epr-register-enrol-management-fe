@@ -19,7 +19,7 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   overrideWorkItemSla: vi.fn()
 }))
 
-const { extendWorkItemSla, overrideWorkItemSla, getWorkItem } =
+const { extendWorkItemSla, overrideWorkItemSla } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '22222222-2222-2222-2222-222222222222'
@@ -74,17 +74,12 @@ describe('#makeSubmitExtendController', () => {
 
   beforeEach(() => {
     extendWorkItemSla.mockReset()
-    getWorkItem.mockReset()
-    // Default: backend lookup for due-date preview succeeds; tests that
-    // care about its absence can override.
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: { id: ID, slaRemaining: '14.00:00:00' }
-    })
   })
 
-  test('POST with valid data renders the confirmation page without calling the backend', async () => {
-    const { statusCode, result } = await injectWithCrumb(server, {
+  test('POST with valid data applies the extension and redirects to detail', async () => {
+    extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
+
+    const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/sla/extend`,
       payload: `reason=Need+more+time&additionalDays=7`,
@@ -94,33 +89,15 @@ describe('#makeSubmitExtendController', () => {
       }
     })
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Confirm extend SLA'))
-    expect(result).toEqual(expect.stringContaining('sla-extend-confirm-form'))
-    expect(result).toEqual(expect.stringContaining('Need more time'))
-    // Hidden inputs carry the validated values to the confirm POST.
-    expect(result).toEqual(
-      expect.stringContaining('name="additionalDays" value="7"')
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    expect(extendWorkItemSla).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workItemId: ID,
+        reason: 'Need more time',
+        additionalDuration: 'P7D'
+      })
     )
-    expect(extendWorkItemSla).not.toHaveBeenCalled()
-  })
-
-  test('POST renders confirmation page even if work-item lookup fails (no due-date preview)', async () => {
-    getWorkItem.mockResolvedValue({ ok: false, status: 503 })
-
-    const { statusCode, result } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/extend`,
-      payload: `reason=Some+reason&additionalDays=3`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        'x-test-user-role': 'team-leader'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Confirm extend SLA'))
-    expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 
   test('POST with empty reason re-renders form with 400', async () => {
@@ -174,14 +151,14 @@ describe('#makeSubmitExtendController', () => {
   test('POST redirects with error flash on forbidden response', async () => {
     extendWorkItemSla.mockResolvedValue({
       ok: false,
-      reason: 'forbidden',
+      outcome: 'forbidden',
       status: 403,
       message: 'Forbidden'
     })
 
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
-      url: `/work-items/${ID}/sla/extend/confirm`,
+      url: `/work-items/${ID}/sla/extend`,
       payload: `reason=Some+reason&additionalDays=3`,
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
@@ -196,14 +173,14 @@ describe('#makeSubmitExtendController', () => {
   test('POST redirects with error flash on conflict response', async () => {
     extendWorkItemSla.mockResolvedValue({
       ok: false,
-      reason: 'conflict',
+      outcome: 'conflict',
       status: 409,
       message: 'Conflict'
     })
 
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
-      url: `/work-items/${ID}/sla/extend/confirm`,
+      url: `/work-items/${ID}/sla/extend`,
       payload: `reason=Some+reason&additionalDays=3`,
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
@@ -213,78 +190,6 @@ describe('#makeSubmitExtendController', () => {
 
     expect(statusCode).toBe(statusCodes.redirect)
     expect(headers.location).toBe(`/work-items/${ID}`)
-  })
-})
-
-describe('#makeConfirmExtendController', () => {
-  let server
-
-  beforeAll(async () => {
-    server = await createServer()
-    await server.initialize()
-  })
-
-  afterAll(async () => {
-    await server.stop({ timeout: 0 })
-  })
-
-  beforeEach(() => {
-    extendWorkItemSla.mockReset()
-  })
-
-  test('POST with valid hidden fields calls backend and redirects to detail', async () => {
-    extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
-
-    const { statusCode, headers } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/extend/confirm`,
-      payload: `reason=Need+more+time&additionalDays=7`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        'x-test-user-role': 'team-leader'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}`)
-    expect(extendWorkItemSla).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workItemId: ID,
-        reason: 'Need more time',
-        additionalDuration: 'P7D'
-      })
-    )
-  })
-
-  test('POST with tampered hidden fields re-renders the input form with 400', async () => {
-    const { statusCode, result } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/extend/confirm`,
-      payload: `reason=&additionalDays=7`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        'x-test-user-role': 'team-leader'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining('There is a problem'))
-    expect(extendWorkItemSla).not.toHaveBeenCalled()
-  })
-
-  test('POST returns 403 for non-team-leader', async () => {
-    const { statusCode } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/extend/confirm`,
-      payload: `reason=Some+reason&additionalDays=3`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        'x-test-user-role': 'standard'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.forbidden)
-    expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 })
 
