@@ -217,6 +217,21 @@
               </form>
             {% endif %}
           {% endfor %}
+          {# RA-131. Override SLA is a BFF-only action (no backend workflow #}
+          {# transition), so it isn't projected into availableActions and  #}
+          {# can't be rendered inside the loop. Render it alongside Extend #}
+          {# whenever Extend would also be available: team leaders only,   #}
+          {# while the work item is being assessed.                        #}
+          {% if canManageSla and workItem.stateId == 'assessment-in-progress' %}
+            <div class="govuk-!-display-inline-block">
+              <a class="govuk-button govuk-button--secondary"
+                 data-module="govuk-button"
+                 role="button"
+                 draggable="false"
+                 data-testid="action-sla-override"
+                 href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
+            </div>
+          {% endif %}
         </div>
       {% else %}
         <p class="govuk-body" data-testid="work-item-no-actions">
@@ -226,12 +241,12 @@
       {% endblock %}
 
       {# ----------------------------- SLA -------------------------------- #}
-      {# RA-131. Team leaders see Extend and Override links when the work  #}
-      {# item has an SLA clock. Both navigate to dedicated server-rendered #}
-      {# pages — there's no GDS modal component, and the extend flow uses  #}
-      {# an explicit "review and confirm" interstitial.                    #}
+      {# RA-131. Extend SLA and Override SLA buttons live in the Actions   #}
+      {# panel above. This section shows the SLA clock status (when the    #}
+      {# backend exposes it) so team leaders can see what they're acting   #}
+      {# on before clicking the buttons.                                   #}
       {% if canManageSla and workItem.slaClock %}
-        <h2 class="govuk-heading-m">SLA management</h2>
+        <h2 class="govuk-heading-m">SLA status</h2>
         <p class="govuk-body" data-testid="sla-clock-info">
           Target: {{ workItem.slaClock.targetDuration }} &mdash;
           {% if workItem.slaClock.breached %}
@@ -240,14 +255,6 @@
             On track
           {% endif %}
         </p>
-        <div class="govuk-button-group" data-testid="sla-management-actions">
-          <a class="govuk-link"
-             data-testid="sla-extend-link"
-             href="/work-items/{{ workItem.id }}/sla/extend">Extend SLA</a>
-          <a class="govuk-link"
-             data-testid="sla-override-link"
-             href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
-        </div>
       {% endif %}
 
       {# --------------------------- Audit log ---------------------------- #}
