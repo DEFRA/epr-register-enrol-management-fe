@@ -76,11 +76,8 @@ describe('#makeSubmitExtendController', () => {
     extendWorkItemSla.mockReset()
   })
 
-  test('POST with valid data redirects to detail page on success', async () => {
-    extendWorkItemSla.mockResolvedValue({
-      ok: true,
-      workItem: { id: ID }
-    })
+  test('POST with valid data applies the extension and redirects to detail', async () => {
+    extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
 
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
@@ -154,7 +151,7 @@ describe('#makeSubmitExtendController', () => {
   test('POST redirects with error flash on forbidden response', async () => {
     extendWorkItemSla.mockResolvedValue({
       ok: false,
-      reason: 'forbidden',
+      outcome: 'forbidden',
       status: 403,
       message: 'Forbidden'
     })
@@ -176,7 +173,7 @@ describe('#makeSubmitExtendController', () => {
   test('POST redirects with error flash on conflict response', async () => {
     extendWorkItemSla.mockResolvedValue({
       ok: false,
-      reason: 'conflict',
+      outcome: 'conflict',
       status: 409,
       message: 'Conflict'
     })

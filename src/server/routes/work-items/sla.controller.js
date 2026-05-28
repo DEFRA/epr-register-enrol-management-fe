@@ -1,13 +1,20 @@
 /**
  * SLA extend and override controllers (RA-131).
  *
- * Four handlers:
- *  - GET  /work-items/{id}/sla/extend   — render extend form
- *  - POST /work-items/{id}/sla/extend   — submit extend
- *  - GET  /work-items/{id}/sla/override — render override form
- *  - POST /work-items/{id}/sla/override — submit override
+ * Extend is a single-step flow as of the May 28 design review: the
+ * team leader fills out reason + additional days, submits, and lands
+ * back on the work item with a success banner. (Previous two-step
+ * "input → confirm" wizard removed — caseworkers use this often and
+ * can change it again if needed; the extra click added friction
+ * without preventing errors.)
  *
- * Both flows use PRG — redirect back to work item detail with flash banner.
+ *  - GET  /work-items/{id}/sla/extend     — render input form
+ *  - POST /work-items/{id}/sla/extend     — validate → apply via backend
+ *  - GET  /work-items/{id}/sla/override   — render override form
+ *  - POST /work-items/{id}/sla/override   — submit override
+ *
+ * All paths PRG-redirect back to the work item detail with a flash
+ * banner on success / non-validation failure.
  */
 
 import { getUser, hasRole } from '#/server/common/helpers/auth/get-user.js'
@@ -77,6 +84,7 @@ export function makeSubmitExtendController({
       const reason = typeof payload.reason === 'string' ? payload.reason : ''
       const additionalDays =
         typeof payload.additionalDays === 'string' ? payload.additionalDays : ''
+      const maxDays = config.get('workItems.sla.maxExtensionDays')
 
       const result = await service.extendSla({
         workItemId: id,
@@ -104,7 +112,7 @@ export function makeSubmitExtendController({
             formAction: `/work-items/${encodeURIComponent(id)}/sla/extend`,
             cancelHref: detailHref(id),
             reasonMaxLength: REASON_MAX_LENGTH,
-            maxDays: config.get('workItems.sla.maxExtensionDays'),
+            maxDays,
             values: { reason, additionalDays },
             errorSummary: {
               titleText: 'There is a problem',
