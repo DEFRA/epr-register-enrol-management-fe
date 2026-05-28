@@ -202,6 +202,17 @@
                      data-testid="action-sla-extend"
                      href="/work-items/{{ workItem.id }}/sla/extend">{{ action.displayName }}</a>
                 </div>
+                {# RA-131. Override SLA is BFF-only (no backend workflow        #}
+                {# transition) so it isn't projected into availableActions.     #}
+                {# Render it immediately after Extend SLA, matching its style.  #}
+                <div class="govuk-!-display-inline-block">
+                  <a class="govuk-button"
+                     data-module="govuk-button"
+                     role="button"
+                     draggable="false"
+                     data-testid="action-sla-override"
+                     href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
+                </div>
               {% endif %}
             {% else %}
               <form method="post"
@@ -217,21 +228,6 @@
               </form>
             {% endif %}
           {% endfor %}
-          {# RA-131. Override SLA is a BFF-only action (no backend workflow #}
-          {# transition), so it isn't projected into availableActions and  #}
-          {# can't be rendered inside the loop. Render it alongside Extend #}
-          {# whenever Extend would also be available: team leaders only,   #}
-          {# while the work item is being assessed.                        #}
-          {% if canManageSla and workItem.stateId == 'assessment-in-progress' %}
-            <div class="govuk-!-display-inline-block">
-              <a class="govuk-button govuk-button--secondary"
-                 data-module="govuk-button"
-                 role="button"
-                 draggable="false"
-                 data-testid="action-sla-override"
-                 href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
-            </div>
-          {% endif %}
         </div>
       {% else %}
         <p class="govuk-body" data-testid="work-item-no-actions">
