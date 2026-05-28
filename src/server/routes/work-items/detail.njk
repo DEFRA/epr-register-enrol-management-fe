@@ -213,8 +213,10 @@
       {% endblock %}
 
       {# ----------------------------- SLA -------------------------------- #}
-      {# RA-131. Team leaders see Extend (modal) and Override (page) links  #}
-      {# when the work item has an SLA clock. Hidden for non-team-leaders. #}
+      {# RA-131. Team leaders see Extend and Override links when the work  #}
+      {# item has an SLA clock. Both navigate to dedicated server-rendered #}
+      {# pages — there's no GDS modal component, and the extend flow uses  #}
+      {# an explicit "review and confirm" interstitial.                    #}
       {% if canManageSla and workItem.slaClock %}
         <h2 class="govuk-heading-m">SLA management</h2>
         <p class="govuk-body" data-testid="sla-clock-info">
@@ -226,94 +228,13 @@
           {% endif %}
         </p>
         <div class="govuk-button-group" data-testid="sla-management-actions">
-          <button type="button"
-                  class="govuk-button govuk-button--secondary"
-                  data-module="sla-extend-modal"
-                  data-testid="sla-extend-open"
-                  aria-haspopup="dialog"
-                  aria-controls="sla-extend-dialog">
-            Extend SLA
-          </button>
+          <a class="govuk-link"
+             data-testid="sla-extend-link"
+             href="/work-items/{{ workItem.id }}/sla/extend">Extend SLA</a>
           <a class="govuk-link"
              data-testid="sla-override-link"
              href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
         </div>
-
-        {# RA-131: Extend SLA modal dialog.                                 #}
-        {# Progressive-enhanced: if JS is unavailable the button navigates  #}
-        {# to the standalone extend page via the noscript fallback link.     #}
-        <dialog id="sla-extend-dialog"
-                class="govuk-!-padding-6"
-                aria-labelledby="sla-extend-dialog-title"
-                data-testid="sla-extend-dialog"
-                style="max-width:40rem;border:2px solid #0b0c0c;border-radius:0">
-          <h2 class="govuk-heading-m" id="sla-extend-dialog-title">Extend SLA</h2>
-
-          <form method="post"
-                action="/work-items/{{ workItem.id }}/sla/extend"
-                novalidate
-                data-testid="sla-extend-modal-form">
-            <input type="hidden" name="crumb" value="{{ crumb }}" />
-
-            {% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
-            {% from "govuk/components/input/macro.njk" import govukInput %}
-
-            {{ govukCharacterCount({
-              id: "modal-field-reason",
-              name: "reason",
-              maxlength: reasonMaxLength,
-              label: {
-                text: "Reason for extending the SLA",
-                classes: "govuk-label--s"
-              },
-              hint: { text: "Explain why the SLA deadline needs to be extended." }
-            }) }}
-
-            {{ govukInput({
-              id: "modal-field-additionalDays",
-              name: "additionalDays",
-              label: {
-                text: "Number of additional days",
-                classes: "govuk-label--s"
-              },
-              hint: { text: "Enter a whole number between 1 and " + slaMaxDays + "." },
-              inputmode: "numeric",
-              classes: "govuk-input--width-5"
-            }) }}
-
-            <div class="govuk-button-group">
-              {% from "govuk/components/button/macro.njk" import govukButton %}
-              {{ govukButton({
-                text: "Extend SLA",
-                attributes: { "data-testid": "sla-extend-modal-submit" }
-              }) }}
-              <button type="button"
-                      class="govuk-button govuk-button--secondary"
-                      data-testid="sla-extend-modal-cancel"
-                      id="sla-extend-dialog-close">Cancel</button>
-            </div>
-          </form>
-        </dialog>
-
-        <script>
-          (function () {
-            var dialog = document.getElementById('sla-extend-dialog')
-            var openBtn = document.querySelector('[data-module="sla-extend-modal"]')
-            var closeBtn = document.getElementById('sla-extend-dialog-close')
-            if (!dialog || !openBtn || !dialog.showModal) { return }
-            openBtn.addEventListener('click', function () { dialog.showModal() })
-            closeBtn.addEventListener('click', function () { dialog.close() })
-            dialog.addEventListener('click', function (e) {
-              if (e.target === dialog) { dialog.close() }
-            })
-          })()
-        </script>
-        <noscript>
-          <p class="govuk-body">
-            <a class="govuk-link"
-               href="/work-items/{{ workItem.id }}/sla/extend">Extend SLA (open form)</a>
-          </p>
-        </noscript>
       {% endif %}
 
       {# --------------------------- Audit log ---------------------------- #}
