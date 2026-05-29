@@ -689,7 +689,7 @@ describe('#workItemListController', () => {
       )
     })
 
-    test('Nation checkboxes appear in the rendered page', async () => {
+    test('Regulator checkboxes appear in the rendered page with regulator body names', async () => {
       getWorkItems.mockResolvedValue(emptyPage())
 
       const { result } = await server.inject({
@@ -698,10 +698,13 @@ describe('#workItemListController', () => {
       })
 
       expect(result).toContain('filter-nation')
-      expect(result).toContain('England')
-      expect(result).toContain('Scotland')
-      expect(result).toContain('Wales')
-      expect(result).toContain('Northern Ireland')
+      // Regulator body display names replace raw nation names
+      expect(result).toContain('Environment Agency (EA)')
+      expect(result).toContain('SEPA')
+      expect(result).toContain('Natural Resources Wales (NRW)')
+      expect(result).toContain('NIEA')
+      // Filter section heading uses "Regulator" not "Nation"
+      expect(result).toContain('Regulator')
     })
 
     test('Nation checkboxes reflect the active filter', async () => {

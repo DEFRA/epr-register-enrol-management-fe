@@ -78,10 +78,22 @@
             idPrefix: "filter-nation",
             name: "nation",
             classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Nation", classes: "govuk-fieldset__legend--s" } },
+            fieldset: { legend: { text: "Regulator", classes: "govuk-fieldset__legend--s" } },
             items: nationOptions
           }) }}
         {% endif %}
+
+        {{ govukCheckboxes({
+          idPrefix: "filter-applicant-type",
+          name: "applicantType",
+          classes: "govuk-checkboxes--small",
+          fieldset: { legend: { text: "Applicant type", classes: "govuk-fieldset__legend--s" } },
+          hint: { text: "Filtering not yet available" },
+          items: [
+            { value: "reprocessor", text: "Reprocessor", disabled: true },
+            { value: "exporter", text: "Exporter", disabled: true }
+          ]
+        }) }}
 
         {# Assignee filter (RA-95). The "Specific user…" radio reveals a #}
         {# select listing the assignable-users directory. Same options are #}
@@ -190,6 +202,8 @@
               { html: itemLinkHtml },
               { text: item.typeDisplayName, classes: "app-!-white-space-nowrap" },
               { html: stateTagHtml },
+              { text: item.orgName or "—" },
+              { text: item.material or "—" },
               { text: item.submittedAt | formatDateTimeGds, classes: "app-!-white-space-nowrap" },
               { text: item.submittedBy or "—" },
               { text: item.assigneeDisplayName or "Unassigned" },
@@ -204,10 +218,12 @@
                 { text: "Application ref" },
                 { text: "Type", classes: "app-!-white-space-nowrap" },
                 { text: "State" },
+                { text: "Org name" },
+                { text: "Material" },
                 { text: "Submitted", classes: "app-!-white-space-nowrap" },
                 { text: "Submitted by", classes: "app-!-white-space-nowrap" },
                 { text: "Assigned to", classes: "app-!-white-space-nowrap" },
-                { text: "SLA" },
+                { text: "Due date (SLA)" },
                 { text: "Archived", classes: "app-!-white-space-nowrap" }
               ],
               rows: rows,
