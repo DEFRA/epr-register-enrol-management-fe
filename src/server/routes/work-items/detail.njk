@@ -191,6 +191,7 @@
 
       {% if workItem.availableActions and workItem.availableActions.length > 0 %}
         <div class="govuk-button-group" data-testid="work-item-actions">
+          {% block approveAction %}{% endblock %}
           {% for action in workItem.availableActions %}
             {% if action.actionId == 'sla-extend' %}
               {% if canManageSla %}
