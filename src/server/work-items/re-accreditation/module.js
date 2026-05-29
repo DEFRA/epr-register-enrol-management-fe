@@ -1,5 +1,4 @@
 import { config } from '#/config/config.js'
-import { registerModuleDetailTemplates } from '../core/templates.js'
 import { buildApprovalRoutes } from './approval/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
 
@@ -145,7 +144,7 @@ const TASKS_BY_STATE = {
 export const reAccreditationType = {
   id: 're-accreditation',
   displayName: 'Re-accreditation',
-  templateVersion: 'v4',
+  detailTemplate: 're-accreditation/detail-v1',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS,
@@ -157,17 +156,6 @@ export const reAccreditationType = {
 export const reAccreditationModule = {
   type: reAccreditationType,
   async register(server) {
-    // Mount the type-specific detail template so the framework's detail
-    // controller picks it for `(re-accreditation, v1)` work items. All
-    // other UI for this type goes through the framework's generic routes.
-    // v2: added duly-made state; v3: notify hook; v4: SLA clock
-    registerModuleDetailTemplates('re-accreditation', {
-      v1: 're-accreditation/detail-v1',
-      v2: 're-accreditation/detail-v1',
-      v3: 're-accreditation/detail-v1',
-      v4: 're-accreditation/detail-v1'
-    })
-
     // RA-132. Approve-determination flow: confirmation interstitial + POST
     // handler that hits the type-specific backend endpoint. Always mounted
     // — the FE button only renders when the work item is eligible, and
