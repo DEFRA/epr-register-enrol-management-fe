@@ -1,6 +1,5 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
-import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import {
   findAssignableUser,
@@ -26,12 +25,10 @@ const UNAVAILABLE_VIEW = 'work-items/detail-error'
  * Render a single work item.
  *
  * The backend's `WorkItemResponse` already carries the engine projection
- * (tasks + available actions) and the `templateVersion` the item was
- * assessed against, so we:
+ * (tasks + available actions), so we:
  *   1. Fetch it via the backend client.
- *   2. Pick the detail template registered for `(typeId, templateVersion)`,
- *      falling back to the generic core template, so historical items keep
- *      their original look even after the live module ships a new template.
+ *   2. Pick the detail template declared on the registered type
+ *      (`type.detailTemplate`), falling back to the generic core template.
  *   3. Decorate with display-name lookups so templates don't have to know
  *      about the registry.
  *
@@ -356,10 +353,8 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
     request,
     user
   })
-  const templatePath = resolveDetailTemplate(
-    enriched.typeId,
-    enriched.templateVersion
-  )
+  const registeredType = getWorkItemType(enriched.typeId)
+  const templatePath = registeredType?.detailTemplate ?? 'work-items/detail'
 
   const assignment = buildAssignmentViewModel({
     workItem: enriched,

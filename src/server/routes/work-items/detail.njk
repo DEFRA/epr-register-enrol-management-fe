@@ -12,11 +12,11 @@
 {# ---------------------------------------------------------------- #}
 {# Generic work item detail template.                                #}
 {#                                                                   #}
-{# Used as the fallback when the work item's `(typeId,                #}
-{# templateVersion)` pair has no module-specific template registered. #}
-{# Renders the envelope (id, type, state, submitter, payload), the   #}
-{# tasks projected by the engine, and the available actions, all in  #}
-{# GOV.UK Design System macros only — no JavaScript dependency.       #}
+{# Used as the fallback when the work item's type has no             #}
+{# module-specific template registered. Renders the envelope         #}
+{# (id, type, state, submitter, payload), the tasks projected by the #}
+{# engine, and the available actions, all in GOV.UK Design System    #}
+{# macros only — no JavaScript dependency.                           #}
 {# ---------------------------------------------------------------- #}
 
 {% block content %}
@@ -69,7 +69,6 @@
           { key: { text: "Id" },           value: { text: workItem.id } },
           { key: { text: "Type" },         value: { text: workItem.typeDisplayName } },
           { key: { text: "State" },        value: { text: workItem.stateDisplayName } },
-          { key: { text: "Template version" }, value: { text: workItem.templateVersion } },
           { key: { text: "Submitted at" }, value: { text: workItem.submittedAt } },
           { key: { text: "Submitted by" }, value: { text: workItem.submittedBy or "—" } },
           { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt } },

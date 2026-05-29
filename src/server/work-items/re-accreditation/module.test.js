@@ -1,27 +1,20 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
-import hapi from '@hapi/hapi'
 
 import { config } from '#/config/config.js'
 import { reAccreditationModule, reAccreditationType } from './module.js'
 import { assertValidWorkItemModule } from '../core/module.js'
-import {
-  clearDetailTemplateRegistry,
-  resolveDetailTemplate
-} from '../core/templates.js'
 
 describe('reAccreditationModule', () => {
-  beforeEach(() => {
-    clearDetailTemplateRegistry()
-  })
-
   test('passes the framework module shape contract', () => {
     expect(() => assertValidWorkItemModule(reAccreditationModule)).not.toThrow()
   })
 
-  test('declares the expected stable identity and template version', () => {
+  test('declares the expected stable identity and detail template', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v4')
+    expect(reAccreditationType.detailTemplate).toBe(
+      're-accreditation/detail-v1'
+    )
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -99,38 +92,6 @@ describe('reAccreditationModule', () => {
       expect(reAccreditationType.getTasksForState(stateId)).toEqual([])
     }
   )
-
-  test('register registers detail templates for all versions (v1–v4) resolvable from the framework', async () => {
-    // Resolve falls back to the generic detail before register runs.
-    expect(resolveDetailTemplate('re-accreditation', 'v4')).toBe(
-      'work-items/detail'
-    )
-
-    const server = hapi.server()
-    // The bare hapi server has no auth strategy, so wire up a permissive
-    // stub for the auth-scoped routes (approval + create) and disable
-    // the RA-127 create routes for this test — we only care that the
-    // detail template gets registered.
-    server.auth.scheme('stub', () => ({
-      authenticate: (_request, h) => h.authenticated({ credentials: {} })
-    }))
-    server.auth.strategy('session', 'stub')
-    server.auth.default('session')
-    const flagKey = 'featureFlags.workItemCreationEnabled'
-    const previous = config.get(flagKey)
-    config.set(flagKey, false)
-    try {
-      await reAccreditationModule.register(server)
-    } finally {
-      config.set(flagKey, previous)
-    }
-
-    for (const version of ['v1', 'v2', 'v3', 'v4']) {
-      expect(resolveDetailTemplate('re-accreditation', version)).toBe(
-        're-accreditation/detail-v1'
-      )
-    }
-  })
 
   test('register does not throw when called with a stub server', async () => {
     const server = { route: vi.fn() }
