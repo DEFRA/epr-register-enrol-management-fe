@@ -476,9 +476,7 @@ function buildFilterSummary({ filters, totalCount }) {
     parts.push(`state: ${filters.stateIds.join(', ')}`)
   }
   if (filters.nations.length > 0) {
-    const labels = filters.nations.map(
-      (n) => REGULATOR_DISPLAY_NAMES[n] ?? n
-    )
+    const labels = filters.nations.map((n) => REGULATOR_DISPLAY_NAMES[n] ?? n)
     parts.push(`regulator: ${labels.join(', ')}`)
   }
   if (filters.search) {
