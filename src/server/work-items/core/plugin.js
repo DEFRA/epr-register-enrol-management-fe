@@ -1,5 +1,6 @@
 import { clearWorkItemRegistry, registerWorkItemType } from './registry.js'
 import { assertValidWorkItemModule } from './module.js'
+import { clearDetailTemplateRegistry } from './templates.js'
 
 /**
  * Hapi plugin that registers a list of work item modules with the server.
@@ -23,6 +24,7 @@ export const workItemsPlugin = (modules) => ({
     name: 'work-items',
     async register(server) {
       clearWorkItemRegistry()
+      clearDetailTemplateRegistry()
       for (const mod of modules) {
         assertValidWorkItemModule(mod)
         registerWorkItemType(mod.type)

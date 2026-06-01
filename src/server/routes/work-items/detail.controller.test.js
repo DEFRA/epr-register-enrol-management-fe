@@ -7,6 +7,10 @@ import {
   clearWorkItemRegistry,
   registerWorkItemType
 } from '#/server/work-items/core/registry.js'
+import {
+  clearDetailTemplateRegistry,
+  registerDetailTemplate
+} from '#/server/work-items/core/templates.js'
 import { makeSelfAssignController } from './detail.controller.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
@@ -43,6 +47,7 @@ function aWorkItem(overrides = {}) {
     submittedAt: '2026-04-27T10:00:00Z',
     lastModifiedAt: '2026-04-27T10:05:00Z',
     submittedBy: 'frontend',
+    templateVersion: 'v1',
     payload: { applicantName: 'Acme' },
     tasks: [
       {
@@ -60,7 +65,6 @@ function registerReaccreditation() {
   registerWorkItemType({
     id: 're-accreditation',
     displayName: 'Re-accreditation',
-    detailTemplate: 're-accreditation/detail-v1',
     initialState: { id: 'submitted', displayName: 'Submitted' },
     states: [
       { id: 'submitted', displayName: 'Submitted' },
@@ -92,6 +96,7 @@ describe('#workItemDetailController', () => {
     unassignWorkItem.mockReset()
     addWorkItemNote.mockReset()
     clearWorkItemRegistry()
+    clearDetailTemplateRegistry()
   })
 
   test('Renders the work item with summary, tasks and payload', async () => {
@@ -159,6 +164,35 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(
       expect.stringContaining(`/work-items/${ID}/actions/approve`)
     )
+  })
+
+  test('Picks the module-registered template for the matching version', async () => {
+    registerReaccreditation()
+    // Register two templates; the work item's templateVersion picks v2.
+    registerDetailTemplate(
+      're-accreditation',
+      'v1',
+      'work-items/detail' // generic
+    )
+    registerDetailTemplate(
+      're-accreditation',
+      'v2',
+      'work-items/detail' // shipping a different template would point elsewhere
+    )
+
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ templateVersion: 'v2' })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Template version is surfaced in the summary list.
+    expect(result).toEqual(expect.stringContaining('v2'))
   })
 
   test('Renders 404 page when the backend reports no such work item', async () => {
@@ -921,8 +955,17 @@ describe('#workItemDetailController', () => {
   })
 
   describe('RA-133 decision metadata rendering', () => {
-    test('renders the confirmation panel, ID, formatted start date and year when approved', async () => {
+    function registerReaccreditationWithDetailV1() {
       registerReaccreditation()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+    }
+
+    test('renders the confirmation panel, ID, formatted start date and year when approved', async () => {
+      registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
@@ -960,7 +1003,7 @@ describe('#workItemDetailController', () => {
     })
 
     test('omits decision metadata when payload has no accreditation fields', async () => {
-      registerReaccreditation()
+      registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
@@ -986,7 +1029,7 @@ describe('#workItemDetailController', () => {
     })
 
     test('falls back to the raw start date when it cannot be parsed', async () => {
-      registerReaccreditation()
+      registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
@@ -1009,7 +1052,7 @@ describe('#workItemDetailController', () => {
     })
 
     test('renders year row with em-dash fallback when accreditationYear absent', async () => {
-      registerReaccreditation()
+      registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
@@ -1039,8 +1082,17 @@ describe('#workItemDetailController', () => {
   })
 
   describe('RA-133 approve CTA eligibility (canApproveDirectly)', () => {
-    test('renders the Approve CTA for a decision-maker when item is in awaiting-decision state', async () => {
+    function registerReaccreditationWithDetailV1() {
       registerReaccreditation()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+    }
+
+    test('renders the Approve CTA for a decision-maker when item is in awaiting-decision state', async () => {
+      registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
@@ -1075,7 +1127,7 @@ describe('#workItemDetailController', () => {
     })
 
     test('does not render the Approve CTA when item is NOT in awaiting-decision state', async () => {
-      registerReaccreditation()
+      registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({ stateId: 'submitted' })
@@ -1094,7 +1146,7 @@ describe('#workItemDetailController', () => {
     })
 
     test('does not render the Approve CTA for a standard user who is not the assignee', async () => {
-      registerReaccreditation()
+      registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
@@ -1116,7 +1168,7 @@ describe('#workItemDetailController', () => {
     })
 
     test('renders the Approve CTA when caller is the assignee even without decision-maker role', async () => {
-      registerReaccreditation()
+      registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({

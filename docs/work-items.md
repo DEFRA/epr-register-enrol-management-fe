@@ -145,7 +145,7 @@ bookmarked URLs from before a module was removed still render.
   which calls it at the start of every registration so repeated `createServer()`
   calls in tests do not accumulate stale types.
 
-## Detail view (RA-94)
+## Detail view & template versioning (RA-94)
 
 The detail view at `/work-items/{id}` is a generic page mounted by
 `src/server/routes/work-items/` that renders **any** work item, regardless
@@ -167,29 +167,54 @@ The generic detail template lives at
 System macros — no JavaScript — so the page works in the same way the rest
 of the service does.
 
-### Type-specific detail templates
+### Template versioning
 
-A module can declare a type-specific Nunjucks template by setting
-`detailTemplate` on its `type` object. The controller reads
-`getWorkItemType(typeId)?.detailTemplate` and falls back to the generic
-`'work-items/detail'` when the property is absent. Template paths are
-relative to `src/server/routes/`, matching the Nunjucks `relativeTo` config.
+Each work item carries a `templateVersion` from the backend. The frontend
+keeps an in-memory registry mapping `(typeId, version)` to a Nunjucks
+template path:
 
 ```js
-export const myTypeModule = {
-  type: {
-    id: 'my-type',
-    detailTemplate: 'my-type/detail' // optional; omit to use the generic template
-    // ...
-  },
-  async register(server) {
-    /* ... */
-  }
+import {
+  registerDetailTemplate,
+  registerModuleDetailTemplates
+} from '#/server/work-items/core/templates.js'
+
+// One at a time:
+registerDetailTemplate('re-accreditation', 'v1', 're-accreditation/detail-v1')
+
+// Or batched at module register time:
+registerModuleDetailTemplates('re-accreditation', {
+  v1: 're-accreditation/detail-v1',
+  v2: 're-accreditation/detail-v2'
+})
+```
+
+`resolveDetailTemplate(typeId, version)` is what the controller calls; it
+returns the registered template if present, otherwise falls back to the
+generic `'work-items/detail'`. Template paths are relative to
+`src/server/routes/`, matching the Nunjucks `relativeTo` config.
+
+When a module ships v2 of its template, it leaves the v1 entry in place so
+historical work items continue to render exactly as they did at the time
+of assessment. The audit history therefore stays accurate even as the
+module's templates evolve.
+
+### Wiring into a module
+
+A module that wants its own detail template registers the template paths in
+its `register(server)` function:
+
+```js
+async register(server) {
+  registerModuleDetailTemplates('my-type', {
+    v1: 'my-type/detail-v1'
+  })
+  server.route({ /* ...module routes... */ })
 }
 ```
 
-The plugin calls `clearWorkItemRegistry()` at the start of every registration
-so repeated `createServer()` calls in tests don’t accumulate stale types.
+The plugin clears the registry at each `createServer()` so tests stay
+hermetic — modules re-register on every server boot.
 
 ## Assignment (RA-95)
 
@@ -315,11 +340,11 @@ anything to opt in.
 Reference frontend module mirroring the backend's `ReAccreditationType`. All
 files live under `src/server/work-items/re-accreditation/`:
 
-| File                                          | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `module.js`                                   | Exports `reAccreditationModule = { type, register }`. The `type` block declares `detailTemplate`, states (`submitted`, `duly-made`, `assessment-in-progress`, `awaiting-decision`, terminal `approved` / `rejected` / `withdrawn`), per-state tasks and the transitions in lock-step with the backend. The `register` callback mounts the approval and (feature-flagged) create routes; the detail template is resolved from `type.detailTemplate`. |
-| `module.test.js`                              | Verifies the module passes `assertValidWorkItemModule`, that the type's shape matches expectations (including `detailTemplate`), and that the transitions and per-state tasks are correct.                                                                                                                                                                                                                                                          |
-| `../../routes/re-accreditation/detail-v1.njk` | Type-specific detail template for re-accreditation work items. Extends `work-items/detail.njk` so it inherits summary, tasks, actions, notes and the audit-log link, and layers re-accreditation-specific content on top.                                                                                                                                                                                                                           |
+| File                                          | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `module.js`                                   | Exports `reAccreditationModule = { type, register }`. The `type` block declares states (`submitted`, `assessment-in-progress`, `awaiting-decision`, terminal `approved` / `rejected` / `withdrawn`), per-state placeholder tasks and the transitions (`start-assessment`, `submit-for-decision`, `approve`, `reject`, `withdraw`, `withdraw-during-assessment`) in lock-step with the backend. The `register` callback registers the v1 detail template with the framework and is otherwise a no-op — every state-changing UI action goes through the framework's generic routes. |
+| `module.test.js`                              | Verifies the module passes `assertValidWorkItemModule`, that the type's shape matches expectations, and that `register` makes the v1 detail template resolvable from the framework registry.                                                                                                                                                                                                                                                                                                                                                                                      |
+| `../../routes/re-accreditation/detail-v1.njk` | Type-specific detail template selected by the framework when a work item's `(typeId, templateVersion)` is `(re-accreditation, v1)`. Extends `work-items/detail.njk` so it inherits summary, tasks, actions, notes and the audit-log link, and layers a re-accreditation-specific tagline on top.                                                                                                                                                                                                                                                                                  |
 
 Wired into the application by a single line in `src/server/work-items/modules.js`:
 
