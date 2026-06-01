@@ -38,6 +38,15 @@ export function assertValidWorkItemModule(mod) {
     )
   }
 
+  if (
+    typeof type.templateVersion !== 'string' ||
+    type.templateVersion.trim() === ''
+  ) {
+    throw new Error(
+      `Work item type "${typeId}" must declare a non-empty string \`templateVersion\``
+    )
+  }
+
   if (!Array.isArray(type.states) || type.states.length === 0) {
     throw new Error(
       `Work item type "${typeId}" must declare a non-empty \`states\` array`

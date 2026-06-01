@@ -5,6 +5,7 @@ import { assertValidWorkItemModule } from './module.js'
 const validType = (overrides = {}) => ({
   id: 'sample',
   displayName: 'Sample',
+  templateVersion: 'v1',
   initialState: 'draft',
   states: [
     { id: 'draft', displayName: 'Draft' },
@@ -71,6 +72,22 @@ describe('assertValidWorkItemModule', () => {
     expect(() =>
       assertValidWorkItemModule({ ...validModule(), register: undefined })
     ).toThrow(/async `register\(server\)` function/)
+  })
+
+  test('rejects a missing `templateVersion`', () => {
+    expect(() =>
+      assertValidWorkItemModule(
+        validModule({ type: { templateVersion: undefined } })
+      )
+    ).toThrow(/non-empty string `templateVersion`/)
+  })
+
+  test('rejects a blank `templateVersion`', () => {
+    expect(() =>
+      assertValidWorkItemModule(
+        validModule({ type: { templateVersion: '  ' } })
+      )
+    ).toThrow(/non-empty string `templateVersion`/)
   })
 
   test('rejects a missing `states` array', () => {
