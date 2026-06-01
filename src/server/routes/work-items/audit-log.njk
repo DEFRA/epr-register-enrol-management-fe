@@ -20,7 +20,7 @@
       {% if workItem.auditLog and workItem.auditLog.length > 0 %}
         <ol class="govuk-list" data-testid="work-item-audit-log">
           {% for entry in workItem.auditLog %}
-            <li class="govuk-!-margin-bottom-3" data-testid="work-item-audit-entry-{{ entry.id }}">
+            <li class="govuk-!-margin-bottom-3" data-testid="work-item-audit-entry-{{ entry.id }}" data-action="{{ entry.action }}">
               <p class="govuk-body govuk-!-margin-bottom-1">
                 <strong>{{ entry.actionDisplayName }}</strong>
                 {% if entry.summary %}

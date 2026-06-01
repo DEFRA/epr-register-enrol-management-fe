@@ -319,6 +319,11 @@ describe('#workItemAuditLogController', () => {
     expect(result).toEqual(
       expect.stringContaining('data-testid="work-item-audit-entry-detail-pre"')
     )
+    // Entry <li> carries a data-action attribute so e2e tests can
+    // scope assertions to a specific entry without relying on its id.
+    expect(result).toEqual(
+      expect.stringContaining('data-action="work-item-submitted"')
+    )
     // Template version is no longer surfaced anywhere on the audit log.
     expect(result).not.toEqual(expect.stringContaining('Template version'))
   })
