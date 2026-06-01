@@ -99,7 +99,7 @@ describe('#workItemDetailController', () => {
     clearDetailTemplateRegistry()
   })
 
-  test('Renders the work item with summary, tasks and payload', async () => {
+  test('Renders the work item with summary, tasks and a link to the audit log', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
@@ -122,8 +122,14 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(expect.stringContaining('Tasks &amp; notes (1)'))
     expect(result).toEqual(expect.stringContaining(`/work-items/${ID}/tasks`))
     expect(result).not.toEqual(expect.stringContaining('Update status'))
-    expect(result).toEqual(expect.stringContaining('Acme'))
-    expect(result).toEqual(expect.stringContaining('v1'))
+    // RA-186. Payload pre block and Template version row no longer
+    // render on the detail page — the payload lives with the submitted
+    // audit entry instead.
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="work-item-payload"')
+    )
+    expect(result).not.toEqual(expect.stringContaining('Template version'))
+    expect(result).not.toEqual(expect.stringContaining('Acme'))
   })
 
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
@@ -191,8 +197,10 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // Template version is surfaced in the summary list.
-    expect(result).toEqual(expect.stringContaining('v2'))
+    // Detail page renders without surfacing the template version itself
+    // (RA-186 removed the row from the summary); landing successfully
+    // on the generic template confirms the registry lookup ran.
+    expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
   })
 
   test('Renders 404 page when the backend reports no such work item', async () => {

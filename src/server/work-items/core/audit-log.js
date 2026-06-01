@@ -14,8 +14,13 @@
  * Decorate the raw audit log from a backend `WorkItemResponse` with a
  * `summary` string suitable for direct rendering. Returns the entries in
  * the same chronological order the backend projected them.
+ *
+ * The optional `payload` is the current work item payload; when supplied
+ * it is surfaced as a `Payload` row on the `work-item-submitted` entry
+ * so the original submission body lives with its audit record rather
+ * than as a stand-alone panel on the detail page (RA-186).
  */
-export function decorateAuditLog(entries) {
+export function decorateAuditLog(entries, { payload } = {}) {
   if (!Array.isArray(entries)) {
     return []
   }
@@ -23,7 +28,7 @@ export function decorateAuditLog(entries) {
     ...entry,
     actionDisplayName: actionDisplayNameFor(entry),
     summary: summariseAuditEntry(entry),
-    detailRows: detailRowsForAuditEntry(entry)
+    detailRows: detailRowsForAuditEntry(entry, { payload })
   }))
 }
 
@@ -109,9 +114,12 @@ export function summariseAuditEntry(entry) {
  * skip the disclosure entirely.
  *
  * Set `multiline: true` to tell the template to preserve newlines in the
- * value (paragraph-per-line). Otherwise the value renders inline.
+ * value (paragraph-per-line). Set `preformatted: true` to render the
+ * value inside a monospace `<pre>` block, preserving all whitespace
+ * verbatim (used for the JSON payload row). Otherwise the value renders
+ * inline.
  */
-export function detailRowsForAuditEntry(entry) {
+export function detailRowsForAuditEntry(entry, { payload } = {}) {
   if (entry == null || typeof entry !== 'object') {
     return []
   }
@@ -123,11 +131,12 @@ export function detailRowsForAuditEntry(entry) {
       if (details.stateId) {
         rows.push({ key: 'Initial state', value: details.stateId })
       }
-      if (details.templateVersion) {
-        rows.push({ key: 'Template version', value: details.templateVersion })
-      }
       const actor = entry.createdByName ?? entry.createdBy
       if (actor) rows.push({ key: 'Submitted by', value: actor })
+      const payloadJson = formatPayloadForAudit(payload)
+      if (payloadJson !== '') {
+        rows.push({ key: 'Payload', value: payloadJson, preformatted: true })
+      }
       return rows
     }
     case 'task-completed': {
@@ -214,5 +223,17 @@ export function detailRowsForAuditEntry(entry) {
     }
     default:
       return []
+  }
+}
+
+function formatPayloadForAudit(payload) {
+  if (payload == null) return ''
+  if (typeof payload === 'string') {
+    return payload.trim() === '' ? '' : payload
+  }
+  try {
+    return JSON.stringify(payload, null, 2)
+  } catch {
+    return ''
   }
 }

@@ -278,6 +278,56 @@ describe('#workItemAuditLogController', () => {
     expect(result).not.toEqual(expect.stringContaining('Show details'))
   })
 
+  test('Surfaces the work item payload on the submitted audit entry (RA-186)', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicantName: 'Acme', siteId: 'site-1' },
+        auditLog: [
+          {
+            id: 'ffff6666-ffff-ffff-ffff-ffffffffffff',
+            action: 'work-item-submitted',
+            actionDisplayName: 'Work item submitted',
+            details: { typeId: 're-accreditation', stateId: 'submitted' },
+            createdAt: '2026-04-27T08:00:00Z',
+            createdBy: 'frontend',
+            createdByName: 'Acme submission'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Payload now lives inside the submitted entry's disclosure rather
+    // than as a separate panel on the detail page.
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-details"')
+    )
+    expect(result).toEqual(expect.stringContaining('Payload'))
+    expect(result).toEqual(expect.stringContaining('applicantName'))
+    expect(result).toEqual(expect.stringContaining('Acme'))
+    expect(result).toEqual(expect.stringContaining('site-1'))
+    // Rendered inside a <pre><code> block so the indentation in the
+    // formatted JSON is preserved (RA-186 follow-up — paragraph-per-
+    // line collapses leading whitespace and looked broken).
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-detail-pre"')
+    )
+    // Entry <li> carries a data-action attribute so e2e tests can
+    // scope assertions to a specific entry without relying on its id.
+    expect(result).toEqual(
+      expect.stringContaining('data-action="work-item-submitted"')
+    )
+    // Template version is no longer surfaced anywhere on the audit log.
+    expect(result).not.toEqual(expect.stringContaining('Template version'))
+  })
+
   test('Renders 404 page when the backend reports no such work item', async () => {
     getWorkItem.mockResolvedValue({ ok: false, status: 404 })
 
