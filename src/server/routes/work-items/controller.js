@@ -294,7 +294,9 @@ function decorate(item) {
     slaTagText: slaTag?.text ?? null,
     slaTagClass: slaTag?.classes ?? null,
     slaRemainingText,
-    archivedAt
+    archivedAt,
+    orgName: item.payload?.organisationName ?? null,
+    material: item.payload?.material ?? null
   }
 }
 
@@ -351,11 +353,18 @@ function buildStateOptions(selectedStateIds) {
   }))
 }
 
+const REGULATOR_DISPLAY_NAMES = {
+  England: 'Environment Agency (EA)',
+  Scotland: 'SEPA',
+  Wales: 'Natural Resources Wales (NRW)',
+  NorthernIreland: 'NIEA'
+}
+
 function buildNationOptions(selectedNations) {
   const selected = new Set(selectedNations)
   return VALID_NATIONS.map((nation) => ({
     value: nation,
-    text: nation === 'NorthernIreland' ? 'Northern Ireland' : nation,
+    text: REGULATOR_DISPLAY_NAMES[nation] ?? nation,
     checked: selected.has(nation)
   }))
 }
@@ -467,10 +476,8 @@ function buildFilterSummary({ filters, totalCount }) {
     parts.push(`state: ${filters.stateIds.join(', ')}`)
   }
   if (filters.nations.length > 0) {
-    const labels = filters.nations.map((n) =>
-      n === 'NorthernIreland' ? 'Northern Ireland' : n
-    )
-    parts.push(`nation: ${labels.join(', ')}`)
+    const labels = filters.nations.map((n) => REGULATOR_DISPLAY_NAMES[n] ?? n)
+    parts.push(`regulator: ${labels.join(', ')}`)
   }
   if (filters.search) {
     parts.push(`search: "${filters.search}"`)
