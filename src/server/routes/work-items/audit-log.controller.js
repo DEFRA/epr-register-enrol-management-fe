@@ -55,6 +55,9 @@ export const workItemAuditLogController = {
     const workItem = result.workItem
     const type = getWorkItemType(workItem.typeId)
     const typeDisplayName = type?.displayName ?? workItem.typeId
+    const stateDisplayName =
+      type?.states?.find((state) => state.id === workItem.stateId)
+        ?.displayName ?? workItem.stateId
 
     return h.view(AUDIT_LOG_VIEW, {
       pageTitle: `Audit log — work item ${workItem.id}`,
@@ -71,6 +74,12 @@ export const workItemAuditLogController = {
       workItem: {
         id: workItem.id,
         typeDisplayName,
+        stateDisplayName,
+        submittedAt: workItem.submittedAt ?? null,
+        submittedBy: workItem.submittedBy ?? null,
+        lastModifiedAt: workItem.lastModifiedAt ?? null,
+        assigneeDisplayName:
+          workItem.assignedToName ?? workItem.assignedToId ?? null,
         auditLog: decorateAuditLog(workItem.auditLog, {
           payload: workItem.payload
         })

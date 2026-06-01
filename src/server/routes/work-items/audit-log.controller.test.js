@@ -352,4 +352,136 @@ describe('#workItemAuditLogController', () => {
     expect(result).toEqual(expect.stringContaining('Work item unavailable'))
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
   })
+
+  // RA-187. Summary table at the top of the audit log page.
+  describe('RA-187 summary table', () => {
+    test('Renders the column headings, work item id, type, state, submitted at/by, last modified and the assignee name', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'approved',
+          submittedAt: '2026-04-27T10:00:00Z',
+          submittedBy: 'frontend',
+          lastModifiedAt: '2026-04-28T11:00:00Z',
+          assignedToId: 'bob-2',
+          assignedToName: 'Bob Bobbinson'
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/audit-log`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="work-item-audit-summary-table"')
+      )
+      for (const heading of [
+        'Org ID',
+        'Type',
+        'State',
+        'Submitted at',
+        'Submitted by',
+        'Last modified',
+        'Assigned to'
+      ]) {
+        expect(result).toEqual(expect.stringContaining(heading))
+      }
+      expect(result).toEqual(expect.stringContaining(ID))
+      expect(result).toEqual(expect.stringContaining('Re-accreditation'))
+      expect(result).toEqual(expect.stringContaining('Approved'))
+      expect(result).toEqual(expect.stringContaining('2026-04-27T10:00:00Z'))
+      expect(result).toEqual(expect.stringContaining('frontend'))
+      expect(result).toEqual(expect.stringContaining('2026-04-28T11:00:00Z'))
+      expect(result).toEqual(expect.stringContaining('Bob Bobbinson'))
+    })
+
+    test('Falls back to "Unassigned" and em dashes when assignee, submitter and timestamps are missing', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          submittedAt: null,
+          submittedBy: null,
+          lastModifiedAt: null
+          // no assignedToId / assignedToName
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/audit-log`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="work-item-audit-summary-table"')
+      )
+      expect(result).toEqual(expect.stringContaining('Unassigned'))
+      expect(result).toEqual(expect.stringContaining('—'))
+    })
+
+    test('Falls back to the assignee id when no display name is set', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          assignedToId: 'alice-1'
+          // no assignedToName
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/audit-log`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(expect.stringContaining('alice-1'))
+      expect(result).not.toEqual(expect.stringContaining('Unassigned'))
+    })
+
+    test('Falls back to the raw stateId when the registered type does not declare a matching state', async () => {
+      // Register a type that has no `approved` state so the controller
+      // cannot resolve a display name and must fall back to the raw id.
+      registerWorkItemType({
+        id: 're-accreditation',
+        displayName: 'Re-accreditation',
+        initialState: { id: 'submitted', displayName: 'Submitted' },
+        states: [{ id: 'submitted', displayName: 'Submitted' }],
+        getTasksForState: () => []
+      })
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'mystery-state' })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/audit-log`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(expect.stringContaining('mystery-state'))
+    })
+
+    test('Falls back to the raw typeId when the work item type is not registered', async () => {
+      // No registerReaccreditation() — the lookup returns undefined and
+      // typeDisplayName falls back to the raw typeId.
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ typeId: 'unregistered-type' })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/audit-log`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(expect.stringContaining('unregistered-type'))
+    })
+  })
 })

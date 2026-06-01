@@ -1,5 +1,7 @@
 {% extends 'layouts/page.njk' %}
 
+{% from "govuk/components/table/macro.njk" import govukTable %}
+
 {# ---------------------------------------------------------------- #}
 {# Standalone audit log page for a work item (RA-97).                #}
 {#                                                                   #}
@@ -14,6 +16,35 @@
     text: heading,
     caption: "Work item " + workItem.id
   }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+      {# RA-187. Single-row summary table replicating the envelope        #}
+      {# details from the detail page so auditors have context without    #}
+      {# bouncing back.                                                    #}
+      {{ govukTable({
+        head: [
+          { text: "Org ID" },
+          { text: "Type" },
+          { text: "State" },
+          { text: "Submitted at" },
+          { text: "Submitted by" },
+          { text: "Last modified" },
+          { text: "Assigned to" }
+        ],
+        rows: [[
+          { text: workItem.id },
+          { text: workItem.typeDisplayName },
+          { text: workItem.stateDisplayName },
+          { text: workItem.submittedAt or "—" },
+          { text: workItem.submittedBy or "—" },
+          { text: workItem.lastModifiedAt or "—" },
+          { text: workItem.assigneeDisplayName or "Unassigned" }
+        ]],
+        attributes: { "data-testid": "work-item-audit-summary-table" }
+      }) }}
+    </div>
+  </div>
 
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
