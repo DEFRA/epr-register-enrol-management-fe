@@ -214,6 +214,17 @@
                      href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
                 </div>
               {% endif %}
+            {% elif action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
+              {# RA-188. Withdraw goes through a confirmation interstitial    #}
+              {# so the user can add an optional note and back out.           #}
+              <div class="govuk-!-display-inline-block">
+                <a class="govuk-button govuk-button--warning"
+                   data-module="govuk-button"
+                   role="button"
+                   draggable="false"
+                   data-testid="action-{{ action.actionId }}"
+                   href="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}/confirm">{{ action.displayName }}</a>
+              </div>
             {% else %}
               <form method="post"
                     action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"

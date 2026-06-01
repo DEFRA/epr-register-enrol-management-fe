@@ -1,0 +1,68 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+{% from "govuk/components/warning-text/macro.njk" import govukWarningText %}
+
+{# RA-188: Withdraw confirmation interstitial #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItem.id
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "withdraw-error-summary" }
+        }) }}
+      {% endif %}
+
+      {{ govukWarningText({
+        text: "Withdrawing this work item moves it to a terminal state. No further actions can be taken.",
+        iconFallbackText: "Warning",
+        attributes: { "data-testid": "withdraw-warning" }
+      }) }}
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="withdraw-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {{ govukCharacterCount({
+          id: "field-note",
+          name: "note",
+          maxlength: noteMaxLength,
+          label: {
+            text: "Add a note (optional)",
+            classes: "govuk-label--s"
+          },
+          hint: {
+            text: "Explain why this work item is being withdrawn."
+          },
+          value: values.note,
+          errorMessage: { text: fieldErrors["note"] } if fieldErrors["note"] else null,
+          attributes: { "data-testid": "withdraw-note" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Yes, withdraw this work item",
+            classes: "govuk-button--warning",
+            attributes: { "data-testid": "withdraw-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="withdraw-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
