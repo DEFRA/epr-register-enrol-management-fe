@@ -313,6 +313,12 @@ describe('#workItemAuditLogController', () => {
     expect(result).toEqual(expect.stringContaining('applicantName'))
     expect(result).toEqual(expect.stringContaining('Acme'))
     expect(result).toEqual(expect.stringContaining('site-1'))
+    // Rendered inside a <pre><code> block so the indentation in the
+    // formatted JSON is preserved (RA-186 follow-up — paragraph-per-
+    // line collapses leading whitespace and looked broken).
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-detail-pre"')
+    )
     // Template version is no longer surfaced anywhere on the audit log.
     expect(result).not.toEqual(expect.stringContaining('Template version'))
   })

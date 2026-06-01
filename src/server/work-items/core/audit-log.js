@@ -114,7 +114,10 @@ export function summariseAuditEntry(entry) {
  * skip the disclosure entirely.
  *
  * Set `multiline: true` to tell the template to preserve newlines in the
- * value (paragraph-per-line). Otherwise the value renders inline.
+ * value (paragraph-per-line). Set `preformatted: true` to render the
+ * value inside a monospace `<pre>` block, preserving all whitespace
+ * verbatim (used for the JSON payload row). Otherwise the value renders
+ * inline.
  */
 export function detailRowsForAuditEntry(entry, { payload } = {}) {
   if (entry == null || typeof entry !== 'object') {
@@ -132,7 +135,7 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       if (actor) rows.push({ key: 'Submitted by', value: actor })
       const payloadJson = formatPayloadForAudit(payload)
       if (payloadJson !== '') {
-        rows.push({ key: 'Payload', value: payloadJson, multiline: true })
+        rows.push({ key: 'Payload', value: payloadJson, preformatted: true })
       }
       return rows
     }

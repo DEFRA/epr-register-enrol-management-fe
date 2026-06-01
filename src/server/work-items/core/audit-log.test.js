@@ -156,7 +156,7 @@ describe('decorateAuditLog', () => {
       {
         key: 'Payload',
         value: JSON.stringify({ applicantName: 'Acme' }, null, 2),
-        multiline: true
+        preformatted: true
       }
     ])
   })
@@ -203,7 +203,7 @@ describe('detailRowsForAuditEntry', () => {
       {
         key: 'Payload',
         value: JSON.stringify({ applicantName: 'Acme' }, null, 2),
-        multiline: true
+        preformatted: true
       }
     ])
   })
@@ -251,7 +251,7 @@ describe('detailRowsForAuditEntry', () => {
       )
     ).toEqual([
       { key: 'Type', value: 're-accreditation' },
-      { key: 'Payload', value: 'raw-body', multiline: true }
+      { key: 'Payload', value: 'raw-body', preformatted: true }
     ])
   })
 
