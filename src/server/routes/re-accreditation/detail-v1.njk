@@ -60,11 +60,13 @@
     <p class="govuk-body" data-testid="re-accreditation-readonly-actions">
       This work item is in a final state. No further decision actions are available.
     </p>
-    {{ govukTag({
-      text: workItem.stateDisplayName,
-      classes: workItem.stateTagClasses,
-      attributes: { "data-testid": "re-accreditation-state-tag" }
-    }) }}
+    <p class="govuk-body">
+      {{ govukTag({
+        text: workItem.stateDisplayName,
+        classes: workItem.stateTagClasses,
+        attributes: { "data-testid": "re-accreditation-state-tag" }
+      }) }}
+    </p>
   {% else %}
     {{ super() }}
   {% endif %}
