@@ -71,7 +71,9 @@ export const workItemAuditLogController = {
       workItem: {
         id: workItem.id,
         typeDisplayName,
-        auditLog: decorateAuditLog(workItem.auditLog)
+        auditLog: decorateAuditLog(workItem.auditLog, {
+          payload: workItem.payload
+        })
       }
     })
   }

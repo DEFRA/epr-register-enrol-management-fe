@@ -69,7 +69,6 @@
           { key: { text: "Id" },           value: { text: workItem.id } },
           { key: { text: "Type" },         value: { text: workItem.typeDisplayName } },
           { key: { text: "State" },        value: { text: workItem.stateDisplayName } },
-          { key: { text: "Template version" }, value: { text: workItem.templateVersion } },
           { key: { text: "Submitted at" }, value: { text: workItem.submittedAt } },
           { key: { text: "Submitted by" }, value: { text: workItem.submittedBy or "—" } },
           { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt } },
@@ -265,12 +264,6 @@
            data-testid="work-item-audit-log-link"
            href="/work-items/{{ workItem.id }}/audit-log">View audit log</a>
       </p>
-    </div>
-
-    <div class="govuk-grid-column-one-third">
-      <h2 class="govuk-heading-s">Payload</h2>
-      <pre class="govuk-!-font-size-14"
-           data-testid="work-item-payload"><code>{{ workItem.payloadJson }}</code></pre>
     </div>
   </div>
 {% endblock %}
