@@ -34,13 +34,13 @@
   </div>
 {% endblock %}
 
-{# RA-132. Primary "Approve" CTA — controller decorates the workItem     #}
-{# with `canApproveDirectly` after applying the awaiting-decision        #}
-{# + (assignee or decision-maker role) rules.                            #}
-{% block primaryActions %}
+{# RA-156. Approve CTA moved into the actionsPanel button group so it    #}
+{# renders alongside Reject and Withdraw.                                #}
+{% block primaryActions %}{% endblock %}
+
+{% block approveAction %}
   {% if workItem.canApproveDirectly %}
-    <div class="govuk-button-group"
-         data-testid="re-accreditation-approve-cta">
+    <div data-testid="re-accreditation-approve-cta">
       {{ govukButton({
         text: "Approve",
         href: workItem.approveHref,

@@ -1095,7 +1095,20 @@ describe('#workItemDetailController', () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
-        workItem: aWorkItem({ stateId: 'awaiting-decision' })
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          availableActions: [
+            // Backend always returns withdraw-during-decision in this state
+            // (no task-completion requirement) even before reject is gated.
+            {
+              actionId: 'withdraw-during-decision',
+              displayName: 'Withdraw',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'withdrawn',
+              requiresAllTasksComplete: false
+            }
+          ]
+        })
       })
 
       const { result, statusCode } = await server.inject({
@@ -1160,7 +1173,16 @@ describe('#workItemDetailController', () => {
         ok: true,
         workItem: aWorkItem({
           stateId: 'awaiting-decision',
-          assignedToId: 'test-standard-id'
+          assignedToId: 'test-standard-id',
+          availableActions: [
+            {
+              actionId: 'withdraw-during-decision',
+              displayName: 'Withdraw',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'withdrawn',
+              requiresAllTasksComplete: false
+            }
+          ]
         })
       })
 
