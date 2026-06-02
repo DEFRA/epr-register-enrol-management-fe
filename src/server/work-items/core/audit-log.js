@@ -1,3 +1,5 @@
+import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
+
 /**
  * Audit log helpers (RA-97).
  *
@@ -19,17 +21,54 @@
  * it is surfaced as a `Payload` row on the `work-item-submitted` entry
  * so the original submission body lives with its audit record rather
  * than as a stand-alone panel on the detail page (RA-186).
+ *
+ * The optional `workItemSnapshot` adds a consistent set of work-item
+ * context rows (Org ID, Type, State, Submitted at, Submitted by,
+ * Last modified, Assigned to) to the disclosure of every audit entry.
  */
-export function decorateAuditLog(entries, { payload } = {}) {
+export function decorateAuditLog(entries, { payload, workItemSnapshot } = {}) {
   if (!Array.isArray(entries)) {
     return []
   }
+  const snapshotRows = buildSnapshotRows(workItemSnapshot)
   return entries.map((entry) => ({
     ...entry,
     actionDisplayName: actionDisplayNameFor(entry),
     summary: summariseAuditEntry(entry),
-    detailRows: detailRowsForAuditEntry(entry, { payload })
+    detailRows: [
+      ...detailRowsForAuditEntry(entry, { payload }),
+      ...snapshotRows
+    ]
   }))
+}
+
+/**
+ * Build the fixed work-item context rows that appear in the "Show details"
+ * disclosure of every audit entry. Returns an empty array when no snapshot
+ * is supplied so callers that don't need this context are unaffected.
+ */
+function buildSnapshotRows(snapshot) {
+  if (snapshot == null || typeof snapshot !== 'object') return []
+  const rows = []
+  if (snapshot.orgId) rows.push({ key: 'Org ID', value: snapshot.orgId })
+  if (snapshot.typeDisplayName) {
+    rows.push({ key: 'Type', value: snapshot.typeDisplayName })
+  }
+  if (snapshot.stateDisplayName) {
+    rows.push({ key: 'State', value: snapshot.stateDisplayName })
+  }
+  const submittedAt = formatDateTimeGds(snapshot.submittedAt)
+  if (submittedAt) rows.push({ key: 'Submitted at', value: submittedAt })
+  if (snapshot.submittedBy) {
+    rows.push({ key: 'Submitted by', value: snapshot.submittedBy })
+  }
+  const lastModified = formatDateTimeGds(snapshot.lastModifiedAt)
+  if (lastModified) rows.push({ key: 'Last modified', value: lastModified })
+  rows.push({
+    key: 'Assigned to',
+    value: snapshot.assignedToName ?? 'Unassigned'
+  })
+  return rows
 }
 
 /**

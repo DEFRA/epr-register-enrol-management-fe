@@ -522,6 +522,96 @@ describe('task-note-added (RA-129)', () => {
   })
 })
 
+describe('decorateAuditLog — workItemSnapshot rows', () => {
+  const baseEntry = {
+    id: '1',
+    action: 'note-added',
+    actionDisplayName: 'Note added',
+    details: {},
+    createdAt: '2026-05-01T09:00:00Z'
+  }
+
+  test('appends snapshot rows to every entry when workItemSnapshot is provided', () => {
+    const snapshot = {
+      orgId: 'APP-001',
+      typeDisplayName: 'Re-accreditation',
+      stateDisplayName: 'Submitted',
+      submittedAt: '2026-05-01T08:00:00Z',
+      submittedBy: 'frontend',
+      lastModifiedAt: '2026-05-01T09:00:00Z',
+      assignedToName: 'Alice Anderson'
+    }
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: snapshot
+    })
+    const keys = decorated.detailRows.map((r) => r.key)
+    expect(keys).toContain('Org ID')
+    expect(keys).toContain('Type')
+    expect(keys).toContain('State')
+    expect(keys).toContain('Submitted at')
+    expect(keys).toContain('Submitted by')
+    expect(keys).toContain('Last modified')
+    expect(keys).toContain('Assigned to')
+  })
+
+  test('shows "Unassigned" when assignedToName is null', () => {
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: { assignedToName: null }
+    })
+    const assignedRow = decorated.detailRows.find(
+      (r) => r.key === 'Assigned to'
+    )
+    expect(assignedRow?.value).toBe('Unassigned')
+  })
+
+  test('omits optional snapshot rows when values are absent', () => {
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: { assignedToName: 'Alice' }
+    })
+    const keys = decorated.detailRows.map((r) => r.key)
+    expect(keys).not.toContain('Org ID')
+    expect(keys).not.toContain('Submitted at')
+    expect(keys).not.toContain('Last modified')
+    expect(keys).toContain('Assigned to')
+  })
+
+  test('appends snapshot rows after entry-specific rows', () => {
+    const [decorated] = decorateAuditLog(
+      [
+        {
+          id: '1',
+          action: 'task-completed',
+          createdByName: 'Alice',
+          details: {
+            taskDisplayName: 'Check eligibility',
+            stateId: 'submitted'
+          }
+        }
+      ],
+      {
+        workItemSnapshot: {
+          typeDisplayName: 'Re-accreditation',
+          assignedToName: null
+        }
+      }
+    )
+    const keys = decorated.detailRows.map((r) => r.key)
+    expect(keys.indexOf('Task')).toBeLessThan(keys.indexOf('Type'))
+  })
+
+  test('returns no snapshot rows when workItemSnapshot is absent', () => {
+    const [decorated] = decorateAuditLog([baseEntry])
+    expect(decorated.detailRows).toEqual([])
+  })
+
+  test('returns no snapshot rows when workItemSnapshot is null', () => {
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: null
+    })
+    expect(decorated.detailRows).toEqual([])
+  })
+})
+
 describe('decorateAuditLog (RA-129)', () => {
   test('returns empty array when entries is not an array', () => {
     expect(decorateAuditLog(null)).toEqual([])
