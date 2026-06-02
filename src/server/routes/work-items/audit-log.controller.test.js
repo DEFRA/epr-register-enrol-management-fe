@@ -246,7 +246,7 @@ describe('#workItemAuditLogController', () => {
     expect(result).toEqual(expect.stringContaining('InProgress'))
   })
 
-  test('Omits the disclosure entirely when an entry has no extra detail rows worth showing', async () => {
+  test('Shows snapshot context rows even for unknown action entries with no action-specific detail rows', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -254,9 +254,6 @@ describe('#workItemAuditLogController', () => {
         auditLog: [
           {
             id: 'eeee5555-eeee-eeee-eeee-eeeeeeeeeeee',
-            // Unknown action with no actor and no useful details: the
-            // helper returns no detail rows so the template must skip
-            // the disclosure rather than render an empty one.
             action: 'something-else',
             actionDisplayName: 'Something else',
             details: {},
@@ -272,10 +269,11 @@ describe('#workItemAuditLogController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).not.toEqual(
+    expect(result).toEqual(
       expect.stringContaining('data-testid="work-item-audit-entry-details"')
     )
-    expect(result).not.toEqual(expect.stringContaining('Show details'))
+    expect(result).toEqual(expect.stringContaining('Show details'))
+    expect(result).toEqual(expect.stringContaining('Assigned to'))
   })
 
   test('Surfaces the work item payload on the submitted audit entry (RA-186)', async () => {
