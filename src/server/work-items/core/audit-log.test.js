@@ -541,7 +541,9 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
       lastModifiedAt: '2026-05-01T09:00:00Z',
       assignedToName: 'Alice Anderson'
     }
-    const [decorated] = decorateAuditLog([baseEntry], { workItemSnapshot: snapshot })
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: snapshot
+    })
     const keys = decorated.detailRows.map((r) => r.key)
     expect(keys).toContain('Org ID')
     expect(keys).toContain('Type')
@@ -556,7 +558,9 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
     const [decorated] = decorateAuditLog([baseEntry], {
       workItemSnapshot: { assignedToName: null }
     })
-    const assignedRow = decorated.detailRows.find((r) => r.key === 'Assigned to')
+    const assignedRow = decorated.detailRows.find(
+      (r) => r.key === 'Assigned to'
+    )
     expect(assignedRow?.value).toBe('Unassigned')
   })
 
@@ -578,10 +582,18 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
           id: '1',
           action: 'task-completed',
           createdByName: 'Alice',
-          details: { taskDisplayName: 'Check eligibility', stateId: 'submitted' }
+          details: {
+            taskDisplayName: 'Check eligibility',
+            stateId: 'submitted'
+          }
         }
       ],
-      { workItemSnapshot: { typeDisplayName: 'Re-accreditation', assignedToName: null } }
+      {
+        workItemSnapshot: {
+          typeDisplayName: 'Re-accreditation',
+          assignedToName: null
+        }
+      }
     )
     const keys = decorated.detailRows.map((r) => r.key)
     expect(keys.indexOf('Task')).toBeLessThan(keys.indexOf('Type'))
@@ -593,7 +605,9 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
   })
 
   test('returns no snapshot rows when workItemSnapshot is null', () => {
-    const [decorated] = decorateAuditLog([baseEntry], { workItemSnapshot: null })
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: null
+    })
     expect(decorated.detailRows).toEqual([])
   })
 })

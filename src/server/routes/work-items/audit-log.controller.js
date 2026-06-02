@@ -67,8 +67,7 @@ export const workItemAuditLogController = {
       submittedAt: workItem.submittedAt ?? null,
       submittedBy: workItem.submittedBy ?? null,
       lastModifiedAt: workItem.lastModifiedAt ?? null,
-      assignedToName:
-        workItem.assignedToName ?? workItem.assignedToId ?? null
+      assignedToName: workItem.assignedToName ?? workItem.assignedToId ?? null
     }
 
     return h.view(AUDIT_LOG_VIEW, {
