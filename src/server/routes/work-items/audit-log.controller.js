@@ -2,7 +2,6 @@ import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { decorateAuditLog } from '#/server/work-items/core/audit-log.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
