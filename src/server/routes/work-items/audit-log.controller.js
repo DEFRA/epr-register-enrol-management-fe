@@ -2,6 +2,7 @@ import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { decorateAuditLog } from '#/server/work-items/core/audit-log.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
@@ -55,6 +56,20 @@ export const workItemAuditLogController = {
     const workItem = result.workItem
     const type = getWorkItemType(workItem.typeId)
     const typeDisplayName = type?.displayName ?? workItem.typeId
+    const stateDisplayName =
+      type?.states?.find((s) => s.id === workItem.stateId)?.displayName ??
+      workItem.stateId
+
+    const workItemSnapshot = {
+      orgId: workItem.payload?.applicationReference ?? null,
+      typeDisplayName,
+      stateDisplayName,
+      submittedAt: workItem.submittedAt ?? null,
+      submittedBy: workItem.submittedBy ?? null,
+      lastModifiedAt: workItem.lastModifiedAt ?? null,
+      assignedToName:
+        workItem.assignedToName ?? workItem.assignedToId ?? null
+    }
 
     return h.view(AUDIT_LOG_VIEW, {
       pageTitle: `Audit log — work item ${workItem.id}`,
@@ -72,7 +87,8 @@ export const workItemAuditLogController = {
         id: workItem.id,
         typeDisplayName,
         auditLog: decorateAuditLog(workItem.auditLog, {
-          payload: workItem.payload
+          payload: workItem.payload,
+          workItemSnapshot
         })
       }
     })
