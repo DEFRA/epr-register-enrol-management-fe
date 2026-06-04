@@ -44,13 +44,33 @@
         <h2 class="govuk-heading-m">Filter</h2>
 
         {{ govukInput({
-          id: "search",
-          name: "search",
-          label: { text: "Search", classes: "govuk-label--s" },
-          hint: { text: "Search by id or submitter" },
-          value: filters.search,
+          id: "orgId",
+          name: "orgId",
+          label: { text: "Organisation ID", classes: "govuk-label--s" },
+          value: filters.orgId,
           spellcheck: false,
-          autocomplete: "off"
+          autocomplete: "off",
+          attributes: { "data-testid": "work-items-filter-org-id" }
+        }) }}
+
+        {{ govukInput({
+          id: "registrationId",
+          name: "registrationId",
+          label: { text: "Registration ID", classes: "govuk-label--s" },
+          value: filters.registrationId,
+          spellcheck: false,
+          autocomplete: "off",
+          attributes: { "data-testid": "work-items-filter-registration-id" }
+        }) }}
+
+        {{ govukInput({
+          id: "orgName",
+          name: "orgName",
+          label: { text: "Organisation name", classes: "govuk-label--s" },
+          value: filters.orgName,
+          spellcheck: false,
+          autocomplete: "off",
+          attributes: { "data-testid": "work-items-filter-org-name" }
         }) }}
 
         {% if typeOptions.length > 0 %}

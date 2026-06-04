@@ -45,6 +45,9 @@ export const workItemListController = {
       typeIds: filters.typeIds,
       stateIds: filters.stateIds,
       search: filters.search,
+      orgId: filters.orgId,
+      registrationId: filters.registrationId,
+      orgName: filters.orgName,
       assigneeId: filters.backendAssigneeId,
       unassigned: filters.backendUnassignedOnly,
       nations: filters.nations,
@@ -92,6 +95,9 @@ export const workItemListController = {
         filters.typeIds.length > 0 ||
         filters.stateIds.length > 0 ||
         filters.search !== '' ||
+        filters.orgId !== '' ||
+        filters.registrationId !== '' ||
+        filters.orgName !== '' ||
         filters.assigneeMode !== ASSIGNEE_FILTER_ANY ||
         filters.nations.length > 0 ||
         filters.includeArchived,
@@ -115,6 +121,10 @@ function readFilters(query, user) {
   )
 
   const search = typeof query.search === 'string' ? query.search.trim() : ''
+  const orgId = typeof query.orgId === 'string' ? query.orgId.trim() : ''
+  const registrationId =
+    typeof query.registrationId === 'string' ? query.registrationId.trim() : ''
+  const orgName = typeof query.orgName === 'string' ? query.orgName.trim() : ''
 
   const page = clampPositiveInt(query.page, 1)
 
@@ -151,6 +161,9 @@ function readFilters(query, user) {
     typeIds,
     stateIds,
     search,
+    orgId,
+    registrationId,
+    orgName,
     page,
     assigneeMode,
     assigneeUserId,
@@ -448,6 +461,11 @@ function buildHref(filters) {
   if (filters.filtersApplied) params.append('filtersApplied', '1')
   if (filters.includeArchived) params.append('includeArchived', 'true')
   if (filters.search) params.append('search', filters.search)
+  if (filters.orgId) params.append('orgId', filters.orgId)
+  if (filters.registrationId) {
+    params.append('registrationId', filters.registrationId)
+  }
+  if (filters.orgName) params.append('orgName', filters.orgName)
   if (filters.assigneeMode && filters.assigneeMode !== ASSIGNEE_FILTER_ANY) {
     params.append('assigneeMode', filters.assigneeMode)
     if (
@@ -481,6 +499,15 @@ function buildFilterSummary({ filters, totalCount }) {
   }
   if (filters.search) {
     parts.push(`search: "${filters.search}"`)
+  }
+  if (filters.orgId) {
+    parts.push(`org ID: "${filters.orgId}"`)
+  }
+  if (filters.registrationId) {
+    parts.push(`registration ID: "${filters.registrationId}"`)
+  }
+  if (filters.orgName) {
+    parts.push(`org name: "${filters.orgName}"`)
   }
   if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
     parts.push('assigned to me')

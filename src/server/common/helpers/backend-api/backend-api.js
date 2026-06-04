@@ -142,6 +142,9 @@ export async function getWorkItems({
   stateIds,
   nations,
   search,
+  orgId,
+  registrationId,
+  orgName,
   assigneeId,
   unassigned,
   includeArchived,
@@ -157,6 +160,9 @@ export async function getWorkItems({
     stateIds,
     nations,
     search,
+    orgId,
+    registrationId,
+    orgName,
     assigneeId,
     unassigned,
     includeArchived,
@@ -200,6 +206,9 @@ function buildWorkItemsUrl(
     stateIds,
     nations,
     search,
+    orgId,
+    registrationId,
+    orgName,
     assigneeId,
     unassigned,
     includeArchived,
@@ -221,6 +230,15 @@ function buildWorkItemsUrl(
   }
   if (search && String(search).trim() !== '') {
     params.append('search', String(search).trim())
+  }
+  if (orgId && String(orgId).trim() !== '') {
+    params.append('orgId', String(orgId).trim())
+  }
+  if (registrationId && String(registrationId).trim() !== '') {
+    params.append('registrationId', String(registrationId).trim())
+  }
+  if (orgName && String(orgName).trim() !== '') {
+    params.append('orgName', String(orgName).trim())
   }
   if (assigneeId && String(assigneeId).trim() !== '') {
     params.append('assigneeId', String(assigneeId).trim())
