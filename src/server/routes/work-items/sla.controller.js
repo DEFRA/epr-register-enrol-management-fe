@@ -288,7 +288,30 @@ export function makeSubmitOverrideController({
   }
 }
 
-function bannerForSlaFailure(result, _action) {
+function bannerForSlaFailure(result, action) {
+  const title = `Could not ${action} SLA`
+  if (result.outcome === 'conflict') {
+    return {
+      type: 'error',
+      title,
+      text: 'The work item state changed. Refresh and try again.'
+    }
+  }
+  if (result.outcome === 'forbidden') {
+    return {
+      type: 'error',
+      title,
+      text: 'You do not have permission to perform this action.'
+    }
+  }
+  if (result.outcome === 'not-found') {
+    return {
+      type: 'error',
+      title,
+      text: 'The work item could not be found.'
+    }
+  }
+
   return {
     type: 'error',
     title: 'Action failed',
