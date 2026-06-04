@@ -105,7 +105,11 @@ describe('makeShowWithdrawController', () => {
   test('redirects with a banner when the withdraw action is no longer available', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: { id: 'wi-1', availableActions: [{ actionId: 'approve' }] }
+      workItem: {
+        id: 'wi-1',
+        availableActions: [{ actionId: 'approve' }],
+        payload: { applicationReference: 'RA-000000001' }
+      }
     })
     const { request, h, captured } = buildHapi()
 
@@ -121,7 +125,10 @@ describe('makeShowWithdrawController', () => {
   test('handles a work item with no availableActions array', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: { id: 'wi-1' }
+      workItem: {
+        id: 'wi-1',
+        payload: { applicationReference: 'RA-000000001' }
+      }
     })
     const { request, h, captured } = buildHapi()
 
@@ -137,7 +144,8 @@ describe('makeShowWithdrawController', () => {
         id: 'wi-1',
         availableActions: [
           { actionId: 'withdraw-during-assessment', displayName: 'Withdraw' }
-        ]
+        ],
+        payload: { applicationReference: 'RA-000000001' }
       }
     })
     const { request, h, captured } = buildHapi({
@@ -160,7 +168,8 @@ describe('makeShowWithdrawController', () => {
       ok: true,
       workItem: {
         id: 'wi-1',
-        availableActions: [{ actionId: 'withdraw' }]
+        availableActions: [{ actionId: 'withdraw' }],
+        payload: { applicationReference: 'RA-000000001' }
       }
     })
     const { request, h, captured } = buildHapi()
@@ -168,6 +177,32 @@ describe('makeShowWithdrawController', () => {
     await makeShowWithdrawController().handler(request, h)
 
     expect(captured.viewCtx.actionDisplayName).toBe('Withdraw')
+  })
+
+  // RA-196: the breadcrumb text and the workItem passed to the template
+  // show the application reference when present; the breadcrumb href and
+  // form action keep the internal id.
+  test('uses the application reference for the breadcrumb text, keeping the id in the href', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: {
+        id: 'wi-1',
+        availableActions: [{ actionId: 'withdraw', displayName: 'Withdraw' }],
+        payload: { applicationReference: 'RA-111222333' }
+      }
+    })
+    const { request, h, captured } = buildHapi()
+
+    await makeShowWithdrawController().handler(request, h)
+
+    expect(captured.viewCtx.breadcrumbs[2]).toEqual({
+      text: 'RA-111222333',
+      href: '/work-items/wi-1'
+    })
+    expect(captured.viewCtx.workItem.applicationRef).toBe('RA-111222333')
+    expect(captured.viewCtx.formAction).toBe(
+      '/work-items/wi-1/actions/withdraw/confirm'
+    )
   })
 })
 
@@ -186,6 +221,14 @@ describe('makeSubmitWithdrawController', () => {
 
   test('renders an inline error when the note is too long', async () => {
     const service = { withdrawWorkItem: vi.fn() }
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: {
+        id: 'wi-1',
+        availableActions: [{ actionId: 'withdraw', displayName: 'Withdraw' }],
+        payload: { applicationReference: 'RA-123456789' }
+      }
+    })
     const { request, h, captured } = buildHapi({
       payload: { note: 'x'.repeat(WITHDRAW_NOTE_MAX_LENGTH + 1) }
     })
@@ -194,6 +237,7 @@ describe('makeSubmitWithdrawController', () => {
 
     expect(captured.viewPath).toBe('work-items/withdraw')
     expect(captured.statusCode).toBe(400)
+    expect(captured.viewCtx.workItem.applicationRef).toBe('RA-123456789')
     expect(captured.viewCtx.errorSummary.items[0].href).toBe('#field-note')
     expect(captured.viewCtx.fieldErrors.note).toContain(
       String(WITHDRAW_NOTE_MAX_LENGTH)
@@ -203,7 +247,13 @@ describe('makeSubmitWithdrawController', () => {
 
   test('treats a non-string note as empty (length guard short-circuits)', async () => {
     const service = {
-      withdrawWorkItem: vi.fn().mockResolvedValue({ ok: true, workItem: {} })
+      withdrawWorkItem: vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: {
+          id: 'wi-1',
+          payload: { applicationReference: 'RA-000000001' }
+        }
+      })
     }
     const { request, h, captured } = buildHapi({ payload: { note: 42 } })
 
@@ -217,9 +267,13 @@ describe('makeSubmitWithdrawController', () => {
 
   test('flashes success and redirects on a successful withdrawal', async () => {
     const service = {
-      withdrawWorkItem: vi
-        .fn()
-        .mockResolvedValue({ ok: true, workItem: { id: 'wi-1' } })
+      withdrawWorkItem: vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: {
+          id: 'wi-1',
+          payload: { applicationReference: 'RA-000000001' }
+        }
+      })
     }
     const { request, h, captured } = buildHapi({ payload: { note: 'why' } })
 
@@ -271,7 +325,13 @@ describe('makeSubmitWithdrawController', () => {
 
   test('falls back to a generic empty payload', async () => {
     const service = {
-      withdrawWorkItem: vi.fn().mockResolvedValue({ ok: true, workItem: {} })
+      withdrawWorkItem: vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: {
+          id: 'wi-1',
+          payload: { applicationReference: 'RA-000000001' }
+        }
+      })
     }
     const { request, h, captured } = buildHapi()
     request.payload = null

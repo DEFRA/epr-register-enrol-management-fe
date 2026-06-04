@@ -748,6 +748,8 @@ const SLA_REASON_BY_STATUS = {
 export async function createWorkItem({
   typeId,
   payload,
+  source = null,
+  applicationReference = null,
   user = null,
   baseUrl = config.get('backendApi.url'),
   timeoutMs = config.get('backendApi.timeoutMs'),
@@ -768,7 +770,7 @@ export async function createWorkItem({
         },
         user
       ),
-      body: JSON.stringify({ typeId, payload })
+      body: JSON.stringify({ typeId, payload, source, applicationReference })
     })
 
     if (response.status === 201) {

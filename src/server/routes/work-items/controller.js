@@ -308,6 +308,7 @@ function decorate(item) {
     slaTagClass: slaTag?.classes ?? null,
     slaRemainingText,
     archivedAt,
+    applicationRef: item.payload?.applicationReference ?? item.id,
     orgName: item.payload?.organisationName ?? null,
     material: item.payload?.material ?? null
   }

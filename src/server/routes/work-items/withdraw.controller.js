@@ -42,11 +42,11 @@ function confirmHref(id, actionId) {
   return `/work-items/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}/confirm`
 }
 
-function breadcrumbs(id) {
+function breadcrumbs(id, ref) {
   return [
     { text: 'Home', href: '/' },
     { text: 'Work items', href: '/work-items' },
-    { text: id, href: detailHref(id) },
+    { text: ref ?? 'Work item', href: detailHref(id) },
     { text: 'Withdraw' }
   ]
 }
@@ -107,13 +107,14 @@ export function makeShowWithdrawController() {
             breadcrumbs: [
               { text: 'Home', href: '/' },
               { text: 'Work items', href: '/work-items' },
-              { text: id }
+              { text: 'Work item' }
             ]
           })
           .code(502)
       }
 
       const workItem = result.workItem
+      const applicationRef = workItem.payload.applicationReference
       const available = findAvailableAction(workItem, actionId)
       if (!available) {
         flashBanner(request, {
@@ -126,8 +127,8 @@ export function makeShowWithdrawController() {
       return h.view(VIEW_PATH, {
         pageTitle: 'Withdraw this work item',
         heading: 'Are you sure you want to withdraw this work item?',
-        breadcrumbs: breadcrumbs(id),
-        workItem,
+        breadcrumbs: breadcrumbs(id, applicationRef),
+        workItem: { ...workItem, applicationRef },
         actionId,
         actionDisplayName: available.displayName ?? 'Withdraw',
         formAction: confirmHref(id, actionId),
@@ -156,12 +157,16 @@ export function makeSubmitWithdrawController({
       const note = typeof payload.note === 'string' ? payload.note : ''
 
       if (note.length > WITHDRAW_NOTE_MAX_LENGTH) {
+        const itemResult = await getWorkItem({ workItemId: id, user })
+        const applicationRef = itemResult.ok
+          ? itemResult.workItem.payload.applicationReference
+          : null
         return h
           .view(VIEW_PATH, {
             pageTitle: 'Error: Withdraw this work item',
             heading: 'Are you sure you want to withdraw this work item?',
-            breadcrumbs: breadcrumbs(id),
-            workItem: { id },
+            breadcrumbs: breadcrumbs(id, applicationRef),
+            workItem: { id, applicationRef },
             actionId,
             actionDisplayName: 'Withdraw',
             formAction: confirmHref(id, actionId),

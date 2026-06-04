@@ -48,7 +48,10 @@ function aWorkItem(overrides = {}) {
     lastModifiedAt: '2026-04-27T10:05:00Z',
     submittedBy: 'frontend',
     templateVersion: 'v1',
-    payload: { applicantName: 'Acme' },
+    payload: {
+      applicantName: 'Acme',
+      applicationReference: 'RA-000000001'
+    },
     tasks: [
       {
         taskId: 'check-eligibility',
@@ -113,7 +116,7 @@ describe('#workItemDetailController', () => {
       workItemId: ID,
       user: expect.objectContaining({ id: expect.any(String) })
     })
-    expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).toEqual(expect.stringContaining('Work item RA-000000001'))
     expect(result).toEqual(expect.stringContaining('Re-accreditation'))
     expect(result).toEqual(expect.stringContaining('Submitted'))
     // RA-129. Detail page is now a read-only progress summary; the task
@@ -130,6 +133,35 @@ describe('#workItemDetailController', () => {
     )
     expect(result).not.toEqual(expect.stringContaining('Template version'))
     expect(result).not.toEqual(expect.stringContaining('Acme'))
+  })
+
+  // RA-196: the caption, "Application ref" summary row and the final
+  // breadcrumb show the user-facing application reference, while the
+  // assign/tasks/audit-log routes keep using the internal id.
+  test('Shows the application reference in the caption and summary, keeping the id in routes', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicantName: 'Acme', applicationReference: 'RA-987654321' }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Work item RA-987654321'))
+    expect(result).toEqual(expect.stringContaining('Application ref'))
+    expect(result).toEqual(expect.stringContaining('RA-987654321'))
+    // Internal id must not appear as the caption text but still drives routes.
+    expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).toEqual(expect.stringContaining(`/work-items/${ID}/tasks`))
+    expect(result).toEqual(
+      expect.stringContaining(`/work-items/${ID}/audit-log`)
+    )
   })
 
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
@@ -200,7 +232,7 @@ describe('#workItemDetailController', () => {
     // Detail page renders without surfacing the template version itself
     // (RA-186 removed the row from the summary); landing successfully
     // on the generic template confirms the registry lookup ran.
-    expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).toEqual(expect.stringContaining('Work item RA-000000001'))
   })
 
   test('Renders 404 page when the backend reports no such work item', async () => {
@@ -1205,5 +1237,30 @@ describe('#workItemDetailController', () => {
         expect.stringContaining('data-testid="action-approve"')
       )
     })
+  })
+
+  test('RA-196: Falls back to using the work item id if applicationReference is missing from payload', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicantName: 'Acme' } // No applicationReference
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Should use the ID as a fallback for the page title/caption
+    expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
+    // Breadcrumb should also use the ID
+    expect(result).toEqual(
+      expect.stringContaining(
+        `<li class="govuk-breadcrumbs__list-item" aria-current="page">${ID}</li>`
+      )
+    )
   })
 })

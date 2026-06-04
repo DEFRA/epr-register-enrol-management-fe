@@ -35,7 +35,7 @@ function aWorkItem(overrides = {}) {
     lastModifiedAt: '2026-04-27T10:05:00Z',
     submittedBy: 'frontend',
     templateVersion: 'v1',
-    payload: {},
+    payload: { applicationReference: 'RA-000000001' },
     tasks: [
       {
         taskId: 'check-eligibility',
@@ -148,6 +148,28 @@ describe('#workItemTasksController (RA-129)', () => {
           `/work-items/${ID}/tasks/check-eligibility/complete`
         )
       )
+    })
+
+    // RA-196: caption and breadcrumb show the application reference when
+    // present; routes keep using the internal id.
+    test('shows the application reference in the caption, keeping the id in routes', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          payload: { applicationReference: 'RA-222333444' }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/tasks`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(expect.stringContaining('Work item RA-222333444'))
+      expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
+      expect(result).toEqual(expect.stringContaining(`/work-items/${ID}`))
     })
 
     test('handles a work item with no tasks and no notes', async () => {
