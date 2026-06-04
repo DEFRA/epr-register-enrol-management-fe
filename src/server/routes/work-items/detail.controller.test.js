@@ -48,7 +48,10 @@ function aWorkItem(overrides = {}) {
     lastModifiedAt: '2026-04-27T10:05:00Z',
     submittedBy: 'frontend',
     templateVersion: 'v1',
-    payload: { applicantName: 'Acme' },
+    payload: {
+      applicantName: 'Acme',
+      applicationReference: 'RA-000000001'
+    },
     tasks: [
       {
         taskId: 'check-eligibility',
@@ -113,7 +116,7 @@ describe('#workItemDetailController', () => {
       workItemId: ID,
       user: expect.objectContaining({ id: expect.any(String) })
     })
-    expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).toEqual(expect.stringContaining('Work item RA-000000001'))
     expect(result).toEqual(expect.stringContaining('Re-accreditation'))
     expect(result).toEqual(expect.stringContaining('Submitted'))
     // RA-129. Detail page is now a read-only progress summary; the task
@@ -229,7 +232,7 @@ describe('#workItemDetailController', () => {
     // Detail page renders without surfacing the template version itself
     // (RA-186 removed the row from the summary); landing successfully
     // on the generic template confirms the registry lookup ran.
-    expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).toEqual(expect.stringContaining('Work item RA-000000001'))
   })
 
   test('Renders 404 page when the backend reports no such work item', async () => {

@@ -35,7 +35,7 @@ function aWorkItem(overrides = {}) {
     lastModifiedAt: '2026-04-27T10:05:00Z',
     submittedBy: 'frontend',
     templateVersion: 'v1',
-    payload: {},
+    payload: { applicationReference: 'RA-000000001' },
     tasks: [
       {
         taskId: 'check-eligibility',

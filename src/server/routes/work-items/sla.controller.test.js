@@ -19,10 +19,16 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   overrideWorkItemSla: vi.fn()
 }))
 
-const { extendWorkItemSla, overrideWorkItemSla } =
+const { extendWorkItemSla, overrideWorkItemSla, getWorkItem } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '22222222-2222-2222-2222-222222222222'
+const REF = 'RA-123456789'
+
+const aWorkItem = {
+  id: ID,
+  payload: { applicationReference: REF }
+}
 
 describe('#makeShowExtendController', () => {
   let server
@@ -36,6 +42,11 @@ describe('#makeShowExtendController', () => {
     await server.stop({ timeout: 0 })
   })
 
+  beforeEach(() => {
+    getWorkItem.mockReset()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
+  })
+
   test('GET renders the extend SLA form for team-leader', async () => {
     const { statusCode, result } = await server.inject({
       method: 'GET',
@@ -46,7 +57,7 @@ describe('#makeShowExtendController', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('Extend SLA'))
     expect(result).toEqual(expect.stringContaining('sla-extend-form'))
-    expect(result).toEqual(expect.stringContaining(ID))
+    expect(result).toEqual(expect.stringContaining(REF))
   })
 
   test('GET returns 403 for non-team-leader', async () => {
@@ -74,6 +85,8 @@ describe('#makeSubmitExtendController', () => {
 
   beforeEach(() => {
     extendWorkItemSla.mockReset()
+    getWorkItem.mockReset()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
   })
 
   test('POST with valid data applies the extension and redirects to detail', async () => {
@@ -205,6 +218,11 @@ describe('#makeShowOverrideController', () => {
     await server.stop({ timeout: 0 })
   })
 
+  beforeEach(() => {
+    getWorkItem.mockReset()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
+  })
+
   test('GET renders the override SLA form for team-leader', async () => {
     const { statusCode, result } = await server.inject({
       method: 'GET',
@@ -215,7 +233,7 @@ describe('#makeShowOverrideController', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('Override SLA'))
     expect(result).toEqual(expect.stringContaining('sla-override-form'))
-    expect(result).toEqual(expect.stringContaining(ID))
+    expect(result).toEqual(expect.stringContaining(REF))
   })
 
   test('GET returns 403 for non-team-leader', async () => {
@@ -243,6 +261,8 @@ describe('#makeSubmitOverrideController', () => {
 
   beforeEach(() => {
     overrideWorkItemSla.mockReset()
+    getWorkItem.mockReset()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
   })
 
   test('POST with valid data redirects to detail page on success', async () => {

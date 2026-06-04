@@ -62,7 +62,11 @@ describe('makeShowApprovalController', () => {
   test('renders the interstitial for an eligible work item', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: { id: 'wi-1', stateId: 'awaiting-decision' }
+      workItem: {
+        id: 'wi-1',
+        stateId: 'awaiting-decision',
+        payload: { applicationReference: 'RA-REF-001' }
+      }
     })
     const { request, h, captured } = buildHapi()
     await makeShowApprovalController().handler(request, h)
@@ -78,7 +82,11 @@ describe('makeShowApprovalController', () => {
   test('redirects to the detail page with an error flash when the state is no longer eligible', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: { id: 'wi-1', stateId: 'approved' }
+      workItem: {
+        id: 'wi-1',
+        stateId: 'approved',
+        payload: { applicationReference: 'RA-REF-001' }
+      }
     })
     const { request, h, captured } = buildHapi()
     await makeShowApprovalController().handler(request, h)
@@ -96,7 +104,8 @@ describe('makeShowApprovalController', () => {
       workItem: {
         id: 'wi-1',
         stateId: 'awaiting-decision',
-        assignedToId: 'someone-else'
+        assignedToId: 'someone-else',
+        payload: { applicationReference: 'RA-REF-001' }
       }
     })
     const { request, h, captured } = buildHapi({
@@ -120,7 +129,8 @@ describe('makeShowApprovalController', () => {
       workItem: {
         id: 'wi-1',
         stateId: 'awaiting-decision',
-        assignedToId: 'u-1'
+        assignedToId: 'u-1',
+        payload: { applicationReference: 'RA-REF-001' }
       }
     })
     const { request, h, captured } = buildHapi({

@@ -339,7 +339,7 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
         breadcrumbs: [
           { text: 'Home', href: '/' },
           { text: 'Work items', href: '/work-items' },
-          { text: id }
+          { text: 'Work item' }
         ]
       })
       .code(502)
@@ -595,7 +595,7 @@ function decorate(workItem) {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
-    applicationRef: workItem.payload?.applicationReference ?? workItem.id,
+    applicationRef: workItem.payload.applicationReference,
     assigneeDisplayName:
       workItem.assignedToName ?? workItem.assignedToId ?? null,
     tasks: Array.isArray(workItem.tasks)

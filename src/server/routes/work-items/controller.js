@@ -295,7 +295,7 @@ function decorate(item) {
     slaTagClass: slaTag?.classes ?? null,
     slaRemainingText,
     archivedAt,
-    applicationRef: item.payload?.applicationReference ?? item.id,
+    applicationRef: item.payload.applicationReference,
     orgName: item.payload?.organisationName ?? null,
     material: item.payload?.material ?? null
   }
