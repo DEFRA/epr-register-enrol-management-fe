@@ -169,6 +169,43 @@ describe('#workItemListController', () => {
     )
   })
 
+  test('RA-196: Falls back to using the work item id if applicationReference is missing from payload', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+
+    const id = '22222222-2222-2222-2222-222222222222'
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id,
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: 'frontend',
+            payload: { applicantName: 'Acme' } // No applicationReference
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Should use the ID as a fallback for the link text
+    expect(result).toEqual(expect.stringContaining(`>${id}</a>`))
+  })
+
   // ---------------------------------------------------------------- //
   // Work items list usability improvements                            //
   //                                                                  //

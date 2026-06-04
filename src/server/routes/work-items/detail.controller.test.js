@@ -1238,4 +1238,29 @@ describe('#workItemDetailController', () => {
       )
     })
   })
+
+  test('RA-196: Falls back to using the work item id if applicationReference is missing from payload', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicantName: 'Acme' } // No applicationReference
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Should use the ID as a fallback for the page title/caption
+    expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
+    // Breadcrumb should also use the ID
+    expect(result).toEqual(
+      expect.stringContaining(
+        `<li class="govuk-breadcrumbs__list-item" aria-current="page">${ID}</li>`
+      )
+    )
+  })
 })
