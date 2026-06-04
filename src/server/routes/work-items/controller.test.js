@@ -119,6 +119,56 @@ describe('#workItemListController', () => {
     expect(result).toEqual(expect.stringContaining('govuk-tag govuk-tag--blue'))
   })
 
+  // RA-196: the visible link text shows the user-facing application
+  // reference (payload.applicationReference) while the href and the
+  // data-testid keep using the internal work item id.
+  test('Renders the application reference as the link text, keeping the id in the href and testid', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: 'frontend',
+            payload: { applicationReference: 'RA-123456789' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Visible link text is the application reference.
+    expect(result).toEqual(expect.stringContaining('>RA-123456789</a>'))
+    // The href and data-testid keep the internal id.
+    expect(result).toEqual(
+      expect.stringContaining(
+        'href="/work-items/11111111-1111-1111-1111-111111111111"'
+      )
+    )
+    expect(result).toEqual(
+      expect.stringContaining(
+        'data-testid="work-item-link-11111111-1111-1111-1111-111111111111"'
+      )
+    )
+  })
+
   // ---------------------------------------------------------------- //
   // Work items list usability improvements                            //
   //                                                                  //

@@ -141,6 +141,7 @@ async function renderTasks({
   }
 
   const workItem = result.workItem
+  const applicationRef = workItem.payload?.applicationReference ?? workItem.id
   const type = getWorkItemType(workItem.typeId)
   const typeDisplayName = type?.displayName ?? workItem.typeId
 
@@ -166,19 +167,20 @@ async function renderTasks({
 
   return h
     .view(TASKS_VIEW, {
-      pageTitle: `Tasks — work item ${workItem.id}`,
+      pageTitle: `Tasks — work item ${applicationRef}`,
       heading: 'Tasks',
       breadcrumbs: [
         { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
         {
-          text: workItem.id,
+          text: applicationRef,
           href: `/work-items/${encodeURIComponent(workItem.id)}`
         },
         { text: 'Tasks' }
       ],
       workItem: {
         id: workItem.id,
+        applicationRef,
         typeDisplayName,
         workItemNotes,
         groups,

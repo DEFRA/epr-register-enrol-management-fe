@@ -389,12 +389,12 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
 
   return h
     .view(templatePath, {
-      pageTitle: `Work item ${enriched.id}`,
+      pageTitle: `Work item ${enriched.applicationRef}`,
       heading: enriched.typeDisplayName,
       breadcrumbs: [
         { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
-        { text: enriched.id }
+        { text: enriched.applicationRef }
       ],
       workItem: enriched,
       assignment,
@@ -595,6 +595,7 @@ function decorate(workItem) {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
+    applicationRef: workItem.payload?.applicationReference ?? workItem.id,
     assigneeDisplayName:
       workItem.assignedToName ?? workItem.assignedToId ?? null,
     tasks: Array.isArray(workItem.tasks)

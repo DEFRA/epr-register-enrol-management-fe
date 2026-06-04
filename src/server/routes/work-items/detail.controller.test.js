@@ -132,6 +132,35 @@ describe('#workItemDetailController', () => {
     expect(result).not.toEqual(expect.stringContaining('Acme'))
   })
 
+  // RA-196: the caption, "Application ref" summary row and the final
+  // breadcrumb show the user-facing application reference, while the
+  // assign/tasks/audit-log routes keep using the internal id.
+  test('Shows the application reference in the caption and summary, keeping the id in routes', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicantName: 'Acme', applicationReference: 'RA-987654321' }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Work item RA-987654321'))
+    expect(result).toEqual(expect.stringContaining('Application ref'))
+    expect(result).toEqual(expect.stringContaining('RA-987654321'))
+    // Internal id must not appear as the caption text but still drives routes.
+    expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).toEqual(expect.stringContaining(`/work-items/${ID}/tasks`))
+    expect(result).toEqual(
+      expect.stringContaining(`/work-items/${ID}/audit-log`)
+    )
+  })
+
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({

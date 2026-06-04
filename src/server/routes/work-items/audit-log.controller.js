@@ -53,6 +53,7 @@ export const workItemAuditLogController = {
     }
 
     const workItem = result.workItem
+    const applicationRef = workItem.payload?.applicationReference ?? workItem.id
     const type = getWorkItemType(workItem.typeId)
     const typeDisplayName = type?.displayName ?? workItem.typeId
     const stateDisplayName =
@@ -70,19 +71,20 @@ export const workItemAuditLogController = {
     }
 
     return h.view(AUDIT_LOG_VIEW, {
-      pageTitle: `Audit log — work item ${workItem.id}`,
+      pageTitle: `Audit log — work item ${applicationRef}`,
       heading: 'Audit log',
       breadcrumbs: [
         { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
         {
-          text: workItem.id,
+          text: applicationRef,
           href: `/work-items/${encodeURIComponent(workItem.id)}`
         },
         { text: 'Audit log' }
       ],
       workItem: {
         id: workItem.id,
+        applicationRef,
         typeDisplayName,
         auditLog: decorateAuditLog(workItem.auditLog, {
           payload: workItem.payload,

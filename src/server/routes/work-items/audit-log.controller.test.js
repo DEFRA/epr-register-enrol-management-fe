@@ -157,6 +157,46 @@ describe('#workItemAuditLogController', () => {
     )
   })
 
+  // RA-196: caption and breadcrumb show the application reference when
+  // present in the payload; the breadcrumb href keeps the internal id.
+  test('Shows the application reference in the caption and breadcrumb, keeping the id in the breadcrumb href', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicationReference: 'RA-555000111' }
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Work item RA-555000111'))
+    expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).toEqual(expect.stringContaining(`/work-items/${ID}`))
+  })
+
+  // RA-196: falls back to the internal id when no application reference
+  // is present in the payload.
+  test('Falls back to the internal id in the caption when no application reference exists', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ payload: {} })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
+  })
+
   test('Exposes the body of a note-added entry inside a "Show details" disclosure, preserving line breaks and escaping HTML', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({

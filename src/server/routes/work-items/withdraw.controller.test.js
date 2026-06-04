@@ -169,6 +169,53 @@ describe('makeShowWithdrawController', () => {
 
     expect(captured.viewCtx.actionDisplayName).toBe('Withdraw')
   })
+
+  // RA-196: the breadcrumb text and the workItem passed to the template
+  // show the application reference when present; the breadcrumb href and
+  // form action keep the internal id.
+  test('uses the application reference for the breadcrumb text, keeping the id in the href', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: {
+        id: 'wi-1',
+        availableActions: [{ actionId: 'withdraw', displayName: 'Withdraw' }],
+        payload: { applicationReference: 'RA-111222333' }
+      }
+    })
+    const { request, h, captured } = buildHapi()
+
+    await makeShowWithdrawController().handler(request, h)
+
+    expect(captured.viewCtx.breadcrumbs[2]).toEqual({
+      text: 'RA-111222333',
+      href: '/work-items/wi-1'
+    })
+    expect(captured.viewCtx.workItem.applicationRef).toBe('RA-111222333')
+    expect(captured.viewCtx.formAction).toBe(
+      '/work-items/wi-1/actions/withdraw/confirm'
+    )
+  })
+
+  // RA-196: falls back to the internal id when no application reference.
+  test('falls back to the internal id for the breadcrumb text when no application reference', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: {
+        id: 'wi-1',
+        availableActions: [{ actionId: 'withdraw', displayName: 'Withdraw' }],
+        payload: {}
+      }
+    })
+    const { request, h, captured } = buildHapi()
+
+    await makeShowWithdrawController().handler(request, h)
+
+    expect(captured.viewCtx.breadcrumbs[2]).toEqual({
+      text: 'wi-1',
+      href: '/work-items/wi-1'
+    })
+    expect(captured.viewCtx.workItem.applicationRef).toBe('wi-1')
+  })
 })
 
 describe('makeSubmitWithdrawController', () => {

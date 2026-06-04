@@ -189,7 +189,7 @@
             {# is auto-escaped — never concatenate `item.id` raw into       #}
             {# `html:` (epr-6fi). `urlencode` for the href, `escape` for    #}
             {# the attribute and link text.                                  #}
-            {% set itemLinkHtml %}<a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.id }}</a>{% endset %}
+            {% set itemLinkHtml %}<a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.applicationRef }}</a>{% endset %}
             {% set slaTagHtml %}
               {%- if item.slaTagText %}
                 {{- govukTag({ text: item.slaTagText, classes: item.slaTagClass, attributes: { "data-testid": "work-item-sla-tag-" + item.id } }) }}

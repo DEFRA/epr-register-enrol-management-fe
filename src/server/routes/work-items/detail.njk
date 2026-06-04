@@ -22,7 +22,7 @@
 {% block content %}
   {{ appHeading({
     text: heading,
-    caption: "Work item " + workItem.id
+    caption: "Work item " + workItem.applicationRef
   }) }}
 
   {# RA-132. Generic flash-banner rendered above the existing per-feature  #}
@@ -66,7 +66,7 @@
       {{ govukSummaryList({
         attributes: { "data-testid": "work-item-summary" },
         rows: [
-          { key: { text: "Id" },           value: { text: workItem.id } },
+          { key: { text: "Application ref" }, value: { text: workItem.applicationRef } },
           { key: { text: "Type" },         value: { text: workItem.typeDisplayName } },
           { key: { text: "State" },        value: { text: workItem.stateDisplayName } },
           { key: { text: "Submitted at" }, value: { text: workItem.submittedAt } },
