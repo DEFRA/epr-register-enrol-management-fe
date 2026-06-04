@@ -1009,7 +1009,9 @@ describe('#createWorkItem (RA-127)', () => {
     expect(init.headers['x-cdp-user-roles']).toBe('standard,case-worker')
     expect(JSON.parse(init.body)).toEqual({
       typeId: 're-accreditation',
-      payload: { applicationReference: 'REF-001' }
+      payload: { applicationReference: 'REF-001' },
+      source: null,
+      applicationReference: null
     })
     expect(result).toEqual({ ok: true, workItem })
   })

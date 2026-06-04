@@ -56,6 +56,8 @@ export function createReAccreditationService({
       const result = await createWorkItem({
         typeId: 're-accreditation',
         payload: value,
+        applicationReference: value.applicationReference,
+        source: 're-accreditation-journey',
         user
       })
 
