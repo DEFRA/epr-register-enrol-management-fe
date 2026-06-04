@@ -42,11 +42,11 @@ function confirmHref(id, actionId) {
   return `/work-items/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}/confirm`
 }
 
-function breadcrumbs(id, ref = id) {
+function breadcrumbs(id, ref) {
   return [
     { text: 'Home', href: '/' },
     { text: 'Work items', href: '/work-items' },
-    { text: ref, href: detailHref(id) },
+    { text: ref ?? 'Work item', href: detailHref(id) },
     { text: 'Withdraw' }
   ]
 }

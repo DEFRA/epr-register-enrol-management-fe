@@ -24,11 +24,11 @@ function flashBanner(request, banner) {
   request.yar?.flash?.('flashBanner', banner)
 }
 
-function breadcrumbs(id, action, ref = id) {
+function breadcrumbs(id, action, ref) {
   return [
     { text: 'Home', href: '/' },
     { text: 'Work items', href: '/work-items' },
-    { text: ref, href: detailHref(id) },
+    { text: ref ?? 'Work item', href: detailHref(id) },
     { text: action }
   ]
 }
