@@ -11,26 +11,21 @@
 // Wider page container for the work items list.
 //
 .app-width-container--wide {
-  max-width: 1450px;
+  max-width: 1600px;
 }
 
-// Fixed-width filter sidebar.
-//
-// govuk-grid-column-one-quarter is percentage-based (25%), which gives ~362 px
-// at a 1450 px container — wider than the filter panel needs. This class pins
-// it to 300 px so the results column gets the remaining space.
-
+// Filter sidebar — 1/5 of the container width.
 .app-work-items__filter {
-  flex: 0 0 300px;
-  width: 300px;
-  max-width: 300px;
+  flex: 0 0 20%;
+  width: 20%;
+  max-width: 20%;
 }
 
-// Results column — takes all remaining width after the fixed-width filter.
+// Results column — 4/5 of the container width.
 .app-work-items__results {
-  flex: 1 1 auto;
-  width: auto;
-  max-width: calc(100% - 300px);
+  flex: 1 1 80%;
+  width: 80%;
+  max-width: 80%;
 }
 
 // Work items results table wrapper.
