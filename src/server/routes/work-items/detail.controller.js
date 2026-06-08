@@ -513,6 +513,24 @@ function applyReAccreditationViewModel({ workItem, request, user }) {
   }
 }
 
+/**
+ * RA-176: coerce the issued accreditation start date into a string the date
+ * formatter can parse. The backend now stamps it as a plain ISO date string,
+ * but older work items (and any value that slips through as MongoDB extended
+ * JSON) arrive as a `{ $date: '...' }` object. Left unhandled that object
+ * string-coerces to the literal "[object Object]" in the rendered panel, so
+ * unwrap the `$date` here and ignore any other non-string shape.
+ */
+function normaliseAccreditationStartDate(value) {
+  if (value == null || typeof value === 'string') {
+    return value ?? null
+  }
+  if (typeof value === 'object' && typeof value.$date === 'string') {
+    return value.$date
+  }
+  return null
+}
+
 function buildDecisionMetadata(workItem) {
   if (workItem.stateId !== 'approved') {
     return null
@@ -520,7 +538,9 @@ function buildDecisionMetadata(workItem) {
 
   const payload = workItem.payload ?? {}
   const accreditationId = payload.accreditationId ?? null
-  const accreditationStartDate = payload.accreditationStartDate ?? null
+  const accreditationStartDate = normaliseAccreditationStartDate(
+    payload.accreditationStartDate
+  )
   // RA-133: backend now stamps the accreditation year alongside the id
   // and start date so the UI can display the year independently of the
   // (locally-formatted) start date.
