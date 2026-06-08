@@ -69,9 +69,9 @@
           { key: { text: "Application ref" }, value: { text: workItem.applicationRef } },
           { key: { text: "Type" },         value: { text: workItem.typeDisplayName } },
           { key: { text: "State" },        value: { text: workItem.stateDisplayName } },
-          { key: { text: "Submitted at" }, value: { text: workItem.submittedAt } },
+          { key: { text: "Submitted at" }, value: { text: workItem.submittedAt | formatDateTimeGds } },
           { key: { text: "Submitted by" }, value: { text: workItem.submittedBy or "—" } },
-          { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt } },
+          { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt | formatDateTimeGds } },
           { key: { text: "Assigned to" }, value: { text: assignment.assignedToName or "Unassigned" } }
         ]
       }) }}
