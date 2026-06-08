@@ -339,7 +339,7 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
         breadcrumbs: [
           { text: 'Home', href: '/' },
           { text: 'Work items', href: '/work-items' },
-          { text: id }
+          { text: 'Work item' }
         ]
       })
       .code(502)
@@ -389,12 +389,12 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
 
   return h
     .view(templatePath, {
-      pageTitle: `Work item ${enriched.id}`,
+      pageTitle: `Work item ${enriched.applicationRef}`,
       heading: enriched.typeDisplayName,
       breadcrumbs: [
         { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
-        { text: enriched.id }
+        { text: enriched.applicationRef }
       ],
       workItem: enriched,
       assignment,
@@ -595,7 +595,8 @@ function decorate(workItem) {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
-    payloadJson: safeStringify(workItem.payload),
+    applicationRef:
+      workItem.payload?.applicationReference ?? workItem.id ?? null,
     assigneeDisplayName:
       workItem.assignedToName ?? workItem.assignedToId ?? null,
     tasks: Array.isArray(workItem.tasks)
@@ -663,14 +664,6 @@ const TASK_STATUS_OPTIONS = [
   { value: 'Blocked', text: 'Blocked' },
   { value: 'Completed', text: 'Completed' }
 ]
-
-function safeStringify(value) {
-  try {
-    return JSON.stringify(value ?? {}, null, 2)
-  } catch {
-    return ''
-  }
-}
 
 /**
  * Resolve the success redirect target for a task-level POST. The tasks

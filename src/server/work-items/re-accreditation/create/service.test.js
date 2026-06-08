@@ -4,6 +4,7 @@ import { createReAccreditationService } from './service.js'
 
 const validForm = () => ({
   applicationReference: 'REF-001',
+  operatorEmail: 'test@defra.gov.uk',
   organisationName: 'Acme',
   siteAddress: {
     line1: '1 Test Way',
@@ -50,6 +51,7 @@ describe('#createReAccreditationService.create (RA-127)', () => {
     expect(call.typeId).toBe('re-accreditation')
     expect(call.user).toEqual({ id: 'u-1' })
     expect(call.payload.applicationReference).toBe('REF-001')
+    expect(call.payload.operatorEmail).toBe('test@defra.gov.uk')
     expect(call.payload.siteAddress.postcode).toBe('AB1 2CD')
 
     expect(result).toEqual({

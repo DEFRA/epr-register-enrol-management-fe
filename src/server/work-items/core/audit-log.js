@@ -1,3 +1,5 @@
+import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
+
 /**
  * Audit log helpers (RA-97).
  *
@@ -14,17 +16,59 @@
  * Decorate the raw audit log from a backend `WorkItemResponse` with a
  * `summary` string suitable for direct rendering. Returns the entries in
  * the same chronological order the backend projected them.
+ *
+ * The optional `payload` is the current work item payload; when supplied
+ * it is surfaced as a `Payload` row on the `work-item-submitted` entry
+ * so the original submission body lives with its audit record rather
+ * than as a stand-alone panel on the detail page (RA-186).
+ *
+ * The optional `workItemSnapshot` adds a consistent set of work-item
+ * context rows (Org ID, Type, State, Submitted at, Submitted by,
+ * Last modified, Assigned to) to the disclosure of every audit entry.
  */
-export function decorateAuditLog(entries) {
+export function decorateAuditLog(entries, { payload, workItemSnapshot } = {}) {
   if (!Array.isArray(entries)) {
     return []
   }
+  const snapshotRows = buildSnapshotRows(workItemSnapshot)
   return entries.map((entry) => ({
     ...entry,
     actionDisplayName: actionDisplayNameFor(entry),
     summary: summariseAuditEntry(entry),
-    detailRows: detailRowsForAuditEntry(entry)
+    detailRows: [
+      ...detailRowsForAuditEntry(entry, { payload }),
+      ...snapshotRows
+    ]
   }))
+}
+
+/**
+ * Build the fixed work-item context rows that appear in the "Show details"
+ * disclosure of every audit entry. Returns an empty array when no snapshot
+ * is supplied so callers that don't need this context are unaffected.
+ */
+function buildSnapshotRows(snapshot) {
+  if (snapshot == null || typeof snapshot !== 'object') return []
+  const rows = []
+  if (snapshot.orgId) rows.push({ key: 'Org ID', value: snapshot.orgId })
+  if (snapshot.typeDisplayName) {
+    rows.push({ key: 'Type', value: snapshot.typeDisplayName })
+  }
+  if (snapshot.stateDisplayName) {
+    rows.push({ key: 'State', value: snapshot.stateDisplayName })
+  }
+  const submittedAt = formatDateTimeGds(snapshot.submittedAt)
+  if (submittedAt) rows.push({ key: 'Submitted at', value: submittedAt })
+  if (snapshot.submittedBy) {
+    rows.push({ key: 'Submitted by', value: snapshot.submittedBy })
+  }
+  const lastModified = formatDateTimeGds(snapshot.lastModifiedAt)
+  if (lastModified) rows.push({ key: 'Last modified', value: lastModified })
+  rows.push({
+    key: 'Assigned to',
+    value: snapshot.assignedToName ?? 'Unassigned'
+  })
+  return rows
 }
 
 /**
@@ -109,9 +153,12 @@ export function summariseAuditEntry(entry) {
  * skip the disclosure entirely.
  *
  * Set `multiline: true` to tell the template to preserve newlines in the
- * value (paragraph-per-line). Otherwise the value renders inline.
+ * value (paragraph-per-line). Set `preformatted: true` to render the
+ * value inside a monospace `<pre>` block, preserving all whitespace
+ * verbatim (used for the JSON payload row). Otherwise the value renders
+ * inline.
  */
-export function detailRowsForAuditEntry(entry) {
+export function detailRowsForAuditEntry(entry, { payload } = {}) {
   if (entry == null || typeof entry !== 'object') {
     return []
   }
@@ -123,11 +170,12 @@ export function detailRowsForAuditEntry(entry) {
       if (details.stateId) {
         rows.push({ key: 'Initial state', value: details.stateId })
       }
-      if (details.templateVersion) {
-        rows.push({ key: 'Template version', value: details.templateVersion })
-      }
       const actor = entry.createdByName ?? entry.createdBy
       if (actor) rows.push({ key: 'Submitted by', value: actor })
+      const payloadJson = formatPayloadForAudit(payload)
+      if (payloadJson !== '') {
+        rows.push({ key: 'Payload', value: payloadJson, preformatted: true })
+      }
       return rows
     }
     case 'task-completed': {
@@ -214,5 +262,17 @@ export function detailRowsForAuditEntry(entry) {
     }
     default:
       return []
+  }
+}
+
+function formatPayloadForAudit(payload) {
+  if (payload == null) return ''
+  if (typeof payload === 'string') {
+    return payload.trim() === '' ? '' : payload
+  }
+  try {
+    return JSON.stringify(payload, null, 2)
+  } catch {
+    return ''
   }
 }

@@ -43,11 +43,11 @@ function approveHref(id) {
   return `/work-items/re-accreditation/${encodeURIComponent(id)}/approve`
 }
 
-function breadcrumbs(id) {
+function breadcrumbs(id, ref) {
   return [
     { text: 'Home', href: '/' },
     { text: 'Work items', href: '/work-items' },
-    { text: id, href: detailHref(id) },
+    { text: ref ?? 'Work item', href: detailHref(id) },
     { text: 'Approve' }
   ]
 }
@@ -98,6 +98,7 @@ export function makeShowApprovalController() {
       }
 
       const workItem = result.workItem
+      const applicationRef = workItem.payload.applicationReference
 
       // Defensive UX: if the underlying state is no longer eligible (the
       // user followed a stale link or the state moved on between page
@@ -132,8 +133,8 @@ export function makeShowApprovalController() {
       return h.view(VIEW_PATH, {
         pageTitle: PAGE_TITLE,
         heading: PAGE_TITLE,
-        breadcrumbs: breadcrumbs(id),
-        workItem,
+        breadcrumbs: breadcrumbs(id, applicationRef),
+        workItem: { ...workItem, applicationRef },
         formAction: approveHref(id),
         cancelHref: detailHref(id),
         decisionNoteMaxLength: APPROVAL_DECISION_NOTE_MAX_LENGTH,
@@ -164,12 +165,19 @@ export function makeSubmitApprovalController({
       // interstitial rather than after a redirect — the textarea has the
       // character-count component and the user expects feedback in place.
       if (decisionNote.length > APPROVAL_DECISION_NOTE_MAX_LENGTH) {
+        const result = await getWorkItem({ workItemId: id, user })
+        const applicationRef = result.ok
+          ? result.workItem.payload.applicationReference
+          : id
+
         return h
           .view(VIEW_PATH, {
             pageTitle: `Error: ${PAGE_TITLE}`,
             heading: PAGE_TITLE,
-            breadcrumbs: breadcrumbs(id),
-            workItem: { id },
+            breadcrumbs: breadcrumbs(id, applicationRef),
+            workItem: result.ok
+              ? { ...result.workItem, applicationRef }
+              : { id },
             formAction: approveHref(id),
             cancelHref: detailHref(id),
             decisionNoteMaxLength: APPROVAL_DECISION_NOTE_MAX_LENGTH,

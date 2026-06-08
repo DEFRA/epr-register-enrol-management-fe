@@ -21,6 +21,10 @@ import {
   makeSubmitOverrideController
 } from './sla.controller.js'
 import {
+  makeShowWithdrawController,
+  makeSubmitWithdrawController
+} from './withdraw.controller.js'
+import {
   requireAssign,
   requireStandard,
   requireTeamLeader
@@ -92,6 +96,20 @@ export const workItems = {
           method: 'POST',
           path: '/work-items/{id}/actions/{actionId}',
           ...makeApplyActionController()
+        },
+        {
+          // RA-188. Interstitial confirmation page for withdraw actions.
+          // The detail template swaps the inline POST form for a link to
+          // this GET when it spots a withdraw action; the POST below
+          // accepts an optional note and PRG-redirects on success.
+          method: 'GET',
+          path: '/work-items/{id}/actions/{actionId}/confirm',
+          ...makeShowWithdrawController()
+        },
+        {
+          method: 'POST',
+          path: '/work-items/{id}/actions/{actionId}/confirm',
+          ...makeSubmitWithdrawController()
         },
         {
           // Assign / re-assign / self-assign. Gated declaratively at the

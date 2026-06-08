@@ -136,6 +136,30 @@ describe('decorateAuditLog', () => {
     // Original fields are preserved.
     expect(decorated[1].createdAt).toBe('2026-04-27T10:00:00Z')
   })
+
+  test('passes the supplied payload through to detail rows for a work-item-submitted entry', () => {
+    const decorated = decorateAuditLog(
+      [
+        {
+          id: '1',
+          action: 'work-item-submitted',
+          actionDisplayName: 'Work item submitted',
+          details: { typeId: 're-accreditation', stateId: 'submitted' },
+          createdAt: '2026-04-27T08:00:00Z'
+        }
+      ],
+      { payload: { applicantName: 'Acme' } }
+    )
+    expect(decorated[0].detailRows).toEqual([
+      { key: 'Type', value: 're-accreditation' },
+      { key: 'Initial state', value: 'submitted' },
+      {
+        key: 'Payload',
+        value: JSON.stringify({ applicantName: 'Acme' }, null, 2),
+        preformatted: true
+      }
+    ])
+  })
 })
 
 describe('detailRowsForAuditEntry', () => {
@@ -157,24 +181,92 @@ describe('detailRowsForAuditEntry', () => {
     ).toEqual([])
   })
 
-  test('projects type, initial state, template version and submitter for a work-item-submitted entry', () => {
+  test('projects type, initial state, submitter and payload for a work-item-submitted entry', () => {
+    expect(
+      detailRowsForAuditEntry(
+        {
+          action: 'work-item-submitted',
+          createdBy: 'frontend',
+          createdByName: 'Acme submission',
+          details: {
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            templateVersion: 'v1'
+          }
+        },
+        { payload: { applicantName: 'Acme' } }
+      )
+    ).toEqual([
+      { key: 'Type', value: 're-accreditation' },
+      { key: 'Initial state', value: 'submitted' },
+      { key: 'Submitted by', value: 'Acme submission' },
+      {
+        key: 'Payload',
+        value: JSON.stringify({ applicantName: 'Acme' }, null, 2),
+        preformatted: true
+      }
+    ])
+  })
+
+  test('omits the payload row when no payload is supplied or it is empty', () => {
     expect(
       detailRowsForAuditEntry({
         action: 'work-item-submitted',
-        createdBy: 'frontend',
         createdByName: 'Acme submission',
-        details: {
-          typeId: 're-accreditation',
-          stateId: 'submitted',
-          templateVersion: 'v1'
-        }
+        details: { typeId: 're-accreditation', stateId: 'submitted' }
       })
     ).toEqual([
       { key: 'Type', value: 're-accreditation' },
       { key: 'Initial state', value: 'submitted' },
-      { key: 'Template version', value: 'v1' },
       { key: 'Submitted by', value: 'Acme submission' }
     ])
+    expect(
+      detailRowsForAuditEntry(
+        {
+          action: 'work-item-submitted',
+          details: { typeId: 're-accreditation' }
+        },
+        { payload: null }
+      )
+    ).toEqual([{ key: 'Type', value: 're-accreditation' }])
+    expect(
+      detailRowsForAuditEntry(
+        {
+          action: 'work-item-submitted',
+          details: { typeId: 're-accreditation' }
+        },
+        { payload: '   ' }
+      )
+    ).toEqual([{ key: 'Type', value: 're-accreditation' }])
+  })
+
+  test('renders a string payload verbatim on a work-item-submitted entry', () => {
+    expect(
+      detailRowsForAuditEntry(
+        {
+          action: 'work-item-submitted',
+          details: { typeId: 're-accreditation' }
+        },
+        { payload: 'raw-body' }
+      )
+    ).toEqual([
+      { key: 'Type', value: 're-accreditation' },
+      { key: 'Payload', value: 'raw-body', preformatted: true }
+    ])
+  })
+
+  test('returns an empty array when JSON.stringify throws on a circular payload', () => {
+    const circular = {}
+    circular.self = circular
+    expect(
+      detailRowsForAuditEntry(
+        {
+          action: 'work-item-submitted',
+          details: {}
+        },
+        { payload: circular }
+      )
+    ).toEqual([])
   })
 
   test('projects task, state and actor for a task-completed entry', () => {
@@ -427,6 +519,96 @@ describe('task-note-added (RA-129)', () => {
 
   test('detailRowsForAuditEntry returns no rows when details are empty', () => {
     expect(detailRowsForAuditEntry({ action: 'task-note-added' })).toEqual([])
+  })
+})
+
+describe('decorateAuditLog — workItemSnapshot rows', () => {
+  const baseEntry = {
+    id: '1',
+    action: 'note-added',
+    actionDisplayName: 'Note added',
+    details: {},
+    createdAt: '2026-05-01T09:00:00Z'
+  }
+
+  test('appends snapshot rows to every entry when workItemSnapshot is provided', () => {
+    const snapshot = {
+      orgId: 'APP-001',
+      typeDisplayName: 'Re-accreditation',
+      stateDisplayName: 'Submitted',
+      submittedAt: '2026-05-01T08:00:00Z',
+      submittedBy: 'frontend',
+      lastModifiedAt: '2026-05-01T09:00:00Z',
+      assignedToName: 'Alice Anderson'
+    }
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: snapshot
+    })
+    const keys = decorated.detailRows.map((r) => r.key)
+    expect(keys).toContain('Org ID')
+    expect(keys).toContain('Type')
+    expect(keys).toContain('State')
+    expect(keys).toContain('Submitted at')
+    expect(keys).toContain('Submitted by')
+    expect(keys).toContain('Last modified')
+    expect(keys).toContain('Assigned to')
+  })
+
+  test('shows "Unassigned" when assignedToName is null', () => {
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: { assignedToName: null }
+    })
+    const assignedRow = decorated.detailRows.find(
+      (r) => r.key === 'Assigned to'
+    )
+    expect(assignedRow?.value).toBe('Unassigned')
+  })
+
+  test('omits optional snapshot rows when values are absent', () => {
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: { assignedToName: 'Alice' }
+    })
+    const keys = decorated.detailRows.map((r) => r.key)
+    expect(keys).not.toContain('Org ID')
+    expect(keys).not.toContain('Submitted at')
+    expect(keys).not.toContain('Last modified')
+    expect(keys).toContain('Assigned to')
+  })
+
+  test('appends snapshot rows after entry-specific rows', () => {
+    const [decorated] = decorateAuditLog(
+      [
+        {
+          id: '1',
+          action: 'task-completed',
+          createdByName: 'Alice',
+          details: {
+            taskDisplayName: 'Check eligibility',
+            stateId: 'submitted'
+          }
+        }
+      ],
+      {
+        workItemSnapshot: {
+          typeDisplayName: 'Re-accreditation',
+          assignedToName: null
+        }
+      }
+    )
+    const keys = decorated.detailRows.map((r) => r.key)
+    expect(keys.indexOf('Task')).toBeLessThan(keys.indexOf('Type'))
+  })
+
+  test('returns no snapshot rows when workItemSnapshot is absent', () => {
+    const [decorated] = decorateAuditLog([baseEntry])
+    expect(decorated.detailRows).toEqual([])
+  })
+
+  test('returns no snapshot rows when workItemSnapshot is null', () => {
+    const [decorated] = decorateAuditLog([baseEntry], {
+      workItemSnapshot: null
+    })
+    expect(decorated.detailRows).toEqual([])
   })
 })
 

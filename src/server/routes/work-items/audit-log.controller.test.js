@@ -34,7 +34,10 @@ function aWorkItem(overrides = {}) {
     lastModifiedAt: '2026-04-27T10:05:00Z',
     submittedBy: 'frontend',
     templateVersion: 'v1',
-    payload: { applicantName: 'Acme' },
+    payload: {
+      applicantName: 'Acme',
+      applicationReference: 'RA-000000001'
+    },
     tasks: [],
     availableActions: [],
     auditLog: [],
@@ -157,6 +160,28 @@ describe('#workItemAuditLogController', () => {
     )
   })
 
+  // RA-196: caption and breadcrumb show the application reference when
+  // present in the payload; the breadcrumb href keeps the internal id.
+  test('Shows the application reference in the caption and breadcrumb, keeping the id in the breadcrumb href', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicationReference: 'RA-555000111' }
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Work item RA-555000111'))
+    expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).toEqual(expect.stringContaining(`/work-items/${ID}`))
+  })
+
   test('Exposes the body of a note-added entry inside a "Show details" disclosure, preserving line breaks and escaping HTML', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
@@ -246,7 +271,7 @@ describe('#workItemAuditLogController', () => {
     expect(result).toEqual(expect.stringContaining('InProgress'))
   })
 
-  test('Omits the disclosure entirely when an entry has no extra detail rows worth showing', async () => {
+  test('Shows snapshot context rows even for unknown action entries with no action-specific detail rows', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -254,9 +279,6 @@ describe('#workItemAuditLogController', () => {
         auditLog: [
           {
             id: 'eeee5555-eeee-eeee-eeee-eeeeeeeeeeee',
-            // Unknown action with no actor and no useful details: the
-            // helper returns no detail rows so the template must skip
-            // the disclosure rather than render an empty one.
             action: 'something-else',
             actionDisplayName: 'Something else',
             details: {},
@@ -272,10 +294,61 @@ describe('#workItemAuditLogController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).not.toEqual(
+    expect(result).toEqual(
       expect.stringContaining('data-testid="work-item-audit-entry-details"')
     )
-    expect(result).not.toEqual(expect.stringContaining('Show details'))
+    expect(result).toEqual(expect.stringContaining('Show details'))
+    expect(result).toEqual(expect.stringContaining('Assigned to'))
+  })
+
+  test('Surfaces the work item payload on the submitted audit entry (RA-186)', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicantName: 'Acme', siteId: 'site-1' },
+        auditLog: [
+          {
+            id: 'ffff6666-ffff-ffff-ffff-ffffffffffff',
+            action: 'work-item-submitted',
+            actionDisplayName: 'Work item submitted',
+            details: { typeId: 're-accreditation', stateId: 'submitted' },
+            createdAt: '2026-04-27T08:00:00Z',
+            createdBy: 'frontend',
+            createdByName: 'Acme submission'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Payload now lives inside the submitted entry's disclosure rather
+    // than as a separate panel on the detail page.
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-details"')
+    )
+    expect(result).toEqual(expect.stringContaining('Payload'))
+    expect(result).toEqual(expect.stringContaining('applicantName'))
+    expect(result).toEqual(expect.stringContaining('Acme'))
+    expect(result).toEqual(expect.stringContaining('site-1'))
+    // Rendered inside a <pre><code> block so the indentation in the
+    // formatted JSON is preserved (RA-186 follow-up — paragraph-per-
+    // line collapses leading whitespace and looked broken).
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-detail-pre"')
+    )
+    // Entry <li> carries a data-action attribute so e2e tests can
+    // scope assertions to a specific entry without relying on its id.
+    expect(result).toEqual(
+      expect.stringContaining('data-action="work-item-submitted"')
+    )
+    // Template version is no longer surfaced anywhere on the audit log.
+    expect(result).not.toEqual(expect.stringContaining('Template version'))
   })
 
   test('Renders 404 page when the backend reports no such work item', async () => {

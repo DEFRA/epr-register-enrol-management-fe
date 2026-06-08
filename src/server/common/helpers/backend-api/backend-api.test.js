@@ -260,6 +260,44 @@ describe('#getWorkItems', () => {
     const calledUrl = fetchImpl.mock.calls[0][0]
     expect(calledUrl).not.toContain('nation=')
   })
+
+  test('Appends includeArchived=true when includeArchived is true', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      includeArchived: true,
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const calledUrl = fetchImpl.mock.calls[0][0]
+    expect(calledUrl).toContain('includeArchived=true')
+  })
+
+  test('Omits includeArchived param when includeArchived is false or absent', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      includeArchived: false,
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const calledUrl = fetchImpl.mock.calls[0][0]
+    expect(calledUrl).not.toContain('includeArchived')
+  })
 })
 
 describe('#completeWorkItemTask', () => {
@@ -971,7 +1009,9 @@ describe('#createWorkItem (RA-127)', () => {
     expect(init.headers['x-cdp-user-roles']).toBe('standard,case-worker')
     expect(JSON.parse(init.body)).toEqual({
       typeId: 're-accreditation',
-      payload: { applicationReference: 'REF-001' }
+      payload: { applicationReference: 'REF-001' },
+      source: null,
+      applicationReference: null
     })
     expect(result).toEqual({ ok: true, workItem })
   })

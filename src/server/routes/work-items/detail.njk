@@ -22,7 +22,7 @@
 {% block content %}
   {{ appHeading({
     text: heading,
-    caption: "Work item " + workItem.id
+    caption: "Work item " + workItem.applicationRef
   }) }}
 
   {# RA-132. Generic flash-banner rendered above the existing per-feature  #}
@@ -66,10 +66,9 @@
       {{ govukSummaryList({
         attributes: { "data-testid": "work-item-summary" },
         rows: [
-          { key: { text: "Id" },           value: { text: workItem.id } },
+          { key: { text: "Application ref" }, value: { text: workItem.applicationRef } },
           { key: { text: "Type" },         value: { text: workItem.typeDisplayName } },
           { key: { text: "State" },        value: { text: workItem.stateDisplayName } },
-          { key: { text: "Template version" }, value: { text: workItem.templateVersion } },
           { key: { text: "Submitted at" }, value: { text: workItem.submittedAt } },
           { key: { text: "Submitted by" }, value: { text: workItem.submittedBy or "—" } },
           { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt } },
@@ -191,18 +190,54 @@
 
       {% if workItem.availableActions and workItem.availableActions.length > 0 %}
         <div class="govuk-button-group" data-testid="work-item-actions">
+          {% block approveAction %}{% endblock %}
           {% for action in workItem.availableActions %}
-            <form method="post"
-                  action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
-                  class="govuk-!-display-inline-block"
-                  novalidate>
-              <input type="hidden" name="crumb" value="{{ crumb }}" />
-              {{ govukButton({
-                text: action.displayName,
-                classes: action.actionId == 'reject' and 'govuk-button--warning' or '',
-                attributes: { "data-testid": "action-" + action.actionId }
-              }) }}
-            </form>
+            {% if action.actionId == 'sla-extend' %}
+              {% if canManageSla %}
+                <div class="govuk-!-display-inline-block">
+                  <a class="govuk-button"
+                     data-module="govuk-button"
+                     role="button"
+                     draggable="false"
+                     data-testid="action-sla-extend"
+                     href="/work-items/{{ workItem.id }}/sla/extend">{{ action.displayName }}</a>
+                </div>
+                {# RA-131. Override SLA is BFF-only (no backend workflow        #}
+                {# transition) so it isn't projected into availableActions.     #}
+                {# Render it immediately after Extend SLA, matching its style.  #}
+                <div class="govuk-!-display-inline-block">
+                  <a class="govuk-button"
+                     data-module="govuk-button"
+                     role="button"
+                     draggable="false"
+                     data-testid="action-sla-override"
+                     href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
+                </div>
+              {% endif %}
+            {% elif action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
+              {# RA-188. Withdraw goes through a confirmation interstitial    #}
+              {# so the user can add an optional note and back out.           #}
+              <div class="govuk-!-display-inline-block">
+                <a class="govuk-button govuk-button--warning"
+                   data-module="govuk-button"
+                   role="button"
+                   draggable="false"
+                   data-testid="action-{{ action.actionId }}"
+                   href="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}/confirm">{{ action.displayName }}</a>
+              </div>
+            {% else %}
+              <form method="post"
+                    action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
+                    class="govuk-!-display-inline-block"
+                    novalidate>
+                <input type="hidden" name="crumb" value="{{ crumb }}" />
+                {{ govukButton({
+                  text: action.displayName,
+                  classes: action.actionId == 'reject' and 'govuk-button--warning' or '',
+                  attributes: { "data-testid": "action-" + action.actionId }
+                }) }}
+              </form>
+            {% endif %}
           {% endfor %}
         </div>
       {% else %}
@@ -213,10 +248,12 @@
       {% endblock %}
 
       {# ----------------------------- SLA -------------------------------- #}
-      {# RA-131. Team leaders see Extend (modal) and Override (page) links  #}
-      {# when the work item has an SLA clock. Hidden for non-team-leaders. #}
+      {# RA-131. Extend SLA and Override SLA buttons live in the Actions   #}
+      {# panel above. This section shows the SLA clock status (when the    #}
+      {# backend exposes it) so team leaders can see what they're acting   #}
+      {# on before clicking the buttons.                                   #}
       {% if canManageSla and workItem.slaClock %}
-        <h2 class="govuk-heading-m">SLA management</h2>
+        <h2 class="govuk-heading-m">SLA status</h2>
         <p class="govuk-body" data-testid="sla-clock-info">
           Target: {{ workItem.slaClock.targetDuration }} &mdash;
           {% if workItem.slaClock.breached %}
@@ -225,95 +262,6 @@
             On track
           {% endif %}
         </p>
-        <div class="govuk-button-group" data-testid="sla-management-actions">
-          <button type="button"
-                  class="govuk-button govuk-button--secondary"
-                  data-module="sla-extend-modal"
-                  data-testid="sla-extend-open"
-                  aria-haspopup="dialog"
-                  aria-controls="sla-extend-dialog">
-            Extend SLA
-          </button>
-          <a class="govuk-link"
-             data-testid="sla-override-link"
-             href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
-        </div>
-
-        {# RA-131: Extend SLA modal dialog.                                 #}
-        {# Progressive-enhanced: if JS is unavailable the button navigates  #}
-        {# to the standalone extend page via the noscript fallback link.     #}
-        <dialog id="sla-extend-dialog"
-                class="govuk-!-padding-6"
-                aria-labelledby="sla-extend-dialog-title"
-                data-testid="sla-extend-dialog"
-                style="max-width:40rem;border:2px solid #0b0c0c;border-radius:0">
-          <h2 class="govuk-heading-m" id="sla-extend-dialog-title">Extend SLA</h2>
-
-          <form method="post"
-                action="/work-items/{{ workItem.id }}/sla/extend"
-                novalidate
-                data-testid="sla-extend-modal-form">
-            <input type="hidden" name="crumb" value="{{ crumb }}" />
-
-            {% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
-            {% from "govuk/components/input/macro.njk" import govukInput %}
-
-            {{ govukCharacterCount({
-              id: "modal-field-reason",
-              name: "reason",
-              maxlength: reasonMaxLength,
-              label: {
-                text: "Reason for extending the SLA",
-                classes: "govuk-label--s"
-              },
-              hint: { text: "Explain why the SLA deadline needs to be extended." }
-            }) }}
-
-            {{ govukInput({
-              id: "modal-field-additionalDays",
-              name: "additionalDays",
-              label: {
-                text: "Number of additional days",
-                classes: "govuk-label--s"
-              },
-              hint: { text: "Enter a whole number between 1 and " + slaMaxDays + "." },
-              inputmode: "numeric",
-              classes: "govuk-input--width-5"
-            }) }}
-
-            <div class="govuk-button-group">
-              {% from "govuk/components/button/macro.njk" import govukButton %}
-              {{ govukButton({
-                text: "Extend SLA",
-                attributes: { "data-testid": "sla-extend-modal-submit" }
-              }) }}
-              <button type="button"
-                      class="govuk-button govuk-button--secondary"
-                      data-testid="sla-extend-modal-cancel"
-                      id="sla-extend-dialog-close">Cancel</button>
-            </div>
-          </form>
-        </dialog>
-
-        <script>
-          (function () {
-            var dialog = document.getElementById('sla-extend-dialog')
-            var openBtn = document.querySelector('[data-module="sla-extend-modal"]')
-            var closeBtn = document.getElementById('sla-extend-dialog-close')
-            if (!dialog || !openBtn || !dialog.showModal) { return }
-            openBtn.addEventListener('click', function () { dialog.showModal() })
-            closeBtn.addEventListener('click', function () { dialog.close() })
-            dialog.addEventListener('click', function (e) {
-              if (e.target === dialog) { dialog.close() }
-            })
-          })()
-        </script>
-        <noscript>
-          <p class="govuk-body">
-            <a class="govuk-link"
-               href="/work-items/{{ workItem.id }}/sla/extend">Extend SLA (open form)</a>
-          </p>
-        </noscript>
       {% endif %}
 
       {# --------------------------- Audit log ---------------------------- #}
@@ -327,12 +275,6 @@
            data-testid="work-item-audit-log-link"
            href="/work-items/{{ workItem.id }}/audit-log">View audit log</a>
       </p>
-    </div>
-
-    <div class="govuk-grid-column-one-third">
-      <h2 class="govuk-heading-s">Payload</h2>
-      <pre class="govuk-!-font-size-14"
-           data-testid="work-item-payload"><code>{{ workItem.payloadJson }}</code></pre>
     </div>
   </div>
 {% endblock %}

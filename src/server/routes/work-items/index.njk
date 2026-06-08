@@ -1,4 +1,6 @@
 {% extends 'layouts/page.njk' %}
+{# containerClasses = "app-width-container--wide" is injected by the        #}
+{# controller so govuk/template.njk widens the container to 1600 px.        #}
 
 {% from "govuk/components/table/macro.njk" import govukTable %}
 {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
@@ -11,8 +13,9 @@
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 
 {% block content %}
+  {# ── Row 1: heading + optional "Create work item" button ─────────────── #}
   <div class="govuk-grid-row">
-    <div class="govuk-grid-column-two-thirds">
+    <div class="govuk-grid-column-full">
       {{ appHeading({
         text: heading,
         caption: "All work items currently in the case management system"
@@ -28,8 +31,11 @@
     </div>
   </div>
 
+  {# ── Row 2: filter sidebar (1/5) + results area (4/5) side-by-side ───── #}
+  {# The 1600 px container gives the table ~1280 px of width, comfortably   #}
+  {# preventing column wrapping at typical viewport sizes.                  #}
   <div class="govuk-grid-row">
-    <div class="govuk-grid-column-one-third">
+    <div class="govuk-grid-column-one-quarter app-work-items__filter">
       <form method="get" action="/work-items" novalidate data-testid="work-items-filter-form">
         {# Hidden marker so the controller can tell a real form submission #}
         {# (possibly with everything unchecked) apart from a fresh GET of the #}
@@ -38,13 +44,33 @@
         <h2 class="govuk-heading-m">Filter</h2>
 
         {{ govukInput({
-          id: "search",
-          name: "search",
-          label: { text: "Search", classes: "govuk-label--s" },
-          hint: { text: "Search by id or submitter" },
-          value: filters.search,
+          id: "orgId",
+          name: "orgId",
+          label: { text: "Organisation ID", classes: "govuk-label--s" },
+          value: filters.orgId,
           spellcheck: false,
-          autocomplete: "off"
+          autocomplete: "off",
+          attributes: { "data-testid": "work-items-filter-org-id" }
+        }) }}
+
+        {{ govukInput({
+          id: "registrationId",
+          name: "registrationId",
+          label: { text: "Registration ID", classes: "govuk-label--s" },
+          value: filters.registrationId,
+          spellcheck: false,
+          autocomplete: "off",
+          attributes: { "data-testid": "work-items-filter-registration-id" }
+        }) }}
+
+        {{ govukInput({
+          id: "orgName",
+          name: "orgName",
+          label: { text: "Organisation name", classes: "govuk-label--s" },
+          value: filters.orgName,
+          spellcheck: false,
+          autocomplete: "off",
+          attributes: { "data-testid": "work-items-filter-org-name" }
         }) }}
 
         {% if typeOptions.length > 0 %}
@@ -72,10 +98,22 @@
             idPrefix: "filter-nation",
             name: "nation",
             classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Nation", classes: "govuk-fieldset__legend--s" } },
+            fieldset: { legend: { text: "Regulator", classes: "govuk-fieldset__legend--s" } },
             items: nationOptions
           }) }}
         {% endif %}
+
+        {{ govukCheckboxes({
+          idPrefix: "filter-applicant-type",
+          name: "applicantType",
+          classes: "govuk-checkboxes--small",
+          fieldset: { legend: { text: "Applicant type", classes: "govuk-fieldset__legend--s" } },
+          hint: { text: "Filtering not yet available" },
+          items: [
+            { value: "reprocessor", text: "Reprocessor", disabled: true },
+            { value: "exporter", text: "Exporter", disabled: true }
+          ]
+        }) }}
 
         {# Assignee filter (RA-95). The "Specific user…" radio reveals a #}
         {# select listing the assignable-users directory. Same options are #}
@@ -116,6 +154,21 @@
           items: assigneeRadioItems
         }) }}
 
+        {{ govukCheckboxes({
+          idPrefix: "filter-include-archived",
+          name: "includeArchived",
+          classes: "govuk-checkboxes--small",
+          fieldset: { legend: { text: "Archived", classes: "govuk-fieldset__legend--s" } },
+          items: [
+            {
+              value: "true",
+              text: "Show archived",
+              checked: filters.includeArchived,
+              attributes: { "data-testid": "work-items-filter-include-archived" }
+            }
+          ]
+        }) }}
+
         <div class="govuk-button-group">
           {{ govukButton({ text: "Apply filters", attributes: { "data-testid": "work-items-filter-apply" } }) }}
           {% if hasFilters %}
@@ -125,7 +178,7 @@
       </form>
     </div>
 
-    <div class="govuk-grid-column-two-thirds">
+    <div class="govuk-grid-column-three-quarters app-work-items__results">
       {% if not ok %}
         {# `text:` is auto-escaped by the govuk macro and wrapped in the   #}
         {# notification-banner heading paragraph; never concatenate raw    #}
@@ -156,7 +209,7 @@
             {# is auto-escaped — never concatenate `item.id` raw into       #}
             {# `html:` (epr-6fi). `urlencode` for the href, `escape` for    #}
             {# the attribute and link text.                                  #}
-            {% set itemLinkHtml %}<a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.id }}</a>{% endset %}
+            {% set itemLinkHtml %}<a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.applicationRef }}</a>{% endset %}
             {% set slaTagHtml %}
               {%- if item.slaTagText %}
                 {{- govukTag({ text: item.slaTagText, classes: item.slaTagClass, attributes: { "data-testid": "work-item-sla-tag-" + item.id } }) }}
@@ -167,28 +220,36 @@
             {% endset %}
             {% set _ = rows.push([
               { html: itemLinkHtml },
-              { text: item.typeDisplayName },
+              { text: item.typeDisplayName, classes: "app-!-white-space-nowrap" },
               { html: stateTagHtml },
-              { text: item.submittedAt },
+              { text: item.orgName or "—" },
+              { text: item.material or "—" },
+              { text: item.submittedAt | formatDateTimeGds, classes: "app-!-white-space-nowrap" },
               { text: item.submittedBy or "—" },
               { text: item.assigneeDisplayName or "Unassigned" },
-              { html: slaTagHtml }
+              { html: slaTagHtml },
+              { text: item.archivedAt or "—", classes: "app-!-white-space-nowrap", attributes: { "data-testid": "work-item-archived-at-" + item.id } }
             ]) %}
           {% endfor %}
 
-          {{ govukTable({
-            head: [
-              { text: "ID" },
-              { text: "Type" },
-              { text: "State" },
-              { text: "Submitted" },
-              { text: "Submitted by" },
-              { text: "Assigned to" },
-              { text: "SLA" }
-            ],
-            rows: rows,
-            attributes: { "data-testid": "work-items-table" }
-          }) }}
+          <div class="app-work-items__table-wrapper">
+            {{ govukTable({
+              head: [
+                { text: "Application ref" },
+                { text: "Type", classes: "app-!-white-space-nowrap" },
+                { text: "State" },
+                { text: "Org name" },
+                { text: "Material" },
+                { text: "Submitted", classes: "app-!-white-space-nowrap" },
+                { text: "Submitted by", classes: "app-!-white-space-nowrap" },
+                { text: "Assigned to", classes: "app-!-white-space-nowrap" },
+                { text: "Due date (SLA)" },
+                { text: "Archived", classes: "app-!-white-space-nowrap" }
+              ],
+              rows: rows,
+              attributes: { "data-testid": "work-items-table" }
+            }) }}
+          </div>
 
           {% if pagination %}
             {{ govukPagination(pagination) }}

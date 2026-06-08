@@ -1,0 +1,42 @@
+// Work items list table
+//
+// Prevents specific columns from wrapping their content onto multiple lines.
+// Applied via the `classes:` parameter on govukTable head/body cells so no
+// inline styles are needed (which would be blocked by the strict CSP).
+
+.app-\!-white-space-nowrap {
+  white-space: nowrap;
+}
+
+// Wider page container for the work items list.
+//
+.app-width-container--wide {
+  max-width: 1600px;
+}
+
+// Filter sidebar — 1/5 of the container width.
+.app-work-items__filter {
+  flex: 0 0 20%;
+  width: 20%;
+  max-width: 20%;
+}
+
+// Results column — 4/5 of the container width.
+.app-work-items__results {
+  flex: 1 1 80%;
+  width: 80%;
+  max-width: 80%;
+}
+
+// Work items results table wrapper.
+//
+// The table has white-space: nowrap on several columns which can make it
+// wider than its three-quarters container column. Without this wrapper the
+// overflow leaks out at the page level, consuming the right-hand margin and
+// making the container appear uncentred. Constraining overflow to this
+// wrapper keeps the page margins intact while still allowing the table to
+// be scrolled horizontally if it is genuinely too wide for the viewport.
+
+.app-work-items__table-wrapper {
+  overflow-x: auto;
+}

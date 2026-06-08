@@ -1,4 +1,5 @@
 import {
+  ROLE_TEAM_LEADER,
   ROLE_ASSIGN,
   ROLE_DECISION_MAKER,
   ROLE_NATION_ENGLAND,
@@ -51,6 +52,11 @@ const ROLE_OPTIONS = [
     value: 'decision-maker',
     label: 'Decision Maker',
     roles: [ROLE_STANDARD, ROLE_DECISION_MAKER]
+  },
+  {
+    value: 'team-leader',
+    label: 'Team Leader (can manage SLA)',
+    roles: [ROLE_STANDARD, ROLE_TEAM_LEADER]
   }
 ]
 

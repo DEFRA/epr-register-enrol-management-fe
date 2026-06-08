@@ -45,9 +45,13 @@ export const workItemListController = {
       typeIds: filters.typeIds,
       stateIds: filters.stateIds,
       search: filters.search,
+      orgId: filters.orgId,
+      registrationId: filters.registrationId,
+      orgName: filters.orgName,
       assigneeId: filters.backendAssigneeId,
       unassigned: filters.backendUnassignedOnly,
       nations: filters.nations,
+      includeArchived: filters.includeArchived,
       page: filters.page,
       pageSize: DEFAULT_PAGE_SIZE,
       user
@@ -65,6 +69,11 @@ export const workItemListController = {
       pageTitle: 'Work items',
       heading: 'Work items',
       breadcrumbs: [{ text: 'Home', href: '/' }, { text: 'Work items' }],
+      // Widen the govuk-width-container to 1200 px so the filter sidebar and
+      // table have enough room and the page centres symmetrically on screen.
+      // Passed here (not via {% set %} in the template) so hapi-vision injects
+      // it directly into the Nunjucks context, where govuk/template.njk reads it.
+      containerClasses: 'app-width-container--wide',
       ok: result.ok,
       error: result.error,
       items,
@@ -86,8 +95,12 @@ export const workItemListController = {
         filters.typeIds.length > 0 ||
         filters.stateIds.length > 0 ||
         filters.search !== '' ||
+        filters.orgId !== '' ||
+        filters.registrationId !== '' ||
+        filters.orgName !== '' ||
         filters.assigneeMode !== ASSIGNEE_FILTER_ANY ||
-        filters.nations.length > 0,
+        filters.nations.length > 0 ||
+        filters.includeArchived,
       filtersApplied: filters.filtersApplied
     })
   }
@@ -108,6 +121,10 @@ function readFilters(query, user) {
   )
 
   const search = typeof query.search === 'string' ? query.search.trim() : ''
+  const orgId = typeof query.orgId === 'string' ? query.orgId.trim() : ''
+  const registrationId =
+    typeof query.registrationId === 'string' ? query.registrationId.trim() : ''
+  const orgName = typeof query.orgName === 'string' ? query.orgName.trim() : ''
 
   const page = clampPositiveInt(query.page, 1)
 
@@ -137,16 +154,23 @@ function readFilters(query, user) {
   // the user explicitly cleared them (RA-125).
   const filtersApplied = query.filtersApplied === '1'
 
+  const includeArchived =
+    query.includeArchived === 'true' || query.includeArchived === '1'
+
   return {
     typeIds,
     stateIds,
     search,
+    orgId,
+    registrationId,
+    orgName,
     page,
     assigneeMode,
     assigneeUserId,
     backendAssigneeId,
     backendUnassignedOnly,
     nations: resolveNations(query.nation, user, filtersApplied),
+    includeArchived,
     filtersApplied
   }
 }
@@ -271,6 +295,9 @@ function decorate(item) {
       ? formatSlaRemaining(item.slaRemaining)
       : null
 
+  const archivedAtRaw = item.payload?.archivedAt
+  const archivedAt = formatArchivedAt(archivedAtRaw)
+
   return {
     ...item,
     typeDisplayName: type?.displayName ?? item.typeId,
@@ -279,8 +306,37 @@ function decorate(item) {
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
     slaTagText: slaTag?.text ?? null,
     slaTagClass: slaTag?.classes ?? null,
-    slaRemainingText
+    slaRemainingText,
+    archivedAt,
+    applicationRef: item.payload?.applicationReference ?? item.id,
+    orgName: item.payload?.organisationName ?? null,
+    material: item.payload?.material ?? null
   }
+}
+
+/**
+ * Format the archivedAt value from the payload. The backend serialises
+ * BsonDateTime values in relaxed extended JSON as `{ "$date": "ISO-8601" }`,
+ * so we handle both that shape and a plain ISO-8601 string.
+ */
+function formatArchivedAt(value) {
+  if (!value) return null
+  const iso =
+    typeof value === 'object' &&
+    value !== null &&
+    typeof value.$date === 'string'
+      ? value.$date
+      : typeof value === 'string'
+        ? value
+        : null
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })
 }
 
 function buildTypeOptions(selectedTypeIds) {
@@ -311,11 +367,18 @@ function buildStateOptions(selectedStateIds) {
   }))
 }
 
+const REGULATOR_DISPLAY_NAMES = {
+  England: 'Environment Agency (EA)',
+  Scotland: 'SEPA',
+  Wales: 'Natural Resources Wales (NRW)',
+  NorthernIreland: 'NIEA'
+}
+
 function buildNationOptions(selectedNations) {
   const selected = new Set(selectedNations)
   return VALID_NATIONS.map((nation) => ({
     value: nation,
-    text: nation === 'NorthernIreland' ? 'Northern Ireland' : nation,
+    text: REGULATOR_DISPLAY_NAMES[nation] ?? nation,
     checked: selected.has(nation)
   }))
 }
@@ -397,7 +460,13 @@ function buildHref(filters) {
   // Carry the form-submission marker through pagination/back-links so
   // role-based defaults don't silently re-apply mid-paging (RA-125).
   if (filters.filtersApplied) params.append('filtersApplied', '1')
+  if (filters.includeArchived) params.append('includeArchived', 'true')
   if (filters.search) params.append('search', filters.search)
+  if (filters.orgId) params.append('orgId', filters.orgId)
+  if (filters.registrationId) {
+    params.append('registrationId', filters.registrationId)
+  }
+  if (filters.orgName) params.append('orgName', filters.orgName)
   if (filters.assigneeMode && filters.assigneeMode !== ASSIGNEE_FILTER_ANY) {
     params.append('assigneeMode', filters.assigneeMode)
     if (
@@ -426,13 +495,20 @@ function buildFilterSummary({ filters, totalCount }) {
     parts.push(`state: ${filters.stateIds.join(', ')}`)
   }
   if (filters.nations.length > 0) {
-    const labels = filters.nations.map((n) =>
-      n === 'NorthernIreland' ? 'Northern Ireland' : n
-    )
-    parts.push(`nation: ${labels.join(', ')}`)
+    const labels = filters.nations.map((n) => REGULATOR_DISPLAY_NAMES[n] ?? n)
+    parts.push(`regulator: ${labels.join(', ')}`)
   }
   if (filters.search) {
     parts.push(`search: "${filters.search}"`)
+  }
+  if (filters.orgId) {
+    parts.push(`org ID: "${filters.orgId}"`)
+  }
+  if (filters.registrationId) {
+    parts.push(`registration ID: "${filters.registrationId}"`)
+  }
+  if (filters.orgName) {
+    parts.push(`org name: "${filters.orgName}"`)
   }
   if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
     parts.push('assigned to me')

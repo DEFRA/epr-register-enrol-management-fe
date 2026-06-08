@@ -1,16 +1,9 @@
 /**
  * SLA extend and override controllers (RA-131).
- *
- * Four handlers:
- *  - GET  /work-items/{id}/sla/extend   — render extend form
- *  - POST /work-items/{id}/sla/extend   — submit extend
- *  - GET  /work-items/{id}/sla/override — render override form
- *  - POST /work-items/{id}/sla/override — submit override
- *
- * Both flows use PRG — redirect back to work item detail with flash banner.
  */
 
 import { getUser, hasRole } from '#/server/common/helpers/auth/get-user.js'
+import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { REASON_MAX_LENGTH, createSlaService } from './sla.service.js'
 import { ROLE_TEAM_LEADER } from '#/server/common/helpers/auth/auth-scopes.js'
@@ -18,6 +11,8 @@ import { config } from '#/config/config.js'
 
 const EXTEND_VIEW = 'work-items/sla-extend'
 const OVERRIDE_VIEW = 'work-items/sla-override'
+const NOT_FOUND_VIEW = 'work-items/not-found'
+const UNAVAILABLE_VIEW = 'work-items/detail-error'
 
 const logger = createLogger()
 
@@ -29,11 +24,11 @@ function flashBanner(request, banner) {
   request.yar?.flash?.('flashBanner', banner)
 }
 
-function breadcrumbs(id, action) {
+function breadcrumbs(id, action, ref) {
   return [
     { text: 'Home', href: '/' },
     { text: 'Work items', href: '/work-items' },
-    { text: id, href: detailHref(id) },
+    { text: ref ?? 'Work item', href: detailHref(id) },
     { text: action }
   ]
 }
@@ -45,12 +40,48 @@ export function makeShowExtendController() {
         return h.response('Forbidden').code(403)
       }
       const id = request.params.id
+      const user = getUser(request)
+      const result = await getWorkItem({ workItemId: id, user })
+
+      if (result.ok === false && result.status === 404) {
+        return h
+          .view(NOT_FOUND_VIEW, {
+            pageTitle: 'Work item not found',
+            heading: 'Work item not found',
+            workItemId: id,
+            breadcrumbs: [
+              { text: 'Home', href: '/' },
+              { text: 'Work items', href: '/work-items' },
+              { text: 'Not found' }
+            ]
+          })
+          .code(404)
+      }
+
+      if (!result.ok) {
+        return h
+          .view(UNAVAILABLE_VIEW, {
+            pageTitle: 'Work item unavailable',
+            heading: 'Work item unavailable',
+            workItemId: id,
+            error: result.error ?? `Backend returned ${result.status}`,
+            breadcrumbs: [
+              { text: 'Home', href: '/' },
+              { text: 'Work items', href: '/work-items' },
+              { text: 'Work item' }
+            ]
+          })
+          .code(502)
+      }
+
+      const workItem = result.workItem
+      const applicationRef = workItem.payload.applicationReference
       const maxDays = config.get('workItems.sla.maxExtensionDays')
       return h.view(EXTEND_VIEW, {
         pageTitle: 'Extend SLA',
         heading: 'Extend SLA',
-        breadcrumbs: breadcrumbs(id, 'Extend SLA'),
-        workItem: { id },
+        breadcrumbs: breadcrumbs(id, 'Extend SLA', applicationRef),
+        workItem: { ...workItem, applicationRef },
         formAction: `/work-items/${encodeURIComponent(id)}/sla/extend`,
         cancelHref: detailHref(id),
         reasonMaxLength: REASON_MAX_LENGTH,
@@ -77,6 +108,7 @@ export function makeSubmitExtendController({
       const reason = typeof payload.reason === 'string' ? payload.reason : ''
       const additionalDays =
         typeof payload.additionalDays === 'string' ? payload.additionalDays : ''
+      const maxDays = config.get('workItems.sla.maxExtensionDays')
 
       const result = await service.extendSla({
         workItemId: id,
@@ -95,16 +127,20 @@ export function makeSubmitExtendController({
       }
 
       if (result.outcome === 'invalid') {
+        const itemResult = await getWorkItem({ workItemId: id, user })
+        const applicationRef = itemResult.ok
+          ? itemResult.workItem.payload.applicationReference
+          : null
         return h
           .view(EXTEND_VIEW, {
             pageTitle: 'Error: Extend SLA',
             heading: 'Extend SLA',
-            breadcrumbs: breadcrumbs(id, 'Extend SLA'),
-            workItem: { id },
+            breadcrumbs: breadcrumbs(id, 'Extend SLA', applicationRef),
+            workItem: { id, applicationRef },
             formAction: `/work-items/${encodeURIComponent(id)}/sla/extend`,
             cancelHref: detailHref(id),
             reasonMaxLength: REASON_MAX_LENGTH,
-            maxDays: config.get('workItems.sla.maxExtensionDays'),
+            maxDays,
             values: { reason, additionalDays },
             errorSummary: {
               titleText: 'There is a problem',
@@ -132,11 +168,47 @@ export function makeShowOverrideController() {
         return h.response('Forbidden').code(403)
       }
       const id = request.params.id
+      const user = getUser(request)
+      const result = await getWorkItem({ workItemId: id, user })
+
+      if (result.ok === false && result.status === 404) {
+        return h
+          .view(NOT_FOUND_VIEW, {
+            pageTitle: 'Work item not found',
+            heading: 'Work item not found',
+            workItemId: id,
+            breadcrumbs: [
+              { text: 'Home', href: '/' },
+              { text: 'Work items', href: '/work-items' },
+              { text: 'Not found' }
+            ]
+          })
+          .code(404)
+      }
+
+      if (!result.ok) {
+        return h
+          .view(UNAVAILABLE_VIEW, {
+            pageTitle: 'Work item unavailable',
+            heading: 'Work item unavailable',
+            workItemId: id,
+            error: result.error ?? `Backend returned ${result.status}`,
+            breadcrumbs: [
+              { text: 'Home', href: '/' },
+              { text: 'Work items', href: '/work-items' },
+              { text: 'Work item' }
+            ]
+          })
+          .code(502)
+      }
+
+      const workItem = result.workItem
+      const applicationRef = workItem.payload.applicationReference
       return h.view(OVERRIDE_VIEW, {
         pageTitle: 'Override SLA',
         heading: 'Override SLA',
-        breadcrumbs: breadcrumbs(id, 'Override SLA'),
-        workItem: { id },
+        breadcrumbs: breadcrumbs(id, 'Override SLA', applicationRef),
+        workItem: { ...workItem, applicationRef },
         formAction: `/work-items/${encodeURIComponent(id)}/sla/override`,
         cancelHref: detailHref(id),
         reasonMaxLength: REASON_MAX_LENGTH,
@@ -183,12 +255,16 @@ export function makeSubmitOverrideController({
       }
 
       if (result.outcome === 'invalid') {
+        const itemResult = await getWorkItem({ workItemId: id, user })
+        const applicationRef = itemResult.ok
+          ? itemResult.workItem.payload.applicationReference
+          : null
         return h
           .view(OVERRIDE_VIEW, {
             pageTitle: 'Error: Override SLA',
             heading: 'Override SLA',
-            breadcrumbs: breadcrumbs(id, 'Override SLA'),
-            workItem: { id },
+            breadcrumbs: breadcrumbs(id, 'Override SLA', applicationRef),
+            workItem: { id, applicationRef },
             formAction: `/work-items/${encodeURIComponent(id)}/sla/override`,
             cancelHref: detailHref(id),
             reasonMaxLength: REASON_MAX_LENGTH,
@@ -213,30 +289,32 @@ export function makeSubmitOverrideController({
 }
 
 function bannerForSlaFailure(result, action) {
+  const title = `Could not ${action} SLA`
   if (result.outcome === 'conflict') {
     return {
       type: 'error',
-      title: `Could not ${action} SLA`,
-      text: 'Someone else updated this case. Refresh and try again.'
+      title,
+      text: 'The work item state changed. Refresh and try again.'
     }
   }
   if (result.outcome === 'forbidden') {
     return {
       type: 'error',
-      title: `Could not ${action} SLA`,
+      title,
       text: 'You do not have permission to perform this action.'
     }
   }
   if (result.outcome === 'not-found') {
     return {
       type: 'error',
-      title: 'Work item not found',
-      text: 'This work item could not be found.'
+      title,
+      text: 'The work item could not be found.'
     }
   }
+
   return {
     type: 'error',
-    title: `Could not ${action} SLA`,
-    text: 'There was a problem. Try again.'
+    title: 'Action failed',
+    text: result.message ?? 'The SLA could not be updated.'
   }
 }

@@ -12,7 +12,7 @@
 {% block content %}
   {{ appHeading({
     text: heading,
-    caption: "Work item " + workItem.id
+    caption: "Work item " + workItem.applicationRef
   }) }}
 
   <div class="govuk-grid-row">
@@ -20,7 +20,7 @@
       {% if workItem.auditLog and workItem.auditLog.length > 0 %}
         <ol class="govuk-list" data-testid="work-item-audit-log">
           {% for entry in workItem.auditLog %}
-            <li class="govuk-!-margin-bottom-3" data-testid="work-item-audit-entry-{{ entry.id }}">
+            <li class="govuk-!-margin-bottom-3" data-testid="work-item-audit-entry-{{ entry.id }}" data-action="{{ entry.action }}">
               <p class="govuk-body govuk-!-margin-bottom-1">
                 <strong>{{ entry.actionDisplayName }}</strong>
                 {% if entry.summary %}
@@ -41,7 +41,10 @@
                         <div class="govuk-summary-list__row">
                           <dt class="govuk-summary-list__key">{{ row.key }}</dt>
                           <dd class="govuk-summary-list__value">
-                            {% if row.multiline %}
+                            {% if row.preformatted %}
+                              <pre class="govuk-!-font-size-14 govuk-!-margin-top-0 govuk-!-margin-bottom-0"
+                                   data-testid="work-item-audit-entry-detail-pre"><code>{{ row.value }}</code></pre>
+                            {% elif row.multiline %}
                               {% for line in row.value.split('\n') %}
                                 <p class="govuk-body govuk-!-margin-bottom-1">{{ line }}</p>
                               {% endfor %}

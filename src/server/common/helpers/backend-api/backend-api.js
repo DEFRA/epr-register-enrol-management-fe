@@ -142,8 +142,12 @@ export async function getWorkItems({
   stateIds,
   nations,
   search,
+  orgId,
+  registrationId,
+  orgName,
   assigneeId,
   unassigned,
+  includeArchived,
   page,
   pageSize,
   user = null,
@@ -156,8 +160,12 @@ export async function getWorkItems({
     stateIds,
     nations,
     search,
+    orgId,
+    registrationId,
+    orgName,
     assigneeId,
     unassigned,
+    includeArchived,
     page,
     pageSize
   })
@@ -193,7 +201,20 @@ export async function getWorkItems({
 
 function buildWorkItemsUrl(
   baseUrl,
-  { typeIds, stateIds, nations, search, assigneeId, unassigned, page, pageSize }
+  {
+    typeIds,
+    stateIds,
+    nations,
+    search,
+    orgId,
+    registrationId,
+    orgName,
+    assigneeId,
+    unassigned,
+    includeArchived,
+    page,
+    pageSize
+  }
 ) {
   const root = `${baseUrl.replace(/\/$/, '')}/work-items`
   const params = new URLSearchParams()
@@ -210,11 +231,23 @@ function buildWorkItemsUrl(
   if (search && String(search).trim() !== '') {
     params.append('search', String(search).trim())
   }
+  if (orgId && String(orgId).trim() !== '') {
+    params.append('orgId', String(orgId).trim())
+  }
+  if (registrationId && String(registrationId).trim() !== '') {
+    params.append('registrationId', String(registrationId).trim())
+  }
+  if (orgName && String(orgName).trim() !== '') {
+    params.append('orgName', String(orgName).trim())
+  }
   if (assigneeId && String(assigneeId).trim() !== '') {
     params.append('assigneeId', String(assigneeId).trim())
   }
   if (unassigned === true) {
     params.append('unassigned', 'true')
+  }
+  if (includeArchived === true) {
+    params.append('includeArchived', 'true')
   }
   if (page != null && page !== '') params.append('page', String(page))
   if (pageSize != null && pageSize !== '') {
@@ -715,6 +748,8 @@ const SLA_REASON_BY_STATUS = {
 export async function createWorkItem({
   typeId,
   payload,
+  source = null,
+  applicationReference = null,
   user = null,
   baseUrl = config.get('backendApi.url'),
   timeoutMs = config.get('backendApi.timeoutMs'),
@@ -735,7 +770,7 @@ export async function createWorkItem({
         },
         user
       ),
-      body: JSON.stringify({ typeId, payload })
+      body: JSON.stringify({ typeId, payload, source, applicationReference })
     })
 
     if (response.status === 201) {

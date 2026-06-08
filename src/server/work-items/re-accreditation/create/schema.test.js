@@ -9,6 +9,7 @@ import {
 
 const validForm = () => ({
   applicationReference: 'REF-001',
+  operatorEmail: 'test@defra.gov.uk',
   organisationName: 'Acme Recycling Ltd',
   siteAddress: {
     line1: '1 Test Way',
@@ -52,6 +53,7 @@ describe('#createReAccreditationSchema (RA-127)', () => {
     expect(error).toBeDefined()
     const errors = joiDetailsToFieldErrors(error.details)
     expect(errors.applicationReference).toBe('Enter the application reference')
+    expect(errors.operatorEmail).toBe('Enter an email address')
     expect(errors.organisationName).toBe('Enter the organisation name')
     expect(errors.material).toBe('Select a material')
     expect(errors.tonnageBand).toBe('Select a tonnage band')
@@ -69,6 +71,12 @@ describe('#createReAccreditationSchema (RA-127)', () => {
       'applicationReference',
       'has space!',
       'Application reference can only include letters, numbers and hyphens'
+    ],
+    ['operatorEmail', '', 'Enter an email address'],
+    [
+      'operatorEmail',
+      'not-an-email',
+      'Enter an email address in the correct format, like name@example.com'
     ],
     [
       'organisationName',
@@ -114,6 +122,21 @@ describe('#createReAccreditationSchema (RA-127)', () => {
     expect(error).toBeDefined()
     const errors = joiDetailsToFieldErrors(error.details)
     expect(errors[`siteAddress.${field}`]).toBe(message)
+  })
+
+  test('rejects an email longer than 254 characters with the max message', () => {
+    // 60-char local part + '@' + 195-char domain = 256 chars total but
+    // syntactically valid, so the `string.max` rule is what fires.
+    const form = validForm()
+    form.operatorEmail = `${'a'.repeat(60)}@${'b'.repeat(191)}.uk`
+    const { error } = createReAccreditationSchema.validate(form, {
+      abortEarly: false
+    })
+    expect(error).toBeDefined()
+    const messages = error.details
+      .filter((d) => d.path[0] === 'operatorEmail')
+      .map((d) => d.message)
+    expect(messages).toContain('Email address must be 254 characters or fewer')
   })
 
   test('material option list is non-empty and exposes value+text', () => {

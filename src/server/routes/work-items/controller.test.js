@@ -119,6 +119,197 @@ describe('#workItemListController', () => {
     expect(result).toEqual(expect.stringContaining('govuk-tag govuk-tag--blue'))
   })
 
+  // RA-196: the visible link text shows the user-facing application
+  // reference (payload.applicationReference) while the href and the
+  // data-testid keep using the internal work item id.
+  test('Renders the application reference as the link text, keeping the id in the href and testid', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: 'frontend',
+            payload: { applicationReference: 'RA-123456789' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Visible link text is the application reference.
+    expect(result).toEqual(expect.stringContaining('>RA-123456789</a>'))
+    // The href and data-testid keep the internal id.
+    expect(result).toEqual(
+      expect.stringContaining(
+        'href="/work-items/11111111-1111-1111-1111-111111111111"'
+      )
+    )
+    expect(result).toEqual(
+      expect.stringContaining(
+        'data-testid="work-item-link-11111111-1111-1111-1111-111111111111"'
+      )
+    )
+  })
+
+  test('RA-196: Falls back to using the work item id if applicationReference is missing from payload', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+
+    const id = '22222222-2222-2222-2222-222222222222'
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id,
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: 'frontend',
+            payload: { applicantName: 'Acme' } // No applicationReference
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Should use the ID as a fallback for the link text
+    expect(result).toEqual(expect.stringContaining(`>${id}</a>`))
+  })
+
+  // ---------------------------------------------------------------- //
+  // Work items list usability improvements                            //
+  //                                                                  //
+  // AC1: "ID" column header renamed to "Application ref"             //
+  // AC2: Submitted date rendered in GDS date-time format             //
+  // AC3: Table is in a govuk-grid-column-full section                //
+  // ---------------------------------------------------------------- //
+  test('Renders "Application ref" as the first column header (not "ID")', async () => {
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('Application ref')
+    // The old "ID" header must not appear as an isolated table heading.
+    // (The string "ID" may still appear inside GDS component markup, so
+    // we specifically check the govukTable head cell text.)
+    const tableSection = result.slice(
+      result.indexOf('data-testid="work-items-table"')
+    )
+    expect(tableSection).not.toMatch(/<th[^>]*>\s*ID\s*<\/th>/)
+  })
+
+  test('Renders the submitted timestamp in GDS date-time format', async () => {
+    // Use a January date (UK GMT = UTC+0) for timezone-stable assertions.
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    // Formatted GDS date-time must appear; raw ISO string must not.
+    expect(result).toContain('15 January 2026 at 10:00am')
+    expect(result).not.toContain('2026-01-15T10:00:00Z')
+  })
+
+  test('Renders with a wider container, narrow filter sidebar left and wider table right', async () => {
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-1111-1111-1111-111111111111',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    // Controller must inject containerClasses so govuk/template.njk widens
+    // the govuk-width-container from 960 px to 1200 px, giving equal margins
+    // on both sides of the screen and more room for the table.
+    expect(result).toContain('app-width-container--wide')
+    // Filter sidebar uses the narrower one-quarter column (25% of 1200 px = 300 px).
+    expect(result).toContain('govuk-grid-column-one-quarter')
+    // Results area uses three-quarters (75% of 1200 px ≈ 900 px).
+    expect(result).toContain('govuk-grid-column-three-quarters')
+    // Filter form must appear before the results table in document order.
+    const filterIdx = result.indexOf('data-testid="work-items-filter-form"')
+    const tableIdx = result.indexOf('data-testid="work-items-table"')
+    expect(filterIdx).toBeGreaterThan(-1)
+    expect(tableIdx).toBeGreaterThan(filterIdx)
+  })
+
   test('Maps each registered state id to its GOV.UK tag colour', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
@@ -585,7 +776,7 @@ describe('#workItemListController', () => {
       )
     })
 
-    test('Nation checkboxes appear in the rendered page', async () => {
+    test('Regulator checkboxes appear in the rendered page with regulator body names', async () => {
       getWorkItems.mockResolvedValue(emptyPage())
 
       const { result } = await server.inject({
@@ -594,10 +785,13 @@ describe('#workItemListController', () => {
       })
 
       expect(result).toContain('filter-nation')
-      expect(result).toContain('England')
-      expect(result).toContain('Scotland')
-      expect(result).toContain('Wales')
-      expect(result).toContain('Northern Ireland')
+      // Regulator body display names replace raw nation names
+      expect(result).toContain('Environment Agency (EA)')
+      expect(result).toContain('SEPA')
+      expect(result).toContain('Natural Resources Wales (NRW)')
+      expect(result).toContain('NIEA')
+      // Filter section heading uses "Regulator" not "Nation"
+      expect(result).toContain('Regulator')
     })
 
     test('Nation checkboxes reflect the active filter', async () => {
@@ -703,6 +897,175 @@ describe('#workItemListController', () => {
 
       // The "Clear filters" link is only rendered when hasFilters=true.
       expect(result).toContain('Clear filters')
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-136 — Archive filter                                           //
+  // ---------------------------------------------------------------- //
+  describe('RA-136 archive filter', () => {
+    test('Forwards includeArchived=true to the backend when the query param is set', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ includeArchived: true })
+      )
+    })
+
+    test('Sends includeArchived=false when the query param is absent', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({ method: 'GET', url: '/work-items' })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ includeArchived: false })
+      )
+    })
+
+    test('hasFilters is true when includeArchived is set', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      expect(result).toContain('Clear filters')
+    })
+
+    test('Renders the Archived column header in the work-items table', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('Archived')
+    })
+
+    test('Renders archivedAt from extended-JSON $date shape as a human-readable date', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+              typeId: 'unknown-type',
+              stateId: 'approved',
+              submittedAt: '2026-04-01T10:00:00Z',
+              submittedBy: null,
+              payload: { archivedAt: { $date: '2026-05-01T12:00:00Z' } }
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      expect(result).toContain('1 May 2026')
+      expect(result).toContain(
+        'data-testid="work-item-archived-at-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"'
+      )
+    })
+
+    test('Renders archivedAt from a plain ISO-8601 string as a human-readable date', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+              typeId: 'unknown-type',
+              stateId: 'approved',
+              submittedAt: '2026-04-01T10:00:00Z',
+              submittedBy: null,
+              payload: { archivedAt: '2026-05-01T12:00:00Z' }
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      expect(result).toContain('1 May 2026')
+      expect(result).toContain(
+        'data-testid="work-item-archived-at-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"'
+      )
+    })
+
+    test('Renders an em-dash for items with no archivedAt value', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+              typeId: 'unknown-type',
+              stateId: 'submitted',
+              submittedAt: '2026-04-01T10:00:00Z',
+              submittedBy: null,
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      // The Nunjucks `item.archivedAt or "—"` renders a dash when null.
+      expect(result).toContain('—')
+    })
+
+    test('Pagination links preserve includeArchived so the filter survives page changes', async () => {
+      clearWorkItemRegistry()
+      registerWorkItemType({
+        id: 're-accreditation',
+        displayName: 'Re-accreditation',
+        initialState: { id: 'submitted', displayName: 'Submitted' },
+        states: [{ id: 'submitted', displayName: 'Submitted' }],
+        getTasksForState: () => []
+      })
+      getWorkItems.mockResolvedValue({
+        ok: true,
+        items: [
+          {
+            id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-04-01T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 100,
+        page: 1,
+        pageSize: 20
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true&filtersApplied=1'
+      })
+
+      expect(result).toMatch(/href="[^"]*includeArchived=true[^"]*"/)
     })
   })
 })
