@@ -48,7 +48,7 @@
             <li class="govuk-!-margin-bottom-4" data-testid="work-item-note-{{ note.id }}">
               <p class="govuk-body govuk-!-margin-bottom-1" style="white-space: pre-wrap">{{ note.text }}</p>
               <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-0">
-                {{ note.createdByName or note.createdBy or "Unknown" }} — {{ note.createdAt }}
+                {{ note.createdByName or note.createdBy or "Unknown" }} — {{ note.createdAt | formatDateTimeGds }}
               </p>
             </li>
           {% endfor %}
@@ -151,7 +151,7 @@
                     <li class="govuk-!-margin-bottom-3" data-testid="task-note-{{ note.id }}">
                       <p class="govuk-body govuk-!-margin-bottom-1" style="white-space: pre-wrap">{{ note.text }}</p>
                       <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-0">
-                        {{ note.createdByName or note.createdBy or "Unknown" }} — {{ note.createdAt }}
+                        {{ note.createdByName or note.createdBy or "Unknown" }} — {{ note.createdAt | formatDateTimeGds }}
                       </p>
                     </li>
                   {% endfor %}

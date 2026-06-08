@@ -28,7 +28,7 @@
                 {% endif %}
               </p>
               <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-1">
-                {{ entry.createdByName or entry.createdBy or "System" }} — {{ entry.createdAt }}
+                {{ entry.createdByName or entry.createdBy or "System" }} — {{ entry.createdAt | formatDateTimeGds }}
               </p>
               {% if entry.detailRows and entry.detailRows.length > 0 %}
                 <details class="govuk-details govuk-!-margin-top-1 govuk-!-margin-bottom-0" data-testid="work-item-audit-entry-details">

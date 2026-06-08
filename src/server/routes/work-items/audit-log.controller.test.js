@@ -130,7 +130,9 @@ describe('#workItemAuditLogController', () => {
     )
     expect(result).toEqual(expect.stringContaining('Alice Example'))
     expect(result).toEqual(expect.stringContaining('Bob Example'))
-    expect(result).toEqual(expect.stringContaining('2026-04-27T09:00:00Z'))
+    // Timestamps render in UK local time (BST in April, so 09:00Z -> 10:00am)
+    // via the formatDateTimeGds filter, not as the raw UTC ISO string.
+    expect(result).toEqual(expect.stringContaining('27 April 2026 at 10:00am'))
     // Chronological (oldest-first) ordering: the earlier entry appears
     // before the later one in the rendered HTML.
     expect(result.indexOf('Task completed')).toBeLessThan(

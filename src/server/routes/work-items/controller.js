@@ -335,7 +335,8 @@ function formatArchivedAt(value) {
   return d.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
-    year: 'numeric'
+    year: 'numeric',
+    timeZone: 'Europe/London'
   })
 }
 
