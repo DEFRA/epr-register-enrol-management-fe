@@ -977,12 +977,12 @@ describe('#buildHeaders header injection guards (epr-zld)', () => {
   })
 })
 
-describe('#createWorkItem (RA-127)', () => {
+describe('#createWorkItem (RA-127, RA-219)', () => {
   const baseArgs = () => ({
     baseUrl: 'http://backend:8085',
     timeoutMs: 1000,
     typeId: 're-accreditation',
-    payload: { applicationReference: 'REF-001' }
+    payload: { organisationName: 'Acme' }
   })
 
   test('POSTs the envelope as JSON to /work-items and returns the created item on 201', async () => {
@@ -1007,12 +1007,15 @@ describe('#createWorkItem (RA-127)', () => {
     expect(init.headers['content-type']).toBe('application/json')
     expect(init.headers['x-cdp-user-id']).toBe('u-1')
     expect(init.headers['x-cdp-user-roles']).toBe('standard,case-worker')
-    expect(JSON.parse(init.body)).toEqual({
+    // RA-219: the BFF never sends an applicationReference; the backend
+    // generates it server-side.
+    const sentBody = JSON.parse(init.body)
+    expect(sentBody).toEqual({
       typeId: 're-accreditation',
-      payload: { applicationReference: 'REF-001' },
-      source: null,
-      applicationReference: null
+      payload: { organisationName: 'Acme' },
+      source: null
     })
+    expect(sentBody).not.toHaveProperty('applicationReference')
     expect(result).toEqual({ ok: true, workItem })
   })
 

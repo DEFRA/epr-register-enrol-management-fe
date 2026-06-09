@@ -2,7 +2,6 @@ import { describe, expect, test, vi } from 'vitest'
 
 import {
   DEFAULT_EMAIL,
-  generateApplicationReference,
   makeCreateWorkItemController,
   makeSubmitCreateWorkItemController
 } from './controller.js'
@@ -46,17 +45,16 @@ function makeRequest({
   }
 }
 
-describe('#makeCreateWorkItemController (RA-127, RA-172)', () => {
-  test('GET renders the form with a generated reference and default email', () => {
-    const ctl = makeCreateWorkItemController({
-      generateReference: () => 'RA-GEN-1'
-    })
+describe('#makeCreateWorkItemController (RA-127, RA-219)', () => {
+  test('GET renders the form with the default email and no application reference field', () => {
+    const ctl = makeCreateWorkItemController()
     const { h, captured } = makeH()
     ctl.handler(makeRequest(), h)
     expect(captured.view).toBe('re-accreditation/create/index')
     expect(captured.code).toBe(200)
     expect(captured.viewModel.heading).toBe('Create a work item')
-    expect(captured.viewModel.values.applicationReference).toBe('RA-GEN-1')
+    // RA-219: the reference is server-generated; the form never shows it.
+    expect(captured.viewModel.values.applicationReference).toBeUndefined()
     expect(captured.viewModel.values.operatorEmail).toBe(DEFAULT_EMAIL)
     expect(captured.viewModel.values.organisationName).toBe(
       'Acme Recycling Ltd'
@@ -81,37 +79,13 @@ describe('#makeCreateWorkItemController (RA-127, RA-172)', () => {
     expect(captured.viewModel.errorSummary).toBeNull()
   })
 
-  test('uses defaults when no factory options are passed', () => {
-    const ctl = makeCreateWorkItemController()
-    const { h, captured } = makeH()
-    ctl.handler(makeRequest(), h)
-    expect(captured.viewModel.values.operatorEmail).toBe(DEFAULT_EMAIL)
-    expect(captured.viewModel.values.applicationReference).toMatch(/^RA-\d{9}$/)
-  })
-
   test('accepts a custom defaultEmail override', () => {
     const ctl = makeCreateWorkItemController({
-      generateReference: () => 'RA-X',
       defaultEmail: 'override@example.org'
     })
     const { h, captured } = makeH()
     ctl.handler(makeRequest(), h)
     expect(captured.viewModel.values.operatorEmail).toBe('override@example.org')
-  })
-})
-
-describe('#generateApplicationReference (RA-172)', () => {
-  test('returns a value matching the RA-<9 digit> pattern', () => {
-    for (let i = 0; i < 50; i++) {
-      expect(generateApplicationReference()).toMatch(/^RA-\d{9}$/)
-    }
-  })
-
-  test('returns different values across calls (random)', () => {
-    const set = new Set()
-    for (let i = 0; i < 20; i++) set.add(generateApplicationReference())
-    // Vanishingly unlikely 20 random 9-digit numbers all collide.
-    expect(set.size).toBeGreaterThan(1)
   })
 })
 
@@ -127,7 +101,6 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
     const ctl = makeSubmitCreateWorkItemController({ service })
     const request = makeRequest({
       payload: {
-        applicationReference: 'REF-A',
         organisationName: 'Acme',
         siteAddressLine1: '1 Road',
         siteAddressLine2: '',
@@ -150,8 +123,11 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
       town: 'Town',
       postcode: 'AB1 2CD'
     })
-    expect(call.formValues.applicationReference).toBe('REF-A')
+    // RA-219: the BFF never sends an application reference to the service.
+    expect(call.formValues.applicationReference).toBeUndefined()
 
+    // The reference shown to the user is the one the service returns
+    // (sourced from the backend-created work item), flashed verbatim.
     expect(request.yar._flashCalls).toEqual([
       { name: 'successBanner', value: { reference: 'REF-A' } }
     ])
@@ -178,7 +154,7 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
         ok: false,
         reason: 'invalid',
         fieldErrors: {
-          applicationReference: 'Enter the application reference',
+          operatorEmail: 'Enter an email address',
           'siteAddress.postcode': 'Enter a valid UK postcode'
         }
       })
@@ -190,12 +166,12 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
 
     expect(captured.view).toBe('re-accreditation/create/index')
     expect(captured.code).toBe(400)
-    expect(captured.viewModel.fieldErrors.applicationReference).toBeDefined()
+    expect(captured.viewModel.fieldErrors.operatorEmail).toBeDefined()
     expect(captured.viewModel.errorSummary.items).toHaveLength(2)
-    // FIELD_ORDER places applicationReference before siteAddress.postcode
+    // FIELD_ORDER places operatorEmail before siteAddress.postcode
     expect(captured.viewModel.errorSummary.items[0]).toEqual({
-      text: 'Enter the application reference',
-      href: '#field-applicationReference'
+      text: 'Enter an email address',
+      href: '#field-operatorEmail'
     })
     expect(captured.viewModel.errorSummary.items[1]).toEqual({
       text: 'Enter a valid UK postcode',
@@ -260,7 +236,7 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
       create: vi.fn().mockResolvedValue({
         ok: false,
         reason: 'invalid',
-        fieldErrors: { applicationReference: 'Enter the application reference' }
+        fieldErrors: { operatorEmail: 'Enter an email address' }
       })
     }
     const ctl = makeSubmitCreateWorkItemController({ service })

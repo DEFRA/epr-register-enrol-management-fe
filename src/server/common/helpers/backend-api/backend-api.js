@@ -733,8 +733,10 @@ const SLA_REASON_BY_STATUS = {
  * Wraps `POST /work-items` on the backend. The backend wraps every
  * `payload` as opaque BSON so the per-type shape lives in the
  * type-specific service object (Joi schema + form mapping); this client
- * just forwards the envelope `{ typeId, payload }` and translates the
- * response to a typed result.
+ * just forwards the envelope `{ typeId, payload, source }` and translates
+ * the response to a typed result. RA-219: the backend generates the
+ * `applicationReference` server-side and returns it on the created work
+ * item — the BFF no longer sends one.
  *
  * Result shape:
  *  - 201 → { ok: true, workItem }
@@ -749,7 +751,6 @@ export async function createWorkItem({
   typeId,
   payload,
   source = null,
-  applicationReference = null,
   user = null,
   baseUrl = config.get('backendApi.url'),
   timeoutMs = config.get('backendApi.timeoutMs'),
@@ -770,7 +771,7 @@ export async function createWorkItem({
         },
         user
       ),
-      body: JSON.stringify({ typeId, payload, source, applicationReference })
+      body: JSON.stringify({ typeId, payload, source })
     })
 
     if (response.status === 201) {
