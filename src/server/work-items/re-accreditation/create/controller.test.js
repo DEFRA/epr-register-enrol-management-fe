@@ -134,6 +134,53 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
     expect(captured.redirect).toBe('/work-items/wi-42')
   })
 
+  test('falls back to the work item id when the service returns no applicationReference (RA-219 guard)', async () => {
+    // Defensive path: the backend always stamps the reference in practice,
+    // but if the created work item carries no applicationReference the banner
+    // must not show a dangling "Work item created — ". We flash the work
+    // item id instead (mirroring decorate()'s applicationRef fallback).
+    const service = {
+      create: vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: { id: 'wi-77' },
+        applicationReference: undefined
+      })
+    }
+    const ctl = makeSubmitCreateWorkItemController({ service })
+    const request = makeRequest()
+    const { h, captured } = makeH()
+
+    await ctl.handler(request, h)
+
+    expect(request.yar._flashCalls).toEqual([
+      { name: 'successBanner', value: { reference: 'wi-77' } }
+    ])
+    expect(captured.redirect).toBe('/work-items/wi-77')
+  })
+
+  test('suppresses the success banner entirely when neither a reference nor an id is available (RA-219 guard)', async () => {
+    // Belt-and-braces: with no reference and no id there is nothing to show,
+    // so we flash no banner at all rather than a dangling "Work item created
+    // — " one. The redirect still happens (to the bare detail path).
+    const service = {
+      create: vi.fn().mockResolvedValue({
+        ok: true,
+        workItem: {},
+        applicationReference: undefined
+      })
+    }
+    const ctl = makeSubmitCreateWorkItemController({ service })
+    const request = makeRequest()
+    const { h, captured } = makeH()
+
+    await ctl.handler(request, h)
+
+    expect(request.yar._flashCalls).toEqual([])
+    // No id to redirect to; the existing redirect logic stringifies the
+    // missing id. The point of this test is the suppressed banner above.
+    expect(captured.redirect).toBe('/work-items/undefined')
+  })
+
   test('encodes the redirect path so weird ids cannot break out', async () => {
     const service = {
       create: vi.fn().mockResolvedValue({

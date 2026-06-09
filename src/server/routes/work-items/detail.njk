@@ -37,7 +37,11 @@
     }) }}
   {% endif %}
 
-  {% if successBanner %}
+  {# RA-219: `successBanner` is only ever flashed with a truthy `reference`   #}
+  {# (the create controller falls back to the work item id and suppresses    #}
+  {# the banner entirely when even that is missing), so the banner can never  #}
+  {# render a dangling "Work item created — " / "Reference: " line.           #}
+  {% if successBanner and successBanner.reference %}
     {{ govukNotificationBanner({
       type: 'success',
       titleText: 'Work item created — ' + successBanner.reference,

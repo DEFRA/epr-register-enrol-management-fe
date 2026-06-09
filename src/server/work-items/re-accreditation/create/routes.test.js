@@ -234,6 +234,65 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
       expect.stringContaining('Work item created — RA-123456789')
     )
   })
+
+  test('Following the redirect falls back to the work item id on the banner when the backend omits the reference (RA-219 guard)', async () => {
+    // Defensive path: the backend always stamps the reference in practice,
+    // but if the created work item carries no applicationReference the banner
+    // must still render with a sensible value (the work item id) rather than
+    // a dangling "Work item created — ".
+    createWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: { id: 'wi-noref' }
+    })
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: {
+        id: 'wi-noref',
+        typeId: 're-accreditation',
+        stateId: 'submitted',
+        submittedAt: '2026-04-27T10:00:00Z',
+        lastModifiedAt: '2026-04-27T10:00:00Z',
+        submittedBy: 'frontend',
+        templateVersion: 'v1',
+        payload: {},
+        tasks: [],
+        availableActions: []
+      }
+    })
+
+    const post = await injectWithCrumb(server, {
+      method: 'POST',
+      url: '/work-items/re-accreditation/new',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: validForm()
+    })
+    expect(post.statusCode).toBe(302)
+    expect(post.headers.location).toBe('/work-items/wi-noref')
+
+    const setCookies = [].concat(post.headers['set-cookie'] ?? [])
+    const cookieHeader = setCookies.map((c) => c.split(';')[0]).join('; ')
+
+    const detail = await server.inject({
+      method: 'GET',
+      url: '/work-items/wi-noref',
+      headers: { cookie: cookieHeader }
+    })
+
+    expect(detail.statusCode).toBe(200)
+    // The banner renders with the work item id and is never dangling.
+    expect(detail.result).toEqual(
+      expect.stringContaining('data-testid="work-item-success-banner"')
+    )
+    expect(detail.result).toEqual(
+      expect.stringContaining('Work item created — wi-noref')
+    )
+    expect(detail.result).not.toEqual(
+      expect.stringContaining('Work item created — <')
+    )
+    expect(detail.result).not.toEqual(
+      expect.stringContaining('Work item created —\n')
+    )
+  })
 })
 
 describe('Re-accreditation create-work-item routes (RA-127, flag off)', () => {
