@@ -30,7 +30,6 @@ const { createWorkItem, getWorkItem, getWorkItems } =
 
 const validForm = () =>
   [
-    'applicationReference=REF-1',
     'operatorEmail=test%40defra.gov.uk',
     'organisationName=Acme',
     'siteAddressLine1=1%20Road',
@@ -76,14 +75,20 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
     )
   })
 
-  test('GET seeds a random application reference (readonly) and default email (RA-172)', async () => {
+  test('GET no longer renders an application reference field and seeds the default email (RA-219)', async () => {
     const { statusCode, result } = await server.inject({
       method: 'GET',
       url: '/work-items/re-accreditation/new'
     })
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toMatch(/value="RA-\d{9}"/)
-    expect(result).toEqual(expect.stringContaining('readonly'))
+    // RA-219: the reference is server-generated; the form never shows it.
+    expect(result).not.toMatch(/value="RA-\d{9}"/)
+    expect(result).not.toEqual(
+      expect.stringContaining('create-work-item-applicationReference')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining('name="applicationReference"')
+    )
     expect(result).toEqual(expect.stringContaining('value="test@defra.gov.uk"'))
     expect(result).toEqual(
       expect.stringContaining('data-testid="create-work-item-email"')
@@ -143,7 +148,9 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
     expect(createWorkItem).toHaveBeenCalledTimes(1)
     const arg = createWorkItem.mock.calls[0][0]
     expect(arg.typeId).toBe('re-accreditation')
-    expect(arg.payload.applicationReference).toBe('REF-1')
+    // RA-219: no application reference is supplied by the BFF.
+    expect(arg).not.toHaveProperty('applicationReference')
+    expect(arg.payload).not.toHaveProperty('applicationReference')
     expect(arg.payload.operatorEmail).toBe('test@defra.gov.uk')
     expect(arg.payload.siteAddress).toEqual({
       line1: '1 Road',
@@ -173,10 +180,15 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
     expect(res.result).toEqual(expect.stringContaining('Backend down'))
   })
 
-  test('Following the redirect renders the success banner from the flash', async () => {
+  test('Following the redirect renders the success banner with the backend-generated reference (RA-219)', async () => {
+    // RA-219: the reference shown to the user is the one the backend
+    // stamped onto the created work item's payload, not one the BFF made.
     createWorkItem.mockResolvedValue({
       ok: true,
-      workItem: { id: 'wi-99' }
+      workItem: {
+        id: 'wi-99',
+        payload: { applicationReference: 'RA-123456789' }
+      }
     })
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -188,7 +200,7 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
         lastModifiedAt: '2026-04-27T10:00:00Z',
         submittedBy: 'frontend',
         templateVersion: 'v1',
-        payload: { applicationReference: 'REF-1' },
+        payload: { applicationReference: 'RA-123456789' },
         tasks: [],
         availableActions: []
       }
@@ -219,7 +231,66 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
       expect.stringContaining('data-testid="work-item-success-banner"')
     )
     expect(detail.result).toEqual(
-      expect.stringContaining('Work item created — REF-1')
+      expect.stringContaining('Work item created — RA-123456789')
+    )
+  })
+
+  test('Following the redirect falls back to the work item id on the banner when the backend omits the reference (RA-219 guard)', async () => {
+    // Defensive path: the backend always stamps the reference in practice,
+    // but if the created work item carries no applicationReference the banner
+    // must still render with a sensible value (the work item id) rather than
+    // a dangling "Work item created — ".
+    createWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: { id: 'wi-noref' }
+    })
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: {
+        id: 'wi-noref',
+        typeId: 're-accreditation',
+        stateId: 'submitted',
+        submittedAt: '2026-04-27T10:00:00Z',
+        lastModifiedAt: '2026-04-27T10:00:00Z',
+        submittedBy: 'frontend',
+        templateVersion: 'v1',
+        payload: {},
+        tasks: [],
+        availableActions: []
+      }
+    })
+
+    const post = await injectWithCrumb(server, {
+      method: 'POST',
+      url: '/work-items/re-accreditation/new',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: validForm()
+    })
+    expect(post.statusCode).toBe(302)
+    expect(post.headers.location).toBe('/work-items/wi-noref')
+
+    const setCookies = [].concat(post.headers['set-cookie'] ?? [])
+    const cookieHeader = setCookies.map((c) => c.split(';')[0]).join('; ')
+
+    const detail = await server.inject({
+      method: 'GET',
+      url: '/work-items/wi-noref',
+      headers: { cookie: cookieHeader }
+    })
+
+    expect(detail.statusCode).toBe(200)
+    // The banner renders with the work item id and is never dangling.
+    expect(detail.result).toEqual(
+      expect.stringContaining('data-testid="work-item-success-banner"')
+    )
+    expect(detail.result).toEqual(
+      expect.stringContaining('Work item created — wi-noref')
+    )
+    expect(detail.result).not.toEqual(
+      expect.stringContaining('Work item created — <')
+    )
+    expect(detail.result).not.toEqual(
+      expect.stringContaining('Work item created —\n')
     )
   })
 })
