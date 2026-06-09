@@ -63,6 +63,12 @@
 
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
+      {# Block for type-specific content rendered ABOVE the generic envelope #}
+      {# summary — used by RA-177 to surface the re-accreditation "issued"   #}
+      {# confirmation panel + metadata as the first thing the user sees      #}
+      {# after approving, with the envelope attributes below it.             #}
+      {% block summaryListBefore %}{% endblock %}
+
       {{ govukSummaryList({
         attributes: { "data-testid": "work-item-summary" },
         rows: [

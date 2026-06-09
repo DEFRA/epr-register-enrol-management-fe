@@ -72,13 +72,15 @@
   {% endif %}
 {% endblock %}
 
-{# RA-132 / RA-133. When the work item has been approved, surface the  #}
-{# issued accreditation metadata from the backend                       #}
+{# RA-132 / RA-133 / RA-177. When the work item has been approved,      #}
+{# surface the issued accreditation metadata from the backend           #}
 {# (`payload.accreditationId`, `payload.accreditationStartDate`,        #}
-{# `payload.accreditationYear`) above the envelope summary as a         #}
+{# `payload.accreditationYear`) ABOVE the envelope summary as a         #}
 {# confirmation panel + a summary list so it is the first thing the     #}
-{# user sees after approving.                                           #}
-{% block summaryListExtra %}
+{# user sees after approving. RA-177 moved this from `summaryListExtra` #}
+{# (which renders below the envelope attributes) to `summaryListBefore` #}
+{# so the success message sits above the attributes.                    #}
+{% block summaryListBefore %}
   {% if workItem.decisionMetadata %}
     {{ govukPanel({
       titleText: "Accreditation issued",
