@@ -252,14 +252,15 @@
       {# panel above. This section shows the SLA clock status (when the    #}
       {# backend exposes it) so team leaders can see what they're acting   #}
       {# on before clicking the buttons.                                   #}
-      {% if canManageSla and workItem.slaClock %}
+      {% if canManageSla and workItem.slaState %}
         <h2 class="govuk-heading-m">SLA status</h2>
         <p class="govuk-body" data-testid="sla-clock-info">
-          Target: {{ workItem.slaClock.targetDuration }} &mdash;
-          {% if workItem.slaClock.breached %}
+          {% if workItem.slaState === 'breached' %}
             <strong class="govuk-tag govuk-tag--red">Breached</strong>
+          {% elif workItem.slaState === 'atRisk' %}
+            <strong class="govuk-tag govuk-tag--orange">At risk</strong>
           {% else %}
-            On track
+            <strong class="govuk-tag govuk-tag--green">On track</strong>
           {% endif %}
         </p>
       {% endif %}
