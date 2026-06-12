@@ -1042,6 +1042,41 @@ describe('#workItemDetailController', () => {
       expect(result).toEqual(expect.stringContaining('>2027<'))
     })
 
+    test('RA-177: renders the issued confirmation panel and metadata above the envelope attributes', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'approved',
+          payload: {
+            accreditationId: 'ACC-2027-P-AB12CD34',
+            accreditationStartDate: '2027-01-01',
+            accreditationYear: 2027
+          }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const panelIndex = result.indexOf(
+        'data-testid="re-accreditation-approval-panel"'
+      )
+      const metadataIndex = result.indexOf(
+        'data-testid="re-accreditation-decision-metadata"'
+      )
+      const summaryIndex = result.indexOf('data-testid="work-item-summary"')
+      expect(panelIndex).toBeGreaterThan(-1)
+      expect(metadataIndex).toBeGreaterThan(-1)
+      expect(summaryIndex).toBeGreaterThan(-1)
+      // Success message first, then its metadata, then the envelope attributes.
+      expect(panelIndex).toBeLessThan(metadataIndex)
+      expect(metadataIndex).toBeLessThan(summaryIndex)
+    })
+
     test('omits decision metadata when payload has no accreditation fields', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
@@ -1089,6 +1124,57 @@ describe('#workItemDetailController', () => {
 
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).toEqual(expect.stringContaining('not-a-real-date'))
+    })
+
+    test('formats an extended-JSON {$date} start date instead of rendering [object Object]', async () => {
+      // RA-176: guard against a start date that arrives as MongoDB extended
+      // JSON rather than a plain ISO string.
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'approved',
+          payload: {
+            accreditationId: 'ACC-2027-P-AB12CD34',
+            accreditationStartDate: { $date: '2027-01-01T00:00:00Z' },
+            accreditationYear: 2027
+          }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(expect.stringContaining('1 January 2027'))
+      expect(result).not.toEqual(expect.stringContaining('[object Object]'))
+    })
+
+    test('renders the em-dash fallback for an unrecognised start date object shape', async () => {
+      // RA-176: any non-string, non-{$date} object must not leak
+      // "[object Object]" into the rendered panel.
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'approved',
+          payload: {
+            accreditationId: 'ACC-2027-P-AB12CD34',
+            accreditationStartDate: { year: 2027, month: 1, day: 1 },
+            accreditationYear: 2027
+          }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(expect.stringContaining('[object Object]'))
     })
 
     test('renders year row with em-dash fallback when accreditationYear absent', async () => {

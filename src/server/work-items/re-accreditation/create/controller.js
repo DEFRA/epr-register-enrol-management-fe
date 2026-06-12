@@ -13,24 +13,6 @@ const PAGE_TITLE = 'Create a work item'
  */
 export const DEFAULT_EMAIL = 'test@defra.gov.uk'
 
-/**
- * RA-172: build a fresh, random application reference for each GET of
- * the create form. The field is rendered read-only so the user cannot
- * tweak it — the value still travels back to the backend on POST via a
- * standard input element (read-only inputs are submitted; disabled ones
- * are not, which would defeat the purpose).
- *
- * Format: `RA-<9-digit-number>` — long enough that collisions across a
- * demo session are vanishingly rare, and within the schema's 50-char /
- * `[A-Za-z0-9-]+` constraints.
- */
-export function generateApplicationReference() {
-  const min = 100_000_000
-  const max = 999_999_999
-  const n = Math.floor(Math.random() * (max - min + 1)) + min
-  return `RA-${n}`
-}
-
 const BREADCRUMBS = [
   { text: 'Home', href: '/' },
   { text: 'Work items', href: '/work-items' },
@@ -55,7 +37,6 @@ function renderForm(
       heading: PAGE_TITLE,
       breadcrumbs: BREADCRUMBS,
       values: {
-        applicationReference: values.applicationReference ?? '',
         operatorEmail: values.operatorEmail ?? '',
         organisationName: values.organisationName ?? '',
         siteAddress: {
@@ -76,7 +57,6 @@ function renderForm(
 }
 
 const FIELD_ORDER = [
-  'applicationReference',
   'operatorEmail',
   'organisationName',
   'siteAddress.line1',
@@ -103,10 +83,11 @@ function buildErrorSummary(fieldErrors) {
 /**
  * GET /work-items/re-accreditation/new — render the create form pre-filled with demo data.
  *
- * RA-172: `applicationReference` is generated per-request (read-only in
- * the template) and `operatorEmail` is seeded with the default operator address.
- * Both can be overridden by the caller in tests via `generateReference`
- * and `defaultEmail` injection.
+ * RA-219: the application reference is no longer generated here. The
+ * backend stamps it server-side on submission and returns it on the
+ * created work item; the user never supplies it. `operatorEmail` is
+ * seeded with the default operator address and can be overridden by the
+ * caller in tests via `defaultEmail` injection.
  */
 const DEMO_VALUES = {
   organisationName: 'Acme Recycling Ltd',
@@ -121,7 +102,6 @@ const DEMO_VALUES = {
 }
 
 export function makeCreateWorkItemController({
-  generateReference = generateApplicationReference,
   defaultEmail = DEFAULT_EMAIL
 } = {}) {
   return {
@@ -129,7 +109,6 @@ export function makeCreateWorkItemController({
       return renderForm(h, {
         values: {
           ...DEMO_VALUES,
-          applicationReference: generateReference(),
           operatorEmail: defaultEmail
         }
       })
@@ -146,7 +125,6 @@ export function makeCreateWorkItemController({
 function reshapeFormPayload(payload) {
   const p = payload ?? {}
   return {
-    applicationReference: p.applicationReference,
     operatorEmail: p.operatorEmail,
     organisationName: p.organisationName,
     siteAddress: {
@@ -181,9 +159,17 @@ export function makeSubmitCreateWorkItemController({
       })
 
       if (result.ok) {
-        request.yar.flash('successBanner', {
-          reference: result.applicationReference
-        })
+        // RA-219: the backend stamps the application reference and returns it
+        // on the created work item; in practice it is always present. Guard
+        // defensively so a missing reference never produces a dangling
+        // "Work item created — " banner: fall back to the work item id (the
+        // same fallback `decorate()` uses for `applicationRef`), and only
+        // flash the success banner when we actually have a reference to show.
+        const reference =
+          result.applicationReference ?? result.workItem?.id ?? null
+        if (reference) {
+          request.yar.flash('successBanner', { reference })
+        }
         return h.redirect(
           `/work-items/${encodeURIComponent(result.workItem.id)}`
         )

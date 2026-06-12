@@ -8,7 +8,6 @@ import {
 } from './schema.js'
 
 const validForm = () => ({
-  applicationReference: 'REF-001',
   operatorEmail: 'test@defra.gov.uk',
   organisationName: 'Acme Recycling Ltd',
   siteAddress: {
@@ -21,26 +20,33 @@ const validForm = () => ({
   tonnageBand: '500-5000'
 })
 
-describe('#createReAccreditationSchema (RA-127)', () => {
+describe('#createReAccreditationSchema (RA-127, RA-219)', () => {
   test('accepts a fully populated valid form payload', () => {
     const { error, value } = createReAccreditationSchema.validate(validForm(), {
       abortEarly: false
     })
     expect(error).toBeUndefined()
-    expect(value.applicationReference).toBe('REF-001')
     expect(value.siteAddress.line2).toBe('')
+  })
+
+  test('RA-219: is no longer an inbound field and is stripped from input', () => {
+    const form = { ...validForm(), applicationReference: 'RA-123456789' }
+    const { error, value } = createReAccreditationSchema.validate(form, {
+      abortEarly: false,
+      stripUnknown: true
+    })
+    expect(error).toBeUndefined()
+    expect(value).not.toHaveProperty('applicationReference')
   })
 
   test('trims surrounding whitespace from string fields', () => {
     const form = validForm()
-    form.applicationReference = '  REF-002  '
     form.organisationName = '  Trim Me  '
     form.siteAddress.line1 = '  10 Road  '
     const { error, value } = createReAccreditationSchema.validate(form, {
       abortEarly: false
     })
     expect(error).toBeUndefined()
-    expect(value.applicationReference).toBe('REF-002')
     expect(value.organisationName).toBe('Trim Me')
     expect(value.siteAddress.line1).toBe('10 Road')
   })
@@ -52,7 +58,7 @@ describe('#createReAccreditationSchema (RA-127)', () => {
     )
     expect(error).toBeDefined()
     const errors = joiDetailsToFieldErrors(error.details)
-    expect(errors.applicationReference).toBe('Enter the application reference')
+    expect(errors).not.toHaveProperty('applicationReference')
     expect(errors.operatorEmail).toBe('Enter an email address')
     expect(errors.organisationName).toBe('Enter the organisation name')
     expect(errors.material).toBe('Select a material')
@@ -61,17 +67,6 @@ describe('#createReAccreditationSchema (RA-127)', () => {
   })
 
   test.each([
-    ['applicationReference', '', 'Enter the application reference'],
-    [
-      'applicationReference',
-      'a'.repeat(51),
-      'Application reference must be 50 characters or fewer'
-    ],
-    [
-      'applicationReference',
-      'has space!',
-      'Application reference can only include letters, numbers and hyphens'
-    ],
     ['operatorEmail', '', 'Enter an email address'],
     [
       'operatorEmail',

@@ -38,18 +38,6 @@
 
         <input type="hidden" name="crumb" value="{{ crumb }}" />
         {{ govukInput({
-          id: "field-applicationReference",
-          name: "applicationReference",
-          label: { text: "Application reference", classes: "govuk-label--s" },
-          hint: { text: "Auto-generated for this re-accreditation. You cannot edit this value." },
-          value: values.applicationReference,
-          autocomplete: "off",
-          spellcheck: false,
-          attributes: { readonly: true, "data-testid": "create-work-item-applicationReference" },
-          errorMessage: { text: fieldErrors["applicationReference"] } if fieldErrors["applicationReference"] else null
-        }) }}
-
-        {{ govukInput({
           id: "field-operatorEmail",
           name: "operatorEmail",
           type: "email",
