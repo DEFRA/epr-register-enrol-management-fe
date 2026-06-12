@@ -265,10 +265,10 @@
       {% if canManageSla and workItem.slaState %}
         <h2 class="govuk-heading-m">SLA status</h2>
         <p class="govuk-body" data-testid="sla-clock-info">
-          {% if workItem.slaState === 'breached' %}
+          {% if workItem.slaState === 'Breached' %}
             <strong class="govuk-tag govuk-tag--red">Breached</strong>
-          {% elif workItem.slaState === 'atRisk' %}
-            <strong class="govuk-tag govuk-tag--orange">At risk</strong>
+          {% elif workItem.slaState === 'AtRisk' %}
+            <strong class="govuk-tag govuk-tag--yellow">At risk</strong>
           {% else %}
             <strong class="govuk-tag govuk-tag--green">On track</strong>
           {% endif %}
