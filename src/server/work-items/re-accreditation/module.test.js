@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v4')
+    expect(reAccreditationType.templateVersion).toBe('v5')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -38,7 +38,6 @@ describe('reAccreditationModule', () => {
   })
 
   test.each([
-    ['duly-make', 'submitted', 'duly-made', true],
     ['payment-received', 'duly-made', 'assessment-in-progress', true],
     ['sla-extend', 'assessment-in-progress', 'assessment-in-progress', false],
     [
@@ -100,9 +99,9 @@ describe('reAccreditationModule', () => {
     }
   )
 
-  test('register registers detail templates for all versions (v1–v4) resolvable from the framework', async () => {
+  test('register registers detail templates for all versions (v1–v5) resolvable from the framework', async () => {
     // Resolve falls back to the generic detail before register runs.
-    expect(resolveDetailTemplate('re-accreditation', 'v4')).toBe(
+    expect(resolveDetailTemplate('re-accreditation', 'v5')).toBe(
       'work-items/detail'
     )
 
@@ -125,7 +124,7 @@ describe('reAccreditationModule', () => {
       config.set(flagKey, previous)
     }
 
-    for (const version of ['v1', 'v2', 'v3', 'v4']) {
+    for (const version of ['v1', 'v2', 'v3', 'v4', 'v5']) {
       expect(resolveDetailTemplate('re-accreditation', version)).toBe(
         're-accreditation/detail-v1'
       )

@@ -32,13 +32,6 @@ const STATES = [
 
 const TRANSITIONS = [
   {
-    actionId: 'duly-make',
-    displayName: 'Mark as duly made',
-    fromStateId: 'submitted',
-    toStateId: 'duly-made',
-    requiresAllTasksComplete: true
-  },
-  {
     actionId: 'payment-received',
     displayName: 'Payment received',
     fromStateId: 'duly-made',
@@ -145,7 +138,7 @@ const TASKS_BY_STATE = {
 export const reAccreditationType = {
   id: 're-accreditation',
   displayName: 'Re-accreditation',
-  templateVersion: 'v4',
+  templateVersion: 'v5',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS,
@@ -158,14 +151,16 @@ export const reAccreditationModule = {
   type: reAccreditationType,
   async register(server) {
     // Mount the type-specific detail template so the framework's detail
-    // controller picks it for `(re-accreditation, v1)` work items. All
+    // controller picks it for `(re-accreditation, v*)` work items. All
     // other UI for this type goes through the framework's generic routes.
     // v2: added duly-made state; v3: notify hook; v4: SLA clock
+    // v5: removed duly-make action (auto-transition on task completion)
     registerModuleDetailTemplates('re-accreditation', {
       v1: 're-accreditation/detail-v1',
       v2: 're-accreditation/detail-v1',
       v3: 're-accreditation/detail-v1',
-      v4: 're-accreditation/detail-v1'
+      v4: 're-accreditation/detail-v1',
+      v5: 're-accreditation/detail-v1'
     })
 
     // RA-132. Approve-determination flow: confirmation interstitial + POST
