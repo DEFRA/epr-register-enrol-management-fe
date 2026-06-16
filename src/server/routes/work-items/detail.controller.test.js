@@ -50,7 +50,8 @@ function aWorkItem(overrides = {}) {
     templateVersion: 'v1',
     payload: {
       applicantName: 'Acme',
-      applicationReference: 'RA-000000001'
+      applicationReference: 'RA-000000001',
+      registrationNumber: 'REG-000000001'
     },
     tasks: [
       {
@@ -162,6 +163,53 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(
       expect.stringContaining(`/work-items/${ID}/audit-log`)
     )
+  })
+
+  // RA-223: regulators need the Registration ID visible on the detail page.
+  // It is sourced from payload.registrationNumber and rendered as a summary row.
+  test('RA-223: Shows the Registration ID summary row from payload.registrationNumber', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicantName: 'Acme',
+          applicationReference: 'RA-987654321',
+          registrationNumber: 'REG-987654321'
+        }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Registration ID'))
+    expect(result).toEqual(expect.stringContaining('REG-987654321'))
+  })
+
+  test('RA-223: Falls back to an em-dash when payload.registrationNumber is missing', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicantName: 'Acme',
+          applicationReference: 'RA-987654321'
+        } // No registrationNumber
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Registration ID'))
+    expect(result).toEqual(expect.stringContaining('—'))
   })
 
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {

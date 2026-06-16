@@ -617,6 +617,7 @@ function decorate(workItem) {
     stateDisplayName,
     applicationRef:
       workItem.payload?.applicationReference ?? workItem.id ?? null,
+    registrationId: workItem.payload?.registrationNumber ?? null,
     assigneeDisplayName:
       workItem.assignedToName ?? workItem.assignedToId ?? null,
     tasks: Array.isArray(workItem.tasks)

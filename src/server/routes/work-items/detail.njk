@@ -77,6 +77,7 @@
         attributes: { "data-testid": "work-item-summary" },
         rows: [
           { key: { text: "Application ref" }, value: { text: workItem.applicationRef } },
+          { key: { text: "Registration ID" }, value: { text: workItem.registrationId or "—" } },
           { key: { text: "Type" },         value: { text: workItem.typeDisplayName } },
           { key: { text: "State" },        value: { text: workItem.stateDisplayName } },
           { key: { text: "Submitted at" }, value: { text: workItem.submittedAt | formatDateTimeGds } },
