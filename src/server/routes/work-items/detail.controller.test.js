@@ -186,8 +186,11 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Registration ID'))
-    expect(result).toEqual(expect.stringContaining('REG-987654321'))
+    // Scope the assertion to the Registration ID row's value cell so it
+    // cannot pass against the value of an unrelated summary-list row.
+    expect(result).toMatch(
+      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-987654321\s*<\/dd>/
+    )
   })
 
   test('RA-223: Falls back to an em-dash when payload.registrationNumber is missing', async () => {
@@ -208,8 +211,9 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Registration ID'))
-    expect(result).toEqual(expect.stringContaining('—'))
+    // The em-dash recurs in other rows, so scope the fallback assertion to
+    // the Registration ID row's value cell specifically.
+    expect(result).toMatch(/Registration ID\s*<\/dt>\s*<dd[^>]*>\s*—\s*<\/dd>/)
   })
 
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
