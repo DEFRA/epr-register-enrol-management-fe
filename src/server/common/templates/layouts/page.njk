@@ -18,16 +18,26 @@
 {% endblock %}
 
 {% block head %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
   <link href="{{ getAssetPath('src/client/stylesheets/application.scss') }}" rel="stylesheet">
 {% endblock %}
 
 {% block header %}
-  {# In govuk-frontend v6 the service name and navigation links moved from the header to the service navigation component - https://github.com/alphagov/govuk-frontend/blob/main/CHANGELOG.md#move-service-name-and-navigation-links-from-the-govuk-header-to-service-navigation-component #}
-  {{ govukHeader({
-    homepageUrl: "https://www.gov.uk/",
-    classes: "app-header",
-    containerClasses: "govuk-width-container"
-  }) }}
+  <header class="govuk-header" role="banner">
+    <div class="govuk-header__container govuk-width-container">
+      <div class="govuk-header__logo">
+        <a href="/" class="govuk-header__homepage-link">
+          <img
+            src="{{ getAssetPath('src/client/images/defra-logo-wide.svg') }}"
+            alt="Department for Environment, Food and Rural Affairs"
+            class="app-header__logo-img"
+          >
+        </a>
+      </div>
+    </div>
+  </header>
 
   {% if user %}
     {% set serviceNavItems = navigation.concat([{ text: 'Sign out', href: '/auth/logout' }]) %}
@@ -56,24 +66,28 @@
 {% block content %}{% endblock %}
 
 {% block footer %}
-  {{ govukFooter({
-    meta: {
-      items: [
-        {
-          href: "https://www.gov.uk/help/privacy-notice",
-          text: "Privacy"
-        },
-        {
-          href: "https://www.gov.uk/help/cookies",
-          text: "Cookies"
-        },
-        {
-          href: "https://www.gov.uk/help/accessibility-statement",
-          text: "Accessibility statement"
-        }
-      ]
-    }
-  }) }}
+  <footer class="govuk-template__footer">
+    <div class="govuk-footer">
+      <div class="govuk-width-container">
+        <div class="govuk-footer__meta">
+          <div class="govuk-footer__meta-item govuk-footer__meta-item--grow">
+            <p class="govuk-footer__body">A Department for Environment, Food &amp; Rural Affairs Digital, Data and Technology service</p>
+            <ul class="govuk-footer__inline-list">
+              <li class="govuk-footer__inline-list-item">
+                <a class="govuk-footer__link" href="/accessibility-statement">Accessibility statement</a>
+              </li>
+              <li class="govuk-footer__inline-list-item">
+                <a class="govuk-footer__link" href="/cookies">Cookies</a>
+              </li>
+              <li class="govuk-footer__inline-list-item">
+                <a class="govuk-footer__link" href="/feedback">Feedback</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
 {% endblock %}
 
 {% block bodyEnd %}
