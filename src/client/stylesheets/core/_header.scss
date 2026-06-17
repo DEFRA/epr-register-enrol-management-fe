@@ -7,9 +7,9 @@
 }
 
 // govuk compiled CSS: background: var(--govuk-brand-colour, #1d70b8); color: #fff
-// Override to white background with dark text.
+// Scope --govuk-brand-colour to white within the header so var() resolves correctly.
 .govuk-header {
-  background: #ffffff !important;
+  --govuk-brand-colour: #ffffff;
   color: #0b0c0c;
   border-bottom: none;
 }
