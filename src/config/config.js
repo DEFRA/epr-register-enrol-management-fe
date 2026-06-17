@@ -66,7 +66,7 @@ export const config = convict({
   port: {
     doc: 'The port to bind.',
     format: 'port',
-    default: 3007,
+    default: 3000,
     env: 'PORT'
   },
   staticCacheTimeout: {
@@ -317,7 +317,7 @@ export const config = convict({
     callbackBaseUrl: {
       doc: 'Base URL for OAuth callback URLs (e.g. https://myapp.example.com)',
       format: String,
-      default: 'http://localhost:3007',
+      default: 'http://localhost:3000',
       env: 'AUTH_CALLBACK_BASE_URL'
     },
     sharedSecret: {
