@@ -50,7 +50,8 @@ function aWorkItem(overrides = {}) {
     templateVersion: 'v1',
     payload: {
       applicantName: 'Acme',
-      applicationReference: 'RA-000000001'
+      applicationReference: 'RA-000000001',
+      registrationNumber: 'REG-000000001'
     },
     tasks: [
       {
@@ -162,6 +163,57 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(
       expect.stringContaining(`/work-items/${ID}/audit-log`)
     )
+  })
+
+  // RA-223: regulators need the Registration ID visible on the detail page.
+  // It is sourced from payload.registrationNumber and rendered as a summary row.
+  test('RA-223: Shows the Registration ID summary row from payload.registrationNumber', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicantName: 'Acme',
+          applicationReference: 'RA-987654321',
+          registrationNumber: 'REG-987654321'
+        }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Scope the assertion to the Registration ID row's value cell so it
+    // cannot pass against the value of an unrelated summary-list row.
+    expect(result).toMatch(
+      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-987654321\s*<\/dd>/
+    )
+  })
+
+  test('RA-223: Falls back to an em-dash when payload.registrationNumber is missing', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicantName: 'Acme',
+          applicationReference: 'RA-987654321'
+        } // No registrationNumber
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // The em-dash recurs in other rows, so scope the fallback assertion to
+    // the Registration ID row's value cell specifically.
+    expect(result).toMatch(/Registration ID\s*<\/dt>\s*<dd[^>]*>\s*—\s*<\/dd>/)
   })
 
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
