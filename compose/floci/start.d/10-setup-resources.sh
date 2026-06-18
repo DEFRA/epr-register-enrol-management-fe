@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# S3 buckets
-#aws s3 mb s3://my-bucket
-
-# SQS queues
-#aws sqs create-queue --queue-name my-queue
+# S3 buckets for the EPR register-enrol backend
+aws --endpoint-url=http://localhost:4566 s3 mb s3://epr-register-enrol-sampling-plans
+aws --endpoint-url=http://localhost:4566 s3 mb s3://epr-register-enrol-bes-evidence
