@@ -1,4 +1,5 @@
 @forward 'pkg:govuk-frontend' with (
   $govuk-assets-path: '../../../node_modules/govuk-frontend/dist/govuk/assets/',
-  $govuk-global-styles: true
+  $govuk-global-styles: true,
+  $govuk-font-family: ("Roboto", arial, sans-serif)
 );

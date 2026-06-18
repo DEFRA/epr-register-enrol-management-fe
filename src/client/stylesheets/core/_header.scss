@@ -1,7 +1,45 @@
 @use "variables/colours" as *;
 
-// Example namespaced custom element style CSS classes
+// govuk-frontend v6 uses CSS custom properties for brand colour.
+// Setting --govuk-brand-colour changes footer border-top and service nav accent to green.
+:root {
+  --govuk-brand-colour: #{$app-defra-green};
+}
 
-.app-header {
-  border-bottom-color: $app-light-grey;
+// govuk compiled CSS: background: var(--govuk-brand-colour, #1d70b8); color: #fff
+// Scope --govuk-brand-colour to white within the header so var() resolves correctly.
+.govuk-header {
+  --govuk-brand-colour: #ffffff;
+  color: #0b0c0c;
+  border-bottom: none;
+}
+
+.govuk-header a,
+.govuk-header__link,
+.govuk-header__homepage-link {
+  color: #0b0c0c;
+
+  &:link,
+  &:visited {
+    color: #0b0c0c;
+  }
+}
+
+.govuk-service-navigation {
+  background-color: #ffffff;
+  border-bottom: 4px solid $app-defra-green;
+}
+
+// govuk compiled CSS: border-top: 10px solid; border-top-color: var(--govuk-brand-colour)
+// background: var(--govuk-template-background-colour, #f4f8fb)
+// Override to white with thin grey separator.
+.govuk-footer {
+  background: #ffffff;
+  border-top: 1px solid #b1b4b6;
+}
+
+.app-header__logo-img {
+  width: 300px;
+  height: auto;
+  display: block;
 }
