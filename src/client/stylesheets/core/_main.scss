@@ -1,9 +1,13 @@
 @use "govuk-frontend" as *;
 @use "variables/colours" as *;
 
+.app-main-background {
+  display: flow-root;
+  background-color: $app-background-grey;
+}
+
 .app-main-wrapper {
   display: block;
   padding-top: govuk-spacing(4);
   padding-bottom: govuk-spacing(3);
-  background-color: $app-background-grey;
 }

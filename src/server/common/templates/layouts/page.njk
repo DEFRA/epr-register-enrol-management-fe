@@ -55,6 +55,12 @@
   {{ pageTitle }} | {{ serviceName }}
 {% endblock %}
 
+{% block container %}
+  <div class="app-main-background">
+    {{ super() }}
+  </div>
+{% endblock %}
+
 {% block beforeContent %}
   {% if breadcrumbs.length > 1 %}
     {{ govukBreadcrumbs({

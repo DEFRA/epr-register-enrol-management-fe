@@ -30,6 +30,17 @@
   border-bottom: 4px solid $app-defra-green;
 }
 
+.govuk-service-navigation__list {
+  color: #0b0c0c;
+}
+
+.govuk-service-navigation__link {
+  &:link,
+  &:visited {
+    color: #0b0c0c;
+  }
+}
+
 // govuk compiled CSS: border-top: 10px solid; border-top-color: var(--govuk-brand-colour)
 // background: var(--govuk-template-background-colour, #f4f8fb)
 // Override to white with thin grey separator.
@@ -42,4 +53,14 @@
   width: 300px;
   height: auto;
   display: block;
+}
+
+.govuk-header__logo {
+  padding-top: 8px;
+  padding-bottom: 1px;
+}
+
+.govuk-header__homepage-link {
+  display: block;
+  line-height: 0;
 }
