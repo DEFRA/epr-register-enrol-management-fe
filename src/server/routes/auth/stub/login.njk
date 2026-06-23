@@ -63,6 +63,14 @@
 
         <button class="govuk-button" type="submit">Log in</button>
       </form>
+
+      {% if entraIdConfigured %}
+        <hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+        <h2 class="govuk-heading-m">Or sign in with a real account</h2>
+        <a href="/auth/regulator/entra-id" class="govuk-button govuk-button--secondary" data-testid="entra-id-login">
+          Sign in with Entra ID
+        </a>
+      {% endif %}
     </div>
   </div>
 {% endblock %}

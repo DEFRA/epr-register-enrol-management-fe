@@ -26,6 +26,27 @@ export const authRoutes = {
           options: { auth: false },
           handler: (_request, h) => h.redirect('/auth/stub/login')
         })
+
+        if (
+          config.get('auth.azureEntraId.clientId') &&
+          config.get('auth.azureEntraId.tenantId')
+        ) {
+          server.route([
+            {
+              method: 'GET',
+              path: '/auth/regulator/entra-id',
+              options: { auth: false },
+              handler: regulatorLoginController
+            },
+            {
+              method: 'GET',
+              path: '/auth/regulator/callback',
+              options: { auth: false },
+              handler: regulatorCallbackController
+            }
+          ])
+        }
+
         await server.register([stubAuthRoutes])
         return
       }

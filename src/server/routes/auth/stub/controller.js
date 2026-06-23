@@ -1,3 +1,4 @@
+import { config } from '#/config/config.js'
 import {
   ROLE_ASSIGN,
   ROLE_DECISION_MAKER,
@@ -75,7 +76,11 @@ function viewData(overrides = {}) {
 }
 
 export function stubLoginGetController(_request, h) {
-  return h.view('auth/stub/login', viewData())
+  const entraIdConfigured = !!(
+    config.get('auth.azureEntraId.clientId') &&
+    config.get('auth.azureEntraId.tenantId')
+  )
+  return h.view('auth/stub/login', viewData({ entraIdConfigured }))
 }
 
 export function stubLoginPostController(request, h) {

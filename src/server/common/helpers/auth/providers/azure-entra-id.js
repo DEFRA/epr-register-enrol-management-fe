@@ -1,5 +1,5 @@
 // Returns OAuth2 endpoint config for Azure Entra ID (Defra regulator users).
-// AZURE_TENANT_ID is set to the appropriate tenant by the deployment pipeline.
+// ENTRA_TENANT_ID is set to the appropriate tenant by the deployment pipeline.
 export function getAzureEntraIdConfig(config) {
   const tenantId = config.get('auth.azureEntraId.tenantId')
   const callbackUrl = `${config.get('auth.callbackBaseUrl')}/auth/regulator/callback`

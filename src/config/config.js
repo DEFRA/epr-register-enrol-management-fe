@@ -321,19 +321,19 @@ export const config = convict({
       clientId: {
         format: String,
         default: '',
-        env: 'AZURE_CLIENT_ID',
+        env: 'ENTRA_CLIENT_ID',
         sensitive: true
       },
       clientSecret: {
         format: String,
         default: '',
-        env: 'AZURE_CLIENT_SECRET',
+        env: 'ENTRA_CLIENT_SECRET',
         sensitive: true
       },
       tenantId: {
         format: String,
         default: '',
-        env: 'AZURE_TENANT_ID'
+        env: 'ENTRA_TENANT_ID'
       }
     }
   }
@@ -375,7 +375,7 @@ if (config.get('environment') === 'prod' && config.get('auth.stubEnabled')) {
   )
 }
 
-// 3. AZURE_CLIENT_ID / AZURE_CLIENT_SECRET: when real OAuth is in use
+// 3. ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET: when real OAuth is in use
 //    (production with stub disabled) the Azure Entra ID credentials must
 //    be supplied. The convict defaults are empty strings so dev/test
 //    work without secrets; an empty value reaching production means a
@@ -384,14 +384,14 @@ if (config.get('environment') === 'prod' && config.get('auth.stubEnabled')) {
 if (config.get('isProduction') && !config.get('auth.stubEnabled')) {
   if (!config.get('auth.azureEntraId.clientId')) {
     throw new Error(
-      'AZURE_CLIENT_ID (auth.azureEntraId.clientId) must be set in ' +
+      'ENTRA_CLIENT_ID (auth.azureEntraId.clientId) must be set in ' +
         'production when AUTH_STUB_ENABLED is false. Wire the value via ' +
         'Secrets Manager.'
     )
   }
   if (!config.get('auth.azureEntraId.clientSecret')) {
     throw new Error(
-      'AZURE_CLIENT_SECRET (auth.azureEntraId.clientSecret) must be set ' +
+      'ENTRA_CLIENT_SECRET (auth.azureEntraId.clientSecret) must be set ' +
         'in production when AUTH_STUB_ENABLED is false. Wire the value ' +
         'via Secrets Manager.'
     )
