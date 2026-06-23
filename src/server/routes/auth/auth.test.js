@@ -113,8 +113,9 @@ describe('Entra ID button visibility', () => {
   beforeAll(async () => {
     vi.spyOn(config, 'get').mockImplementation((key) => {
       if (key === 'auth.azureEntraId.clientId') return 'test-client-id'
-      if (key === 'auth.azureEntraId.tenantId')
+      if (key === 'auth.azureEntraId.tenantId') {
         return 'Defradev.onmicrosoft.com'
+      }
       return realConfigGet(key)
     })
     entraServer = await createServer()
