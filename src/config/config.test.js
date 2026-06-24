@@ -58,8 +58,8 @@ describe('config production hardening', () => {
     process.env.ENVIRONMENT = 'prod'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
     process.env.AUTH_STUB_ENABLED = 'false'
-    process.env.AZURE_CLIENT_ID = 'azure-client-id'
-    process.env.AZURE_CLIENT_SECRET = 'azure-client-secret'
+    process.env.ENTRA_CLIENT_ID = 'azure-client-id'
+    process.env.ENTRA_CLIENT_SECRET = 'azure-client-secret'
     process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
@@ -71,26 +71,26 @@ describe('config production hardening', () => {
     expect(mod.config.get('session.cookie.password')).toBe(REAL_SECRET)
   })
 
-  test('production boot rejects empty AZURE_CLIENT_ID when stub auth disabled', async () => {
+  test('production boot rejects empty ENTRA_CLIENT_ID when stub auth disabled', async () => {
     process.env.NODE_ENV = 'production'
     process.env.ENVIRONMENT = 'prod'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
     process.env.AUTH_STUB_ENABLED = 'false'
-    delete process.env.AZURE_CLIENT_ID
-    process.env.AZURE_CLIENT_SECRET = 'azure-client-secret'
+    delete process.env.ENTRA_CLIENT_ID
+    process.env.ENTRA_CLIENT_SECRET = 'azure-client-secret'
 
-    await expect(import('./config.js')).rejects.toThrow(/AZURE_CLIENT_ID/)
+    await expect(import('./config.js')).rejects.toThrow(/ENTRA_CLIENT_ID/)
   })
 
-  test('production boot rejects empty AZURE_CLIENT_SECRET when stub auth disabled', async () => {
+  test('production boot rejects empty ENTRA_CLIENT_SECRET when stub auth disabled', async () => {
     process.env.NODE_ENV = 'production'
     process.env.ENVIRONMENT = 'prod'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
     process.env.AUTH_STUB_ENABLED = 'false'
-    process.env.AZURE_CLIENT_ID = 'azure-client-id'
-    delete process.env.AZURE_CLIENT_SECRET
+    process.env.ENTRA_CLIENT_ID = 'azure-client-id'
+    delete process.env.ENTRA_CLIENT_SECRET
 
-    await expect(import('./config.js')).rejects.toThrow(/AZURE_CLIENT_SECRET/)
+    await expect(import('./config.js')).rejects.toThrow(/ENTRA_CLIENT_SECRET/)
   })
 
   test('production boot with ENVIRONMENT=dev allows AUTH_STUB_ENABLED=true', async () => {
@@ -98,8 +98,8 @@ describe('config production hardening', () => {
     process.env.ENVIRONMENT = 'dev'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
     process.env.AUTH_STUB_ENABLED = 'true'
-    delete process.env.AZURE_CLIENT_ID
-    delete process.env.AZURE_CLIENT_SECRET
+    delete process.env.ENTRA_CLIENT_ID
+    delete process.env.ENTRA_CLIENT_SECRET
     process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
@@ -116,8 +116,8 @@ describe('config production hardening', () => {
     process.env.ENVIRONMENT = 'dev'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
     process.env.AUTH_STUB_ENABLED = 'true'
-    delete process.env.AZURE_CLIENT_ID
-    delete process.env.AZURE_CLIENT_SECRET
+    delete process.env.ENTRA_CLIENT_ID
+    delete process.env.ENTRA_CLIENT_SECRET
     process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
@@ -158,8 +158,8 @@ describe('config production hardening', () => {
   test('non-production boot accepts empty Azure creds', async () => {
     process.env.NODE_ENV = 'development'
     process.env.ENVIRONMENT = 'local'
-    delete process.env.AZURE_CLIENT_ID
-    delete process.env.AZURE_CLIENT_SECRET
+    delete process.env.ENTRA_CLIENT_ID
+    delete process.env.ENTRA_CLIENT_SECRET
     delete process.env.SESSION_COOKIE_PASSWORD
     delete process.env.SESSION_COOKIE_SECURE
     delete process.env.AUTH_STUB_ENABLED
@@ -200,8 +200,8 @@ describe('config production hardening', () => {
     process.env.ENVIRONMENT = 'prod'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
     process.env.AUTH_STUB_ENABLED = 'false'
-    process.env.AZURE_CLIENT_ID = 'azure-client-id'
-    process.env.AZURE_CLIENT_SECRET = 'azure-client-secret'
+    process.env.ENTRA_CLIENT_ID = 'azure-client-id'
+    process.env.ENTRA_CLIENT_SECRET = 'azure-client-secret'
     process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
   }
 

@@ -1,6 +1,9 @@
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { injectWithCrumb } from '#/test-helpers/csrf.js'
+import { config } from '#/config/config.js'
+
+const realConfigGet = config.get.bind(config)
 
 describe('auth', () => {
   let server
@@ -101,5 +104,69 @@ describe('auth', () => {
 
     expect(statusCode).toBe(302)
     expect(headers.location).toBe('/auth/regulator/login')
+  })
+})
+
+describe('Entra ID button visibility', () => {
+  let entraServer
+
+  beforeAll(async () => {
+    vi.spyOn(config, 'get').mockImplementation((key) => {
+      if (key === 'auth.azureEntraId.clientId') return 'test-client-id'
+      if (key === 'auth.azureEntraId.tenantId') {
+        return 'Defradev.onmicrosoft.com'
+      }
+      return realConfigGet(key)
+    })
+    entraServer = await createServer()
+    await entraServer.initialize()
+  })
+
+  afterAll(async () => {
+    await entraServer?.stop({ timeout: 0 })
+    vi.restoreAllMocks()
+  })
+
+  test('shows Entra ID button when credentials are configured', async () => {
+    const { result, statusCode } = await entraServer.inject({
+      method: 'GET',
+      url: '/auth/stub/login'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('data-testid="entra-id-login"')
+  })
+
+  test('Entra ID routes are registered when credentials are configured', async () => {
+    const { statusCode } = await entraServer.inject({
+      method: 'GET',
+      url: '/auth/regulator/entra-id'
+    })
+
+    // regulatorLoginController redirects to Azure — any non-404 means the route exists
+    expect(statusCode).not.toBe(statusCodes.notFound)
+  })
+})
+
+describe('Entra ID button absent without credentials', () => {
+  let plainServer
+
+  beforeAll(async () => {
+    plainServer = await createServer()
+    await plainServer.initialize()
+  })
+
+  afterAll(async () => {
+    await plainServer?.stop({ timeout: 0 })
+  })
+
+  test('does not show Entra ID button when credentials are not set', async () => {
+    const { result, statusCode } = await plainServer.inject({
+      method: 'GET',
+      url: '/auth/stub/login'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toContain('data-testid="entra-id-login"')
   })
 })
