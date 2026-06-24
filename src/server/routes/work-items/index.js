@@ -1,4 +1,5 @@
 import { workItemListController } from './controller.js'
+import { workItemApplicationDetailsController } from './application-details.controller.js'
 import {
   makeAddNoteController,
   makeApplyActionController,
@@ -57,6 +58,11 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}',
           ...workItemDetailController
+        },
+        {
+          method: 'GET',
+          path: '/work-items/{id}/application-details',
+          ...workItemApplicationDetailsController
         },
         {
           // RA-97. Standalone audit log page so the detail view stays
