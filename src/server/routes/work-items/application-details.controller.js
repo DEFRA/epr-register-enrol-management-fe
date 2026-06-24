@@ -27,7 +27,10 @@ function buildBusinessPlanRows(bp) {
     if (pct == null && !detail) return []
     const rows = []
     if (pct != null) {
-      rows.push({ key: { text: `${label} (%)` }, value: { text: formatPercent(pct) } })
+      rows.push({
+        key: { text: `${label} (%)` },
+        value: { text: formatPercent(pct) }
+      })
     }
     if (detail) {
       rows.push({ key: { text: `${label} (detail)` }, value: { text: detail } })
@@ -67,32 +70,72 @@ export const workItemApplicationDetailsController = {
       workItemId: id,
       applicationSection: {
         rows: [
-          { key: { text: 'Application reference' }, value: { text: applicationRef } },
-          { key: { text: 'Organisation name' }, value: { text: p.organisationName || '—' } },
-          { key: { text: 'Registration number' }, value: { text: p.registrationNumber || '—' } },
-          { key: { text: 'Accreditation year' }, value: { text: p.accreditationYear != null ? String(p.accreditationYear) : '—' } },
-          { key: { text: 'Materials handled' }, value: { text: Array.isArray(p.materialsHandled) ? p.materialsHandled.join(', ') : '—' } },
-          { key: { text: 'Site address' }, value: { text: p.siteAddress || '—' } },
-          { key: { text: 'Site postcode' }, value: { text: p.siteAddressPostcode || '—' } }
+          {
+            key: { text: 'Application reference' },
+            value: { text: applicationRef }
+          },
+          {
+            key: { text: 'Organisation name' },
+            value: { text: p.organisationName || '—' }
+          },
+          {
+            key: { text: 'Registration number' },
+            value: { text: p.registrationNumber || '—' }
+          },
+          {
+            key: { text: 'Accreditation year' },
+            value: {
+              text:
+                p.accreditationYear != null ? String(p.accreditationYear) : '—'
+            }
+          },
+          {
+            key: { text: 'Materials handled' },
+            value: {
+              text: Array.isArray(p.materialsHandled)
+                ? p.materialsHandled.join(', ')
+                : '—'
+            }
+          },
+          {
+            key: { text: 'Site address' },
+            value: { text: p.siteAddress || '—' }
+          },
+          {
+            key: { text: 'Site postcode' },
+            value: { text: p.siteAddressPostcode || '—' }
+          }
         ]
       },
       submittedBySection: submittedBy.fullName
         ? {
             rows: [
-              { key: { text: 'Full name' }, value: { text: submittedBy.fullName } },
-              { key: { text: 'Job title' }, value: { text: submittedBy.jobTitle || '—' } },
-              { key: { text: 'Email' }, value: { text: submittedBy.email || '—' } }
+              {
+                key: { text: 'Full name' },
+                value: { text: submittedBy.fullName }
+              },
+              {
+                key: { text: 'Job title' },
+                value: { text: submittedBy.jobTitle || '—' }
+              },
+              {
+                key: { text: 'Email' },
+                value: { text: submittedBy.email || '—' }
+              }
             ]
           }
         : null,
       prnsSection: {
         tonnageBand: prns.plannedTonnageBand
-          ? TONNAGE_BAND_LABELS[prns.plannedTonnageBand] ?? prns.plannedTonnageBand
+          ? (TONNAGE_BAND_LABELS[prns.plannedTonnageBand] ??
+            prns.plannedTonnageBand)
           : '—',
         authorisers: Array.isArray(prns.authorisers) ? prns.authorisers : []
       },
       businessPlanRows: buildBusinessPlanRows(bp),
-      samplingPlanFiles: Array.isArray(samplingPlan.files) ? samplingPlan.files : []
+      samplingPlanFiles: Array.isArray(samplingPlan.files)
+        ? samplingPlan.files
+        : []
     })
   }
 }
