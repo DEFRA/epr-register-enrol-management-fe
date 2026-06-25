@@ -1,0 +1,83 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
+{% from "govuk/components/table/macro.njk" import govukTable %}
+{% from "govuk/components/back-link/macro.njk" import govukBackLink %}
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+
+{% block content %}
+  {{ govukBackLink({ text: "Back to work item", href: "/work-items/" + workItemId }) }}
+
+  {{ appHeading({ text: "Application details", caption: "Work item " + applicationRef }) }}
+
+  {# ── Overview ── #}
+  <h2 class="govuk-heading-m">Overview</h2>
+  {{ govukSummaryList({ attributes: { "data-testid": "app-details-overview" }, rows: applicationSection.rows }) }}
+
+  {# ── Declaration ── #}
+  {% if submittedBySection %}
+    <h2 class="govuk-heading-m">Declaration</h2>
+    {{ govukSummaryList({ attributes: { "data-testid": "app-details-submitted-by" }, rows: submittedBySection.rows }) }}
+  {% endif %}
+
+  {# ── PRNs — tonnage ── #}
+  <h2 class="govuk-heading-m">PRNs — tonnage</h2>
+  {{ govukSummaryList({
+    attributes: { "data-testid": "app-details-prns-tonnage" },
+    rows: [
+      { key: { text: "Planned tonnage band" }, value: { text: prnsSection.tonnageBand } }
+    ]
+  }) }}
+
+  {# ── PRNs — authorisers ── #}
+  <h2 class="govuk-heading-m">PRNs — authorisers</h2>
+  {% if prnsSection.authorisers.length %}
+    {% set authoriserRows = [] %}
+    {% for a in prnsSection.authorisers %}
+      {% set authoriserRows = (authoriserRows.push([{ text: a.fullName }, { text: a.email }]), authoriserRows) %}
+    {% endfor %}
+    {{ govukTable({
+      attributes: { "data-testid": "app-details-authorisers" },
+      head: [{ text: "Full name" }, { text: "Email" }],
+      rows: authoriserRows
+    }) }}
+  {% else %}
+    <p class="govuk-body" data-testid="app-details-authorisers-none">No authorisers recorded.</p>
+  {% endif %}
+
+  {# ── Business plan ── #}
+  <h2 class="govuk-heading-m">Business plan</h2>
+  {% if businessPlanRows.length %}
+    {{ govukSummaryList({ attributes: { "data-testid": "app-details-business-plan" }, rows: businessPlanRows }) }}
+  {% else %}
+    <p class="govuk-body" data-testid="app-details-business-plan-none">No business plan data recorded.</p>
+  {% endif %}
+
+  {# ── Sampling plan ── #}
+  <h2 class="govuk-heading-m">Sampling plan</h2>
+  {% if samplingPlanFiles.length %}
+    {% set fileRows = [] %}
+    {% for f in samplingPlanFiles %}
+      {% if f.scanStatus == "Clean" %}
+        {% set scanTag %}{{ govukTag({ text: "Clean", classes: "govuk-tag--green" }) }}{% endset %}
+      {% elif f.scanStatus == "Infected" %}
+        {% set scanTag %}{{ govukTag({ text: "Infected", classes: "govuk-tag--red" }) }}{% endset %}
+      {% else %}
+        {% set scanTag %}{{ govukTag({ text: f.scanStatus or "Pending", classes: "govuk-tag--grey" }) }}{% endset %}
+      {% endif %}
+      {% set fileRows = (fileRows.push([
+        { text: f.filename },
+        { text: f.uploadedAt | formatDateTimeGds if f.uploadedAt else "—" },
+        { html: scanTag }
+      ]), fileRows) %}
+    {% endfor %}
+    {{ govukTable({
+      attributes: { "data-testid": "app-details-sampling-files" },
+      head: [{ text: "File name" }, { text: "Uploaded at" }, { text: "Scan status" }],
+      rows: fileRows
+    }) }}
+  {% else %}
+    <p class="govuk-body" data-testid="app-details-sampling-files-none">No files uploaded.</p>
+  {% endif %}
+
+{% endblock %}

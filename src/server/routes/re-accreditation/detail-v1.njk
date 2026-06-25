@@ -80,6 +80,41 @@
 {# user sees after approving. RA-177 moved this from `summaryListExtra` #}
 {# (which renders below the envelope attributes) to `summaryListBefore` #}
 {# so the success message sits above the attributes.                    #}
+{% block summaryListExtra %}
+  <p class="govuk-body">
+    <a class="govuk-link" href="/work-items/{{ workItem.id }}/application-details" data-testid="view-application-details-link">
+      View full application details
+    </a>
+  </p>
+
+  {% set p = workItem.payload %}
+  {% if p %}
+    <h2 class="govuk-heading-m">Application details</h2>
+    {% set payloadRows = [] %}
+    {% if p.organisationName %}
+      {% set payloadRows = (payloadRows.push({ key: { text: "Organisation name" }, value: { html: '<span data-testid="payload-organisation-name">' + (p.organisationName | escape) + '</span>' } }), payloadRows) %}
+    {% endif %}
+    {% if p.materialsHandled and p.materialsHandled.length %}
+      {% set payloadRows = (payloadRows.push({ key: { text: "Materials handled" }, value: { html: '<span data-testid="payload-materials-handled">' + (p.materialsHandled | join(", ") | escape) + '</span>' } }), payloadRows) %}
+    {% endif %}
+    {% if p.accreditationYear %}
+      {% set payloadRows = (payloadRows.push({ key: { text: "Accreditation year" }, value: { html: '<span data-testid="payload-accreditation-year">' + (p.accreditationYear | string | escape) + '</span>' } }), payloadRows) %}
+    {% endif %}
+    {% if p.siteAddress %}
+      {% set payloadRows = (payloadRows.push({ key: { text: "Site address" }, value: { html: '<span data-testid="payload-site-address">' + (p.siteAddress | escape) + '</span>' } }), payloadRows) %}
+    {% endif %}
+    {% if p.siteAddressPostcode %}
+      {% set payloadRows = (payloadRows.push({ key: { text: "Site postcode" }, value: { html: '<span data-testid="payload-site-postcode">' + (p.siteAddressPostcode | escape) + '</span>' } }), payloadRows) %}
+    {% endif %}
+    {% if p.operatorEmail %}
+      {% set payloadRows = (payloadRows.push({ key: { text: "Operator email" }, value: { html: '<span data-testid="payload-operator-email">' + (p.operatorEmail | escape) + '</span>' } }), payloadRows) %}
+    {% endif %}
+    {% if payloadRows.length %}
+      {{ govukSummaryList({ attributes: { "data-testid": "re-accreditation-payload" }, rows: payloadRows }) }}
+    {% endif %}
+  {% endif %}
+{% endblock %}
+
 {% block summaryListBefore %}
   {% if workItem.decisionMetadata %}
     {{ govukPanel({
