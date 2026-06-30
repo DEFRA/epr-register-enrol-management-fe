@@ -9,6 +9,8 @@
 {# (oldest-first) so we render top-to-bottom without re-sorting.     #}
 {# ---------------------------------------------------------------- #}
 
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+
 {% block content %}
   {{ appHeading({
     text: heading,
@@ -20,8 +22,11 @@
       {% if workItem.auditLog and workItem.auditLog.length > 0 %}
         <ol class="govuk-list" data-testid="work-item-audit-log">
           {% for entry in workItem.auditLog %}
-            <li class="govuk-!-margin-bottom-3" data-testid="work-item-audit-entry-{{ entry.id }}" data-action="{{ entry.action }}">
+            <li class="govuk-!-margin-bottom-3{% if entry.isFailure %} app-audit-entry--failure{% endif %}" data-testid="work-item-audit-entry-{{ entry.id }}" data-action="{{ entry.action }}">
               <p class="govuk-body govuk-!-margin-bottom-1">
+                {% if entry.isFailure %}
+                  {{ govukTag({ text: "Failed", classes: "govuk-tag--red" }) }}
+                {% endif %}
                 <strong>{{ entry.actionDisplayName }}</strong>
                 {% if entry.summary %}
                   — {{ entry.summary }}

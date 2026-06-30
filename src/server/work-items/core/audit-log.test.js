@@ -659,5 +659,194 @@ describe('decorateAuditLog (RA-129)', () => {
     expect(decorated.actionDisplayName).toBe('')
     expect(decorated.summary).toBe('')
     expect(decorated.detailRows).toEqual([])
+    expect(decorated.isFailure).toBe(false)
+  })
+})
+
+describe('notification audit entries (RA-234)', () => {
+  describe('actionDisplayNameFor fallbacks', () => {
+    test('notification-sent falls back to "Notification sent"', () => {
+      const [decorated] = decorateAuditLog([
+        { action: 'notification-sent', details: {} }
+      ])
+      expect(decorated.actionDisplayName).toBe('Notification sent')
+    })
+
+    test('notification-skipped falls back to "Notification not sent"', () => {
+      const [decorated] = decorateAuditLog([
+        { action: 'notification-skipped', details: {} }
+      ])
+      expect(decorated.actionDisplayName).toBe('Notification not sent')
+    })
+
+    test('notification-failed falls back to "Notification failed"', () => {
+      const [decorated] = decorateAuditLog([
+        { action: 'notification-failed', details: {} }
+      ])
+      expect(decorated.actionDisplayName).toBe('Notification failed')
+    })
+
+    test('uses the backend actionDisplayName when present', () => {
+      const [decorated] = decorateAuditLog([
+        {
+          action: 'notification-sent',
+          actionDisplayName: 'Submission confirmation email sent',
+          details: {}
+        }
+      ])
+      expect(decorated.actionDisplayName).toBe(
+        'Submission confirmation email sent'
+      )
+    })
+  })
+
+  describe('summariseAuditEntry', () => {
+    test('notification-sent summarises to the recipient', () => {
+      expect(
+        summariseAuditEntry({
+          action: 'notification-sent',
+          details: { recipient: 'op@example.com' }
+        })
+      ).toBe('op@example.com')
+    })
+
+    test('notification-sent summary is empty when recipient absent', () => {
+      expect(
+        summariseAuditEntry({ action: 'notification-sent', details: {} })
+      ).toBe('')
+    })
+
+    test('notification-skipped summarises to the reason', () => {
+      expect(
+        summariseAuditEntry({
+          action: 'notification-skipped',
+          details: { reason: 'missing-operator-email' }
+        })
+      ).toBe('missing-operator-email')
+    })
+
+    test('notification-skipped summary is empty when reason absent', () => {
+      expect(
+        summariseAuditEntry({ action: 'notification-skipped', details: {} })
+      ).toBe('')
+    })
+
+    test('notification-failed summarises to the error message', () => {
+      expect(
+        summariseAuditEntry({
+          action: 'notification-failed',
+          details: { errorMessage: 'Notify returned 500' }
+        })
+      ).toBe('Notify returned 500')
+    })
+
+    test('notification-failed summary is empty when error message absent', () => {
+      expect(
+        summariseAuditEntry({ action: 'notification-failed', details: {} })
+      ).toBe('')
+    })
+  })
+
+  describe('detailRowsForAuditEntry', () => {
+    test('projects all fields for a notification-sent entry', () => {
+      expect(
+        detailRowsForAuditEntry({
+          action: 'notification-sent',
+          createdBy: 'frontend',
+          createdByName: 'Carol Caseworker',
+          details: {
+            templateKey: 'SubmissionConfirmation',
+            recipient: 'op@example.com',
+            reference: 'wi-1',
+            providerMessageId: 'msg-123'
+          }
+        })
+      ).toEqual([
+        { key: 'Notification type', value: 'SubmissionConfirmation' },
+        { key: 'Recipient', value: 'op@example.com' },
+        { key: 'Reference', value: 'wi-1' },
+        { key: 'Provider message ID', value: 'msg-123' },
+        { key: 'Triggered by', value: 'Carol Caseworker' }
+      ])
+    })
+
+    test('projects template, reference and reason for a notification-skipped entry (no recipient)', () => {
+      expect(
+        detailRowsForAuditEntry({
+          action: 'notification-skipped',
+          createdByName: 'Carol Caseworker',
+          details: {
+            templateKey: 'SubmissionConfirmation',
+            reference: 'wi-1',
+            reason: 'missing-operator-email'
+          }
+        })
+      ).toEqual([
+        { key: 'Notification type', value: 'SubmissionConfirmation' },
+        { key: 'Reference', value: 'wi-1' },
+        { key: 'Reason', value: 'missing-operator-email' },
+        { key: 'Triggered by', value: 'Carol Caseworker' }
+      ])
+    })
+
+    test('projects the error message as a multiline row for a notification-failed entry', () => {
+      expect(
+        detailRowsForAuditEntry({
+          action: 'notification-failed',
+          createdBy: 'frontend',
+          details: {
+            templateKey: 'Decision',
+            recipient: 'op@example.com',
+            reference: 'wi-2',
+            providerMessageId: null,
+            errorMessage: 'Notify returned 500\nstatus: ServiceUnavailable'
+          }
+        })
+      ).toEqual([
+        { key: 'Notification type', value: 'Decision' },
+        { key: 'Recipient', value: 'op@example.com' },
+        { key: 'Reference', value: 'wi-2' },
+        {
+          key: 'Error',
+          value: 'Notify returned 500\nstatus: ServiceUnavailable',
+          multiline: true
+        },
+        { key: 'Triggered by', value: 'frontend' }
+      ])
+    })
+
+    test('returns an empty array for a notification entry with no details and no actor', () => {
+      expect(
+        detailRowsForAuditEntry({ action: 'notification-sent', details: {} })
+      ).toEqual([])
+      expect(
+        detailRowsForAuditEntry({ action: 'notification-failed' })
+      ).toEqual([])
+    })
+  })
+
+  describe('isFailure flag on decorateAuditLog', () => {
+    test('marks notification-failed entries as failures', () => {
+      const [decorated] = decorateAuditLog([
+        { action: 'notification-failed', details: {} }
+      ])
+      expect(decorated.isFailure).toBe(true)
+    })
+
+    test('does not mark notification-sent or notification-skipped as failures', () => {
+      const decorated = decorateAuditLog([
+        { action: 'notification-sent', details: {} },
+        { action: 'notification-skipped', details: {} }
+      ])
+      expect(decorated[0].isFailure).toBe(false)
+      expect(decorated[1].isFailure).toBe(false)
+    })
+
+    test('does not mark ordinary actions as failures', () => {
+      const [decorated] = decorateAuditLog([
+        { action: 'task-completed', details: {} }
+      ])
+      expect(decorated.isFailure).toBe(false)
+    })
   })
 })
