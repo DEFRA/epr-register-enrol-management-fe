@@ -1029,6 +1029,152 @@ describe('#workItemDetailController', () => {
     })
   })
 
+  describe('RA-211 notification-failed banner', () => {
+    test('renders the banner when a notification-failed audit entry is present with no later notification-sent', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          auditLog: [
+            {
+              action: 'notification-failed',
+              createdAt: '2026-04-27T10:00:00Z',
+              details: { templateKey: 'Queried' }
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+
+    test('does not render the banner for a clean notification history', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          auditLog: [
+            {
+              action: 'notification-sent',
+              createdAt: '2026-04-27T10:00:00Z',
+              details: { templateKey: 'SubmissionConfirmation' }
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+
+    test('does not render the banner when a later notification-sent entry for the SAME template resolves an earlier failure', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          auditLog: [
+            {
+              action: 'notification-failed',
+              createdAt: '2026-04-27T10:00:00Z',
+              details: { templateKey: 'SubmissionConfirmation' }
+            },
+            {
+              action: 'notification-sent',
+              createdAt: '2026-04-27T10:05:00Z',
+              details: { templateKey: 'SubmissionConfirmation' }
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+
+    // RA-211: a DulyMade email succeeding must not hide a still-unresolved
+    // Queried failure — they're different notifications.
+    test('still renders the banner when a later notification-sent is for a DIFFERENT template', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          auditLog: [
+            {
+              action: 'notification-failed',
+              createdAt: '2026-04-27T10:00:00Z',
+              details: { templateKey: 'Queried' }
+            },
+            {
+              action: 'notification-sent',
+              createdAt: '2026-04-27T10:05:00Z',
+              details: { templateKey: 'DulyMade' }
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+
+    test('does not render the banner when there is no audit log at all', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem()
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+  })
+
   describe('RA-127 success banner from yar.flash', () => {
     test('does not render the success banner when no flash is present', async () => {
       registerReaccreditation()
