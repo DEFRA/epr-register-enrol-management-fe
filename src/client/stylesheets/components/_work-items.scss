@@ -40,3 +40,16 @@
 .app-work-items__table-wrapper {
   overflow-x: auto;
 }
+
+// Audit-log failure entry (RA-234)
+//
+// Regulator notification failures must be visually distinct on the audit
+// timeline so they cannot be mistaken for an ordinary (grey) event. We reuse
+// the GOV.UK inset-text pattern (left border + padding) but recolour the
+// border to the GOV.UK error red so the failure is obvious at a glance. The
+// styling lives in this external stylesheet (never inline) so the strict CSP
+// is unaffected. #d4351c is the GOV.UK Design System $govuk-error-colour.
+.app-audit-entry--failure {
+  padding: 10px 15px; // govuk-spacing(2) govuk-spacing(3)
+  border-left: 5px solid #d4351c;
+}

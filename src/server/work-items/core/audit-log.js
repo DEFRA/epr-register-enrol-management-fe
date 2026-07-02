@@ -35,6 +35,7 @@ export function decorateAuditLog(entries, { payload, workItemSnapshot } = {}) {
     ...entry,
     actionDisplayName: actionDisplayNameFor(entry),
     summary: summariseAuditEntry(entry),
+    isFailure: isFailureAuditEntry(entry),
     detailRows: [
       ...detailRowsForAuditEntry(entry, { payload }),
       ...snapshotRows
@@ -85,7 +86,23 @@ const ACTION_DISPLAY_NAMES = {
   assigned: 'Assigned',
   unassigned: 'Unassigned',
   'note-added': 'Note added',
-  'task-note-added': 'Task note added'
+  'task-note-added': 'Task note added',
+  'notification-sent': 'Notification sent',
+  'notification-skipped': 'Notification not sent',
+  'notification-failed': 'Notification failed'
+}
+
+/**
+ * Audit actions that record a failed regulator notification. These render
+ * in a visually distinct (error-styled) way on the audit-log page (RA-234)
+ * so notification failures are obviously displayed rather than buried as
+ * another grey timeline row.
+ */
+const FAILURE_ACTIONS = new Set(['notification-failed'])
+
+function isFailureAuditEntry(entry) {
+  if (entry == null || typeof entry !== 'object') return false
+  return FAILURE_ACTIONS.has(entry.action)
 }
 
 function actionDisplayNameFor(entry) {
@@ -140,6 +157,12 @@ export function summariseAuditEntry(entry) {
       if (task) return task
       return excerpt ? `\u201c${excerpt}\u201d` : ''
     }
+    case 'notification-sent':
+      return details.recipient ?? ''
+    case 'notification-skipped':
+      return details.reason ?? ''
+    case 'notification-failed':
+      return details.errorMessage ?? ''
     default:
       return ''
   }
@@ -260,9 +283,57 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       if (actor) rows.push({ key: 'Unassigned by', value: actor })
       return rows
     }
+    case 'notification-sent':
+    case 'notification-skipped':
+    case 'notification-failed':
+      return notificationDetailRows(entry, details)
     default:
       return []
   }
+}
+
+/**
+ * Project the structured details of a notification audit entry (RA-234).
+ *
+ * The backend's `ReAccreditationNotificationHook.SendAndRecordAsync` stamps
+ * these fields onto the entry's `details` dictionary:
+ *   - `templateKey`        — the GOV.UK Notify template that was (or would
+ *                            have been) used; surfaced as "Notification type".
+ *   - `recipient`          — the operator email (sent / failed only; absent
+ *                            on a skip, which never resolved a recipient).
+ *   - `reference`          — the Notify client reference (the work item id).
+ *   - `providerMessageId`  — the Notify message id (sent / failed; may be
+ *                            null on a failure that never reached Notify).
+ *   - `reason`             — why a send was skipped (skipped only, e.g.
+ *                            "missing-operator-email").
+ *   - `errorMessage`       — the Notify error text (failed only).
+ *
+ * Only fields actually present on the entry are rendered, mirroring the
+ * other audit actions; we never invent rows for absent fields.
+ */
+function notificationDetailRows(entry, details) {
+  const rows = []
+  if (details.templateKey) {
+    rows.push({ key: 'Notification type', value: details.templateKey })
+  }
+  if (details.recipient) {
+    rows.push({ key: 'Recipient', value: details.recipient })
+  }
+  if (details.reference) {
+    rows.push({ key: 'Reference', value: details.reference })
+  }
+  if (details.providerMessageId) {
+    rows.push({ key: 'Provider message ID', value: details.providerMessageId })
+  }
+  if (details.reason) {
+    rows.push({ key: 'Reason', value: details.reason })
+  }
+  if (details.errorMessage) {
+    rows.push({ key: 'Error', value: details.errorMessage, multiline: true })
+  }
+  const actor = entry.createdByName ?? entry.createdBy
+  if (actor) rows.push({ key: 'Triggered by', value: actor })
+  return rows
 }
 
 function formatPayloadForAudit(payload) {
