@@ -826,6 +826,60 @@ export async function createWorkItem({
   }
 }
 
+/**
+ * Fetch live prior-year accreditation data from ReEx for a re-accreditation
+ * work item (RA-209). The backend calls ReEx using the operator organisation
+ * and registration identifiers stored in the work item payload.
+ *
+ * Result shape:
+ *  - { ok: true, priorYear }   when prior year data is available
+ *  - { ok: false, status: 404 } when the work item has no prior year data
+ *                                (created via form, or no matching ReEx record)
+ *  - { ok: false, status, error } on other 4xx/5xx
+ *  - { ok: false, error }       on transport errors
+ */
+export async function getReAccreditationPriorYear({
+  workItemId,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/prior-year`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(url, {
+      signal: controller.signal,
+      headers: buildHeaders({ accept: 'application/json' }, user)
+    })
+
+    if (response.status === 404) return { ok: false, status: 404 }
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: `Backend returned ${response.status}`
+      }
+    }
+
+    const priorYear = await response.json()
+    return { ok: true, priorYear }
+  } catch (error) {
+    logger.warn(
+      { err: error, url },
+      'Backend API getReAccreditationPriorYear failed'
+    )
+    return {
+      ok: false,
+      error: error.name === 'AbortError' ? 'Request timed out' : error.message
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function safeReadJson(response) {
   try {
     return await response.json()

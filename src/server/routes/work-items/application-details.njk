@@ -20,40 +20,126 @@
     {{ govukSummaryList({ attributes: { "data-testid": "app-details-submitted-by" }, rows: submittedBySection.rows }) }}
   {% endif %}
 
-  {# ── PRNs — tonnage ── #}
-  <h2 class="govuk-heading-m">PRNs — tonnage</h2>
-  {{ govukSummaryList({
-    attributes: { "data-testid": "app-details-prns-tonnage" },
-    rows: [
-      { key: { text: "Planned tonnage band" }, value: { text: prnsSection.tonnageBand } }
-    ]
-  }) }}
+  {# ── PRNs and business plan — side by side when prior year data available ── #}
+  {% if priorYearSection %}
 
-  {# ── PRNs — authorisers ── #}
-  <h2 class="govuk-heading-m">PRNs — authorisers</h2>
-  {% if prnsSection.authorisers.length %}
-    {% set authoriserRows = [] %}
-    {% for a in prnsSection.authorisers %}
-      {% set authoriserRows = (authoriserRows.push([{ text: a.fullName }, { text: a.email }]), authoriserRows) %}
-    {% endfor %}
-    {{ govukTable({
-      attributes: { "data-testid": "app-details-authorisers" },
-      head: [{ text: "Full name" }, { text: "Email" }],
-      rows: authoriserRows
+    <div class="govuk-grid-row">
+
+      {# Current year column #}
+      <div class="govuk-grid-column-one-half">
+        <h2 class="govuk-heading-m">
+          Current year{% if accreditationYear %} ({{ accreditationYear }}){% endif %}
+        </h2>
+
+        <h3 class="govuk-heading-s">PRNs — tonnage</h3>
+        {{ govukSummaryList({
+          attributes: { "data-testid": "app-details-prns-tonnage" },
+          rows: [
+            { key: { text: "Planned tonnage band" }, value: { text: prnsSection.tonnageBand } }
+          ]
+        }) }}
+
+        <h3 class="govuk-heading-s">PRNs — authorisers</h3>
+        {% if prnsSection.authorisers.length %}
+          {% set authoriserRows = [] %}
+          {% for a in prnsSection.authorisers %}
+            {% set authoriserRows = (authoriserRows.push([{ text: a.fullName }, { text: a.email }]), authoriserRows) %}
+          {% endfor %}
+          {{ govukTable({
+            attributes: { "data-testid": "app-details-authorisers" },
+            head: [{ text: "Full name" }, { text: "Email" }],
+            rows: authoriserRows
+          }) }}
+        {% else %}
+          <p class="govuk-body" data-testid="app-details-authorisers-none">No authorisers recorded.</p>
+        {% endif %}
+
+        <h3 class="govuk-heading-s">Business plan</h3>
+        {% if businessPlanRows.length %}
+          {{ govukSummaryList({ attributes: { "data-testid": "app-details-business-plan" }, rows: businessPlanRows }) }}
+        {% else %}
+          <p class="govuk-body" data-testid="app-details-business-plan-none">No business plan data recorded.</p>
+        {% endif %}
+      </div>
+
+      {# Previous year column #}
+      <div class="govuk-grid-column-one-half">
+        <h2 class="govuk-heading-m" data-testid="app-details-prior-year-heading">
+          Previous year ({{ priorYearSection.year }})
+        </h2>
+
+        <h3 class="govuk-heading-s">PRNs — tonnage</h3>
+        {{ govukSummaryList({
+          attributes: { "data-testid": "app-details-prior-year-prns-tonnage" },
+          rows: [
+            { key: { text: "Planned tonnage band" }, value: { text: priorYearSection.tonnageBand } }
+          ]
+        }) }}
+
+        <h3 class="govuk-heading-s">PRNs — authorisers</h3>
+        {% if priorYearSection.authorisers.length %}
+          {% set priorAuthoriserRows = [] %}
+          {% for a in priorYearSection.authorisers %}
+            {% set priorAuthoriserRows = (priorAuthoriserRows.push([{ text: a.fullName }, { text: a.email }]), priorAuthoriserRows) %}
+          {% endfor %}
+          {{ govukTable({
+            attributes: { "data-testid": "app-details-prior-year-authorisers" },
+            head: [{ text: "Full name" }, { text: "Email" }],
+            rows: priorAuthoriserRows
+          }) }}
+        {% else %}
+          <p class="govuk-body" data-testid="app-details-prior-year-authorisers-none">No authorisers recorded for prior year.</p>
+        {% endif %}
+
+        <h3 class="govuk-heading-s">Business plan</h3>
+        {% if priorYearSection.businessPlanRows.length %}
+          {{ govukSummaryList({
+            attributes: { "data-testid": "app-details-prior-year-business-plan" },
+            rows: priorYearSection.businessPlanRows
+          }) }}
+        {% else %}
+          <p class="govuk-body" data-testid="app-details-prior-year-business-plan-none">No business plan data recorded for prior year.</p>
+        {% endif %}
+      </div>
+
+    </div>
+
+  {% else %}
+
+    {# Single column — no prior year data ── #}
+    <h2 class="govuk-heading-m">PRNs — tonnage</h2>
+    {{ govukSummaryList({
+      attributes: { "data-testid": "app-details-prns-tonnage" },
+      rows: [
+        { key: { text: "Planned tonnage band" }, value: { text: prnsSection.tonnageBand } }
+      ]
     }) }}
-  {% else %}
-    <p class="govuk-body" data-testid="app-details-authorisers-none">No authorisers recorded.</p>
+
+    <h2 class="govuk-heading-m">PRNs — authorisers</h2>
+    {% if prnsSection.authorisers.length %}
+      {% set authoriserRows = [] %}
+      {% for a in prnsSection.authorisers %}
+        {% set authoriserRows = (authoriserRows.push([{ text: a.fullName }, { text: a.email }]), authoriserRows) %}
+      {% endfor %}
+      {{ govukTable({
+        attributes: { "data-testid": "app-details-authorisers" },
+        head: [{ text: "Full name" }, { text: "Email" }],
+        rows: authoriserRows
+      }) }}
+    {% else %}
+      <p class="govuk-body" data-testid="app-details-authorisers-none">No authorisers recorded.</p>
+    {% endif %}
+
+    <h2 class="govuk-heading-m">Business plan</h2>
+    {% if businessPlanRows.length %}
+      {{ govukSummaryList({ attributes: { "data-testid": "app-details-business-plan" }, rows: businessPlanRows }) }}
+    {% else %}
+      <p class="govuk-body" data-testid="app-details-business-plan-none">No business plan data recorded.</p>
+    {% endif %}
+
   {% endif %}
 
-  {# ── Business plan ── #}
-  <h2 class="govuk-heading-m">Business plan</h2>
-  {% if businessPlanRows.length %}
-    {{ govukSummaryList({ attributes: { "data-testid": "app-details-business-plan" }, rows: businessPlanRows }) }}
-  {% else %}
-    <p class="govuk-body" data-testid="app-details-business-plan-none">No business plan data recorded.</p>
-  {% endif %}
-
-  {# ── Sampling plan ── #}
+  {# ── Sampling plan — always full width, current year only ── #}
   <h2 class="govuk-heading-m">Sampling plan</h2>
   {% if samplingPlanFiles.length %}
     {% set fileRows = [] %}
