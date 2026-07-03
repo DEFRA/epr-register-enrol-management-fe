@@ -1,4 +1,9 @@
-import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
+import {
+  getReAccreditationPriorYear,
+  getWorkItem
+} from '#/server/common/helpers/backend-api/backend-api.js'
+
+const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
 
 const TONNAGE_BAND_LABELS = {
   UpTo500: 'Up to 500 tonnes',
@@ -58,6 +63,25 @@ export const workItemApplicationDetailsController = {
 
     const applicationRef = p.applicationReference ?? workItem.id
 
+    let priorYearSection = null
+    if (workItem.typeId === RE_ACCREDITATION_TYPE_ID) {
+      const priorYearResult = await getReAccreditationPriorYear({
+        workItemId: id,
+        user
+      })
+      if (priorYearResult.ok) {
+        const py = priorYearResult.priorYear
+        priorYearSection = {
+          year: py.year,
+          tonnageBand: py.tonnageBand
+            ? (TONNAGE_BAND_LABELS[py.tonnageBand] ?? py.tonnageBand)
+            : '—',
+          authorisers: Array.isArray(py.authorisers) ? py.authorisers : [],
+          businessPlanRows: buildBusinessPlanRows(py.businessPlan)
+        }
+      }
+    }
+
     return h.view('work-items/application-details', {
       pageTitle: `Application details — ${applicationRef}`,
       breadcrumbs: [
@@ -67,6 +91,7 @@ export const workItemApplicationDetailsController = {
         { text: 'Application details' }
       ],
       applicationRef,
+      accreditationYear: p.accreditationYear ?? null,
       workItemId: id,
       applicationSection: {
         rows: [
@@ -135,7 +160,8 @@ export const workItemApplicationDetailsController = {
       businessPlanRows: buildBusinessPlanRows(bp),
       samplingPlanFiles: Array.isArray(samplingPlan.files)
         ? samplingPlan.files
-        : []
+        : [],
+      priorYearSection
     })
   }
 }
