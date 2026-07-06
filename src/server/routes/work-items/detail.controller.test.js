@@ -166,8 +166,10 @@ describe('#workItemDetailController', () => {
   })
 
   // RA-223: regulators need the Registration ID visible on the detail page.
-  // It is sourced from payload.registrationNumber and rendered as a summary row.
-  test('RA-223: Shows the Registration ID summary row from payload.registrationNumber', async () => {
+  // It is the operator's EPR registration id, forwarded by the backend as
+  // payload.operatorRegistrationId (NOT payload.registrationNumber, which is
+  // the Companies House company number).
+  test('RA-223: Shows the Registration ID summary row from payload.operatorRegistrationId', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -175,7 +177,7 @@ describe('#workItemDetailController', () => {
         payload: {
           applicantName: 'Acme',
           applicationReference: 'RA-987654321',
-          registrationNumber: 'REG-987654321'
+          operatorRegistrationId: 'REG-100023'
         }
       })
     })
@@ -189,19 +191,22 @@ describe('#workItemDetailController', () => {
     // Scope the assertion to the Registration ID row's value cell so it
     // cannot pass against the value of an unrelated summary-list row.
     expect(result).toMatch(
-      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-987654321\s*<\/dd>/
+      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-100023\s*<\/dd>/
     )
   })
 
-  test('RA-223: Falls back to an em-dash when payload.registrationNumber is missing', async () => {
+  test('RA-223: Falls back to an em-dash when payload.operatorRegistrationId is missing, ignoring registrationNumber', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
         payload: {
           applicantName: 'Acme',
-          applicationReference: 'RA-987654321'
-        } // No registrationNumber
+          applicationReference: 'RA-987654321',
+          // The Companies House company number must NOT leak into the
+          // Registration ID row when operatorRegistrationId is absent.
+          registrationNumber: 'REG-987654321'
+        }
       })
     })
 
@@ -214,6 +219,10 @@ describe('#workItemDetailController', () => {
     // The em-dash recurs in other rows, so scope the fallback assertion to
     // the Registration ID row's value cell specifically.
     expect(result).toMatch(/Registration ID\s*<\/dt>\s*<dd[^>]*>\s*—\s*<\/dd>/)
+    // Guard against a regression that re-adds a registrationNumber fallback.
+    expect(result).not.toMatch(
+      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-987654321\s*<\/dd>/
+    )
   })
 
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
