@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import {
   decorateAuditLog,
   detailRowsForAuditEntry,
+  notificationFailureDetected,
   summariseAuditEntry
 } from './audit-log.js'
 
@@ -659,5 +660,120 @@ describe('decorateAuditLog (RA-129)', () => {
     expect(decorated.actionDisplayName).toBe('')
     expect(decorated.summary).toBe('')
     expect(decorated.detailRows).toEqual([])
+  })
+})
+
+describe('notificationFailureDetected', () => {
+  test('returns true when a notification-failed entry has no later notification-sent entry', () => {
+    const auditLog = [
+      {
+        action: 'notification-failed',
+        createdAt: '2026-04-27T10:00:00Z',
+        details: { templateKey: 'Queried' }
+      }
+    ]
+    expect(notificationFailureDetected(auditLog)).toBe(true)
+  })
+
+  test('returns false for a clean notification history (no failures)', () => {
+    const auditLog = [
+      {
+        action: 'notification-sent',
+        createdAt: '2026-04-27T10:00:00Z',
+        details: { templateKey: 'SubmissionConfirmation' }
+      },
+      { action: 'task-completed', createdAt: '2026-04-27T10:05:00Z' }
+    ]
+    expect(notificationFailureDetected(auditLog)).toBe(false)
+  })
+
+  test('returns false when a later notification-sent entry for the SAME template resolves the failure', () => {
+    // e.g. a resend of the same email type later succeeded.
+    const auditLog = [
+      {
+        action: 'notification-failed',
+        createdAt: '2026-04-27T10:00:00Z',
+        details: { templateKey: 'SubmissionConfirmation' }
+      },
+      {
+        action: 'notification-sent',
+        createdAt: '2026-04-27T10:05:00Z',
+        details: { templateKey: 'SubmissionConfirmation' }
+      }
+    ]
+    expect(notificationFailureDetected(auditLog)).toBe(false)
+  })
+
+  test('returns true when a later notification-sent entry is for a DIFFERENT template (unrelated success does not resolve it)', () => {
+    // A DulyMade email succeeding must not hide an unresolved Queried failure.
+    const auditLog = [
+      {
+        action: 'notification-failed',
+        createdAt: '2026-04-27T10:00:00Z',
+        details: { templateKey: 'Queried' }
+      },
+      {
+        action: 'notification-sent',
+        createdAt: '2026-04-27T10:05:00Z',
+        details: { templateKey: 'DulyMade' }
+      }
+    ]
+    expect(notificationFailureDetected(auditLog)).toBe(true)
+  })
+
+  test('returns false when a later notification-sent entry has no templateKey (degrades to resolving any failure)', () => {
+    const auditLog = [
+      {
+        action: 'notification-failed',
+        createdAt: '2026-04-27T10:00:00Z',
+        details: { templateKey: 'SubmissionConfirmation' }
+      },
+      {
+        action: 'notification-sent',
+        createdAt: '2026-04-27T10:05:00Z',
+        details: {}
+      }
+    ]
+    expect(notificationFailureDetected(auditLog)).toBe(false)
+  })
+
+  test('returns true when the notification-sent entry precedes the failure (still unresolved)', () => {
+    const auditLog = [
+      {
+        action: 'notification-sent',
+        createdAt: '2026-04-27T09:00:00Z',
+        details: { templateKey: 'SubmissionConfirmation' }
+      },
+      {
+        action: 'notification-failed',
+        createdAt: '2026-04-27T10:00:00Z',
+        details: { templateKey: 'Queried' }
+      }
+    ]
+    expect(notificationFailureDetected(auditLog)).toBe(true)
+  })
+
+  test('returns false when auditLog is missing or not an array', () => {
+    expect(notificationFailureDetected(undefined)).toBe(false)
+    expect(notificationFailureDetected(null)).toBe(false)
+    expect(notificationFailureDetected('not-an-array')).toBe(false)
+  })
+
+  test('returns false for an empty audit log', () => {
+    expect(notificationFailureDetected([])).toBe(false)
+  })
+
+  // AC: "still retrying" is not a distinct audit state — the backend only
+  // writes notification-failed once its own retry pipeline is exhausted.
+  // notification-skipped (no operator email) is not a failure either.
+  test('ignores notification-skipped entries', () => {
+    const auditLog = [
+      {
+        action: 'notification-skipped',
+        createdAt: '2026-04-27T10:00:00Z',
+        details: { reason: 'missing-operator-email' }
+      }
+    ]
+    expect(notificationFailureDetected(auditLog)).toBe(false)
   })
 })

@@ -65,6 +65,19 @@
     {% endif %}
   {% endif %}
 
+  {# RA-211: surfaces when the audit log has an unresolved                #}
+  {# notification-failed entry (no later notification-sent). Placement    #}
+  {# (top of page, below the other banners) is a developer working        #}
+  {# assumption pending real UI/UX input — not final.                      #}
+  {% if notificationFailedBanner %}
+    {{ govukNotificationBanner({
+      type: 'error',
+      titleText: 'There is a problem',
+      text: 'A notification email for this application could not be sent. Check the audit log for details.',
+      attributes: { "data-testid": "work-item-notification-failed-banner" }
+    }) }}
+  {% endif %}
+
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
       {# Block for type-specific content rendered ABOVE the generic envelope #}

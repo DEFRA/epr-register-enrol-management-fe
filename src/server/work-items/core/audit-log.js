@@ -85,7 +85,47 @@ const ACTION_DISPLAY_NAMES = {
   assigned: 'Assigned',
   unassigned: 'Unassigned',
   'note-added': 'Note added',
-  'task-note-added': 'Task note added'
+  'task-note-added': 'Task note added',
+  'notification-sent': 'Notification sent',
+  'notification-failed': 'Notification failed',
+  'notification-skipped': 'Notification skipped'
+}
+
+/**
+ * RA-211: whether a work item has an unresolved notification failure worth
+ * surfacing as a banner. A `notification-failed` entry is "unresolved" when
+ * no `notification-sent` entry for the SAME template appears later in the
+ * (chronologically ordered) audit log — a later, unrelated notification
+ * succeeding (e.g. DulyMade) must not hide an earlier, still-unresolved
+ * failure of a different one (e.g. Queried). When either entry lacks a
+ * `details.templateKey` (older data), falls back to treating any later
+ * success as resolving it, so pre-RA-211 audit entries degrade safely
+ * rather than showing a false banner forever.
+ *
+ * The backend only ever writes `notification-failed` after its own
+ * 3-attempt retry pipeline is exhausted (see GovukNotifyClient), so there
+ * is no separate "still retrying" audit state to filter out here — a
+ * still-in-flight send simply hasn't written any entry yet.
+ */
+export function notificationFailureDetected(auditLog) {
+  if (!Array.isArray(auditLog)) return false
+  const failed = auditLog.filter(
+    (entry) => entry?.action === 'notification-failed'
+  )
+  const sent = auditLog.filter((entry) => entry?.action === 'notification-sent')
+  return failed.some((failure) => {
+    const failureTemplate = failure?.details?.templateKey
+    return !sent.some((success) => {
+      if (!(new Date(success.createdAt) > new Date(failure.createdAt))) {
+        return false
+      }
+      const successTemplate = success?.details?.templateKey
+      if (failureTemplate && successTemplate) {
+        return successTemplate === failureTemplate
+      }
+      return true
+    })
+  })
 }
 
 function actionDisplayNameFor(entry) {

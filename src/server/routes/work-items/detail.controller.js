@@ -1,4 +1,5 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
+import { notificationFailureDetected } from '#/server/work-items/core/audit-log.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
@@ -387,6 +388,13 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   const canManageSla = hasRole(request, ROLE_TEAM_LEADER)
   const slaMaxDays = config.get('workItems.sla.maxExtensionDays')
 
+  // RA-211: surface an unresolved notification failure as a banner so
+  // case workers know a lifecycle email (e.g. Queried) didn't reach the
+  // operator, without having to open the audit log to find out.
+  const notificationFailedBanner = notificationFailureDetected(
+    enriched.auditLog
+  )
+
   return h
     .view(templatePath, {
       pageTitle: `Work item ${enriched.applicationRef}`,
@@ -401,6 +409,7 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       notice,
       successBanner,
       flashBanner,
+      notificationFailedBanner,
       canManageSla,
       slaMaxDays,
       reasonMaxLength: 500
