@@ -225,6 +225,78 @@ describe('#workItemDetailController', () => {
     )
   })
 
+  // RA-245: the re-accreditation detail template previously rendered
+  // payload.siteAddress inline; for form-created items that is a nested
+  // { line1, line2, town, postcode } object which stringified to
+  // "[object Object]". The controller now decorates the work item with
+  // `siteAddressFormatted` / `sitePostcode` which the template renders.
+  test('RA-245: renders a nested-object site address and nested postcode', async () => {
+    registerReaccreditation()
+    registerDetailTemplate(
+      're-accreditation',
+      'v1',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          organisationName: 'Acme',
+          siteAddress: {
+            line1: '1 Details Lane',
+            line2: '',
+            town: 'Leeds',
+            postcode: 'LS1 1AB'
+          }
+        }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toEqual(expect.stringContaining('[object Object]'))
+    expect(result).toMatch(
+      /data-testid="payload-site-address">1 Details Lane, Leeds</
+    )
+    expect(result).toMatch(/data-testid="payload-site-postcode">LS1 1AB</)
+  })
+
+  test('RA-245: renders a legacy flat-string site address and flat postcode', async () => {
+    registerReaccreditation()
+    registerDetailTemplate(
+      're-accreditation',
+      'v1',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          organisationName: 'Acme',
+          siteAddress: '1 Main St, Leeds, LS1 1AB',
+          siteAddressPostcode: 'LS1 1AB'
+        }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toMatch(
+      /data-testid="payload-site-address">1 Main St, Leeds, LS1 1AB</
+    )
+    expect(result).toMatch(/data-testid="payload-site-postcode">LS1 1AB</)
+  })
+
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
