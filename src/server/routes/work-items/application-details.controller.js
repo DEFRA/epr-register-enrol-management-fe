@@ -2,6 +2,10 @@ import {
   getReAccreditationPriorYear,
   getWorkItem
 } from '#/server/common/helpers/backend-api/backend-api.js'
+import {
+  formatSiteAddress,
+  getSitePostcode
+} from '#/server/common/helpers/format/site-address.js'
 
 const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
 
@@ -124,11 +128,11 @@ export const workItemApplicationDetailsController = {
           },
           {
             key: { text: 'Site address' },
-            value: { text: p.siteAddress || '—' }
+            value: { text: formatSiteAddress(p) || '—' }
           },
           {
             key: { text: 'Site postcode' },
-            value: { text: p.siteAddressPostcode || '—' }
+            value: { text: getSitePostcode(p) || '—' }
           }
         ]
       },
