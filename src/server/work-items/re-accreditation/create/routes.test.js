@@ -235,11 +235,11 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
     )
   })
 
-  test('Following the redirect falls back to the work item id on the banner when the backend omits the reference (RA-219 guard)', async () => {
-    // Defensive path: the backend always stamps the reference in practice,
-    // but if the created work item carries no applicationReference the banner
-    // must still render with a sensible value (the work item id) rather than
-    // a dangling "Work item created — ".
+  test('Following the redirect renders NO success banner (never the id) when the backend omits the reference (RA-249 guard)', async () => {
+    // RA-249: the success banner is LABELLED "Reference", so it must show the
+    // human RA-* reference or NOTHING — never the work-item Guid. When the
+    // backend omits the applicationReference we render no banner at all
+    // rather than a Guid masquerading as a reference.
     createWorkItem.mockResolvedValue({
       ok: true,
       workItem: { id: 'wi-noref' }
@@ -279,18 +279,16 @@ describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
     })
 
     expect(detail.statusCode).toBe(200)
-    // The banner renders with the work item id and is never dangling.
-    expect(detail.result).toEqual(
+    // No success banner is rendered when there is no reference to show.
+    expect(detail.result).not.toEqual(
       expect.stringContaining('data-testid="work-item-success-banner"')
     )
-    expect(detail.result).toEqual(
+    // The work-item id must never appear as a "Reference".
+    expect(detail.result).not.toEqual(
       expect.stringContaining('Work item created — wi-noref')
     )
     expect(detail.result).not.toEqual(
-      expect.stringContaining('Work item created — <')
-    )
-    expect(detail.result).not.toEqual(
-      expect.stringContaining('Work item created —\n')
+      expect.stringContaining('Work item created —')
     )
   })
 })

@@ -77,7 +77,47 @@ describe('workItemApplicationDetailsController', () => {
     expect(h.view).toHaveBeenCalledOnce()
     const { context } = h._viewCalls[0]
     expect(context.applicationRef).toBe('RA-000000001')
+    // Navigational label matches the reference when present.
+    expect(context.workItemLabel).toBe('RA-000000001')
+    // The DATA row labelled "Application reference" shows the reference.
+    expect(context.applicationSection.rows[0].key.text).toBe(
+      'Application reference'
+    )
+    expect(context.applicationSection.rows[0].value.text).toBe('RA-000000001')
     expect(context.applicationSection.rows[1].value.text).toBe('Acme Ltd')
+  })
+
+  // RA-249: a field LABELLED "Application reference" must show the human
+  // RA-* reference or NOTHING — never the work-item Guid. When the reference
+  // is absent the displayed value is null (not the id), while the
+  // navigational label still falls back to the id.
+  it('shows a null application reference (never the id) when applicationReference is missing, keeping the id as the navigational label', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { organisationName: 'Acme Ltd' } // No applicationReference
+      })
+    })
+    getReAccreditationPriorYear.mockResolvedValue({ ok: false, status: 404 })
+    const h = makeH()
+    await workItemApplicationDetailsController.handler(makeRequest(), h)
+
+    const { context } = h._viewCalls[0]
+    // Displayed application ref is null and specifically NOT the work-item id.
+    expect(context.applicationRef).toBeNull()
+    expect(context.applicationRef).not.toBe(WORK_ITEM_ID)
+    const appRefRow = context.applicationSection.rows[0]
+    expect(appRefRow.key.text).toBe('Application reference')
+    expect(appRefRow.value.text).toBeNull()
+    expect(appRefRow.value.text).not.toBe(WORK_ITEM_ID)
+    // Navigational label falls back to the work-item id.
+    expect(context.workItemLabel).toBe(WORK_ITEM_ID)
+    // Page title and breadcrumb leaf use the navigational label (the id).
+    expect(context.pageTitle).toBe(`Application details — ${WORK_ITEM_ID}`)
+    const leaf = context.breadcrumbs.find(
+      (b) => b.href === `/work-items/${WORK_ITEM_ID}`
+    )
+    expect(leaf.text).toBe(WORK_ITEM_ID)
   })
 
   // RA-245. Legacy/seeded items carry a flat string siteAddress plus a flat

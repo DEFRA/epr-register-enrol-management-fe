@@ -1604,7 +1604,10 @@ describe('#workItemDetailController', () => {
     })
   })
 
-  test('RA-196: Falls back to using the work item id if applicationReference is missing from payload', async () => {
+  // RA-249 (was RA-196): when applicationReference is missing, the
+  // NAVIGATIONAL label (page title / caption / breadcrumb leaf) still falls
+  // back to the work-item id — an identifier is legitimately useful there.
+  test('RA-249: Navigational label falls back to the work item id when applicationReference is missing', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -1619,13 +1622,71 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // Should use the ID as a fallback for the page title/caption
+    // Page title / caption fall back to the ID as a navigational identifier.
     expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
-    // Breadcrumb should also use the ID
+    // Breadcrumb leaf should also use the ID.
     expect(result).toEqual(
       expect.stringContaining(
         `<li class="govuk-breadcrumbs__list-item" aria-current="page">${ID}</li>`
       )
     )
+  })
+
+  // RA-249: a field LABELLED "Application ref" must show the human RA-*
+  // reference or NOTHING — never the work-item Guid. When applicationReference
+  // is absent the "Application ref" summary row must be empty, NOT the id.
+  test('RA-249: "Application ref" summary row is empty (never the id) when applicationReference is missing', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicantName: 'Acme' } // No applicationReference
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Locate the "Application ref" summary row value cell.
+    const match = result.match(
+      /Application ref\s*<\/dt>\s*<dd class="govuk-summary-list__value">([\s\S]*?)<\/dd>/
+    )
+    expect(match).not.toBeNull()
+    const appRefValue = match[1].trim()
+    // The value cell must be empty and must NOT contain the work-item Guid.
+    expect(appRefValue).toBe('')
+    expect(appRefValue).not.toContain(ID)
+  })
+
+  // RA-249: when applicationReference IS present, the "Application ref"
+  // summary row shows it (and not the id).
+  test('RA-249: "Application ref" summary row shows the reference when present', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicantName: 'Acme',
+          applicationReference: 'RA-987654321'
+        }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    const match = result.match(
+      /Application ref\s*<\/dt>\s*<dd class="govuk-summary-list__value">([\s\S]*?)<\/dd>/
+    )
+    expect(match).not.toBeNull()
+    const appRefValue = match[1].trim()
+    expect(appRefValue).toBe('RA-987654321')
+    expect(appRefValue).not.toContain(ID)
   })
 })

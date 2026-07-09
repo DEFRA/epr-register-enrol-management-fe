@@ -8,7 +8,7 @@
 {% block content %}
   {{ govukBackLink({ text: "Back to work item", href: "/work-items/" + workItemId }) }}
 
-  {{ appHeading({ text: "Application details", caption: "Work item " + applicationRef }) }}
+  {{ appHeading({ text: "Application details", caption: "Work item " + workItemLabel }) }}
 
   {# ── Overview ── #}
   <h2 class="govuk-heading-m">Overview</h2>
