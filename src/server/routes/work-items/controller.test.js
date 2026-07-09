@@ -213,6 +213,14 @@ describe('#workItemListController', () => {
     expect(result).toEqual(
       expect.stringContaining(`data-testid="work-item-link-${id}"`)
     )
+    // RA-249 accessibility (WCAG 2.4.4): the visible cell stays blank, but
+    // the link still has an accessible name via a visually-hidden fallback,
+    // so it is never a text-less link.
+    expect(result).toEqual(
+      expect.stringContaining(
+        `data-testid="work-item-link-${id}"><span class="govuk-visually-hidden">View work item</span></a>`
+      )
+    )
   })
 
   // ---------------------------------------------------------------- //

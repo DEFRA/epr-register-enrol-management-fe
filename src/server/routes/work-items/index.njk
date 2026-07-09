@@ -209,7 +209,10 @@
             {# is auto-escaped — never concatenate `item.id` raw into       #}
             {# `html:` (epr-6fi). `urlencode` for the href, `escape` for    #}
             {# the attribute and link text.                                  #}
-            {% set itemLinkHtml %}<a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.applicationRef }}</a>{% endset %}
+            {# RA-249: the visible link text is the RA-* application ref (never the #}
+            {# work-item Guid). When a legacy item has no ref the cell stays blank, #}
+            {# so give the link an accessible name for screen readers (WCAG 2.4.4). #}
+            {% set itemLinkHtml %}<a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.applicationRef }}{% if not item.applicationRef %}<span class="govuk-visually-hidden">View work item</span>{% endif %}</a>{% endset %}
             {% set slaTagHtml %}
               {%- if item.slaTagText %}
                 {{- govukTag({ text: item.slaTagText, classes: item.slaTagClass, attributes: { "data-testid": "work-item-sla-tag-" + item.id } }) }}
