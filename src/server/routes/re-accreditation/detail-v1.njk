@@ -94,8 +94,8 @@
     {% if p.organisationName %}
       {% set payloadRows = (payloadRows.push({ key: { text: "Organisation name" }, value: { html: '<span data-testid="payload-organisation-name">' + (p.organisationName | escape) + '</span>' } }), payloadRows) %}
     {% endif %}
-    {% if p.materialsHandled and p.materialsHandled.length %}
-      {% set payloadRows = (payloadRows.push({ key: { text: "Materials handled" }, value: { html: '<span data-testid="payload-materials-handled">' + (p.materialsHandled | join(", ") | escape) + '</span>' } }), payloadRows) %}
+    {% if p.material %}
+      {% set payloadRows = (payloadRows.push({ key: { text: "Material" }, value: { html: '<span data-testid="payload-material">' + (p.material | escape) + '</span>' } }), payloadRows) %}
     {% endif %}
     {% if p.accreditationYear %}
       {% set payloadRows = (payloadRows.push({ key: { text: "Accreditation year" }, value: { html: '<span data-testid="payload-accreditation-year">' + (p.accreditationYear | string | escape) + '</span>' } }), payloadRows) %}

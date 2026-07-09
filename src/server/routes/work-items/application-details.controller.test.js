@@ -48,7 +48,7 @@ function aWorkItem(overrides = {}) {
       organisationName: 'Acme Ltd',
       registrationNumber: 'WEX001',
       accreditationYear: 2025,
-      materialsHandled: ['paper'],
+      material: 'paper',
       siteAddress: '1 Main St, Leeds, LS1 1AB',
       siteAddressPostcode: 'LS1 1AB'
     },
@@ -164,5 +164,152 @@ describe('workItemApplicationDetailsController', () => {
 
     const { context } = h._viewCalls[0]
     expect(context.priorYearSection).toBeNull()
+  })
+})
+
+/**
+ * Consumer contract test: this payload is a literal copy of the JSON built
+ * by HttpCaseWorkingApiAdapter.BuildPayload in epr-register-enrol-backend
+ * (the real operator submission), not a hand-picked subset. If that
+ * adapter's field names ever drift from what this page reads, this test
+ * fails instead of the mismatch only showing up as a blank field in the
+ * CDP test environment (as happened with `material` vs `materialsHandled`).
+ * Keep this fixture in sync with the adapter's BuildPayload.
+ */
+function realOperatorSubmissionPayload() {
+  return {
+    organisationName: 'Acme Recycling Ltd',
+    registrationNumber: 'EPR-100023',
+    material: 'plastic',
+    accreditationYear: 2026,
+    previousAccreditationYear: 2025,
+    complianceIssuesReported: 0,
+    siteAddress: '123 High Street, London, SW1A 1AA',
+    siteAddressPostcode: 'SW1A 1AA',
+    operatorApplicationId: 'app-001',
+    operatorOrganisationId: '12345',
+    operatorRegistrationId: 'reg-001',
+    operatorEmail: 'jane@example.com',
+    submittedBy: {
+      fullName: 'Jane Smith',
+      jobTitle: 'Operations Manager',
+      email: 'jane@example.com'
+    },
+    prns: {
+      plannedTonnageBand: 'UpTo1000',
+      authorisers: [{ fullName: 'Bob Jones', email: 'bob@example.com' }]
+    },
+    businessPlan: {
+      newInfrastructurePercent: 20,
+      priceSupportPercent: 20,
+      businessCollectionsPercent: 20,
+      communicationsPercent: 20,
+      newMarketsPercent: 10,
+      newUsesPercent: 10,
+      newInfrastructureDetail: 'New sorting line',
+      priceSupportDetail: 'Subsidised collection',
+      businessCollectionsDetail: 'Kerbside expansion',
+      communicationsDetail: 'Customer newsletter',
+      newMarketsDetail: 'Export contracts',
+      newUsesDetail: 'Recycled packaging'
+    },
+    samplingPlan: {
+      files: [
+        {
+          filename: 'sampling-plan.pdf',
+          uploadedAt: '2026-01-05T10:00:00Z',
+          scanStatus: 'Clean'
+        }
+      ]
+    }
+  }
+}
+
+function rowValue(rows, keyText) {
+  return rows.find((row) => row.key.text === keyText)?.value?.text
+}
+
+describe('workItemApplicationDetailsController — real operator submission contract', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+  })
+
+  it('renders every field from a real operator-backend submission payload', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ payload: realOperatorSubmissionPayload() })
+    })
+    getReAccreditationPriorYear.mockResolvedValue({ ok: false, status: 404 })
+    const h = makeH()
+    await workItemApplicationDetailsController.handler(makeRequest(), h)
+
+    const { context } = h._viewCalls[0]
+
+    expect(rowValue(context.applicationSection.rows, 'Organisation name')).toBe(
+      'Acme Recycling Ltd'
+    )
+    expect(
+      rowValue(context.applicationSection.rows, 'Registration number')
+    ).toBe('EPR-100023')
+    expect(rowValue(context.applicationSection.rows, 'Material')).toBe(
+      'plastic'
+    )
+    expect(
+      rowValue(context.applicationSection.rows, 'Accreditation year')
+    ).toBe('2026')
+    expect(
+      rowValue(context.applicationSection.rows, 'Previous accreditation year')
+    ).toBe('2025')
+    expect(
+      rowValue(context.applicationSection.rows, 'Compliance issues reported')
+    ).toBe('0')
+    expect(rowValue(context.applicationSection.rows, 'Site address')).toBe(
+      '123 High Street, London, SW1A 1AA'
+    )
+    expect(rowValue(context.applicationSection.rows, 'Site postcode')).toBe(
+      'SW1A 1AA'
+    )
+
+    expect(
+      rowValue(context.operatorSection.rows, 'Operator application ID')
+    ).toBe('app-001')
+    expect(
+      rowValue(context.operatorSection.rows, 'Operator organisation ID')
+    ).toBe('12345')
+    expect(
+      rowValue(context.operatorSection.rows, 'Operator registration ID')
+    ).toBe('reg-001')
+    expect(rowValue(context.operatorSection.rows, 'Operator email')).toBe(
+      'jane@example.com'
+    )
+
+    expect(context.submittedBySection).not.toBeNull()
+    expect(rowValue(context.submittedBySection.rows, 'Full name')).toBe(
+      'Jane Smith'
+    )
+    expect(rowValue(context.submittedBySection.rows, 'Job title')).toBe(
+      'Operations Manager'
+    )
+    expect(rowValue(context.submittedBySection.rows, 'Email')).toBe(
+      'jane@example.com'
+    )
+
+    expect(context.prnsSection.tonnageBand).toBe('Up to 1,000 tonnes')
+    expect(context.prnsSection.authorisers).toEqual([
+      { fullName: 'Bob Jones', email: 'bob@example.com' }
+    ])
+
+    expect(context.businessPlanRows.length).toBeGreaterThan(0)
+    expect(
+      context.businessPlanRows.some(
+        (row) =>
+          row.key.text === 'New infrastructure (detail)' &&
+          row.value.text === 'New sorting line'
+      )
+    ).toBe(true)
+
+    expect(context.samplingPlanFiles).toHaveLength(1)
+    expect(context.samplingPlanFiles[0].filename).toBe('sampling-plan.pdf')
+    expect(context.samplingPlanFiles[0].scanStatus).toBe('Clean')
   })
 })

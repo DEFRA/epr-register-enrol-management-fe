@@ -115,12 +115,26 @@ export const workItemApplicationDetailsController = {
             }
           },
           {
-            key: { text: 'Materials handled' },
+            key: { text: 'Previous accreditation year' },
             value: {
-              text: Array.isArray(p.materialsHandled)
-                ? p.materialsHandled.join(', ')
-                : '—'
+              text:
+                p.previousAccreditationYear != null
+                  ? String(p.previousAccreditationYear)
+                  : '—'
             }
+          },
+          {
+            key: { text: 'Compliance issues reported' },
+            value: {
+              text:
+                p.complianceIssuesReported != null
+                  ? String(p.complianceIssuesReported)
+                  : '—'
+            }
+          },
+          {
+            key: { text: 'Material' },
+            value: { text: p.material || '—' }
           },
           {
             key: { text: 'Site address' },
@@ -129,6 +143,26 @@ export const workItemApplicationDetailsController = {
           {
             key: { text: 'Site postcode' },
             value: { text: p.siteAddressPostcode || '—' }
+          }
+        ]
+      },
+      operatorSection: {
+        rows: [
+          {
+            key: { text: 'Operator application ID' },
+            value: { text: p.operatorApplicationId || '—' }
+          },
+          {
+            key: { text: 'Operator organisation ID' },
+            value: { text: p.operatorOrganisationId || '—' }
+          },
+          {
+            key: { text: 'Operator registration ID' },
+            value: { text: p.operatorRegistrationId || '—' }
+          },
+          {
+            key: { text: 'Operator email' },
+            value: { text: p.operatorEmail || '—' }
           }
         ]
       },
