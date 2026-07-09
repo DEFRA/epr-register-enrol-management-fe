@@ -14,6 +14,10 @@ import {
   ROLE_TEAM_LEADER
 } from '#/server/common/helpers/auth/auth-scopes.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
+import {
+  formatSiteAddress,
+  getSitePostcode
+} from '#/server/common/helpers/format/site-address.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { config } from '#/config/config.js'
@@ -629,6 +633,13 @@ function decorate(workItem) {
     registrationId: workItem.payload?.operatorRegistrationId ?? null,
     assigneeDisplayName:
       workItem.assignedToName ?? workItem.assignedToId ?? null,
+    // RA-245. Normalise the site address for display. The payload's
+    // siteAddress arrives either as a nested { line1, line2, town, postcode }
+    // object (form-created) or a flat string (legacy/seeded); compute the
+    // display strings here so the template renders text, never "[object
+    // Object]".
+    siteAddressFormatted: formatSiteAddress(workItem.payload),
+    sitePostcode: getSitePostcode(workItem.payload),
     tasks: Array.isArray(workItem.tasks)
       ? workItem.tasks.map(decorateTask)
       : [],

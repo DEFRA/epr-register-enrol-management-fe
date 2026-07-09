@@ -80,6 +80,74 @@ describe('workItemApplicationDetailsController', () => {
     expect(context.applicationSection.rows[1].value.text).toBe('Acme Ltd')
   })
 
+  // RA-245. Legacy/seeded items carry a flat string siteAddress plus a flat
+  // siteAddressPostcode. Both render verbatim.
+  it('renders a legacy flat-string site address and flat postcode', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+    getReAccreditationPriorYear.mockResolvedValue({ ok: false, status: 404 })
+    const h = makeH()
+    await workItemApplicationDetailsController.handler(makeRequest(), h)
+
+    const { context } = h._viewCalls[0]
+    const rows = context.applicationSection.rows
+    const addressRow = rows.find((r) => r.key.text === 'Site address')
+    const postcodeRow = rows.find((r) => r.key.text === 'Site postcode')
+    expect(addressRow.value.text).toBe('1 Main St, Leeds, LS1 1AB')
+    expect(postcodeRow.value.text).toBe('LS1 1AB')
+  })
+
+  // RA-245. Form-created items store a nested object with NO flat
+  // siteAddressPostcode; the address is joined (postcode excluded) and the
+  // postcode comes from the nested field.
+  it('renders a nested-object site address and the nested postcode', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          organisationName: 'Acme Ltd',
+          siteAddress: {
+            line1: '1 Details Lane',
+            line2: '',
+            town: 'Leeds',
+            postcode: 'LS1 1AB'
+          }
+        }
+      })
+    })
+    getReAccreditationPriorYear.mockResolvedValue({ ok: false, status: 404 })
+    const h = makeH()
+    await workItemApplicationDetailsController.handler(makeRequest(), h)
+
+    const { context } = h._viewCalls[0]
+    const rows = context.applicationSection.rows
+    const addressRow = rows.find((r) => r.key.text === 'Site address')
+    const postcodeRow = rows.find((r) => r.key.text === 'Site postcode')
+    expect(addressRow.value.text).toBe('1 Details Lane, Leeds')
+    expect(postcodeRow.value.text).toBe('LS1 1AB')
+  })
+
+  // RA-245. When there is genuinely no address data, both rows fall back to
+  // the em-dash rather than "[object Object]".
+  it('falls back to an em-dash when site address data is absent', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicationReference: 'RA-000000001' }
+      })
+    })
+    getReAccreditationPriorYear.mockResolvedValue({ ok: false, status: 404 })
+    const h = makeH()
+    await workItemApplicationDetailsController.handler(makeRequest(), h)
+
+    const { context } = h._viewCalls[0]
+    const rows = context.applicationSection.rows
+    expect(rows.find((r) => r.key.text === 'Site address').value.text).toBe('—')
+    expect(rows.find((r) => r.key.text === 'Site postcode').value.text).toBe(
+      '—'
+    )
+  })
+
   it('calls getReAccreditationPriorYear for re-accreditation work items', async () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
     getReAccreditationPriorYear.mockResolvedValue({ ok: false, status: 404 })
