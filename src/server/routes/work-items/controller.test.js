@@ -169,7 +169,11 @@ describe('#workItemListController', () => {
     )
   })
 
-  test('RA-196: Falls back to using the work item id if applicationReference is missing from payload', async () => {
+  // RA-249: the "Application ref" column must show the human RA-* reference
+  // or NOTHING — never the work-item Guid. When applicationReference is
+  // absent the link text is empty, but the href/data-testid keep the id so
+  // navigation is preserved.
+  test('RA-249: Application ref link text is empty (never the id) when applicationReference is missing, keeping the id in the href', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       id: 're-accreditation',
@@ -202,8 +206,21 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // Should use the ID as a fallback for the link text
-    expect(result).toEqual(expect.stringContaining(`>${id}</a>`))
+    // The id must NOT be used as the visible link text.
+    expect(result).not.toEqual(expect.stringContaining(`>${id}</a>`))
+    // The href and data-testid still carry the id, so navigation works.
+    expect(result).toEqual(expect.stringContaining(`href="/work-items/${id}"`))
+    expect(result).toEqual(
+      expect.stringContaining(`data-testid="work-item-link-${id}"`)
+    )
+    // RA-249 accessibility (WCAG 2.4.4): the visible cell stays blank, but
+    // the link still has an accessible name via a visually-hidden fallback,
+    // so it is never a text-less link.
+    expect(result).toEqual(
+      expect.stringContaining(
+        `data-testid="work-item-link-${id}"><span class="govuk-visually-hidden">View work item</span></a>`
+      )
+    )
   })
 
   // ---------------------------------------------------------------- //

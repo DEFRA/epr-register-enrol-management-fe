@@ -65,7 +65,12 @@ export const workItemApplicationDetailsController = {
     const samplingPlan = p.samplingPlan ?? {}
     const submittedBy = p.submittedBy ?? {}
 
-    const applicationRef = p.applicationReference ?? workItem.id
+    // RA-249. The DATA row labelled "Application reference" must show the
+    // human RA-* reference or nothing — never the work-item Guid. The
+    // navigational label (page title / breadcrumb / caption) may still fall
+    // back to the id, where an identifier is legitimately useful.
+    const applicationRef = p.applicationReference ?? null
+    const workItemLabel = p.applicationReference ?? workItem.id
 
     let priorYearSection = null
     if (workItem.typeId === RE_ACCREDITATION_TYPE_ID) {
@@ -87,14 +92,15 @@ export const workItemApplicationDetailsController = {
     }
 
     return h.view('work-items/application-details', {
-      pageTitle: `Application details — ${applicationRef}`,
+      pageTitle: `Application details — ${workItemLabel}`,
       breadcrumbs: [
         { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
-        { text: applicationRef, href: `/work-items/${id}` },
+        { text: workItemLabel, href: `/work-items/${id}` },
         { text: 'Application details' }
       ],
       applicationRef,
+      workItemLabel,
       accreditationYear: p.accreditationYear ?? null,
       workItemId: id,
       applicationSection: {

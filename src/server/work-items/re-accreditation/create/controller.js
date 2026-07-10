@@ -160,13 +160,14 @@ export function makeSubmitCreateWorkItemController({
 
       if (result.ok) {
         // RA-219: the backend stamps the application reference and returns it
-        // on the created work item; in practice it is always present. Guard
-        // defensively so a missing reference never produces a dangling
-        // "Work item created — " banner: fall back to the work item id (the
-        // same fallback `decorate()` uses for `applicationRef`), and only
-        // flash the success banner when we actually have a reference to show.
-        const reference =
-          result.applicationReference ?? result.workItem?.id ?? null
+        // on the created work item; in practice it is always present. Only
+        // flash the success banner when we actually have a reference to show,
+        // so a missing reference never produces a dangling "Work item
+        // created — " banner.
+        // RA-249: the banner is LABELLED "Reference", so it must show the
+        // human RA-* reference or nothing — never the work-item Guid. Do NOT
+        // fall back to the work-item id here.
+        const reference = result.applicationReference ?? null
         if (reference) {
           request.yar.flash('successBanner', { reference })
         }

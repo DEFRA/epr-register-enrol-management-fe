@@ -401,12 +401,12 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
 
   return h
     .view(templatePath, {
-      pageTitle: `Work item ${enriched.applicationRef}`,
+      pageTitle: `Work item ${enriched.workItemLabel}`,
       heading: enriched.typeDisplayName,
       breadcrumbs: [
         { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
-        { text: enriched.applicationRef }
+        { text: enriched.workItemLabel }
       ],
       workItem: enriched,
       assignment,
@@ -628,7 +628,14 @@ function decorate(workItem) {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
-    applicationRef:
+    // RA-249. A field LABELLED "Application ref" must only ever show the
+    // human RA-* reference or nothing — never the work-item Guid. Do NOT
+    // fall back to the id here.
+    applicationRef: workItem.payload?.applicationReference ?? null,
+    // RA-249. Separate navigational label for the page title, breadcrumb
+    // leaf and caption ("Work item …"), where an identifier is legitimately
+    // useful — so those may still fall back to the work-item id.
+    workItemLabel:
       workItem.payload?.applicationReference ?? workItem.id ?? null,
     registrationId: workItem.payload?.operatorRegistrationId ?? null,
     assigneeDisplayName:
