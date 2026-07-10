@@ -14,6 +14,10 @@
   <h2 class="govuk-heading-m">Overview</h2>
   {{ govukSummaryList({ attributes: { "data-testid": "app-details-overview" }, rows: applicationSection.rows }) }}
 
+  {# ── Operator reference ── #}
+  <h2 class="govuk-heading-m">Operator reference</h2>
+  {{ govukSummaryList({ attributes: { "data-testid": "app-details-operator-reference" }, rows: operatorSection.rows }) }}
+
   {# ── Declaration ── #}
   {% if submittedBySection %}
     <h2 class="govuk-heading-m">Declaration</h2>

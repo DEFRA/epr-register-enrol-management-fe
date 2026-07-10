@@ -1085,4 +1085,61 @@ describe('#workItemListController', () => {
       expect(result).toMatch(/href="[^"]*includeArchived=true[^"]*"/)
     })
   })
+
+  // Consumer contract test: this payload is a literal copy of the JSON
+  // built by HttpCaseWorkingApiAdapter.BuildPayload in
+  // epr-register-enrol-backend (the real operator submission), not a
+  // hand-picked field. If the adapter's `material` field name ever drifts
+  // from what decorate() reads here, this test fails instead of the
+  // Material column silently going blank in production — which is exactly
+  // what happened when the adapter sent `materialsHandled` while this table
+  // read `payload.material`. Keep this fixture in sync with BuildPayload.
+  test('Renders the material column from a real operator-backend submission payload', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-05-01T10:00:00Z',
+            submittedBy: 'operator-fe',
+            payload: {
+              organisationName: 'Acme Recycling Ltd',
+              registrationNumber: 'EPR-100023',
+              material: 'plastic',
+              accreditationYear: 2026,
+              previousAccreditationYear: 2025,
+              complianceIssuesReported: 0,
+              siteAddress: '123 High Street, London, SW1A 1AA',
+              siteAddressPostcode: 'SW1A 1AA',
+              operatorApplicationId: 'app-001',
+              operatorOrganisationId: '12345',
+              operatorRegistrationId: 'reg-001',
+              operatorEmail: 'jane@example.com'
+            }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Acme Recycling Ltd'))
+    expect(result).toEqual(expect.stringContaining('plastic'))
+  })
 })
