@@ -166,8 +166,10 @@ describe('#workItemDetailController', () => {
   })
 
   // RA-223: regulators need the Registration ID visible on the detail page.
-  // It is sourced from payload.registrationNumber and rendered as a summary row.
-  test('RA-223: Shows the Registration ID summary row from payload.registrationNumber', async () => {
+  // It is the operator's EPR registration id, forwarded by the backend as
+  // payload.operatorRegistrationId (NOT payload.registrationNumber, which is
+  // the Companies House company number).
+  test('RA-223: Shows the Registration ID summary row from payload.operatorRegistrationId', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -175,7 +177,7 @@ describe('#workItemDetailController', () => {
         payload: {
           applicantName: 'Acme',
           applicationReference: 'RA-987654321',
-          registrationNumber: 'REG-987654321'
+          operatorRegistrationId: 'REG-100023'
         }
       })
     })
@@ -189,19 +191,22 @@ describe('#workItemDetailController', () => {
     // Scope the assertion to the Registration ID row's value cell so it
     // cannot pass against the value of an unrelated summary-list row.
     expect(result).toMatch(
-      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-987654321\s*<\/dd>/
+      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-100023\s*<\/dd>/
     )
   })
 
-  test('RA-223: Falls back to an em-dash when payload.registrationNumber is missing', async () => {
+  test('RA-223: Falls back to an em-dash when payload.operatorRegistrationId is missing, ignoring registrationNumber', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
         payload: {
           applicantName: 'Acme',
-          applicationReference: 'RA-987654321'
-        } // No registrationNumber
+          applicationReference: 'RA-987654321',
+          // The Companies House company number must NOT leak into the
+          // Registration ID row when operatorRegistrationId is absent.
+          registrationNumber: 'REG-987654321'
+        }
       })
     })
 
@@ -214,6 +219,82 @@ describe('#workItemDetailController', () => {
     // The em-dash recurs in other rows, so scope the fallback assertion to
     // the Registration ID row's value cell specifically.
     expect(result).toMatch(/Registration ID\s*<\/dt>\s*<dd[^>]*>\s*—\s*<\/dd>/)
+    // Guard against a regression that re-adds a registrationNumber fallback.
+    expect(result).not.toMatch(
+      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-987654321\s*<\/dd>/
+    )
+  })
+
+  // RA-245: the re-accreditation detail template previously rendered
+  // payload.siteAddress inline; for form-created items that is a nested
+  // { line1, line2, town, postcode } object which stringified to
+  // "[object Object]". The controller now decorates the work item with
+  // `siteAddressFormatted` / `sitePostcode` which the template renders.
+  test('RA-245: renders a nested-object site address and nested postcode', async () => {
+    registerReaccreditation()
+    registerDetailTemplate(
+      're-accreditation',
+      'v1',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          organisationName: 'Acme',
+          siteAddress: {
+            line1: '1 Details Lane',
+            line2: '',
+            town: 'Leeds',
+            postcode: 'LS1 1AB'
+          }
+        }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toEqual(expect.stringContaining('[object Object]'))
+    expect(result).toMatch(
+      /data-testid="payload-site-address">1 Details Lane, Leeds</
+    )
+    expect(result).toMatch(/data-testid="payload-site-postcode">LS1 1AB</)
+  })
+
+  test('RA-245: renders a legacy flat-string site address and flat postcode', async () => {
+    registerReaccreditation()
+    registerDetailTemplate(
+      're-accreditation',
+      'v1',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          organisationName: 'Acme',
+          siteAddress: '1 Main St, Leeds, LS1 1AB',
+          siteAddressPostcode: 'LS1 1AB'
+        }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toMatch(
+      /data-testid="payload-site-address">1 Main St, Leeds, LS1 1AB</
+    )
+    expect(result).toMatch(/data-testid="payload-site-postcode">LS1 1AB</)
   })
 
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
@@ -1029,6 +1110,152 @@ describe('#workItemDetailController', () => {
     })
   })
 
+  describe('RA-211 notification-failed banner', () => {
+    test('renders the banner when a notification-failed audit entry is present with no later notification-sent', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          auditLog: [
+            {
+              action: 'notification-failed',
+              createdAt: '2026-04-27T10:00:00Z',
+              details: { templateKey: 'Queried' }
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+
+    test('does not render the banner for a clean notification history', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          auditLog: [
+            {
+              action: 'notification-sent',
+              createdAt: '2026-04-27T10:00:00Z',
+              details: { templateKey: 'SubmissionConfirmation' }
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+
+    test('does not render the banner when a later notification-sent entry for the SAME template resolves an earlier failure', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          auditLog: [
+            {
+              action: 'notification-failed',
+              createdAt: '2026-04-27T10:00:00Z',
+              details: { templateKey: 'SubmissionConfirmation' }
+            },
+            {
+              action: 'notification-sent',
+              createdAt: '2026-04-27T10:05:00Z',
+              details: { templateKey: 'SubmissionConfirmation' }
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+
+    // RA-211: a DulyMade email succeeding must not hide a still-unresolved
+    // Queried failure — they're different notifications.
+    test('still renders the banner when a later notification-sent is for a DIFFERENT template', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          auditLog: [
+            {
+              action: 'notification-failed',
+              createdAt: '2026-04-27T10:00:00Z',
+              details: { templateKey: 'Queried' }
+            },
+            {
+              action: 'notification-sent',
+              createdAt: '2026-04-27T10:05:00Z',
+              details: { templateKey: 'DulyMade' }
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+
+    test('does not render the banner when there is no audit log at all', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem()
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining(
+          'data-testid="work-item-notification-failed-banner"'
+        )
+      )
+    })
+  })
+
   describe('RA-127 success banner from yar.flash', () => {
     test('does not render the success banner when no flash is present', async () => {
       registerReaccreditation()
@@ -1377,7 +1604,10 @@ describe('#workItemDetailController', () => {
     })
   })
 
-  test('RA-196: Falls back to using the work item id if applicationReference is missing from payload', async () => {
+  // RA-249 (was RA-196): when applicationReference is missing, the
+  // NAVIGATIONAL label (page title / caption / breadcrumb leaf) still falls
+  // back to the work-item id — an identifier is legitimately useful there.
+  test('RA-249: Navigational label falls back to the work item id when applicationReference is missing', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -1392,13 +1622,71 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // Should use the ID as a fallback for the page title/caption
+    // Page title / caption fall back to the ID as a navigational identifier.
     expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
-    // Breadcrumb should also use the ID
+    // Breadcrumb leaf should also use the ID.
     expect(result).toEqual(
       expect.stringContaining(
         `<li class="govuk-breadcrumbs__list-item" aria-current="page">${ID}</li>`
       )
     )
+  })
+
+  // RA-249: a field LABELLED "Application ref" must show the human RA-*
+  // reference or NOTHING — never the work-item Guid. When applicationReference
+  // is absent the "Application ref" summary row must be empty, NOT the id.
+  test('RA-249: "Application ref" summary row is empty (never the id) when applicationReference is missing', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: { applicantName: 'Acme' } // No applicationReference
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Locate the "Application ref" summary row value cell.
+    const match = result.match(
+      /Application ref\s*<\/dt>\s*<dd class="govuk-summary-list__value">([\s\S]*?)<\/dd>/
+    )
+    expect(match).not.toBeNull()
+    const appRefValue = match[1].trim()
+    // The value cell must be empty and must NOT contain the work-item Guid.
+    expect(appRefValue).toBe('')
+    expect(appRefValue).not.toContain(ID)
+  })
+
+  // RA-249: when applicationReference IS present, the "Application ref"
+  // summary row shows it (and not the id).
+  test('RA-249: "Application ref" summary row shows the reference when present', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicantName: 'Acme',
+          applicationReference: 'RA-987654321'
+        }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    const match = result.match(
+      /Application ref\s*<\/dt>\s*<dd class="govuk-summary-list__value">([\s\S]*?)<\/dd>/
+    )
+    expect(match).not.toBeNull()
+    const appRefValue = match[1].trim()
+    expect(appRefValue).toBe('RA-987654321')
+    expect(appRefValue).not.toContain(ID)
   })
 })

@@ -1,4 +1,5 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
+import { notificationFailureDetected } from '#/server/work-items/core/audit-log.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
@@ -13,6 +14,10 @@ import {
   ROLE_TEAM_LEADER
 } from '#/server/common/helpers/auth/auth-scopes.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
+import {
+  formatSiteAddress,
+  getSitePostcode
+} from '#/server/common/helpers/format/site-address.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { config } from '#/config/config.js'
@@ -387,20 +392,28 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   const canManageSla = hasRole(request, ROLE_TEAM_LEADER)
   const slaMaxDays = config.get('workItems.sla.maxExtensionDays')
 
+  // RA-211: surface an unresolved notification failure as a banner so
+  // case workers know a lifecycle email (e.g. Queried) didn't reach the
+  // operator, without having to open the audit log to find out.
+  const notificationFailedBanner = notificationFailureDetected(
+    enriched.auditLog
+  )
+
   return h
     .view(templatePath, {
-      pageTitle: `Work item ${enriched.applicationRef}`,
+      pageTitle: `Work item ${enriched.workItemLabel}`,
       heading: enriched.typeDisplayName,
       breadcrumbs: [
         { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
-        { text: enriched.applicationRef }
+        { text: enriched.workItemLabel }
       ],
       workItem: enriched,
       assignment,
       notice,
       successBanner,
       flashBanner,
+      notificationFailedBanner,
       canManageSla,
       slaMaxDays,
       reasonMaxLength: 500
@@ -615,11 +628,25 @@ function decorate(workItem) {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
-    applicationRef:
+    // RA-249. A field LABELLED "Application ref" must only ever show the
+    // human RA-* reference or nothing — never the work-item Guid. Do NOT
+    // fall back to the id here.
+    applicationRef: workItem.payload?.applicationReference ?? null,
+    // RA-249. Separate navigational label for the page title, breadcrumb
+    // leaf and caption ("Work item …"), where an identifier is legitimately
+    // useful — so those may still fall back to the work-item id.
+    workItemLabel:
       workItem.payload?.applicationReference ?? workItem.id ?? null,
-    registrationId: workItem.payload?.registrationNumber ?? null,
+    registrationId: workItem.payload?.operatorRegistrationId ?? null,
     assigneeDisplayName:
       workItem.assignedToName ?? workItem.assignedToId ?? null,
+    // RA-245. Normalise the site address for display. The payload's
+    // siteAddress arrives either as a nested { line1, line2, town, postcode }
+    // object (form-created) or a flat string (legacy/seeded); compute the
+    // display strings here so the template renders text, never "[object
+    // Object]".
+    siteAddressFormatted: formatSiteAddress(workItem.payload),
+    sitePostcode: getSitePostcode(workItem.payload),
     tasks: Array.isArray(workItem.tasks)
       ? workItem.tasks.map(decorateTask)
       : [],

@@ -134,11 +134,12 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
     expect(captured.redirect).toBe('/work-items/wi-42')
   })
 
-  test('falls back to the work item id when the service returns no applicationReference (RA-219 guard)', async () => {
-    // Defensive path: the backend always stamps the reference in practice,
-    // but if the created work item carries no applicationReference the banner
-    // must not show a dangling "Work item created — ". We flash the work
-    // item id instead (mirroring decorate()'s applicationRef fallback).
+  test('suppresses the success banner (never the id) when the service returns no applicationReference (RA-249 guard)', async () => {
+    // RA-249: the success banner is LABELLED "Reference", so it must show the
+    // human RA-* reference or NOTHING — never the work-item Guid. When the
+    // service returns no applicationReference we flash NO banner rather than
+    // a dangling "Work item created — " or a Guid masquerading as a
+    // reference. The redirect still uses the work-item id.
     const service = {
       create: vi.fn().mockResolvedValue({
         ok: true,
@@ -152,9 +153,7 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
 
     await ctl.handler(request, h)
 
-    expect(request.yar._flashCalls).toEqual([
-      { name: 'successBanner', value: { reference: 'wi-77' } }
-    ])
+    expect(request.yar._flashCalls).toEqual([])
     expect(captured.redirect).toBe('/work-items/wi-77')
   })
 

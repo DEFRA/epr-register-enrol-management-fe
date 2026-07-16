@@ -169,7 +169,11 @@ describe('#workItemListController', () => {
     )
   })
 
-  test('RA-196: Falls back to using the work item id if applicationReference is missing from payload', async () => {
+  // RA-249: the "Application ref" column must show the human RA-* reference
+  // or NOTHING — never the work-item Guid. When applicationReference is
+  // absent the link text is empty, but the href/data-testid keep the id so
+  // navigation is preserved.
+  test('RA-249: Application ref link text is empty (never the id) when applicationReference is missing, keeping the id in the href', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       id: 're-accreditation',
@@ -202,8 +206,21 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // Should use the ID as a fallback for the link text
-    expect(result).toEqual(expect.stringContaining(`>${id}</a>`))
+    // The id must NOT be used as the visible link text.
+    expect(result).not.toEqual(expect.stringContaining(`>${id}</a>`))
+    // The href and data-testid still carry the id, so navigation works.
+    expect(result).toEqual(expect.stringContaining(`href="/work-items/${id}"`))
+    expect(result).toEqual(
+      expect.stringContaining(`data-testid="work-item-link-${id}"`)
+    )
+    // RA-249 accessibility (WCAG 2.4.4): the visible cell stays blank, but
+    // the link still has an accessible name via a visually-hidden fallback,
+    // so it is never a text-less link.
+    expect(result).toEqual(
+      expect.stringContaining(
+        `data-testid="work-item-link-${id}"><span class="govuk-visually-hidden">View work item</span></a>`
+      )
+    )
   })
 
   // ---------------------------------------------------------------- //
@@ -1067,5 +1084,62 @@ describe('#workItemListController', () => {
 
       expect(result).toMatch(/href="[^"]*includeArchived=true[^"]*"/)
     })
+  })
+
+  // Consumer contract test: this payload is a literal copy of the JSON
+  // built by HttpCaseWorkingApiAdapter.BuildPayload in
+  // epr-register-enrol-backend (the real operator submission), not a
+  // hand-picked field. If the adapter's `material` field name ever drifts
+  // from what decorate() reads here, this test fails instead of the
+  // Material column silently going blank in production — which is exactly
+  // what happened when the adapter sent `materialsHandled` while this table
+  // read `payload.material`. Keep this fixture in sync with BuildPayload.
+  test('Renders the material column from a real operator-backend submission payload', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      id: 're-accreditation',
+      displayName: 'Re-accreditation',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            typeId: 're-accreditation',
+            stateId: 'submitted',
+            submittedAt: '2026-05-01T10:00:00Z',
+            submittedBy: 'operator-fe',
+            payload: {
+              organisationName: 'Acme Recycling Ltd',
+              registrationNumber: 'EPR-100023',
+              material: 'plastic',
+              accreditationYear: 2026,
+              previousAccreditationYear: 2025,
+              complianceIssuesReported: 0,
+              siteAddress: '123 High Street, London, SW1A 1AA',
+              siteAddressPostcode: 'SW1A 1AA',
+              operatorApplicationId: 'app-001',
+              operatorOrganisationId: '12345',
+              operatorRegistrationId: 'reg-001',
+              operatorEmail: 'jane@example.com'
+            }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Acme Recycling Ltd'))
+    expect(result).toEqual(expect.stringContaining('plastic'))
   })
 })

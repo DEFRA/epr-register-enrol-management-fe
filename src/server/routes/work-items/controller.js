@@ -308,7 +308,11 @@ function decorate(item) {
     slaTagClass: slaTag?.classes ?? null,
     slaRemainingText,
     archivedAt,
-    applicationRef: item.payload?.applicationReference ?? item.id,
+    // RA-249. The "Application ref" column must show the human RA-*
+    // reference or nothing — never the work-item Guid. The row's link still
+    // navigates via `item.id` (see index.njk), so dropping the id fallback
+    // here loses no navigation.
+    applicationRef: item.payload?.applicationReference ?? null,
     orgName: item.payload?.organisationName ?? null,
     material: item.payload?.material ?? null
   }
