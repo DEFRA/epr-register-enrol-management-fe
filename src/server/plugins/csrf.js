@@ -8,7 +8,7 @@ import { config } from '#/config/config.js'
  * The BFF authenticates the session with a same-origin cookie. Without
  * a per-session token check, any HTML form on a third-party origin
  * could submit a `POST` to one of our state-changing endpoints (task
- * status, action, assignment, notes, stub login) with the user's
+ * status, action, assignment, stub login) with the user's
  * cookie attached and succeed. `@hapi/crumb` issues a short-lived,
  * cryptographically random token bound to the session via a separate
  * cookie and validated against a hidden form field on every POST.

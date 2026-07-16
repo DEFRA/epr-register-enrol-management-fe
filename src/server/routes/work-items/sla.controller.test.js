@@ -14,7 +14,6 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   setWorkItemTaskStatus: vi.fn(),
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
-  addWorkItemTaskNote: vi.fn(),
   extendWorkItemSla: vi.fn(),
   overrideWorkItemSla: vi.fn()
 }))

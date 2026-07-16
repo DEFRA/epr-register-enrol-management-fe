@@ -2,7 +2,6 @@ import { vi } from 'vitest'
 
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
-import { injectWithCrumb } from '#/test-helpers/csrf.js'
 import {
   clearWorkItemRegistry,
   registerWorkItemType
@@ -17,11 +16,10 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   completeWorkItemTask: vi.fn(),
   setWorkItemTaskStatus: vi.fn(),
   applyWorkItemAction: vi.fn(),
-  addWorkItemNote: vi.fn(),
-  addWorkItemTaskNote: vi.fn()
+  addWorkItemNote: vi.fn()
 }))
 
-const { getWorkItem, addWorkItemTaskNote } =
+const { getWorkItem } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '11111111-1111-1111-1111-111111111111'
@@ -48,24 +46,6 @@ function aWorkItem(overrides = {}) {
         displayName: 'Review payload',
         status: 'Completed',
         isComplete: true
-      }
-    ],
-    notes: [
-      {
-        id: 'n-1',
-        text: 'work-item level note',
-        createdAt: '2026-04-27T11:00:00Z',
-        createdBy: 'u-1',
-        createdByName: 'Alice',
-        taskId: null
-      },
-      {
-        id: 'n-2',
-        text: 'eligibility note',
-        createdAt: '2026-04-27T11:30:00Z',
-        createdBy: 'u-2',
-        createdByName: 'Bob',
-        taskId: 'check-eligibility'
       }
     ],
     availableActions: [],
@@ -100,12 +80,11 @@ describe('#workItemTasksController (RA-129)', () => {
 
   beforeEach(() => {
     getWorkItem.mockReset()
-    addWorkItemTaskNote.mockReset()
     clearWorkItemRegistry()
   })
 
   describe('GET /work-items/{id}/tasks', () => {
-    test('renders the tasks page grouped by status with notes split', async () => {
+    test('renders the tasks page grouped by status', async () => {
       registerReaccreditation()
       getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
@@ -128,16 +107,7 @@ describe('#workItemTasksController (RA-129)', () => {
       // Task display names rendered.
       expect(result).toEqual(expect.stringContaining('Check eligibility'))
       expect(result).toEqual(expect.stringContaining('Review payload'))
-      // Work-item-level note rendered separately.
-      expect(result).toEqual(expect.stringContaining('work-item level note'))
-      // Task-scoped note rendered inline against its task.
-      expect(result).toEqual(expect.stringContaining('eligibility note'))
       // Action targets present.
-      expect(result).toEqual(
-        expect.stringContaining(
-          `/work-items/${ID}/tasks/check-eligibility/notes`
-        )
-      )
       expect(result).toEqual(
         expect.stringContaining(
           `/work-items/${ID}/tasks/check-eligibility/status`
@@ -172,11 +142,11 @@ describe('#workItemTasksController (RA-129)', () => {
       expect(result).toEqual(expect.stringContaining(`/work-items/${ID}`))
     })
 
-    test('handles a work item with no tasks and no notes', async () => {
+    test('handles a work item with no tasks', async () => {
       registerReaccreditation()
       getWorkItem.mockResolvedValue({
         ok: true,
-        workItem: aWorkItem({ tasks: [], notes: [] })
+        workItem: aWorkItem({ tasks: [] })
       })
 
       const { result, statusCode } = await server.inject({
@@ -242,11 +212,11 @@ describe('#workItemTasksController (RA-129)', () => {
       expect(result).toEqual(expect.stringContaining('Backend returned 500'))
     })
 
-    test('handles missing tasks/notes arrays defensively', async () => {
+    test('handles a missing tasks array defensively', async () => {
       registerReaccreditation()
       getWorkItem.mockResolvedValue({
         ok: true,
-        workItem: aWorkItem({ tasks: undefined, notes: undefined })
+        workItem: aWorkItem({ tasks: undefined })
       })
 
       const { statusCode } = await server.inject({
@@ -265,8 +235,7 @@ describe('#workItemTasksController (RA-129)', () => {
           tasks: [
             { taskId: 't-a', displayName: 'A', isComplete: false },
             { taskId: 't-b', displayName: 'B', isComplete: true }
-          ],
-          notes: []
+          ]
         })
       })
 
@@ -278,175 +247,6 @@ describe('#workItemTasksController (RA-129)', () => {
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).toEqual(expect.stringContaining('Not started'))
       expect(result).toEqual(expect.stringContaining('Completed'))
-    })
-  })
-
-  describe('POST /work-items/{id}/tasks/{taskId}/notes', () => {
-    test('redirects to the tasks page anchor on success', async () => {
-      registerReaccreditation()
-      addWorkItemTaskNote.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem()
-      })
-
-      const { statusCode, headers } = await injectWithCrumb(server, {
-        method: 'POST',
-        url: `/work-items/${ID}/tasks/check-eligibility/notes`,
-        payload: { text: 'a fresh note' }
-      })
-
-      expect(statusCode).toBe(statusCodes.redirect)
-      expect(headers.location).toBe(
-        `/work-items/${ID}/tasks#task-check-eligibility`
-      )
-      expect(addWorkItemTaskNote).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workItemId: ID,
-          taskId: 'check-eligibility',
-          text: 'a fresh note'
-        })
-      )
-    })
-
-    test('re-renders the page with a 400 notice when the text is blank', async () => {
-      registerReaccreditation()
-      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-
-      const { statusCode, result } = await injectWithCrumb(server, {
-        method: 'POST',
-        url: `/work-items/${ID}/tasks/check-eligibility/notes`,
-        payload: { text: '   ' }
-      })
-
-      expect(addWorkItemTaskNote).not.toHaveBeenCalled()
-      expect(statusCode).toBe(statusCodes.badRequest)
-      expect(result).toEqual(
-        expect.stringContaining('Could not add note to task')
-      )
-      expect(result).toEqual(expect.stringContaining('Note text is required.'))
-    })
-
-    test('re-renders with 409 when the backend rejects with not-allowed', async () => {
-      registerReaccreditation()
-      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-      addWorkItemTaskNote.mockResolvedValue({
-        ok: false,
-        status: 409,
-        problem: { detail: 'Concurrent update' }
-      })
-
-      const { statusCode, result } = await injectWithCrumb(server, {
-        method: 'POST',
-        url: `/work-items/${ID}/tasks/check-eligibility/notes`,
-        payload: { text: 'good text' }
-      })
-
-      expect(statusCode).toBe(statusCodes.conflict)
-      expect(result).toEqual(expect.stringContaining('Concurrent update'))
-    })
-
-    test('re-renders with 403 when the backend rejects with not-authorized', async () => {
-      registerReaccreditation()
-      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-      addWorkItemTaskNote.mockResolvedValue({
-        ok: false,
-        status: 403,
-        problem: { detail: 'Forbidden' }
-      })
-
-      const { statusCode, result } = await injectWithCrumb(server, {
-        method: 'POST',
-        url: `/work-items/${ID}/tasks/check-eligibility/notes`,
-        payload: { text: 'good text' }
-      })
-
-      expect(statusCode).toBe(statusCodes.forbidden)
-      expect(result).toEqual(expect.stringContaining('Forbidden'))
-    })
-
-    test('uses fallback message when the service returns no message', async () => {
-      registerReaccreditation()
-      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-      // 500 maps to reason='backend-error' with default message; controller
-      // hits the else (statusCode=400) branch.
-      addWorkItemTaskNote.mockResolvedValue({ ok: false, status: 500 })
-
-      const { statusCode } = await injectWithCrumb(server, {
-        method: 'POST',
-        url: `/work-items/${ID}/tasks/check-eligibility/notes`,
-        payload: { text: 'good text' }
-      })
-
-      expect(statusCode).toBe(statusCodes.badRequest)
-    })
-
-    test('coerces a missing text payload to empty and re-renders', async () => {
-      registerReaccreditation()
-      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-
-      const { statusCode } = await injectWithCrumb(server, {
-        method: 'POST',
-        url: `/work-items/${ID}/tasks/check-eligibility/notes`,
-        payload: {}
-      })
-
-      expect(addWorkItemTaskNote).not.toHaveBeenCalled()
-      expect(statusCode).toBe(statusCodes.badRequest)
-    })
-  })
-
-  describe('makeAddTaskNoteController() defensive fallbacks', () => {
-    test('falls back to {} when request.payload is null and to "Action failed" when service returns no message', async () => {
-      const { makeAddTaskNoteController } =
-        await import('./tasks.controller.js')
-      const stubService = {
-        addTaskNote: vi.fn().mockResolvedValue({
-          ok: false,
-          reason: 'invalid'
-          // no message
-        })
-      }
-      const controller = makeAddTaskNoteController({ service: stubService })
-
-      const captured = {}
-      const h = {
-        view: (view, context) => {
-          captured.view = view
-          captured.context = context
-          return {
-            code: (statusCode) => {
-              captured.statusCode = statusCode
-              return 'rendered'
-            }
-          }
-        },
-        redirect: () => {
-          throw new Error('should not redirect on failure')
-        }
-      }
-
-      registerReaccreditation()
-      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-
-      const response = await controller.handler(
-        {
-          params: { id: ID, taskId: 'check-eligibility' },
-          payload: null,
-          state: {},
-          auth: { credentials: { user: { id: 'u-1', name: 'A' } } }
-        },
-        h
-      )
-
-      expect(response).toBe('rendered')
-      expect(stubService.addTaskNote).toHaveBeenCalledWith(
-        expect.objectContaining({ text: '' })
-      )
-      expect(captured.statusCode).toBe(400)
-      expect(captured.context.notice).toEqual(
-        expect.objectContaining({ message: 'Action failed' })
-      )
-      clearWorkItemRegistry()
     })
   })
 })
