@@ -771,6 +771,70 @@ describe('notification audit entries (RA-234)', () => {
       ])
     })
 
+    test('projects the nation row for a regulator notification-sent entry', () => {
+      expect(
+        detailRowsForAuditEntry({
+          action: 'notification-sent',
+          createdByName: 'Carol Caseworker',
+          details: {
+            templateKey: 'OfficerAssignment',
+            recipient: 'packagingnotifications@environment-agency.gov.uk',
+            reference: 'wi-3',
+            nation: 'England',
+            providerMessageId: 'msg-456'
+          }
+        })
+      ).toEqual([
+        { key: 'Notification type', value: 'OfficerAssignment' },
+        {
+          key: 'Recipient',
+          value: 'packagingnotifications@environment-agency.gov.uk'
+        },
+        { key: 'Reference', value: 'wi-3' },
+        { key: 'Nation', value: 'England' },
+        { key: 'Provider message ID', value: 'msg-456' },
+        { key: 'Triggered by', value: 'Carol Caseworker' }
+      ])
+    })
+
+    test('projects the nation row on a skipped regulator entry alongside the reason', () => {
+      // The backend records nation even when it could not resolve a mailbox for
+      // it — that pairing is what explains the skip to a caseworker.
+      expect(
+        detailRowsForAuditEntry({
+          action: 'notification-skipped',
+          createdByName: 'Carol Caseworker',
+          details: {
+            templateKey: 'OfficerAssignment',
+            reference: 'wi-4',
+            nation: 'Scotland',
+            reason: 'missing-regulator-mailbox'
+          }
+        })
+      ).toEqual([
+        { key: 'Notification type', value: 'OfficerAssignment' },
+        { key: 'Reference', value: 'wi-4' },
+        { key: 'Nation', value: 'Scotland' },
+        { key: 'Reason', value: 'missing-regulator-mailbox' },
+        { key: 'Triggered by', value: 'Carol Caseworker' }
+      ])
+    })
+
+    test('omits the nation row when the work item was never routed', () => {
+      // nation is explicitly null on an unrouted item; it must not render as an
+      // empty row.
+      const rows = detailRowsForAuditEntry({
+        action: 'notification-skipped',
+        details: {
+          templateKey: 'RegulatorSubmission',
+          reference: 'wi-5',
+          nation: null,
+          reason: 'missing-regulator-mailbox'
+        }
+      })
+      expect(rows.map((r) => r.key)).not.toContain('Nation')
+    })
+
     test('projects template, reference and reason for a notification-skipped entry (no recipient)', () => {
       expect(
         detailRowsForAuditEntry({

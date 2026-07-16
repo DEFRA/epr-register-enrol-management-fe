@@ -339,6 +339,10 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
  *   - `recipient`          — the operator email (sent / failed only; absent
  *                            on a skip, which never resolved a recipient).
  *   - `reference`          — the Notify client reference (the work item id).
+ *   - `nation`             — the UK nation the work item routed to, which is
+ *                            what selects the regulator mailbox (regulator
+ *                            sends only; absent on operator-facing ones, and
+ *                            null when the item was never routed).
  *   - `providerMessageId`  — the Notify message id (sent / failed; may be
  *                            null on a failure that never reached Notify).
  *   - `reason`             — why a send was skipped (skipped only, e.g.
@@ -358,6 +362,9 @@ function notificationDetailRows(entry, details) {
   }
   if (details.reference) {
     rows.push({ key: 'Reference', value: details.reference })
+  }
+  if (details.nation) {
+    rows.push({ key: 'Nation', value: details.nation })
   }
   if (details.providerMessageId) {
     rows.push({ key: 'Provider message ID', value: details.providerMessageId })
