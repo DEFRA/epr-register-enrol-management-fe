@@ -1,6 +1,5 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
-import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 
@@ -37,14 +36,12 @@ const TASK_STATUS_OPTIONS = [
 const STATUS_GROUPS = ['NotStarted', 'InProgress', 'Blocked', 'Completed']
 
 /**
- * Render the dedicated tasks & notes page (RA-129).
+ * Render the dedicated tasks page (RA-129).
  *
- * Type-agnostic: groups tasks by lifecycle status, splits notes into
- * work-item-level (notes with no `taskId`) and per-task buckets and
- * renders the per-task add-note form, status-change form and quick-
- * complete form on each non-completed task. The summary page links here
- * for everything task- or note-related; this page links back to the
- * summary.
+ * Type-agnostic: groups tasks by lifecycle status and renders the
+ * status-change form and quick-complete form on each non-completed task.
+ * The summary page links here for everything task-related; this page
+ * links back to the summary.
  */
 export const workItemTasksController = {
   async handler(request, h) {
@@ -52,60 +49,7 @@ export const workItemTasksController = {
   }
 }
 
-/**
- * POST `/work-items/{id}/tasks/{taskId}/notes` — append a task-scoped
- * note. Validates non-blank text, calls the service, PRG-redirects on
- * success to the tasks-page anchor for the task. On validation /
- * backend failure re-renders the page in place with an error notice and
- * the typed text preserved against the offending task.
- */
-export function makeAddTaskNoteController({
-  service = createWorkItemActionsService()
-} = {}) {
-  return {
-    async handler(request, h) {
-      const { id, taskId } = request.params
-      const payload = request.payload ?? {}
-      const text = typeof payload.text === 'string' ? payload.text : ''
-      const result = await service.addTaskNote({
-        workItemId: id,
-        taskId,
-        text,
-        user: getUser(request)
-      })
-      if (result.ok) {
-        return h.redirect(
-          `/work-items/${encodeURIComponent(id)}/tasks#task-${encodeURIComponent(taskId)}`
-        )
-      }
-      let statusCode
-      if (result.reason === 'not-allowed') statusCode = 409
-      else if (result.reason === 'not-authorized') statusCode = 403
-      else statusCode = 400
-      return renderTasks({
-        request,
-        h,
-        statusCode,
-        notice: {
-          kind: 'error',
-          title: `Could not add note to task "${taskId}"`,
-          message: result.message ?? 'Action failed'
-        },
-        errorTaskId: taskId,
-        errorTaskText: text
-      })
-    }
-  }
-}
-
-async function renderTasks({
-  request,
-  h,
-  notice = null,
-  statusCode = 200,
-  errorTaskId = null,
-  errorTaskText = ''
-}) {
+async function renderTasks({ request, h, notice = null, statusCode = 200 }) {
   const id = request.params.id
   const user = getUser(request)
   const result = await getWorkItem({ workItemId: id, user })
@@ -145,18 +89,8 @@ async function renderTasks({
   const type = getWorkItemType(workItem.typeId)
   const typeDisplayName = type?.displayName ?? workItem.typeId
 
-  const allNotes = Array.isArray(workItem.notes) ? workItem.notes : []
-  const workItemNotes = allNotes.filter((note) => note?.taskId == null)
-  const notesByTask = new Map()
-  for (const note of allNotes) {
-    if (note?.taskId == null) continue
-    const bucket = notesByTask.get(note.taskId) ?? []
-    bucket.push(note)
-    notesByTask.set(note.taskId, bucket)
-  }
-
   const tasks = (Array.isArray(workItem.tasks) ? workItem.tasks : []).map(
-    (task) => projectTask(task, notesByTask.get(task?.taskId) ?? [])
+    (task) => projectTask(task)
   )
   const groups = STATUS_GROUPS.map((statusId) => ({
     statusId,
@@ -182,18 +116,15 @@ async function renderTasks({
         id: workItem.id,
         applicationRef,
         typeDisplayName,
-        workItemNotes,
         groups,
         hasTasks: tasks.length > 0
       },
-      notice,
-      errorTaskId,
-      errorTaskText
+      notice
     })
     .code(statusCode)
 }
 
-function projectTask(task, notes) {
+function projectTask(task) {
   const rawStatus = typeof task?.status === 'string' ? task.status : null
   const fallback = isTaskComplete(task) ? 'Completed' : 'NotStarted'
   const canonical = TASK_STATUS_VIEW[rawStatus] ?? TASK_STATUS_VIEW[fallback]
@@ -207,7 +138,6 @@ function projectTask(task, notes) {
     statusOptions: TASK_STATUS_OPTIONS.map((option) => ({
       ...option,
       selected: option.value === canonical.id
-    })),
-    notes
+    }))
   }
 }

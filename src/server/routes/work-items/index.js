@@ -1,7 +1,6 @@
 import { workItemListController } from './controller.js'
 import { workItemApplicationDetailsController } from './application-details.controller.js'
 import {
-  makeAddNoteController,
   makeApplyActionController,
   makeAssignController,
   makeCompleteTaskController,
@@ -11,10 +10,7 @@ import {
   workItemDetailController
 } from './detail.controller.js'
 import { workItemAuditLogController } from './audit-log.controller.js'
-import {
-  makeAddTaskNoteController,
-  workItemTasksController
-} from './tasks.controller.js'
+import { workItemTasksController } from './tasks.controller.js'
 import {
   makeShowExtendController,
   makeSubmitExtendController,
@@ -72,16 +68,10 @@ export const workItems = {
           ...workItemAuditLogController
         },
         {
-          // RA-129. Dedicated tasks & notes page; type-agnostic.
+          // RA-129. Dedicated tasks page; type-agnostic.
           method: 'GET',
           path: '/work-items/{id}/tasks',
           ...workItemTasksController
-        },
-        {
-          // RA-129. Add a task-scoped note. Open to any authenticated user.
-          method: 'POST',
-          path: '/work-items/{id}/tasks/{taskId}/notes',
-          ...makeAddTaskNoteController()
         },
         {
           method: 'POST',
@@ -107,7 +97,7 @@ export const workItems = {
           // RA-188. Interstitial confirmation page for withdraw actions.
           // The detail template swaps the inline POST form for a link to
           // this GET when it spots a withdraw action; the POST below
-          // accepts an optional note and PRG-redirects on success.
+          // PRG-redirects on success.
           method: 'GET',
           path: '/work-items/{id}/actions/{actionId}/confirm',
           ...makeShowWithdrawController()
@@ -146,13 +136,6 @@ export const workItems = {
           path: '/work-items/{id}/self-assign',
           options: requireStandard,
           ...makeSelfAssignController()
-        },
-        {
-          // Add a note (RA-96). Open to any authenticated user; the backend
-          // snapshots the acting user's identity onto the note.
-          method: 'POST',
-          path: '/work-items/{id}/notes',
-          ...makeAddNoteController()
         },
         {
           // RA-131. Extend SLA clock. Gated to team-leader at both FE route

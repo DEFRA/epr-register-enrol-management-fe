@@ -474,6 +474,10 @@ export async function unassignWorkItem({
  * onto the note for an immutable audit narrative. Same response shape as
  * {@link completeWorkItemTask} — the updated `WorkItemResponse`, including
  * the freshly-appended note projected newest-first under `notes`.
+ *
+ * Used by the withdraw and re-accreditation approval flows to capture the
+ * caseworker's optional rationale before the state transition; there is no
+ * longer a standalone "add a note" feature on the work item detail page.
  */
 export async function addWorkItemNote({
   workItemId,
@@ -490,35 +494,6 @@ export async function addWorkItemNote({
     fetchImpl,
     user,
     label: 'addWorkItemNote',
-    body: { text }
-  })
-}
-
-/**
- * Append a free-text note scoped to a single task on a work item (RA-129).
- *
- * Mirrors {@link addWorkItemNote} but POSTs to the task-scoped endpoint.
- * The backend snapshots the acting user's identity onto the note and
- * stamps the `taskId` on it; the audit log entry is recorded as
- * `task-note-added` so the timeline can humanise it differently from a
- * work-item-level note. Same response shape as {@link addWorkItemNote}.
- */
-export async function addWorkItemTaskNote({
-  workItemId,
-  taskId,
-  text,
-  user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
-  fetchImpl = fetch
-}) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/tasks/${encodeURIComponent(taskId)}/notes`
-  return postJson({
-    url,
-    timeoutMs,
-    fetchImpl,
-    user,
-    label: 'addWorkItemTaskNote',
     body: { text }
   })
 }
