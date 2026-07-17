@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { createAuthControllers } from './controller.js'
+import { config } from '#/config/config.js'
+
+const REQUIRED_ROLE = config.get('auth.azureEntraId.regulatorRoleValue')
 
 function makeRequest({ query = {}, session = {} } = {}) {
   const order = []
@@ -139,7 +142,8 @@ describe('regulatorCallbackController', () => {
       oid: 'u1',
       preferred_username: 'a@b',
       name: 'Alice',
-      nonce: 'n'
+      nonce: 'n',
+      roles: [REQUIRED_ROLE]
     }))
     const { regulatorCallbackController } = buildOk({
       fetchImpl,
@@ -263,7 +267,8 @@ describe('regulatorCallbackController', () => {
     const verifyIdToken = vi.fn(async () => ({
       oid: 'oid-1',
       preferred_username: 'r@d',
-      name: 'Reg'
+      name: 'Reg',
+      roles: [REQUIRED_ROLE]
     }))
     const { regulatorCallbackController } = buildOk({
       fetchImpl,
@@ -290,6 +295,73 @@ describe('regulatorCallbackController', () => {
     expect(resetIdx).toBeGreaterThanOrEqual(0)
     expect(setUserIdx).toBeGreaterThan(resetIdx)
     expect(result.redirected).toBe('/work-items')
+  })
+
+  test('rejects when the id_token roles claim is missing the required regulator role', async () => {
+    const { request, yar, logger } = makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { id_token: 't' }
+      },
+      async text() {
+        return ''
+      }
+    }))
+    const verifyIdToken = vi.fn(async () => ({
+      oid: 'oid-1',
+      preferred_username: 'r@d',
+      name: 'Reg',
+      roles: ['SomeOtherRole']
+    }))
+    const { regulatorCallbackController } = buildOk({
+      fetchImpl,
+      verifyIdToken
+    })
+
+    const result = await regulatorCallbackController(request, h)
+
+    expect(result.redirected).toBe('/auth/regulator/login')
+    expect(yar.set).not.toHaveBeenCalledWith('user', expect.anything())
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ requiredRole: REQUIRED_ROLE }),
+      expect.stringContaining('missing required regulator role')
+    )
+  })
+
+  test('rejects when the id_token has no roles claim at all', async () => {
+    const { request, yar } = makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { id_token: 't' }
+      },
+      async text() {
+        return ''
+      }
+    }))
+    const verifyIdToken = vi.fn(async () => ({
+      oid: 'oid-1',
+      preferred_username: 'r@d',
+      name: 'Reg'
+    }))
+    const { regulatorCallbackController } = buildOk({
+      fetchImpl,
+      verifyIdToken
+    })
+
+    const result = await regulatorCallbackController(request, h)
+
+    expect(result.redirected).toBe('/auth/regulator/login')
+    expect(yar.set).not.toHaveBeenCalledWith('user', expect.anything())
   })
 
   test('logs warn with status code when token endpoint returns non-2xx', async () => {
@@ -336,7 +408,8 @@ describe('regulatorCallbackController', () => {
     const verifyIdToken = vi.fn(async () => ({
       oid: 'oid',
       preferred_username: 'x@y',
-      name: 'X'
+      name: 'X',
+      roles: [REQUIRED_ROLE]
     }))
     const { regulatorCallbackController } = buildOk({
       fetchImpl,

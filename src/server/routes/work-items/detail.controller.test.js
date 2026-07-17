@@ -615,15 +615,15 @@ describe('#workItemDetailController', () => {
     assignWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
-        assignedToId: 'stub-standard-1',
-        assignedToName: 'Stub Standard User'
+        assignedToId: 'stub-caseworker-1',
+        assignedToName: 'Stub Caseworker One'
       })
     })
 
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/assign`,
-      payload: 'assigneeId=stub-standard-1',
+      payload: 'assigneeId=stub-caseworker-1',
       headers: { 'content-type': 'application/x-www-form-urlencoded' }
     })
 
@@ -632,11 +632,11 @@ describe('#workItemDetailController', () => {
     expect(assignWorkItem).toHaveBeenCalledWith(
       expect.objectContaining({
         workItemId: ID,
-        assigneeId: 'stub-standard-1',
+        assigneeId: 'stub-caseworker-1',
         // The controller resolves the snapshot name from the assignable
         // users directory (stub-auth users) so the backend gets a
         // canonical name even when the form omitted it.
-        assigneeName: 'Stub Standard User',
+        assigneeName: 'Stub Caseworker One',
         user: expect.objectContaining({ id: expect.any(String) })
       })
     )
@@ -672,7 +672,7 @@ describe('#workItemDetailController', () => {
     const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/assign`,
-      payload: 'assigneeId=stub-standard-1',
+      payload: 'assigneeId=stub-caseworker-1',
       headers: { 'content-type': 'application/x-www-form-urlencoded' }
     })
 
@@ -765,10 +765,10 @@ describe('#workItemDetailController', () => {
     expect(result).not.toEqual(expect.stringContaining('Task completed'))
   })
 
-  // epr-pbk: assignment role gating must derive from the credentials
-  // scope (which mirrors the route-level `requireAssign`), not from a
-  // separate in-handler role lookup.
-  test('Hides the assign picker for a standard-role user (canAssignAnyone false)', async () => {
+  // RA-323: every caseworker has the same permissions, so the assign-to-
+  // anyone picker is always shown; the self-assign shortcut is offered
+  // alongside it whenever the item is unassigned.
+  test('Shows the assign picker for any caseworker', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -777,62 +777,15 @@ describe('#workItemDetailController', () => {
 
     const { statusCode, result } = await server.inject({
       method: 'GET',
-      url: `/work-items/${ID}`,
-      headers: { 'x-test-user-role': 'standard' }
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    // The assign-anyone <select> is gated behind canAssignAnyone; standard
-    // users only see the self-assign affordance.
-    expect(result).not.toEqual(expect.stringContaining('assign-select'))
-    expect(result).not.toEqual(expect.stringContaining('unassign-submit'))
-  })
-
-  test('Shows the assign picker for an assign-role user (canAssignAnyone true)', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({ assignedToId: null, assignedToName: null })
-    })
-
-    const { statusCode, result } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`,
-      headers: { 'x-test-user-role': 'assign' }
+      url: `/work-items/${ID}`
     })
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('assign-select'))
   })
 
-  test('POST /assign as a standard user is rejected by Hapi with 403 before the handler runs', async () => {
-    const { statusCode } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/assign`,
-      payload: 'assigneeId=stub-standard-1',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        'x-test-user-role': 'standard'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.forbidden)
-    expect(assignWorkItem).not.toHaveBeenCalled()
-  })
-
-  test('POST /unassign as a standard user is rejected by Hapi with 403 before the handler runs', async () => {
-    const { statusCode } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/unassign`,
-      headers: { 'x-test-user-role': 'standard' }
-    })
-
-    expect(statusCode).toBe(statusCodes.forbidden)
-    expect(unassignWorkItem).not.toHaveBeenCalled()
-  })
-
   describe('POST /work-items/{id}/self-assign (RA-153)', () => {
-    test('Standard user GET on an unassigned work item posts to /self-assign (not /assign)', async () => {
+    test('Shows the self-assign shortcut alongside the picker on an unassigned work item', async () => {
       registerReaccreditation()
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -841,8 +794,7 @@ describe('#workItemDetailController', () => {
 
       const { statusCode, result } = await server.inject({
         method: 'GET',
-        url: `/work-items/${ID}`,
-        headers: { 'x-test-user-role': 'standard' }
+        url: `/work-items/${ID}`
       })
 
       expect(statusCode).toBe(statusCodes.ok)
@@ -850,16 +802,12 @@ describe('#workItemDetailController', () => {
       expect(result).toEqual(
         expect.stringContaining(`action="/work-items/${ID}/self-assign"`)
       )
-      expect(result).not.toEqual(
+      expect(result).toEqual(
         expect.stringContaining(`action="/work-items/${ID}/assign"`)
       )
-      // The assignee is now derived from the session; the form must not
-      // carry the previously-required hidden inputs.
-      expect(result).not.toEqual(expect.stringContaining('name="assigneeId"'))
-      expect(result).not.toEqual(expect.stringContaining('name="assigneeName"'))
     })
 
-    test('Standard user self-assigns and is redirected to the detail page', async () => {
+    test('Caseworker self-assigns and is redirected to the detail page', async () => {
       registerReaccreditation()
       assignWorkItem.mockResolvedValue({
         ok: true,
@@ -874,8 +822,7 @@ describe('#workItemDetailController', () => {
         url: `/work-items/${ID}/self-assign`,
         payload: '',
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          'x-test-user-role': 'standard'
+          'content-type': 'application/x-www-form-urlencoded'
         }
       })
 
@@ -890,37 +837,6 @@ describe('#workItemDetailController', () => {
             id: 'test-standard-id',
             name: 'Test Standard User'
           })
-        })
-      )
-    })
-
-    test('Assign-role user can also self-assign (the route is gated at requireStandard which assign users also have)', async () => {
-      registerReaccreditation()
-      assignWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({
-          assignedToId: 'test-assign-id',
-          assignedToName: 'Test Assign User'
-        })
-      })
-
-      const { statusCode, headers } = await injectWithCrumb(server, {
-        method: 'POST',
-        url: `/work-items/${ID}/self-assign`,
-        payload: '',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          'x-test-user-role': 'assign'
-        }
-      })
-
-      expect(statusCode).toBe(statusCodes.redirect)
-      expect(headers.location).toBe(`/work-items/${ID}`)
-      expect(assignWorkItem).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workItemId: ID,
-          assigneeId: 'test-assign-id',
-          assigneeName: 'Test Assign User'
         })
       )
     })
@@ -1400,12 +1316,16 @@ describe('#workItemDetailController', () => {
       )
     }
 
-    test('renders the Approve CTA for a decision-maker when item is in awaiting-decision state', async () => {
+    // RA-323: every caseworker has the same permissions, so the Approve
+    // CTA's visibility depends only on the work item's state — not on the
+    // caller's role or whether they are the assignee.
+    test('renders the Approve CTA for any caseworker when item is in awaiting-decision state', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
           stateId: 'awaiting-decision',
+          assignedToId: 'someone-else',
           availableActions: [
             // Backend always returns withdraw-during-decision in this state
             // (no task-completion requirement) even before reject is gated.
@@ -1422,8 +1342,7 @@ describe('#workItemDetailController', () => {
 
       const { result, statusCode } = await server.inject({
         method: 'GET',
-        url: `/work-items/${ID}`,
-        headers: { 'x-test-user-role': 'decision-maker' }
+        url: `/work-items/${ID}`
       })
 
       expect(statusCode).toBe(statusCodes.ok)
@@ -1444,65 +1363,11 @@ describe('#workItemDetailController', () => {
 
       const { result, statusCode } = await server.inject({
         method: 'GET',
-        url: `/work-items/${ID}`,
-        headers: { 'x-test-user-role': 'decision-maker' }
+        url: `/work-items/${ID}`
       })
 
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).not.toEqual(
-        expect.stringContaining('data-testid="action-approve"')
-      )
-    })
-
-    test('does not render the Approve CTA for a standard user who is not the assignee', async () => {
-      registerReaccreditationWithDetailV1()
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({
-          stateId: 'awaiting-decision',
-          assignedToId: 'someone-else'
-        })
-      })
-
-      const { result, statusCode } = await server.inject({
-        method: 'GET',
-        url: `/work-items/${ID}`,
-        headers: { 'x-test-user-role': 'standard' }
-      })
-
-      expect(statusCode).toBe(statusCodes.ok)
-      expect(result).not.toEqual(
-        expect.stringContaining('data-testid="action-approve"')
-      )
-    })
-
-    test('renders the Approve CTA when caller is the assignee even without decision-maker role', async () => {
-      registerReaccreditationWithDetailV1()
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({
-          stateId: 'awaiting-decision',
-          assignedToId: 'test-standard-id',
-          availableActions: [
-            {
-              actionId: 'withdraw-during-decision',
-              displayName: 'Withdraw',
-              fromStateId: 'awaiting-decision',
-              toStateId: 'withdrawn',
-              requiresAllTasksComplete: false
-            }
-          ]
-        })
-      })
-
-      const { result, statusCode } = await server.inject({
-        method: 'GET',
-        url: `/work-items/${ID}`,
-        headers: { 'x-test-user-role': 'standard' }
-      })
-
-      expect(statusCode).toBe(statusCodes.ok)
-      expect(result).toEqual(
         expect.stringContaining('data-testid="action-approve"')
       )
     })

@@ -7,12 +7,7 @@ import {
   findAssignableUser,
   getAssignableUsers
 } from '#/server/work-items/core/assignees.js'
-import { getUser, hasRole } from '#/server/common/helpers/auth/get-user.js'
-import {
-  ROLE_ASSIGN,
-  ROLE_DECISION_MAKER,
-  ROLE_TEAM_LEADER
-} from '#/server/common/helpers/auth/auth-scopes.js'
+import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 import {
   formatSiteAddress,
@@ -207,12 +202,11 @@ export function makeAssignController({
 }
 
 /**
- * Self-assign a work item: a standard-role user claims an unassigned
- * item for themselves. Distinct from `makeAssignController` so the route
- * can be gated declaratively at `requireStandard` rather than
- * `requireAssign` (RA-153). The handler derives the assignee from the
- * authenticated session, so the form carries no `assigneeId` /
- * `assigneeName` payload at all.
+ * Self-assign a work item: a caseworker claims an unassigned item for
+ * themselves in one click (RA-153), offered alongside the assign-to-anyone
+ * picker. Distinct from `makeAssignController` since the handler derives
+ * the assignee from the authenticated session, so the form carries no
+ * `assigneeId` / `assigneeName` payload at all.
  */
 export function makeSelfAssignController({
   service = createWorkItemActionsService()
@@ -320,11 +314,7 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   // metadata) without leaking type logic into the generic decorator. The
   // backend is still the source of truth for authorisation — this only
   // controls which affordances render.
-  const enriched = applyReAccreditationViewModel({
-    workItem: decorated,
-    request,
-    user
-  })
+  const enriched = applyReAccreditationViewModel({ workItem: decorated })
   const templatePath = resolveDetailTemplate(
     enriched.typeId,
     enriched.templateVersion
@@ -332,7 +322,6 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
 
   const assignment = buildAssignmentViewModel({
     workItem: enriched,
-    request,
     user
   })
 
@@ -352,8 +341,7 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       ? flashedBanners[0]
       : null
 
-  // RA-131. Team-leader SLA management affordances.
-  const canManageSla = hasRole(request, ROLE_TEAM_LEADER)
+  // RA-131. SLA management affordances — available to any caseworker.
   const slaMaxDays = config.get('workItems.sla.maxExtensionDays')
 
   // RA-211: surface an unresolved notification failure as a banner so
@@ -377,7 +365,6 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       successBanner,
       flashBanner,
       notificationFailedBanner,
-      canManageSla,
       slaMaxDays,
       reasonMaxLength: 500
     })
@@ -388,24 +375,19 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
  * Compute everything the detail template needs to render the assignment
  * panel:
  * - The current assignee (or null).
- * - Whether the caller can re-assign / unassign (the `assign` role).
- * - Whether the caller can self-assign right now (any signed-in user, but
- *   only when the item is currently unassigned).
- * - The list of users available in the picker for assign-role users.
+ * - The list of users available in the assign-to-anyone picker.
+ * - Whether the caller can self-assign right now — RA-153's one-click
+ *   "Take this work item" shortcut, offered alongside the picker whenever
+ *   the item is currently unassigned.
  *
- * Keeping all of this in the controller means the template stays free of
- * permission logic.
+ * RA-323: every caseworker has the same permissions, so the picker and
+ * unassign button are always available; there is no separate "standard
+ * user" read-only view any more.
  */
-function buildAssignmentViewModel({ workItem, request, user }) {
-  // Mirror the route-level scope check (`requireAssign`) so the UI only
-  // surfaces affordances the caller can actually use. Reading from
-  // `credentials.scope` matches what Hapi enforces on the assign /
-  // unassign POST routes.
-  const scope = request.auth?.credentials?.scope ?? []
-  const canAssignAnyone = scope.includes(ROLE_ASSIGN)
+function buildAssignmentViewModel({ workItem, user }) {
   const isUnassigned = !workItem.assignedToId
   const callerIsAssignee = user?.id != null && workItem.assignedToId === user.id
-  const canSelfAssign = !canAssignAnyone && isUnassigned && user?.id != null
+  const canSelfAssign = isUnassigned && user?.id != null
 
   return {
     assignedToId: workItem.assignedToId ?? null,
@@ -414,16 +396,13 @@ function buildAssignmentViewModel({ workItem, request, user }) {
     assignedBy: workItem.assignedBy ?? null,
     isUnassigned,
     callerIsAssignee,
-    canAssignAnyone,
     canSelfAssign,
-    canUnassign: canAssignAnyone && !isUnassigned,
-    assignableUsers: canAssignAnyone
-      ? getAssignableUsers().map((u) => ({
-          value: u.id,
-          text: u.name ?? u.id,
-          selected: u.id === workItem.assignedToId
-        }))
-      : []
+    canUnassign: !isUnassigned,
+    assignableUsers: getAssignableUsers().map((u) => ({
+      value: u.id,
+      text: u.name ?? u.id,
+      selected: u.id === workItem.assignedToId
+    }))
   }
 }
 
@@ -435,10 +414,9 @@ function buildAssignmentViewModel({ workItem, request, user }) {
 // `typeId` is `re-accreditation`:
 //
 //  - `canApproveDirectly` — whether the primary "Approve" CTA should
-//    render. Mirrors the backend's eligibility checks: state must be
-//    `assessment-in-progress` and the caller must either be the current
-//    assignee or hold the decision-maker role. The backend remains
-//    authoritative; a forged POST is still rejected there.
+//    render. RA-323: any caseworker may approve, so this only mirrors the
+//    backend's state eligibility check (`awaiting-decision`). The backend
+//    remains authoritative; a forged POST is still rejected there.
 //  - `approveHref` — link target for the CTA.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
 //    a terminal state (approved / rejected / withdrawn), the template
@@ -460,18 +438,13 @@ const RE_ACCREDITATION_STATE_TAG_CLASSES = {
   withdrawn: 'govuk-tag--grey'
 }
 
-function applyReAccreditationViewModel({ workItem, request, user }) {
+function applyReAccreditationViewModel({ workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
   }
 
-  const scope = request.auth?.credentials?.scope ?? []
-  const hasDecisionMakerRole = scope.includes(ROLE_DECISION_MAKER)
-  const callerIsAssignee = user?.id != null && workItem.assignedToId === user.id
-
   const canApproveDirectly =
-    workItem.stateId === RE_ACCREDITATION_ELIGIBLE_STATE &&
-    (callerIsAssignee || hasDecisionMakerRole)
+    workItem.stateId === RE_ACCREDITATION_ELIGIBLE_STATE
 
   const isReadOnlyState = RE_ACCREDITATION_TERMINAL_STATES.has(workItem.stateId)
   const stateTagClasses =

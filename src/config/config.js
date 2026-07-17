@@ -344,6 +344,12 @@ export const config = convict({
         format: String,
         default: '',
         env: 'ENTRA_TENANT_ID'
+      },
+      regulatorRoleValue: {
+        doc: 'RA-323. Entra ID app role a signed-in user must hold to be treated as a caseworker. Unconfirmed pending sign-off — override via env once confirmed.',
+        format: String,
+        default: 'Waste.Regulator.Standard',
+        env: 'ENTRA_REGULATOR_ROLE_VALUE'
       }
     }
   }

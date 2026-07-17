@@ -48,7 +48,7 @@ function buildHapi(overrides = {}) {
     params: { id: 'wi-1' },
     payload: {},
     yar: { flash: vi.fn() },
-    auth: { credentials: { scope: ['reaccreditation-decision-maker'] } },
+    auth: { credentials: { scope: ['standard'] } },
     ...overrides
   }
   return { request, h, captured }
@@ -98,38 +98,16 @@ describe('makeShowApprovalController', () => {
     )
   })
 
-  test('redirects with an error flash when the caller is neither assignee nor decision-maker', async () => {
+  // RA-323: every caseworker has the same permissions, so the interstitial
+  // renders for any authenticated caller once the item is eligible — there
+  // is no assignee-or-decision-maker gate any more.
+  test('renders the interstitial for a caller who is neither the assignee nor holds any special scope', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: {
         id: 'wi-1',
         stateId: 'awaiting-decision',
         assignedToId: 'someone-else',
-        payload: { applicationReference: 'RA-REF-001' }
-      }
-    })
-    const { request, h, captured } = buildHapi({
-      auth: { credentials: { scope: [] } }
-    })
-    await makeShowApprovalController().handler(request, h)
-
-    expect(captured.redirectTo).toBe('/work-items/wi-1')
-    expect(request.yar.flash).toHaveBeenCalledWith(
-      'flashBanner',
-      expect.objectContaining({
-        type: 'error',
-        text: expect.stringMatching(/permission/i)
-      })
-    )
-  })
-
-  test('renders the interstitial when the caller is the assignee even without the decision-maker role', async () => {
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: {
-        id: 'wi-1',
-        stateId: 'awaiting-decision',
-        assignedToId: 'u-1',
         payload: { applicationReference: 'RA-REF-001' }
       }
     })

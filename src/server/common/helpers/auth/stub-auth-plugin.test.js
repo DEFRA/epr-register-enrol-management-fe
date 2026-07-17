@@ -1,10 +1,6 @@
 import hapi from '@hapi/hapi'
 
-import {
-  stubAuthPlugin,
-  TEST_ASSIGN_USER,
-  TEST_STANDARD_USER
-} from './stub-auth-plugin.js'
+import { stubAuthPlugin, TEST_STANDARD_USER } from './stub-auth-plugin.js'
 
 async function buildServer() {
   const server = hapi.server()
@@ -21,11 +17,11 @@ async function buildServer() {
 }
 
 describe('stubAuthPlugin (NODE_ENV=test bypass scheme)', () => {
-  test('defaults to TEST_ASSIGN_USER when no header is sent', async () => {
+  test('defaults to TEST_STANDARD_USER when no header is sent', async () => {
     const server = await buildServer()
     const res = await server.inject({ method: 'GET', url: '/whoami' })
     expect(res.statusCode).toBe(200)
-    expect(res.result.id).toBe(TEST_ASSIGN_USER.id)
+    expect(res.result.id).toBe(TEST_STANDARD_USER.id)
   })
 
   test("accepts x-test-user-role 'standard'", async () => {
@@ -37,17 +33,6 @@ describe('stubAuthPlugin (NODE_ENV=test bypass scheme)', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.result.id).toBe(TEST_STANDARD_USER.id)
-  })
-
-  test("accepts x-test-user-role 'assign'", async () => {
-    const server = await buildServer()
-    const res = await server.inject({
-      method: 'GET',
-      url: '/whoami',
-      headers: { 'x-test-user-role': 'assign' }
-    })
-    expect(res.statusCode).toBe(200)
-    expect(res.result.id).toBe(TEST_ASSIGN_USER.id)
   })
 
   test('rejects unknown x-test-user-role with 400', async () => {
