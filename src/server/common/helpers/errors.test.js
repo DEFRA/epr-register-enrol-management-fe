@@ -23,7 +23,7 @@ describe('#errors', () => {
     })
 
     expect(result).toEqual(
-      expect.stringContaining('Page not found | EPR Register Case Management')
+      expect.stringContaining('Page not found | Packaging waste applications')
     )
     expect(statusCode).toBe(statusCodes.notFound)
   })

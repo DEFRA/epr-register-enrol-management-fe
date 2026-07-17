@@ -14,7 +14,6 @@ const PAGE_TITLE = 'Create a work item'
 export const DEFAULT_EMAIL = 'test@defra.gov.uk'
 
 const BREADCRUMBS = [
-  { text: 'Home', href: '/' },
   { text: 'Work items', href: '/work-items' },
   { text: PAGE_TITLE }
 ]

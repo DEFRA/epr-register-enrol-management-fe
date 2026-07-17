@@ -117,5 +117,5 @@ export function stubLoginPostController(request, h) {
   }
 
   request.yar.set('user', user)
-  return h.redirect('/')
+  return h.redirect('/work-items')
 }

@@ -61,16 +61,6 @@ describe('context and cache', () => {
           getAssetPath: expect.any(Function),
           navigation: [
             {
-              current: true,
-              text: 'Home',
-              href: '/'
-            },
-            {
-              current: false,
-              text: 'About',
-              href: '/about'
-            },
-            {
               current: false,
               text: 'Work items',
               href: '/work-items'
@@ -81,8 +71,8 @@ describe('context and cache', () => {
               href: '/backend-status'
             }
           ],
-          serviceName: 'EPR Register Case Management',
-          serviceUrl: '/',
+          serviceName: 'Packaging waste applications',
+          serviceUrl: null,
           user: null
         })
       })
@@ -161,16 +151,6 @@ describe('context and cache', () => {
           getAssetPath: expect.any(Function),
           navigation: [
             {
-              current: true,
-              text: 'Home',
-              href: '/'
-            },
-            {
-              current: false,
-              text: 'About',
-              href: '/about'
-            },
-            {
               current: false,
               text: 'Work items',
               href: '/work-items'
@@ -181,8 +161,8 @@ describe('context and cache', () => {
               href: '/backend-status'
             }
           ],
-          serviceName: 'EPR Register Case Management',
-          serviceUrl: '/',
+          serviceName: 'Packaging waste applications',
+          serviceUrl: null,
           user: null
         })
       })

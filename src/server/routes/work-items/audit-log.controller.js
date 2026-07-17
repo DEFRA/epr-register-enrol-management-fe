@@ -28,7 +28,6 @@ export const workItemAuditLogController = {
           heading: 'Work item not found',
           workItemId: id,
           breadcrumbs: [
-            { text: 'Home', href: '/' },
             { text: 'Work items', href: '/work-items' },
             { text: 'Not found' }
           ]
@@ -44,7 +43,6 @@ export const workItemAuditLogController = {
           workItemId: id,
           error: result.error ?? `Backend returned ${result.status}`,
           breadcrumbs: [
-            { text: 'Home', href: '/' },
             { text: 'Work items', href: '/work-items' },
             { text: 'Work item' }
           ]
@@ -74,7 +72,6 @@ export const workItemAuditLogController = {
       pageTitle: `Audit log — work item ${applicationRef}`,
       heading: 'Audit log',
       breadcrumbs: [
-        { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
         {
           text: applicationRef,

@@ -26,7 +26,6 @@ function flashBanner(request, banner) {
 
 function breadcrumbs(id, action, ref) {
   return [
-    { text: 'Home', href: '/' },
     { text: 'Work items', href: '/work-items' },
     { text: ref ?? 'Work item', href: detailHref(id) },
     { text: action }
@@ -50,7 +49,6 @@ export function makeShowExtendController() {
             heading: 'Work item not found',
             workItemId: id,
             breadcrumbs: [
-              { text: 'Home', href: '/' },
               { text: 'Work items', href: '/work-items' },
               { text: 'Not found' }
             ]
@@ -66,7 +64,6 @@ export function makeShowExtendController() {
             workItemId: id,
             error: result.error ?? `Backend returned ${result.status}`,
             breadcrumbs: [
-              { text: 'Home', href: '/' },
               { text: 'Work items', href: '/work-items' },
               { text: 'Work item' }
             ]
@@ -178,7 +175,6 @@ export function makeShowOverrideController() {
             heading: 'Work item not found',
             workItemId: id,
             breadcrumbs: [
-              { text: 'Home', href: '/' },
               { text: 'Work items', href: '/work-items' },
               { text: 'Not found' }
             ]
@@ -194,7 +190,6 @@ export function makeShowOverrideController() {
             workItemId: id,
             error: result.error ?? `Backend returned ${result.status}`,
             breadcrumbs: [
-              { text: 'Home', href: '/' },
               { text: 'Work items', href: '/work-items' },
               { text: 'Work item' }
             ]
