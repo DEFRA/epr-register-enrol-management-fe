@@ -432,7 +432,7 @@ if (
   config.get('auth.callbackBaseUrl') === 'http://localhost:3000'
 ) {
   throw new Error(
-    'AUTH_CALLBACK_BASE_URL must be set to this environment\'s public URL ' +
+    "AUTH_CALLBACK_BASE_URL must be set to this environment's public URL " +
       '(e.g. https://epr-register-enrol-management-fe.dev.cdp-int.defra.cloud). ' +
       'The localhost default is not permitted outside local dev — it causes ' +
       'Entra ID logins to redirect back to localhost instead of the real domain.'
