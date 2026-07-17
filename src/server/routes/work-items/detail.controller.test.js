@@ -22,8 +22,7 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   completeWorkItemTask: vi.fn(),
   setWorkItemTaskStatus: vi.fn(),
   applyWorkItemAction: vi.fn(),
-  addWorkItemNote: vi.fn(),
-  addWorkItemTaskNote: vi.fn()
+  addWorkItemNote: vi.fn()
 }))
 
 const {
@@ -33,8 +32,7 @@ const {
   setWorkItemTaskStatus,
   applyWorkItemAction,
   assignWorkItem,
-  unassignWorkItem,
-  addWorkItemNote
+  unassignWorkItem
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '11111111-1111-1111-1111-111111111111'
@@ -98,7 +96,6 @@ describe('#workItemDetailController', () => {
     applyWorkItemAction.mockReset()
     assignWorkItem.mockReset()
     unassignWorkItem.mockReset()
-    addWorkItemNote.mockReset()
     clearWorkItemRegistry()
     clearDetailTemplateRegistry()
   })
@@ -123,7 +120,7 @@ describe('#workItemDetailController', () => {
     // RA-129. Detail page is now a read-only progress summary; the task
     // list, status select and quick-complete button moved to the tasks page.
     expect(result).toEqual(expect.stringContaining('0 of 1 tasks complete'))
-    expect(result).toEqual(expect.stringContaining('Tasks &amp; notes (1)'))
+    expect(result).toEqual(expect.stringContaining('Tasks (1)'))
     expect(result).toEqual(expect.stringContaining(`/work-items/${ID}/tasks`))
     expect(result).not.toEqual(expect.stringContaining('Update status'))
     // RA-186. Payload pre block and Template version row no longer
@@ -551,7 +548,7 @@ describe('#workItemDetailController', () => {
       expect.stringContaining('task-status-select-check-eligibility')
     )
     expect(result).not.toEqual(expect.stringContaining('Update status'))
-    expect(result).toEqual(expect.stringContaining('Tasks &amp; notes (1)'))
+    expect(result).toEqual(expect.stringContaining('Tasks (1)'))
   })
 
   test('Summary page does not render the per-task UI for a Blocked task (RA-129)', async () => {
@@ -707,41 +704,11 @@ describe('#workItemDetailController', () => {
     )
   })
 
-  test('Summary page no longer shows the notes list or add-note form (RA-129)', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        notes: [
-          {
-            id: '22222222-2222-2222-2222-222222222222',
-            text: 'Newer note from Alice',
-            createdAt: '2026-04-27T11:00:00Z',
-            createdBy: 'alice-1',
-            createdByName: 'Alice Example'
-          }
-        ]
-      })
-    })
-
-    const { statusCode, result } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).not.toEqual(expect.stringContaining('Newer note from Alice'))
-    expect(result).not.toEqual(expect.stringContaining('Add a note'))
-    expect(result).not.toEqual(
-      expect.stringContaining(`action="/work-items/${ID}/notes"`)
-    )
-  })
-
   test('Summary page shows the read-only progress count and link to the tasks page (RA-129)', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: aWorkItem({ notes: [] })
+      workItem: aWorkItem()
     })
 
     const { statusCode, result } = await server.inject({
@@ -758,69 +725,6 @@ describe('#workItemDetailController', () => {
     )
     expect(result).toEqual(
       expect.stringContaining(`href="/work-items/${ID}/tasks"`)
-    )
-  })
-
-  test('POST notes forwards trimmed text to the backend and redirects on success', async () => {
-    addWorkItemNote.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem()
-    })
-
-    const { statusCode, headers } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/notes`,
-      payload: 'text=  Spoke to applicant.  ',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' }
-    })
-
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}#notes`)
-    expect(addWorkItemNote).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workItemId: ID,
-        text: 'Spoke to applicant.',
-        user: expect.objectContaining({ id: expect.any(String) })
-      })
-    )
-  })
-
-  test('POST notes with blank text re-renders detail with an inline error and does not call the backend', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-
-    const { statusCode, result } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/notes`,
-      payload: 'text=   ',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' }
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining('Could not add note'))
-    expect(result).toEqual(expect.stringContaining('Note text is required'))
-    expect(addWorkItemNote).not.toHaveBeenCalled()
-  })
-
-  test('POST notes surfaces a backend 400 (e.g. over-length) inline', async () => {
-    registerReaccreditation()
-    addWorkItemNote.mockResolvedValue({
-      ok: false,
-      status: 400,
-      problem: { detail: 'Note text must be 4000 characters or fewer.' }
-    })
-    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-
-    const { statusCode, result } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/notes`,
-      payload: 'text=non-empty-but-rejected-by-backend',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' }
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(
-      expect.stringContaining('Note text must be 4000 characters or fewer.')
     )
   })
 

@@ -16,8 +16,7 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   completeWorkItemTask: vi.fn(),
   setWorkItemTaskStatus: vi.fn(),
   applyWorkItemAction: vi.fn(),
-  addWorkItemNote: vi.fn(),
-  addWorkItemTaskNote: vi.fn()
+  addWorkItemNote: vi.fn()
 }))
 
 const { getWorkItem } =
@@ -230,7 +229,7 @@ describe('#workItemAuditLogController', () => {
     expect(result).not.toEqual(expect.stringContaining('<script>evil</script>'))
   })
 
-  test('Reuses the disclosure to surface the from/to status on a task-status-changed entry', async () => {
+  test('Surfaces the from/to status on a task-status-changed entry inside a "Show details" disclosure', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,

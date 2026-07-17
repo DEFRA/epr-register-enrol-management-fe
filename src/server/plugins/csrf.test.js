@@ -13,14 +13,14 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   completeWorkItemTask: vi.fn(),
   setWorkItemTaskStatus: vi.fn(),
   applyWorkItemAction: vi.fn(),
-  addWorkItemNote: vi.fn(),
-  addWorkItemTaskNote: vi.fn()
+  addWorkItemNote: vi.fn()
 }))
 
-const { addWorkItemNote, getWorkItem } =
+const { completeWorkItemTask, getWorkItem } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '11111111-1111-1111-1111-111111111111'
+const TASK_ID = 'verify-details'
 
 describe('#csrfProtection', () => {
   let server
@@ -35,7 +35,7 @@ describe('#csrfProtection', () => {
   })
 
   beforeEach(() => {
-    addWorkItemNote.mockReset()
+    completeWorkItemTask.mockReset()
     getWorkItem.mockReset()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -56,8 +56,8 @@ describe('#csrfProtection', () => {
   test('A POST without a crumb is rejected with the generic GDS 403 page', async () => {
     const { statusCode, result } = await server.inject({
       method: 'POST',
-      url: `/work-items/${ID}/notes`,
-      payload: 'text=hello',
+      url: `/work-items/${ID}/tasks/${TASK_ID}/complete`,
+      payload: '',
       headers: { 'content-type': 'application/x-www-form-urlencoded' }
     })
 
@@ -66,25 +66,25 @@ describe('#csrfProtection', () => {
     // trace.
     expect(result).toEqual(expect.stringContaining('Forbidden'))
     expect(result).not.toEqual(expect.stringContaining('at '))
-    expect(addWorkItemNote).not.toHaveBeenCalled()
+    expect(completeWorkItemTask).not.toHaveBeenCalled()
   })
 
   test('A POST with a valid crumb passes validation and reaches the handler', async () => {
-    addWorkItemNote.mockResolvedValue({
+    completeWorkItemTask.mockResolvedValue({
       ok: true,
       workItem: { id: ID }
     })
 
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
-      url: `/work-items/${ID}/notes`,
-      payload: 'text=hello',
+      url: `/work-items/${ID}/tasks/${TASK_ID}/complete`,
+      payload: '',
       headers: { 'content-type': 'application/x-www-form-urlencoded' }
     })
 
     expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}#notes`)
-    expect(addWorkItemNote).toHaveBeenCalledOnce()
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    expect(completeWorkItemTask).toHaveBeenCalledOnce()
   })
 
   test('A POST with a body crumb that does not match the cookie is rejected', async () => {
@@ -92,8 +92,8 @@ describe('#csrfProtection', () => {
 
     const { statusCode } = await server.inject({
       method: 'POST',
-      url: `/work-items/${ID}/notes`,
-      payload: `text=hello&crumb=${cookieToken}TAMPERED`,
+      url: `/work-items/${ID}/tasks/${TASK_ID}/complete`,
+      payload: `crumb=${cookieToken}TAMPERED`,
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
         cookie: `crumb=${cookieToken}`

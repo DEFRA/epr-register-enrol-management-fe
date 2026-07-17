@@ -102,9 +102,9 @@ describe('decorateAuditLog', () => {
     const entries = [
       {
         id: '1',
-        action: 'note-added',
-        actionDisplayName: 'Note added',
-        details: { noteId: 'n-1' },
+        action: 'unassigned',
+        actionDisplayName: 'Unassigned',
+        details: {},
         createdAt: '2026-04-27T09:00:00Z'
       },
       {
@@ -125,9 +125,10 @@ describe('decorateAuditLog', () => {
     expect(decorated[0].summary).toBe('')
     expect(decorated[1].summary).toBe('Approve (submitted → approved)')
     // Detail rows are projected alongside the summary so the template
-    // can render a single disclosure per entry. The note has no body and
-    // no actor here, so it has nothing extra to show; the action-applied
-    // entry surfaces the action plus from/to states.
+    // can render a single disclosure per entry. The unassigned entry has
+    // no previous assignee and no actor here, so it has nothing extra to
+    // show; the action-applied entry surfaces the action plus from/to
+    // states.
     expect(decorated[0].detailRows).toEqual([])
     expect(decorated[1].detailRows).toEqual([
       { key: 'Action', value: 'Approve' },
@@ -310,32 +311,6 @@ describe('detailRowsForAuditEntry', () => {
     ])
   })
 
-  test('projects the note body and actor for a note-added entry as a multiline row', () => {
-    expect(
-      detailRowsForAuditEntry({
-        action: 'note-added',
-        createdBy: 'alice-1',
-        createdByName: 'Alice Anderson',
-        details: { noteId: 'n-1', noteText: 'Line 1\nLine 2' }
-      })
-    ).toEqual([
-      { key: 'Added by', value: 'Alice Anderson' },
-      { key: 'Note', value: 'Line 1\nLine 2', multiline: true }
-    ])
-  })
-
-  test('returns an empty array for a note-added entry with no body and no actor', () => {
-    expect(
-      detailRowsForAuditEntry({ action: 'note-added', details: {} })
-    ).toEqual([])
-    expect(
-      detailRowsForAuditEntry({
-        action: 'note-added',
-        details: { noteText: '' }
-      })
-    ).toEqual([])
-  })
-
   test('projects task, state, from/to status and actor for a task-status-changed entry', () => {
     expect(
       detailRowsForAuditEntry({
@@ -445,89 +420,39 @@ describe('detailRowsForAuditEntry', () => {
       { key: 'Unassigned by', value: 'Carol Caseworker' }
     ])
   })
-})
 
-describe('task-note-added (RA-129)', () => {
-  test('summariseAuditEntry shows task and quoted excerpt when both present', () => {
-    expect(
-      summariseAuditEntry({
-        action: 'task-note-added',
-        details: {
-          taskId: 'check-eligibility',
-          taskDisplayName: 'Check eligibility',
-          excerpt: 'looks good'
-        }
-      })
-    ).toBe('Check eligibility \u2014 \u201clooks good\u201d')
-  })
-
-  test('summariseAuditEntry falls back to taskId when no display name', () => {
-    expect(
-      summariseAuditEntry({
-        action: 'task-note-added',
-        details: { taskId: 'check-eligibility', excerpt: '  ' }
-      })
-    ).toBe('check-eligibility')
-  })
-
-  test('summariseAuditEntry returns just the quoted excerpt when no task', () => {
-    expect(
-      summariseAuditEntry({
-        action: 'task-note-added',
-        details: { excerpt: 'orphan' }
-      })
-    ).toBe('\u201corphan\u201d')
-  })
-
-  test('summariseAuditEntry returns empty string when neither task nor excerpt', () => {
-    expect(
-      summariseAuditEntry({ action: 'task-note-added', details: {} })
-    ).toBe('')
-  })
-
-  test('detailRowsForAuditEntry projects task, actor and multiline excerpt', () => {
+  test('projects the note body and actor for a note-added entry as a multiline row', () => {
     expect(
       detailRowsForAuditEntry({
-        action: 'task-note-added',
-        createdBy: 'bob-1',
-        createdByName: 'Bob Builder',
-        details: {
-          taskId: 'check-eligibility',
-          taskDisplayName: 'Check eligibility',
-          excerpt: 'looks good\nmore detail'
-        }
+        action: 'note-added',
+        createdBy: 'alice-1',
+        createdByName: 'Alice Anderson',
+        details: { noteId: 'n-1', noteText: 'Line 1\nLine 2' }
       })
     ).toEqual([
-      { key: 'Task', value: 'Check eligibility' },
-      { key: 'Added by', value: 'Bob Builder' },
-      { key: 'Excerpt', value: 'looks good\nmore detail', multiline: true }
+      { key: 'Added by', value: 'Alice Anderson' },
+      { key: 'Note', value: 'Line 1\nLine 2', multiline: true }
     ])
   })
 
-  test('detailRowsForAuditEntry falls back to id and createdBy when names are missing', () => {
+  test('returns an empty array for a note-added entry with no body and no actor', () => {
+    expect(
+      detailRowsForAuditEntry({ action: 'note-added', details: {} })
+    ).toEqual([])
     expect(
       detailRowsForAuditEntry({
-        action: 'task-note-added',
-        createdBy: 'bob-1',
-        details: { taskId: 'check-eligibility', excerpt: 'x' }
+        action: 'note-added',
+        details: { noteText: '' }
       })
-    ).toEqual([
-      { key: 'Task', value: 'check-eligibility' },
-      { key: 'Added by', value: 'bob-1' },
-      { key: 'Excerpt', value: 'x', multiline: true }
-    ])
-  })
-
-  test('detailRowsForAuditEntry returns no rows when details are empty', () => {
-    expect(detailRowsForAuditEntry({ action: 'task-note-added' })).toEqual([])
+    ).toEqual([])
   })
 })
 
 describe('decorateAuditLog — workItemSnapshot rows', () => {
   const baseEntry = {
     id: '1',
-    action: 'note-added',
-    actionDisplayName: 'Note added',
+    action: 'unassigned',
+    actionDisplayName: 'Unassigned',
     details: {},
     createdAt: '2026-05-01T09:00:00Z'
   }
@@ -623,7 +548,7 @@ describe('decorateAuditLog (RA-129)', () => {
   test('uses backend actionDisplayName when present and non-blank', () => {
     const [decorated] = decorateAuditLog([
       {
-        action: 'task-note-added',
+        action: 'task-status-changed',
         actionDisplayName: 'Custom label',
         details: {}
       }
@@ -633,9 +558,9 @@ describe('decorateAuditLog (RA-129)', () => {
 
   test('falls back to the lookup when backend actionDisplayName is missing', () => {
     const [decorated] = decorateAuditLog([
-      { action: 'task-note-added', details: {} }
+      { action: 'task-status-changed', details: {} }
     ])
-    expect(decorated.actionDisplayName).toBe('Task note added')
+    expect(decorated.actionDisplayName).toBe('Task status changed')
   })
 
   test('falls back to the action id when there is no lookup entry', () => {
@@ -645,9 +570,9 @@ describe('decorateAuditLog (RA-129)', () => {
 
   test('treats blank backend actionDisplayName as missing', () => {
     const [decorated] = decorateAuditLog([
-      { action: 'task-note-added', actionDisplayName: '   ', details: {} }
+      { action: 'task-status-changed', actionDisplayName: '   ', details: {} }
     ])
-    expect(decorated.actionDisplayName).toBe('Task note added')
+    expect(decorated.actionDisplayName).toBe('Task status changed')
   })
 
   test('falls back to empty string when both backend label and action are missing', () => {

@@ -1,6 +1,5 @@
 import {
   addWorkItemNote,
-  addWorkItemTaskNote,
   applyWorkItemAction,
   assignWorkItem,
   completeWorkItemTask,
@@ -33,8 +32,7 @@ export function createWorkItemActionsService({
   applyAction = applyWorkItemAction,
   assign = assignWorkItem,
   unassign = unassignWorkItem,
-  addNote = addWorkItemNote,
-  addTaskNote = addWorkItemTaskNote
+  addNote = addWorkItemNote
 } = {}) {
   return {
     /**
@@ -115,6 +113,8 @@ export function createWorkItemActionsService({
      * the acting user's identity onto the note for an immutable audit
      * narrative; the BFF just forwards the text and lets the backend
      * validate (blank text / over-length) so the rules live in one place.
+     * Used internally by the withdraw and re-accreditation approval flows —
+     * there is no standalone "add a note" UI feature.
      */
     async addNote({ workItemId, text, user = null }) {
       assertId(workItemId, 'workItemId')
@@ -126,31 +126,6 @@ export function createWorkItemActionsService({
         }
       }
       const result = await addNote({ workItemId, text: text.trim(), user })
-      return toResult(result)
-    },
-
-    /**
-     * Append a free-text note scoped to a task (RA-129). Same contract as
-     * {@link addNote} but routed to the task-scoped backend endpoint so the
-     * note carries a `taskId` and the audit timeline records it as
-     * `task-note-added`.
-     */
-    async addTaskNote({ workItemId, taskId, text, user = null }) {
-      assertId(workItemId, 'workItemId')
-      assertId(taskId, 'taskId')
-      if (typeof text !== 'string' || text.trim() === '') {
-        return {
-          ok: false,
-          reason: 'invalid',
-          message: 'Note text is required.'
-        }
-      }
-      const result = await addTaskNote({
-        workItemId,
-        taskId,
-        text: text.trim(),
-        user
-      })
       return toResult(result)
     }
   }

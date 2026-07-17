@@ -179,10 +179,10 @@
       </div>
 
       {# ------------------------------ Tasks ------------------------------ #}
-      {# RA-129. Task progression + per-task notes live on a dedicated      #}
-      {# /tasks page so the summary stays focused on envelope, assignment,  #}
-      {# available actions and the audit log. The summary keeps a read-only #}
-      {# progress indicator + a deep link.                                  #}
+      {# RA-129. Task progression lives on a dedicated /tasks page so the   #}
+      {# summary stays focused on envelope, assignment, available actions   #}
+      {# and the audit log. The summary keeps a read-only progress          #}
+      {# indicator + a deep link.                                           #}
       <h2 class="govuk-heading-m">Tasks</h2>
 
       {% if workItem.taskProgress.total > 0 %}
@@ -192,7 +192,7 @@
         <p class="govuk-body">
           <a class="govuk-link"
              data-testid="work-item-tasks-link"
-             href="/work-items/{{ workItem.id }}/tasks">Tasks &amp; notes ({{ workItem.taskProgress.total }})</a>
+             href="/work-items/{{ workItem.id }}/tasks">Tasks ({{ workItem.taskProgress.total }})</a>
         </p>
       {% else %}
         <p class="govuk-body" data-testid="work-item-no-tasks">
@@ -201,7 +201,7 @@
         <p class="govuk-body">
           <a class="govuk-link"
              data-testid="work-item-tasks-link"
-             href="/work-items/{{ workItem.id }}/tasks">Tasks &amp; notes</a>
+             href="/work-items/{{ workItem.id }}/tasks">Tasks</a>
         </p>
       {% endif %}
 
@@ -240,7 +240,7 @@
               {% endif %}
             {% elif action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
               {# RA-188. Withdraw goes through a confirmation interstitial    #}
-              {# so the user can add an optional note and back out.           #}
+              {# so the user can confirm or back out.                         #}
               <div class="govuk-!-display-inline-block">
                 <a class="govuk-button govuk-button--warning"
                    data-module="govuk-button"
