@@ -71,10 +71,15 @@ export function stubLoginPostController(request, h) {
 
   const nationSuffix = nationOption?.value ? ` (${nationOption.label})` : ''
 
+  // Base the logged-in identity on the first assignable-users directory
+  // entry so id AND name match exactly — the "My work items" (assigned to
+  // me) filter relies on this identity being the same one that appears in
+  // the assign-to-anyone picker.
+  const [defaultUser] = STUB_USERS
   const user = {
-    id: 'stub-caseworker-1',
-    name: `Stub Caseworker User${nationSuffix}`,
-    email: 'stub-caseworker@stub.example',
+    id: defaultUser.id,
+    name: `${defaultUser.name}${nationSuffix}`,
+    email: defaultUser.email,
     roles,
     scope: roles
   }
