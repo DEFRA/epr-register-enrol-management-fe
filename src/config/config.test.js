@@ -61,6 +61,7 @@ describe('config production hardening', () => {
     process.env.ENTRA_CLIENT_ID = 'azure-client-id'
     process.env.ENTRA_CLIENT_SECRET = 'azure-client-secret'
     process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    process.env.AUTH_CALLBACK_BASE_URL = 'https://app.example.com'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
@@ -101,6 +102,7 @@ describe('config production hardening', () => {
     delete process.env.ENTRA_CLIENT_ID
     delete process.env.ENTRA_CLIENT_SECRET
     process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    process.env.AUTH_CALLBACK_BASE_URL = 'https://app.example.com'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
@@ -119,6 +121,7 @@ describe('config production hardening', () => {
     delete process.env.ENTRA_CLIENT_ID
     delete process.env.ENTRA_CLIENT_SECRET
     process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    process.env.AUTH_CALLBACK_BASE_URL = 'https://app.example.com'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
@@ -141,6 +144,40 @@ describe('config production hardening', () => {
     process.env.REDIS_PASSWORD = 'redis-password'
 
     await expect(import('./config.js')).rejects.toThrow(/AUTH_SHARED_SECRET/)
+  })
+
+  test('deployed boot rejects the localhost default AUTH_CALLBACK_BASE_URL in non-local environments', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.ENVIRONMENT = 'dev'
+    process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
+    process.env.AUTH_STUB_ENABLED = 'true'
+    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    delete process.env.AUTH_CALLBACK_BASE_URL
+    process.env.REDIS_HOST = 'redis.example.internal'
+    process.env.REDIS_USERNAME = 'redis-user'
+    process.env.REDIS_PASSWORD = 'redis-password'
+
+    await expect(import('./config.js')).rejects.toThrow(
+      /AUTH_CALLBACK_BASE_URL/
+    )
+  })
+
+  test('deployed boot succeeds when AUTH_CALLBACK_BASE_URL is set to the real domain', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.ENVIRONMENT = 'dev'
+    process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
+    process.env.AUTH_STUB_ENABLED = 'true'
+    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    process.env.AUTH_CALLBACK_BASE_URL =
+      'https://epr-register-enrol-management-fe.dev.cdp-int.defra.cloud'
+    process.env.REDIS_HOST = 'redis.example.internal'
+    process.env.REDIS_USERNAME = 'redis-user'
+    process.env.REDIS_PASSWORD = 'redis-password'
+
+    const mod = await import('./config.js')
+    expect(mod.config.get('auth.callbackBaseUrl')).toBe(
+      'https://epr-register-enrol-management-fe.dev.cdp-int.defra.cloud'
+    )
   })
 
   test('local boot succeeds without AUTH_SHARED_SECRET', async () => {
@@ -203,6 +240,7 @@ describe('config production hardening', () => {
     process.env.ENTRA_CLIENT_ID = 'azure-client-id'
     process.env.ENTRA_CLIENT_SECRET = 'azure-client-secret'
     process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    process.env.AUTH_CALLBACK_BASE_URL = 'https://app.example.com'
   }
 
   test('production boot rejects empty REDIS_PASSWORD', async () => {

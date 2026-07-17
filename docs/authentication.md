@@ -38,7 +38,7 @@ server.route({
 | ------------------------ | ------------------------------------------------------------ | ----------------------- |
 | `ENVIRONMENT`            | Deployment environment name                                  | `local`                 |
 | `AUTH_STUB_ENABLED`      | Enable stub auth. Defaults `true` when `ENVIRONMENT != prod` | `true`                  |
-| `AUTH_CALLBACK_BASE_URL` | Base URL used to build OAuth callback redirect URI           | `http://localhost:3000` |
+| `AUTH_CALLBACK_BASE_URL` | Base URL used to build OAuth callback redirect URI. Must be set to this environment's public URL outside local dev — boot fails otherwise (see `config.js`). | `http://localhost:3000` |
 | `AZURE_CLIENT_ID`        | Azure Entra ID client ID                                     | _(empty)_               |
 | `AZURE_CLIENT_SECRET`    | Azure Entra ID client secret                                 | _(empty)_               |
 | `AZURE_TENANT_ID`        | Azure Entra ID tenant ID                                     | _(empty)_               |

@@ -421,7 +421,25 @@ if (config.get('environment') !== 'local' && !config.get('auth.sharedSecret')) {
   )
 }
 
-// 5. REDIS_HOST / REDIS_USERNAME / REDIS_PASSWORD: convict defaults
+// 5. AUTH_CALLBACK_BASE_URL: used to build the OAuth redirect_uri sent to
+//    Entra ID. The convict default targets local dev; if a deployed
+//    environment forgets to wire this env var the app boots fine but
+//    silently sends redirect_uri=http://localhost:3000/auth/regulator/callback
+//    to Entra ID, so every login bounces users back to localhost instead
+//    of the real domain. Fail loudly at boot instead.
+if (
+  config.get('environment') !== 'local' &&
+  config.get('auth.callbackBaseUrl') === 'http://localhost:3000'
+) {
+  throw new Error(
+    'AUTH_CALLBACK_BASE_URL must be set to this environment\'s public URL ' +
+      '(e.g. https://epr-register-enrol-management-fe.dev.cdp-int.defra.cloud). ' +
+      'The localhost default is not permitted outside local dev — it causes ' +
+      'Entra ID logins to redirect back to localhost instead of the real domain.'
+  )
+}
+
+// 6. REDIS_HOST / REDIS_USERNAME / REDIS_PASSWORD: convict defaults
 //    target local dev (host=127.0.0.1, empty username/password). In a
 //    deployed env the cache must point at Elasticache over TLS with
 //    real credentials. The redis client in
