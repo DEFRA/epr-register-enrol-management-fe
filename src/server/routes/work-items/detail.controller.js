@@ -292,7 +292,6 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
         heading: 'Work item not found',
         workItemId: id,
         breadcrumbs: [
-          { text: 'Home', href: '/' },
           { text: 'Work items', href: '/work-items' },
           { text: 'Not found' }
         ]
@@ -308,7 +307,6 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
         workItemId: id,
         error: result.error ?? `Backend returned ${result.status}`,
         breadcrumbs: [
-          { text: 'Home', href: '/' },
           { text: 'Work items', href: '/work-items' },
           { text: 'Work item' }
         ]
@@ -370,7 +368,6 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       pageTitle: `Work item ${enriched.workItemLabel}`,
       heading: enriched.typeDisplayName,
       breadcrumbs: [
-        { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
         { text: enriched.workItemLabel }
       ],

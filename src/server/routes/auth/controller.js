@@ -179,7 +179,7 @@ export function createAuthControllers({
     // know) is discarded, and a fresh session id is bound to the user.
     request.yar.reset()
     request.yar.set('user', user)
-    return h.redirect('/')
+    return h.redirect('/work-items')
   }
 
   function logoutController(request, h) {

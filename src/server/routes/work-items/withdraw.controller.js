@@ -44,7 +44,6 @@ function confirmHref(id, actionId) {
 
 function breadcrumbs(id, ref) {
   return [
-    { text: 'Home', href: '/' },
     { text: 'Work items', href: '/work-items' },
     { text: ref ?? 'Work item', href: detailHref(id) },
     { text: 'Withdraw' }
@@ -89,7 +88,6 @@ export function makeShowWithdrawController() {
             heading: 'Work item not found',
             workItemId: id,
             breadcrumbs: [
-              { text: 'Home', href: '/' },
               { text: 'Work items', href: '/work-items' },
               { text: 'Not found' }
             ]
@@ -105,7 +103,6 @@ export function makeShowWithdrawController() {
             workItemId: id,
             error: result.error ?? `Backend returned ${result.status}`,
             breadcrumbs: [
-              { text: 'Home', href: '/' },
               { text: 'Work items', href: '/work-items' },
               { text: 'Work item' }
             ]

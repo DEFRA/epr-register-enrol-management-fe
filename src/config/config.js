@@ -78,7 +78,7 @@ export const config = convict({
   serviceName: {
     doc: 'Applications Service Name',
     format: String,
-    default: 'EPR Register Case Management'
+    default: 'Packaging waste applications'
   },
   root: {
     doc: 'Project root',

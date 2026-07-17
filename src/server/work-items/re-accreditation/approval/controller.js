@@ -45,7 +45,6 @@ function approveHref(id) {
 
 function breadcrumbs(id, ref) {
   return [
-    { text: 'Home', href: '/' },
     { text: 'Work items', href: '/work-items' },
     { text: ref ?? 'Work item', href: detailHref(id) },
     { text: 'Approve' }
@@ -73,7 +72,6 @@ export function makeShowApprovalController() {
             heading: 'Work item not found',
             workItemId: id,
             breadcrumbs: [
-              { text: 'Home', href: '/' },
               { text: 'Work items', href: '/work-items' },
               { text: 'Not found' }
             ]
@@ -89,7 +87,6 @@ export function makeShowApprovalController() {
             workItemId: id,
             error: result.error ?? `Backend returned ${result.status}`,
             breadcrumbs: [
-              { text: 'Home', href: '/' },
               { text: 'Work items', href: '/work-items' },
               { text: id }
             ]

@@ -289,7 +289,7 @@ describe('regulatorCallbackController', () => {
     )
     expect(resetIdx).toBeGreaterThanOrEqual(0)
     expect(setUserIdx).toBeGreaterThan(resetIdx)
-    expect(result.redirected).toBe('/')
+    expect(result.redirected).toBe('/work-items')
   })
 
   test('logs warn with status code when token endpoint returns non-2xx', async () => {

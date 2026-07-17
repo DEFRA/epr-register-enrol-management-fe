@@ -20,7 +20,7 @@ describe('auth', () => {
   test('protected routes are accessible to authenticated test users', async () => {
     const { statusCode } = await server.inject({
       method: 'GET',
-      url: '/'
+      url: '/work-items'
     })
 
     expect(statusCode).toBe(statusCodes.ok)
@@ -38,7 +38,7 @@ describe('auth', () => {
   test('default test user has assign role', async () => {
     const { request } = await server.inject({
       method: 'GET',
-      url: '/'
+      url: '/work-items'
     })
 
     expect(request.auth.credentials.roles).toContain('assign')
@@ -48,11 +48,21 @@ describe('auth', () => {
   test('x-test-user-role=standard header switches credentials', async () => {
     const { request } = await server.inject({
       method: 'GET',
-      url: '/',
+      url: '/work-items',
       headers: { 'x-test-user-role': 'standard' }
     })
 
     expect(request.auth.credentials.roles).toEqual(['standard'])
+  })
+
+  test('root path redirects to work items', async () => {
+    const { statusCode, headers } = await server.inject({
+      method: 'GET',
+      url: '/'
+    })
+
+    expect(statusCode).toBe(302)
+    expect(headers.location).toBe('/work-items')
   })
 
   test('stub login GET returns the chooser page', async () => {
@@ -75,7 +85,7 @@ describe('auth', () => {
     expect(statusCode).toBe(statusCodes.badRequest)
   })
 
-  test('stub login POST with valid user redirects to /', async () => {
+  test('stub login POST with valid user redirects to /work-items', async () => {
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: '/auth/stub/login',
@@ -83,7 +93,7 @@ describe('auth', () => {
     })
 
     expect(statusCode).toBe(302)
-    expect(headers.location).toBe('/')
+    expect(headers.location).toBe('/work-items')
   })
 
   test('regulator login (stub mode) redirects to stub chooser', async () => {

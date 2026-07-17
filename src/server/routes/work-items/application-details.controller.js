@@ -94,7 +94,6 @@ export const workItemApplicationDetailsController = {
     return h.view('work-items/application-details', {
       pageTitle: `Application details — ${workItemLabel}`,
       breadcrumbs: [
-        { text: 'Home', href: '/' },
         { text: 'Work items', href: '/work-items' },
         { text: workItemLabel, href: `/work-items/${id}` },
         { text: 'Application details' }

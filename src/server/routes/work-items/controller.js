@@ -68,7 +68,7 @@ export const workItemListController = {
     return h.view('work-items/index', {
       pageTitle: 'Work items',
       heading: 'Work items',
-      breadcrumbs: [{ text: 'Home', href: '/' }, { text: 'Work items' }],
+      breadcrumbs: [{ text: 'Work items' }],
       // Widen the govuk-width-container to 1200 px so the filter sidebar and
       // table have enough room and the page centres symmetrically on screen.
       // Passed here (not via {% set %} in the template) so hapi-vision injects

@@ -195,7 +195,7 @@ describe('makeShowWithdrawController', () => {
 
     await makeShowWithdrawController().handler(request, h)
 
-    expect(captured.viewCtx.breadcrumbs[2]).toEqual({
+    expect(captured.viewCtx.breadcrumbs[1]).toEqual({
       text: 'RA-111222333',
       href: '/work-items/wi-1'
     })
