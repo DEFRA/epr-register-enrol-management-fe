@@ -5,6 +5,7 @@ import { statusCodes } from '#/server/common/constants/status-codes.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getBackendHealth: vi.fn(),
+  raiseWorkItemQuery: vi.fn(),
   getWorkItem: vi.fn(),
   getWorkItems: vi.fn(),
   completeWorkItemTask: vi.fn(),

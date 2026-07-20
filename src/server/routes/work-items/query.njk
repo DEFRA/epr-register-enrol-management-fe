@@ -1,0 +1,92 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
+{% from "govuk/components/checkboxes/macro.njk" import govukCheckboxes %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+{% from "govuk/components/inset-text/macro.njk" import govukInsetText %}
+
+{# RA-291: Query an application. No browser JS is required — the        #}
+{# character count is progressive enhancement only, all validation is   #}
+{# server-side and the form is a plain POST with a PRG redirect.        #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItem.applicationRef
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "query-error-summary" }
+        }) }}
+      {% endif %}
+
+      <p class="govuk-body" data-testid="query-lead">
+        Unlock parts of the application that need to be updated. You'll get a
+        notification when the operator resubmits.
+      </p>
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="query-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {{ govukCheckboxes({
+          idPrefix: "field-sections",
+          id: "field-sections",
+          name: "sections",
+          fieldset: {
+            legend: {
+              text: "Which areas do you want to query?",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          hint: {
+            text: "This will unlock the questions for the operator to resubmit."
+          },
+          items: sectionItems,
+          errorMessage: { text: fieldErrors["sections"] } if fieldErrors["sections"] else null,
+          attributes: { "data-testid": "query-sections" }
+        }) }}
+
+        {{ govukCharacterCount({
+          id: "field-reason",
+          name: "reason",
+          maxwords: maxWords,
+          label: {
+            text: "Reason for the query",
+            classes: "govuk-label--m"
+          },
+          hint: {
+            text: "This will be included in the email to the operator."
+          },
+          value: values.reason,
+          errorMessage: { text: fieldErrors["reason"] } if fieldErrors["reason"] else null,
+          attributes: { "data-testid": "query-reason" }
+        }) }}
+
+        {{ govukInsetText({
+          text: "When you send the query, the application will also be assigned to you.",
+          attributes: { "data-testid": "query-assignment-notice" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Send query",
+            attributes: { "data-testid": "query-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="query-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
