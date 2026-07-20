@@ -16,6 +16,7 @@ import {
   SELECT_SECTIONS_MESSAGE
 } from './query.schema.js'
 import { hasQueryAction, isQueryActionId } from './query.controller.js'
+import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', async () => {
   const actual = await vi.importActual(
@@ -166,6 +167,112 @@ describe('RA-291 Query link on the work item detail page', () => {
     expect(result).not.toEqual(
       expect.stringContaining('data-testid="action-query"')
     )
+  })
+})
+
+describe('RA-291 detail template resolves for the current templateVersion', () => {
+  let server
+
+  beforeEach(async () => {
+    // Build the server per-test so the work-item plugin performs its real
+    // module registration (it clears and repopulates both registries at
+    // boot) rather than inheriting state cleared by another describe.
+    server = await createServer()
+    await server.initialize()
+    getWorkItem.mockReset()
+  })
+
+  afterEach(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  test('an item stamped with the backend-current version renders the type-specific detail view', async () => {
+    // Mirrors what the running stack showed: a v6-stamped item was
+    // falling through to the generic template, silently losing the
+    // re-accreditation approve CTA and actions panel.
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        templateVersion: reAccreditationType.templateVersion,
+        availableActions: []
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: DETAIL_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="re-accreditation-detail"')
+    )
+  })
+})
+
+describe('RA-291 queried state renders its display name (bug: raw state id)', () => {
+  let server
+
+  beforeAll(async () => {
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  beforeEach(() => {
+    clearWorkItemRegistry()
+    clearDetailTemplateRegistry()
+    // Deliberately registers the REAL module rather than a hand-rolled
+    // type: the bug was a state missing from the real STATES array, which
+    // a bespoke fixture type would never have caught.
+    registerWorkItemType(reAccreditationType)
+    getWorkItem.mockReset()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ stateId: 'queried', availableActions: [] })
+    })
+  })
+
+  test('the detail page State row shows "Queried", not "queried"', async () => {
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: DETAIL_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Queried'))
+  })
+
+  test('the audit log entry State row shows "Queried"', async () => {
+    // The audit log surfaces the state label in each entry's "Show
+    // details" disclosure, so the item needs at least one entry for the
+    // row to exist at all.
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        stateId: 'queried',
+        availableActions: [],
+        auditLog: [
+          {
+            id: 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            action: 'state-changed',
+            at: '2026-04-27T10:05:00Z',
+            by: 'alice'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `${DETAIL_HREF}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Queried'))
   })
 })
 
