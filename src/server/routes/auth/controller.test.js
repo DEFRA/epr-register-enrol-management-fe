@@ -193,7 +193,9 @@ describe('regulatorCallbackController', () => {
     expect(result.redirected).toBe('/auth/regulator/login')
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
-        err: expect.objectContaining({ message: 'signature verification failed' })
+        err: expect.objectContaining({
+          message: 'signature verification failed'
+        })
       }),
       expect.stringContaining('id_token verification failed')
     )
