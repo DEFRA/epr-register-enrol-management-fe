@@ -4,10 +4,7 @@ import { fetch as undiciFetch } from 'undici'
 import { config } from '#/config/config.js'
 import { getAzureEntraIdConfig } from '#/server/common/helpers/auth/providers/azure-entra-id.js'
 import { verifyAzureIdToken } from '#/server/common/helpers/auth/providers/azure-id-token.js'
-import {
-  ROLE_ASSIGN,
-  ROLE_STANDARD
-} from '#/server/common/helpers/auth/auth-scopes.js'
+import { ROLE_STANDARD } from '#/server/common/helpers/auth/auth-scopes.js'
 
 const LOGIN_PATH = '/auth/regulator/login'
 
@@ -164,13 +161,29 @@ export function createAuthControllers({
       return h.redirect(LOGIN_PATH)
     }
 
+    // RA-323: every caseworker holds the same Entra ID app role — there is
+    // no per-user permission tiering. App roles surface on the id_token as
+    // a `roles` claim (an array) once assigned to the user in the
+    // Enterprise Application; a caller without the configured role is not
+    // a caseworker and is bounced back to login rather than granted a
+    // degraded session.
+    const requiredRole = config.get('auth.azureEntraId.regulatorRoleValue')
+    const claimRoles = Array.isArray(claims.roles) ? claims.roles : []
+    if (!claimRoles.includes(requiredRole)) {
+      logWarn(
+        request,
+        'oauth callback: caller missing required regulator role',
+        {
+          requiredRole
+        }
+      )
+      return h.redirect(LOGIN_PATH)
+    }
+
     const user = {
       id: claims.oid ?? claims.sub,
       email: claims.preferred_username ?? claims.email ?? null,
       name: claims.name ?? null,
-      // Real role assignment will come from group claims / a directory
-      // lookup. For PoC purposes every signed-in regulator gets the
-      // standard role; preserve that behaviour.
       roles: [ROLE_STANDARD]
     }
 
@@ -199,6 +212,3 @@ const defaults = createAuthControllers()
 export const regulatorLoginController = defaults.regulatorLoginController
 export const regulatorCallbackController = defaults.regulatorCallbackController
 export const logoutController = defaults.logoutController
-
-// Re-exported for test / route convenience
-export const ROLES = { ROLE_STANDARD, ROLE_ASSIGN }

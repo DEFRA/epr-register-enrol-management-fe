@@ -35,14 +35,13 @@ describe('auth', () => {
     expect(statusCode).toBe(statusCodes.ok)
   })
 
-  test('default test user has assign role', async () => {
+  test('default test user has the standard caseworker role', async () => {
     const { request } = await server.inject({
       method: 'GET',
       url: '/work-items'
     })
 
-    expect(request.auth.credentials.roles).toContain('assign')
-    expect(request.auth.credentials.roles).toContain('standard')
+    expect(request.auth.credentials.roles).toEqual(['standard'])
   })
 
   test('x-test-user-role=standard header switches credentials', async () => {
@@ -75,21 +74,11 @@ describe('auth', () => {
     expect(result).toEqual(expect.stringContaining('Stub Login'))
   })
 
-  test('stub login POST without selection returns 400', async () => {
-    const { statusCode } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: '/auth/stub/login',
-      payload: {}
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-  })
-
-  test('stub login POST with valid user redirects to /work-items', async () => {
+  test('stub login POST redirects to /work-items', async () => {
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: '/auth/stub/login',
-      payload: { role: 'standard' }
+      payload: {}
     })
 
     expect(statusCode).toBe(302)

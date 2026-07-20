@@ -1,8 +1,5 @@
 import { config } from '#/config/config.js'
 import {
-  ROLE_TEAM_LEADER,
-  ROLE_ASSIGN,
-  ROLE_DECISION_MAKER,
   ROLE_NATION_ENGLAND,
   ROLE_NATION_NORTHERN_IRELAND,
   ROLE_NATION_SCOTLAND,
@@ -12,52 +9,28 @@ import {
 
 /**
  * Static directory of stub assignable users. Exported for the assignee-
- * picker so the assign UI has real names to list. The login form builds a
- * user dynamically from the submitted role + nation choice, and the
- * resulting session id (`stub-<role>-1`) intentionally matches these ids
- * so the "My work items" filter works out of the box.
+ * picker so the assign UI has real names to list. RA-323: every caseworker
+ * has the same role, so this is just a directory of names — not a set of
+ * permission tiers.
  */
 export const STUB_USERS = [
   {
-    id: 'stub-standard-1',
-    name: 'Stub Standard User',
-    email: 'standard@stub.example',
+    id: 'stub-caseworker-1',
+    name: 'Stub Caseworker One',
+    email: 'caseworker-1@stub.example',
     roles: [ROLE_STANDARD]
   },
   {
-    id: 'stub-assign-1',
-    name: 'Stub Assign User',
-    email: 'assign@stub.example',
-    roles: [ROLE_STANDARD, ROLE_ASSIGN]
-  },
-  {
-    id: 'stub-decision-maker-1',
-    name: 'Stub Decision Maker',
-    email: 'decision-maker@stub.example',
-    roles: [ROLE_STANDARD, ROLE_DECISION_MAKER]
-  }
-]
-
-const ROLE_OPTIONS = [
-  {
-    value: 'standard',
-    label: 'Standard',
+    id: 'stub-caseworker-2',
+    name: 'Stub Caseworker Two',
+    email: 'caseworker-2@stub.example',
     roles: [ROLE_STANDARD]
   },
   {
-    value: 'assign',
-    label: 'Assign (can assign work items)',
-    roles: [ROLE_STANDARD, ROLE_ASSIGN]
-  },
-  {
-    value: 'decision-maker',
-    label: 'Decision Maker',
-    roles: [ROLE_STANDARD, ROLE_DECISION_MAKER]
-  },
-  {
-    value: 'team-leader',
-    label: 'Team Leader (can manage SLA)',
-    roles: [ROLE_STANDARD, ROLE_TEAM_LEADER]
+    id: 'stub-caseworker-3',
+    name: 'Stub Caseworker Three',
+    email: 'caseworker-3@stub.example',
+    roles: [ROLE_STANDARD]
   }
 ]
 
@@ -75,7 +48,6 @@ const NATION_OPTIONS = [
 
 function viewData(overrides = {}) {
   return {
-    roleOptions: ROLE_OPTIONS,
     nationOptions: NATION_OPTIONS,
     ...overrides
   }
@@ -90,28 +62,24 @@ export function stubLoginGetController(_request, h) {
 }
 
 export function stubLoginPostController(request, h) {
-  const { role, nation } = request.payload ?? {}
-
-  const roleOption = ROLE_OPTIONS.find((r) => r.value === role)
-  if (!roleOption) {
-    return h
-      .view('auth/stub/login', viewData({ error: 'Please select a role' }))
-      .code(400)
-  }
+  const { nation } = request.payload ?? {}
 
   const nationOption = NATION_OPTIONS.find((n) => n.value === (nation ?? ''))
   const nationRole = nationOption?.role ?? null
 
-  const roles = nationRole
-    ? [...roleOption.roles, nationRole]
-    : [...roleOption.roles]
+  const roles = nationRole ? [ROLE_STANDARD, nationRole] : [ROLE_STANDARD]
 
   const nationSuffix = nationOption?.value ? ` (${nationOption.label})` : ''
 
+  // Base the logged-in identity on the first assignable-users directory
+  // entry so id AND name match exactly — the "My work items" (assigned to
+  // me) filter relies on this identity being the same one that appears in
+  // the assign-to-anyone picker.
+  const [defaultUser] = STUB_USERS
   const user = {
-    id: `stub-${role}-1`,
-    name: `Stub ${roleOption.label} User${nationSuffix}`,
-    email: `stub-${role}@stub.example`,
+    id: defaultUser.id,
+    name: `${defaultUser.name}${nationSuffix}`,
+    email: defaultUser.email,
     roles,
     scope: roles
   }

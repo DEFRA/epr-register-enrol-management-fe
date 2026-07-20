@@ -14,34 +14,46 @@ All routes are protected by `server.auth.default('session')`. Public routes (hea
 
 ## Roles
 
-Two roles are recognised:
+RA-323: every caseworker holds the same role — `standard` — with no
+permission tiering (previously there were separate `assign`,
+`reaccreditation-decision-maker` and `team-leader` roles; these have been
+removed, and every caseworker can now assign work items, extend/override an
+SLA clock, and approve re-accreditations).
 
-- `standard` — view and progress work items
-- `assign` — additionally able to assign work items to other users
+A caseworker's real identity still carries a nation role
+(`role:nation-england` etc.) used only to default the worklist filter
+(RA-125) — this is unrelated to permissions.
 
-Use the helpers from `src/server/common/helpers/auth/auth-scopes.js` to enforce role at the framework level:
+Real Entra ID login requires the caller's id_token `roles` claim to include
+the value configured by `ENTRA_REGULATOR_ROLE_VALUE` (see below); a signed-in
+user without it is bounced back to the login page rather than granted a
+session.
+
+Use the helper from `src/server/common/helpers/auth/auth-scopes.js` to
+require an authenticated caseworker at the framework level:
 
 ```javascript
-import { requireAssign } from '../common/helpers/auth/auth-scopes.js'
+import { requireStandard } from '../common/helpers/auth/auth-scopes.js'
 
 server.route({
   method: 'POST',
   path: '/work-items/{id}/assign',
-  options: requireAssign,
+  options: requireStandard,
   handler: assignController
 })
 ```
 
 ## Environment variables
 
-| Variable                 | Description                                                  | Default                 |
-| ------------------------ | ------------------------------------------------------------ | ----------------------- |
-| `ENVIRONMENT`            | Deployment environment name                                  | `local`                 |
-| `AUTH_STUB_ENABLED`      | Enable stub auth. Defaults `true` when `ENVIRONMENT != prod` | `true`                  |
-| `AUTH_CALLBACK_BASE_URL` | Base URL used to build OAuth callback redirect URI           | `http://localhost:3000` |
-| `AZURE_CLIENT_ID`        | Azure Entra ID client ID                                     | _(empty)_               |
-| `AZURE_CLIENT_SECRET`    | Azure Entra ID client secret                                 | _(empty)_               |
-| `AZURE_TENANT_ID`        | Azure Entra ID tenant ID                                     | _(empty)_               |
+| Variable                     | Description                                                                                              | Default                    |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `ENVIRONMENT`                | Deployment environment name                                                                              | `local`                    |
+| `AUTH_STUB_ENABLED`          | Enable stub auth. Defaults `true` when `ENVIRONMENT != prod`                                             | `true`                     |
+| `AUTH_CALLBACK_BASE_URL`     | Base URL used to build OAuth callback redirect URI                                                       | `http://localhost:3000`    |
+| `AZURE_CLIENT_ID`            | Azure Entra ID client ID                                                                                 | _(empty)_                  |
+| `AZURE_CLIENT_SECRET`        | Azure Entra ID client secret                                                                             | _(empty)_                  |
+| `AZURE_TENANT_ID`            | Azure Entra ID tenant ID                                                                                 | _(empty)_                  |
+| `ENTRA_REGULATOR_ROLE_VALUE` | RA-323. App role a signed-in user must hold to be treated as a caseworker. Unconfirmed pending sign-off. | `Waste.Regulator.Standard` |
 
 ## Routes
 
@@ -55,12 +67,15 @@ server.route({
 
 ## Tests
 
-The test bypass auto-authenticates each request as the assign user. To test as a `standard`-only user:
+The test bypass auto-authenticates each request as the standard caseworker.
+To test as a nation-scoped user (e.g. for the RA-125 default-filter), set
+`x-test-user-role` to `nation-england`, `nation-scotland`, `nation-wales` or
+`nation-northern-ireland`:
 
 ```javascript
 const { statusCode } = await server.inject({
   method: 'GET',
   url: '/work-items',
-  headers: { 'x-test-user-role': 'standard' }
+  headers: { 'x-test-user-role': 'nation-england' }
 })
 ```

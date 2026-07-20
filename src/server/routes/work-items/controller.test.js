@@ -568,8 +568,8 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        // Default test user is the assign-role stub user.
-        assigneeId: 'test-assign-id',
+        // Default test user is the standard caseworker stub user.
+        assigneeId: 'test-standard-id',
         unassigned: false
       })
     )

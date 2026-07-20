@@ -2,11 +2,10 @@
  * SLA extend and override controllers (RA-131).
  */
 
-import { getUser, hasRole } from '#/server/common/helpers/auth/get-user.js'
+import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { REASON_MAX_LENGTH, createSlaService } from './sla.service.js'
-import { ROLE_TEAM_LEADER } from '#/server/common/helpers/auth/auth-scopes.js'
 import { config } from '#/config/config.js'
 
 const EXTEND_VIEW = 'work-items/sla-extend'
@@ -35,9 +34,6 @@ function breadcrumbs(id, action, ref) {
 export function makeShowExtendController() {
   return {
     async handler(request, h) {
-      if (!hasRole(request, ROLE_TEAM_LEADER)) {
-        return h.response('Forbidden').code(403)
-      }
       const id = request.params.id
       const user = getUser(request)
       const result = await getWorkItem({ workItemId: id, user })
@@ -96,9 +92,6 @@ export function makeSubmitExtendController({
 } = {}) {
   return {
     async handler(request, h) {
-      if (!hasRole(request, ROLE_TEAM_LEADER)) {
-        return h.response('Forbidden').code(403)
-      }
       const id = request.params.id
       const user = getUser(request)
       const payload = request.payload ?? {}
@@ -161,9 +154,6 @@ export function makeSubmitExtendController({
 export function makeShowOverrideController() {
   return {
     async handler(request, h) {
-      if (!hasRole(request, ROLE_TEAM_LEADER)) {
-        return h.response('Forbidden').code(403)
-      }
       const id = request.params.id
       const user = getUser(request)
       const result = await getWorkItem({ workItemId: id, user })
@@ -220,9 +210,6 @@ export function makeSubmitOverrideController({
 } = {}) {
   return {
     async handler(request, h) {
-      if (!hasRole(request, ROLE_TEAM_LEADER)) {
-        return h.response('Forbidden').code(403)
-      }
       const id = request.params.id
       const user = getUser(request)
       const payload = request.payload ?? {}

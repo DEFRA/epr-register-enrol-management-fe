@@ -111,51 +111,18 @@
       {% block primaryActions %}{% endblock %}
 
       {# --------------------------- Assignment --------------------------- #}
-      {# RA-95. Assign-role users see a picker and re-assign / unassign    #}
-      {# buttons. Standard users see a "Take this work item" button only   #}
-      {# when the item is currently unassigned. Backend enforces the same  #}
-      {# rules — the BFF is just providing a sensible UI.                  #}
+      {# RA-323: every caseworker has the same permissions, so the         #}
+      {# assign-to-anyone picker and re-assign / unassign buttons are      #}
+      {# always shown. RA-153's one-click "Take this work item" shortcut   #}
+      {# is offered alongside the picker whenever the item is currently    #}
+      {# unassigned. Backend enforces the same rules — the BFF is just     #}
+      {# providing a sensible UI.                                          #}
       <h2 class="govuk-heading-m">Assignment</h2>
       <div data-testid="work-item-assignment">
-        {% if assignment.canAssignAnyone %}
-          <form method="post"
-                action="/work-items/{{ workItem.id }}/assign"
-                class="govuk-!-margin-bottom-3"
-                novalidate>
-            <input type="hidden" name="crumb" value="{{ crumb }}" />
-            {{ govukSelect({
-              id: "assign-assignee-id",
-              name: "assigneeId",
-              label: { text: "Assign to", classes: "govuk-label--s" },
-              items: assignment.assignableUsers,
-              attributes: { "data-testid": "assign-select" }
-            }) }}
-            <div class="govuk-button-group">
-              {{ govukButton({
-                text: assignment.isUnassigned and "Assign" or "Re-assign",
-                attributes: { "data-testid": "assign-submit" }
-              }) }}
-              {% if assignment.canUnassign %}
-                {# Distinct form so the unassign button doesn't carry the   #}
-                {# select payload.                                           #}
-              {% endif %}
-            </div>
-          </form>
-          {% if assignment.canUnassign %}
-            <form method="post"
-                  action="/work-items/{{ workItem.id }}/unassign"
-                  novalidate>
-              <input type="hidden" name="crumb" value="{{ crumb }}" />
-              {{ govukButton({
-                text: "Unassign",
-                classes: "govuk-button--secondary",
-                attributes: { "data-testid": "unassign-submit" }
-              }) }}
-            </form>
-          {% endif %}
-        {% elif assignment.canSelfAssign %}
+        {% if assignment.canSelfAssign %}
           <form method="post"
                 action="/work-items/{{ workItem.id }}/self-assign"
+                class="govuk-!-margin-bottom-3"
                 novalidate>
             <input type="hidden" name="crumb" value="{{ crumb }}" />
             {{ govukButton({
@@ -163,18 +130,37 @@
               attributes: { "data-testid": "self-assign-submit" }
             }) }}
           </form>
-        {% elif assignment.callerIsAssignee %}
-          <p class="govuk-body" data-testid="assignment-caller-is-assignee">
-            This work item is assigned to you.
-          </p>
-        {% else %}
-          <p class="govuk-body" data-testid="assignment-readonly">
-            {% if assignment.isUnassigned %}
-              This work item is not currently assigned.
-            {% else %}
-              This work item is assigned to {{ assignment.assignedToName }}.
-            {% endif %}
-          </p>
+        {% endif %}
+        <form method="post"
+              action="/work-items/{{ workItem.id }}/assign"
+              class="govuk-!-margin-bottom-3"
+              novalidate>
+          <input type="hidden" name="crumb" value="{{ crumb }}" />
+          {{ govukSelect({
+            id: "assign-assignee-id",
+            name: "assigneeId",
+            label: { text: "Assign to", classes: "govuk-label--s" },
+            items: assignment.assignableUsers,
+            attributes: { "data-testid": "assign-select" }
+          }) }}
+          <div class="govuk-button-group">
+            {{ govukButton({
+              text: assignment.isUnassigned and "Assign" or "Re-assign",
+              attributes: { "data-testid": "assign-submit" }
+            }) }}
+          </div>
+        </form>
+        {% if assignment.canUnassign %}
+          <form method="post"
+                action="/work-items/{{ workItem.id }}/unassign"
+                novalidate>
+            <input type="hidden" name="crumb" value="{{ crumb }}" />
+            {{ govukButton({
+              text: "Unassign",
+              classes: "govuk-button--secondary",
+              attributes: { "data-testid": "unassign-submit" }
+            }) }}
+          </form>
         {% endif %}
       </div>
 
@@ -217,27 +203,25 @@
           {% block approveAction %}{% endblock %}
           {% for action in workItem.availableActions %}
             {% if action.actionId == 'sla-extend' %}
-              {% if canManageSla %}
-                <div class="govuk-!-display-inline-block">
-                  <a class="govuk-button"
-                     data-module="govuk-button"
-                     role="button"
-                     draggable="false"
-                     data-testid="action-sla-extend"
-                     href="/work-items/{{ workItem.id }}/sla/extend">{{ action.displayName }}</a>
-                </div>
-                {# RA-131. Override SLA is BFF-only (no backend workflow        #}
-                {# transition) so it isn't projected into availableActions.     #}
-                {# Render it immediately after Extend SLA, matching its style.  #}
-                <div class="govuk-!-display-inline-block">
-                  <a class="govuk-button"
-                     data-module="govuk-button"
-                     role="button"
-                     draggable="false"
-                     data-testid="action-sla-override"
-                     href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
-                </div>
-              {% endif %}
+              <div class="govuk-!-display-inline-block">
+                <a class="govuk-button"
+                   data-module="govuk-button"
+                   role="button"
+                   draggable="false"
+                   data-testid="action-sla-extend"
+                   href="/work-items/{{ workItem.id }}/sla/extend">{{ action.displayName }}</a>
+              </div>
+              {# RA-131. Override SLA is BFF-only (no backend workflow        #}
+              {# transition) so it isn't projected into availableActions.     #}
+              {# Render it immediately after Extend SLA, matching its style.  #}
+              <div class="govuk-!-display-inline-block">
+                <a class="govuk-button"
+                   data-module="govuk-button"
+                   role="button"
+                   draggable="false"
+                   data-testid="action-sla-override"
+                   href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
+              </div>
             {% elif action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
               {# RA-188. Withdraw goes through a confirmation interstitial    #}
               {# so the user can confirm or back out.                         #}
@@ -274,9 +258,9 @@
       {# ----------------------------- SLA -------------------------------- #}
       {# RA-131. Extend SLA and Override SLA buttons live in the Actions   #}
       {# panel above. This section shows the SLA clock status (when the    #}
-      {# backend exposes it) so team leaders can see what they're acting   #}
+      {# backend exposes it) so caseworkers can see what they're acting    #}
       {# on before clicking the buttons.                                   #}
-      {% if canManageSla and workItem.slaState %}
+      {% if workItem.slaState %}
         <h2 class="govuk-heading-m">SLA status</h2>
         <p class="govuk-body" data-testid="sla-clock-info">
           {% if workItem.slaState === 'Breached' %}
