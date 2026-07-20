@@ -138,7 +138,7 @@ export function createAuthControllers({
       tokenJson = await tokenResponse.json()
     } catch (err) {
       logWarn(request, 'oauth callback: token endpoint request failed', {
-        err: err?.message
+        err
       })
       return h.redirect(LOGIN_PATH)
     }
@@ -159,7 +159,7 @@ export function createAuthControllers({
       })
     } catch (err) {
       logWarn(request, 'oauth callback: id_token verification failed', {
-        err: err?.message
+        err
       })
       return h.redirect(LOGIN_PATH)
     }

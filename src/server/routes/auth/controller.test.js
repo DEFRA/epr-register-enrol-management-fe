@@ -192,7 +192,11 @@ describe('regulatorCallbackController', () => {
     )
     expect(result.redirected).toBe('/auth/regulator/login')
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ err: 'signature verification failed' }),
+      expect.objectContaining({
+        err: expect.objectContaining({
+          message: 'signature verification failed'
+        })
+      }),
       expect.stringContaining('id_token verification failed')
     )
   })
@@ -240,7 +244,9 @@ describe('regulatorCallbackController', () => {
     )
     expect(result.redirected).toBe('/auth/regulator/login')
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ err: 'id_token nonce mismatch' }),
+      expect.objectContaining({
+        err: expect.objectContaining({ message: 'id_token nonce mismatch' })
+      }),
       expect.stringContaining('id_token verification failed')
     )
   })
