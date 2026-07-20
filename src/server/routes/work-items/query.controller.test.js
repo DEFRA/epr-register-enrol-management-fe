@@ -330,8 +330,11 @@ describe('GET /work-items/{id}/query', () => {
     expect(result).toEqual(expect.stringContaining(REF))
   })
 
-  test.each(['standard', 'assign'])(
-    'is reachable by a %s role user',
+  // RA-323: every caseworker holds the same role, so the query page is
+  // reachable by any authenticated user regardless of nation scope — there
+  // is no longer an 'assign' role to gate on.
+  test.each(['standard', 'nation-england'])(
+    'is reachable by a %s user',
     async (role) => {
       const { statusCode } = await server.inject({
         method: 'GET',
