@@ -1,5 +1,5 @@
 ---
-description: 'Use for any work in lib/epr-register-enrol-management-fe — the EPR Register case management Node.js 24 / Hapi 21 BFF frontend (GOV.UK Design System, Nunjucks templates, work-item module framework, yar-session auth, CDP deployment). Trigger words: management-fe, case management frontend, BFF, Hapi, Nunjucks, GOV.UK, govuk-frontend, work-items frontend, workItemModules, reAccreditationModule, registerDetailTemplate, createWorkItemActionsService, requireAssign, yar-session, stub auth, vitest, neostandard, hapi-secure-context, undici fetch, backend-api.js, BACKEND_API_URL, x-cdp-user-id.'
+description: 'Use for any work in lib/epr-register-enrol-management-fe — the EPR Register case management Node.js 24 / Hapi 21 BFF frontend (GOV.UK Design System, Nunjucks templates, work-item module framework, yar-session auth, CDP deployment). Trigger words: management-fe, case management frontend, BFF, Hapi, Nunjucks, GOV.UK, govuk-frontend, work-items frontend, workItemModules, reAccreditationModule, registerDetailTemplate, createWorkItemActionsService, requireStandard, yar-session, stub auth, vitest, neostandard, hapi-secure-context, undici fetch, backend-api.js, BACKEND_API_URL, x-cdp-user-id.'
 name: 'EPR Management Frontend'
 tools:
   [
@@ -108,7 +108,7 @@ src/
     common/
       helpers/
         auth/             auth-plugin (real OAuth), stub-auth-plugin (dev/test),
-                          auth-scopes (requireStandard / requireAssign),
+                          auth-scopes (requireStandard),
                           providers/azure-entra-id.js
         backend-api/      Single backend HTTP client (undici fetch). Adds
                           x-cdp-cognito-client-id + x-cdp-user-* headers.
@@ -210,17 +210,19 @@ the module's `register(server)` callback; paths are relative to
 - **Stub provider** (`stub-auth-plugin.js`) is mounted whenever
   `auth.stubEnabled` is true (default: any env that isn't `prod`) **or**
   `NODE_ENV=test`:
-  - In tests, every request auto-authenticates as `TEST_ASSIGN_USER`.
-    Override with the `x-test-user-role` header (`standard` or `assign`)
-    to test role-gated UI.
+  - In tests, every request auto-authenticates as `TEST_STANDARD_USER`.
+    Override with the `x-test-user-role` header (`nation-england` etc.) to
+    test the RA-125 nation-default filter.
   - In dev, the `/auth/stub/login` chooser populates the same yar session
     the production scheme reads from.
-- Roles (`auth-scopes.js`):
-  - `standard` — view and progress work items.
-  - `assign` — additionally assign work items to other users.
-  - Use `requireStandard` / `requireAssign` as route `options` so Hapi
-    rejects with 403 **before** the handler runs. Don't re-check roles
-    inside handlers.
+- Roles (`auth-scopes.js`): RA-323 — every caseworker holds the single
+  `standard` role; there is no permission tiering (the former `assign`,
+  `reaccreditation-decision-maker` and `team-leader` roles were removed).
+  Real Entra ID login additionally requires the id_token `roles` claim to
+  contain the value configured by `ENTRA_REGULATOR_ROLE_VALUE`, or the
+  caller is bounced back to login.
+  - Use `requireStandard` as route `options` so Hapi rejects an
+    unauthenticated caller with 403 **before** the handler runs.
 - Public routes (health, static assets, login pages, errors) opt out of
   auth with `auth: false`.
 - See [`docs/authentication.md`](../../lib/epr-register-enrol-management-fe/docs/authentication.md)
@@ -385,6 +387,6 @@ implementation.
    source), then run
    `npm run format:check && npm run lint && npm test`.
 5. If you change anything user-visible, sanity-check the page renders
-   without browser JS and with both `standard` and `assign` roles.
+   without browser JS.
 6. Track the work in `bd` (per repo-wide AGENTS.md). Push before
    ending the session.

@@ -25,11 +25,7 @@ import {
   makeShowQueryController,
   makeSubmitQueryController
 } from './query.controller.js'
-import {
-  requireAssign,
-  requireStandard,
-  requireTeamLeader
-} from '#/server/common/helpers/auth/auth-scopes.js'
+import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
  * Routes for the cross-type work item list (RA-93) plus the detail view,
@@ -38,11 +34,8 @@ import {
  * the browser. The action POSTs use a redirect-after-post pattern so
  * refresh is harmless.
  *
- * Authorization: assignment writes are deliberately gated *server-side*.
- * Backend enforcement is the source of truth (the role headers it reads
- * are the BFF's; it does not trust client-supplied roles), but the BFF
- * also fails fast for the obvious case so a standard user never sees a
- * 403 from a bad UI affordance.
+ * Authorization: RA-323 — every caseworker holds the same role, so these
+ * routes only require an authenticated session (`requireStandard`).
  */
 export const workItems = {
   plugin: {
@@ -132,48 +125,41 @@ export const workItems = {
           ...makeSubmitQueryController()
         },
         {
-          // Assign / re-assign / self-assign. Gated declaratively at the
-          // route level (RA-95): only `assign`-role users can reach the
-          // handler. The backend enforces the same rule independently and
-          // remains the source of truth.
+          // RA-323: assign / re-assign / self-assign are available to any
+          // authenticated caseworker.
           method: 'POST',
           path: '/work-items/{id}/assign',
-          options: requireAssign,
+          options: requireStandard,
           ...makeAssignController()
         },
         {
-          // Unassign requires the assign role; gated declaratively at the
-          // route level so Hapi returns 403 before the handler runs.
           method: 'POST',
           path: '/work-items/{id}/unassign',
-          options: requireAssign,
+          options: requireStandard,
           ...makeUnassignController()
         },
         {
-          // RA-153. Self-assign: a standard-role user claims an unassigned
-          // work item for themselves. Gated at `requireStandard` (assign
-          // users also have the standard scope) so the obvious "Take this
-          // work item" affordance never returns a 403. The handler derives
-          // the assignee from the authenticated session — the form carries
-          // no assigneeId / assigneeName.
+          // RA-153. Self-assign: claim an unassigned work item for
+          // yourself. The handler derives the assignee from the
+          // authenticated session — the form carries no assigneeId /
+          // assigneeName.
           method: 'POST',
           path: '/work-items/{id}/self-assign',
           options: requireStandard,
           ...makeSelfAssignController()
         },
         {
-          // RA-131. Extend SLA clock. Gated to team-leader at both FE route
-          // and controller level. BE independently enforces the role.
+          // RA-131. Extend SLA clock — available to any caseworker.
           method: 'GET',
           path: '/work-items/{id}/sla/extend',
-          options: requireTeamLeader,
+          options: requireStandard,
           ...makeShowExtendController()
         },
         {
           method: 'POST',
           path: '/work-items/{id}/sla/extend',
           options: {
-            ...requireTeamLeader,
+            ...requireStandard,
             payload: {
               parse: true,
               allow: 'application/x-www-form-urlencoded',
@@ -183,17 +169,17 @@ export const workItems = {
           ...makeSubmitExtendController()
         },
         {
-          // RA-131. Override SLA clock. Gated to team-leader.
+          // RA-131. Override SLA clock — available to any caseworker.
           method: 'GET',
           path: '/work-items/{id}/sla/override',
-          options: requireTeamLeader,
+          options: requireStandard,
           ...makeShowOverrideController()
         },
         {
           method: 'POST',
           path: '/work-items/{id}/sla/override',
           options: {
-            ...requireTeamLeader,
+            ...requireStandard,
             payload: {
               parse: true,
               allow: 'application/x-www-form-urlencoded',

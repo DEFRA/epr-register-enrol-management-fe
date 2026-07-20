@@ -18,7 +18,6 @@
 
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { ROLE_DECISION_MAKER } from '#/server/common/helpers/auth/auth-scopes.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
 import {
@@ -106,23 +105,6 @@ export function makeShowApprovalController() {
         flashBanner(request, {
           type: 'error',
           text: 'This work item can no longer be approved from its current state.'
-        })
-        return h.redirect(detailHref(id))
-      }
-
-      // Mirror the FE button-visibility rule from
-      // `applyReAccreditationViewModel`: the caller must either be the
-      // current assignee or hold the decision-maker role. The backend
-      // remains authoritative, but redirecting here gives the user a
-      // clearer message than a generic POST failure banner.
-      const scope = request.auth?.credentials?.scope ?? []
-      const hasDecisionMakerRole = scope.includes(ROLE_DECISION_MAKER)
-      const callerIsAssignee =
-        user?.id != null && workItem.assignedToId === user.id
-      if (!callerIsAssignee && !hasDecisionMakerRole) {
-        flashBanner(request, {
-          type: 'error',
-          text: 'You do not have permission to approve this work item.'
         })
         return h.redirect(detailHref(id))
       }

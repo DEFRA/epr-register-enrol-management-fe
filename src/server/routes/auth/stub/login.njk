@@ -5,7 +5,8 @@
     <div class="govuk-grid-column-two-thirds">
       <h1 class="govuk-heading-l">Stub Login</h1>
       <p class="govuk-body">
-        This is a development stub. Choose a role and optionally a nation to log in as.
+        This is a development stub. Every caseworker has the same
+        permissions (RA-323) — optionally choose a nation to log in as.
       </p>
 
       {% if error %}
@@ -21,31 +22,6 @@
 
       <form method="POST" action="/auth/stub/login">
         <input type="hidden" name="crumb" value="{{ crumb }}" />
-
-        <div class="govuk-form-group">
-          <fieldset class="govuk-fieldset">
-            <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
-              <h2 class="govuk-fieldset__heading">Role</h2>
-            </legend>
-            <div class="govuk-radios">
-              {% for option in roleOptions %}
-                <div class="govuk-radios__item">
-                  <input
-                    class="govuk-radios__input"
-                    id="role-{{ loop.index }}"
-                    name="role"
-                    type="radio"
-                    value="{{ option.value }}"
-                    {% if loop.index === 2 %}checked{% endif %}
-                  >
-                  <label class="govuk-label govuk-radios__label" for="role-{{ loop.index }}">
-                    {{ option.label }}
-                  </label>
-                </div>
-              {% endfor %}
-            </div>
-          </fieldset>
-        </div>
 
         <div class="govuk-form-group">
           <label class="govuk-label govuk-label--m" for="nation">

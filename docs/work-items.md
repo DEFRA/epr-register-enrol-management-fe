@@ -270,10 +270,14 @@ modes (radio buttons), encoded into `assigneeMode`:
 
 ### Detail actions
 
-| Route                            | Authorization (Hapi scope is intentionally **not** set)                                                                                           |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /work-items/{id}/assign`   | Open to any authenticated user; backend rejects with 403 if the caller is a standard user trying to assign to someone else or take an owned item. |
-| `POST /work-items/{id}/unassign` | Open at the route layer; backend requires the `assign` role.                                                                                      |
+RA-323: every caseworker holds the same role — there is no permission
+tiering. Both routes below are gated only on `requireStandard`
+(authenticated caseworker), and the backend imposes no further role check.
+
+| Route                            | Authorization                 |
+| -------------------------------- | ----------------------------- |
+| `POST /work-items/{id}/assign`   | Any authenticated caseworker. |
+| `POST /work-items/{id}/unassign` | Any authenticated caseworker. |
 
 The assign controller resolves the snapshot display name from the
 assignable-users directory so the backend always receives a canonical
