@@ -297,6 +297,21 @@ export const config = convict({
       env: 'WORK_ITEM_CREATION_ENABLED'
     }
   },
+  fileStorage: {
+    samplingPlanBucket: {
+      doc: 'S3 bucket sampling-plan files are stored in (operator-side upload, read here for download)',
+      format: String,
+      default: 'epr-register-enrol-sampling-plans',
+      env: 'SAMPLING_PLAN_S3_BUCKET'
+    },
+    s3Endpoint: {
+      doc: 'S3 endpoint override for local dev (floci). Left unset in deployed environments so the AWS SDK resolves the real regional endpoint via the default credential provider chain / IAM role.',
+      format: String,
+      nullable: true,
+      default: null,
+      env: 'AWS_ENDPOINT_URL'
+    }
+  },
   workItems: {
     sla: {
       maxExtensionDays: {
