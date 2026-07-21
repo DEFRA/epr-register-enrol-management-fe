@@ -155,19 +155,66 @@
       {% else %}
         {% set scanTag %}{{ govukTag({ text: f.scanStatus or "Pending", classes: "govuk-tag--grey" }) }}{% endset %}
       {% endif %}
+      {% if f.fileId and f.scanStatus == "Clean" %}
+        {% set downloadCell %}<a class="govuk-link" data-testid="app-details-sampling-file-download-{{ loop.index }}" href="/work-items/{{ workItemId }}/files/{{ f.fileId }}/download">Download</a>{% endset %}
+      {% else %}
+        {% set downloadCell %}—{% endset %}
+      {% endif %}
       {% set fileRows = (fileRows.push([
         { text: f.filename },
         { text: f.uploadedAt | formatDateTimeGds if f.uploadedAt else "—" },
-        { html: scanTag }
+        { html: scanTag },
+        { html: downloadCell }
       ]), fileRows) %}
     {% endfor %}
     {{ govukTable({
       attributes: { "data-testid": "app-details-sampling-files" },
-      head: [{ text: "File name" }, { text: "Uploaded at" }, { text: "Scan status" }],
+      head: [{ text: "File name" }, { text: "Uploaded at" }, { text: "Scan status" }, { text: "Download" }],
       rows: fileRows
     }) }}
   {% else %}
     <p class="govuk-body" data-testid="app-details-sampling-files-none">No files uploaded.</p>
+  {% endif %}
+
+  {# ── Overseas sites — BES evidence, per site ── #}
+  {% if overseasSitesSection.length %}
+    <h2 class="govuk-heading-m">Overseas sites — BES evidence</h2>
+    {% for site in overseasSitesSection %}
+      <h3 class="govuk-heading-s" data-testid="app-details-overseas-site-{{ loop.index }}-name">{{ site.siteName }}{% if site.country %} ({{ site.country }}){% endif %}</h3>
+      {% if site.siteAddress %}
+        <p class="govuk-body">{{ site.siteAddress }}</p>
+      {% endif %}
+      {% if site.besEvidenceFiles.length %}
+        {% set besFileRows = [] %}
+        {% for f in site.besEvidenceFiles %}
+          {% if f.scanStatus == "Clean" %}
+            {% set besScanTag %}{{ govukTag({ text: "Clean", classes: "govuk-tag--green" }) }}{% endset %}
+          {% elif f.scanStatus == "Infected" %}
+            {% set besScanTag %}{{ govukTag({ text: "Infected", classes: "govuk-tag--red" }) }}{% endset %}
+          {% else %}
+            {% set besScanTag %}{{ govukTag({ text: f.scanStatus or "Pending", classes: "govuk-tag--grey" }) }}{% endset %}
+          {% endif %}
+          {% if f.fileId and f.scanStatus == "Clean" %}
+            {% set besDownloadCell %}<a class="govuk-link" data-testid="app-details-bes-file-download-{{ loop.index }}" href="/work-items/{{ workItemId }}/files/{{ f.fileId }}/download">Download</a>{% endset %}
+          {% else %}
+            {% set besDownloadCell %}—{% endset %}
+          {% endif %}
+          {% set besFileRows = (besFileRows.push([
+            { text: f.filename },
+            { text: f.uploadedAt | formatDateTimeGds if f.uploadedAt else "—" },
+            { html: besScanTag },
+            { html: besDownloadCell }
+          ]), besFileRows) %}
+        {% endfor %}
+        {{ govukTable({
+          attributes: { "data-testid": "app-details-bes-evidence-files-" ~ loop.index },
+          head: [{ text: "File name" }, { text: "Uploaded at" }, { text: "Scan status" }, { text: "Download" }],
+          rows: besFileRows
+        }) }}
+      {% else %}
+        <p class="govuk-body" data-testid="app-details-bes-evidence-files-none-{{ loop.index }}">No BES evidence files uploaded.</p>
+      {% endif %}
+    {% endfor %}
   {% endif %}
 
 {% endblock %}

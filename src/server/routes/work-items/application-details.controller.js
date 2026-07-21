@@ -64,6 +64,9 @@ export const workItemApplicationDetailsController = {
     const prns = p.prns ?? {}
     const samplingPlan = p.samplingPlan ?? {}
     const submittedBy = p.submittedBy ?? {}
+    const overseasSites = Array.isArray(p.overseasSites?.sites)
+      ? p.overseasSites.sites
+      : []
 
     // RA-249. The DATA row labelled "Application reference" must show the
     // human RA-* reference or nothing — never the work-item Guid. The
@@ -204,6 +207,15 @@ export const workItemApplicationDetailsController = {
       samplingPlanFiles: Array.isArray(samplingPlan.files)
         ? samplingPlan.files
         : [],
+      overseasSitesSection: overseasSites.map((site) => ({
+        siteId: site.siteId,
+        siteName: site.siteName,
+        siteAddress: site.siteAddress,
+        country: site.country,
+        besEvidenceFiles: Array.isArray(site.besEvidence?.files)
+          ? site.besEvidence.files
+          : []
+      })),
       priorYearSection
     })
   }
