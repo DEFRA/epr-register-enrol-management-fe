@@ -101,6 +101,39 @@ describe('#workItemDownloadFileController', () => {
     expect(headers['content-disposition']).toContain('sampling-plan.pdf')
   })
 
+  test('falls back to fileStorage.fallbackBucket when the file record has no s3Bucket', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem([
+        {
+          fileId: FILE_ID,
+          filename: 'sampling-plan.pdf',
+          contentType: 'application/pdf',
+          scanStatus: 'Clean',
+          s3Key: 'sampling-plans/full-payload-verification/sampling-plan.pdf'
+        }
+      ])
+    })
+    s3Client.send.mockResolvedValue({
+      Body: 'pdf-bytes',
+      ContentType: 'application/pdf'
+    })
+
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/files/${FILE_ID}/download`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(s3Client.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Bucket: 'epr-register-enrol-file-uploads'
+        })
+      })
+    )
+  })
+
   test('returns 404 when the work item is not visible to the caller', async () => {
     getWorkItem.mockResolvedValue({ ok: false, status: 404 })
 
