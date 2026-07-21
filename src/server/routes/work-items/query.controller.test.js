@@ -381,6 +381,9 @@ describe('GET /work-items/{id}/query', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('data-testid="query-form"'))
     expect(result).not.toEqual(expect.stringContaining(REF))
+    // The caption is omitted entirely rather than rendered as the literal
+    // "Work item null" when there is no application reference.
+    expect(result).not.toEqual(expect.stringContaining('Work item null'))
   })
 
   test('renders 404 when the work item does not exist', async () => {
