@@ -1,5 +1,6 @@
 import { workItemListController } from './controller.js'
 import { workItemApplicationDetailsController } from './application-details.controller.js'
+import { workItemDownloadFileController } from './download-file.controller.js'
 import {
   makeApplyActionController,
   makeAssignController,
@@ -52,6 +53,14 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}/application-details',
           ...workItemApplicationDetailsController
+        },
+        {
+          // Sampling-plan file download — direct S3 stream-through, gated
+          // on the same work-item tenancy check as application-details
+          // (enforced by the backend via getWorkItem, not re-implemented here).
+          method: 'GET',
+          path: '/work-items/{id}/files/{fileId}/download',
+          ...workItemDownloadFileController
         },
         {
           // RA-97. Standalone audit log page so the detail view stays
