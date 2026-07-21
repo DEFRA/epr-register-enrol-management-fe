@@ -11,7 +11,7 @@ describe('signRequestHeaders', () => {
       'x-cdp-cognito-client-id': 'frontend',
       'x-cdp-user-id': 'user-123',
       'x-cdp-user-name': 'Alice Example',
-      'x-cdp-user-roles': 'standard,case-worker'
+      'x-cdp-user-roles': 'standard,assign'
     }
     const timestamp = '2026-05-18T10:00:00Z'
     const nonce = 'abc123def456ghi7'
@@ -27,7 +27,7 @@ describe('signRequestHeaders', () => {
       'frontend',
       'user-123',
       'Alice Example',
-      'standard,case-worker',
+      'standard,assign',
       timestamp,
       nonce
     ].join('\n')
@@ -42,7 +42,7 @@ describe('signRequestHeaders', () => {
     // bugs that would change both sides of the dynamic assertion equally.
     // Computed with: printf 'v2\n...' | openssl dgst -sha256 -hmac '...' -binary | base64
     expect(result['x-cdp-auth-signature']).toBe(
-      'npHjUO2Pha5yBjDzKloEXodqx8oJMPMCOtKQRS2fYtE='
+      'sbFMANrOvnlsd0OIQp31eTkDLGxS6rufSgSBVo07MlM='
     )
   })
 
