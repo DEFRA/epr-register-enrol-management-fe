@@ -298,11 +298,11 @@ export const config = convict({
     }
   },
   fileStorage: {
-    samplingPlanBucket: {
-      doc: 'S3 bucket sampling-plan files are stored in (operator-side upload, read here for download)',
+    fallbackBucket: {
+      doc: 'Fallback S3 bucket for file downloads when a file record has no s3Bucket of its own (older records; every file type — sampling-plan and BES-evidence alike — currently lands in this one shared bucket on the operator upload side, see epr-register-enrol-frontend fileUpload.s3Bucket). Must match that value.',
       format: String,
-      default: 'epr-register-enrol-sampling-plans',
-      env: 'SAMPLING_PLAN_S3_BUCKET'
+      default: 'epr-register-enrol-file-uploads',
+      env: 'FILE_UPLOAD_S3_BUCKET'
     },
     s3Endpoint: {
       doc: 'S3 endpoint override for local dev (floci). Left unset in deployed environments so the AWS SDK resolves the real regional endpoint via the default credential provider chain / IAM role.',

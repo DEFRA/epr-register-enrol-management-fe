@@ -65,7 +65,7 @@ export const workItemDownloadFileController = {
         .code(422)
     }
 
-    const bucket = file.s3Bucket || config.get('fileStorage.samplingPlanBucket')
+    const bucket = file.s3Bucket || config.get('fileStorage.fallbackBucket')
 
     try {
       const response = await s3Client.send(
