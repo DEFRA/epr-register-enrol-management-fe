@@ -680,6 +680,84 @@ export async function overrideWorkItemSla({
   }
 }
 
+/**
+ * Raise a query against a re-accreditation application (RA-291).
+ *
+ * Wraps `POST /work-items/re-accreditation/{id}/query`.
+ * Body: { sections: string[], reason: string }.
+ *
+ * The backend resolves the appropriate state transition itself, so no
+ * action id is sent. Status mapping matches the vocabulary used by
+ * `core/service.js` so controllers can branch on `reason`:
+ *
+ *  - 400 → { ok: false, reason: 'invalid' }
+ *  - 401 → { ok: false, reason: 'unauthorized' }
+ *  - 403 → { ok: false, reason: 'not-authorized' }
+ *  - 404 → { ok: false, reason: 'not-found' }
+ *  - 409 → { ok: false, reason: 'not-allowed' } (wrong state to query)
+ *  - other → { ok: false, reason: 'server' }
+ *  - network/timeout → { ok: false, reason: 'network' }
+ */
+export async function raiseWorkItemQuery({
+  workItemId,
+  sections,
+  reason,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/query`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: buildHeaders(
+        { 'content-type': 'application/json', accept: 'application/json' },
+        user
+      ),
+      body: JSON.stringify({ sections, reason })
+    })
+
+    if (response.ok) {
+      const workItem = await response.json()
+      return { ok: true, workItem }
+    }
+
+    const problem = await safeReadJson(response)
+    const detail =
+      (problem && (problem.detail || problem.title)) ||
+      `Backend returned ${response.status}`
+    return {
+      ok: false,
+      reason: QUERY_REASON_BY_STATUS[response.status] ?? 'server',
+      status: response.status,
+      message: detail
+    }
+  } catch (error) {
+    logger.warn({ err: error, url }, 'Backend API raiseWorkItemQuery failed')
+    return {
+      ok: false,
+      reason: 'network',
+      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+const QUERY_REASON_BY_STATUS = {
+  400: 'invalid',
+  401: 'unauthorized',
+  403: 'not-authorized',
+  404: 'not-found',
+  409: 'not-allowed',
+  422: 'invalid'
+}
+
 const SLA_REASON_BY_STATUS = {
   400: 'invalid',
   401: 'unauthorized',

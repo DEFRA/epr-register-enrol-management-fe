@@ -14,6 +14,7 @@ import {
   getWorkItem,
   getWorkItems,
   overrideWorkItemSla,
+  raiseWorkItemQuery,
   setWorkItemTaskStatus,
   unassignWorkItem
 } from './backend-api.js'
@@ -1485,6 +1486,112 @@ describe('#overrideWorkItemSla (RA-131)', () => {
       ok: false,
       reason: 'network',
       message: 'connection refused'
+    })
+  })
+})
+
+describe('#raiseWorkItemQuery (RA-291)', () => {
+  const call = (fetchImpl, extra = {}) =>
+    raiseWorkItemQuery({
+      workItemId: 'wi-1',
+      sections: ['business-plan', 'prn-tonnage'],
+      reason: 'Please clarify',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      ...extra
+    })
+
+  test('POSTs sections and reason to the module-scoped query endpoint', async () => {
+    const workItem = { id: 'wi-1', stateId: 'queried' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await call(fetchImpl)
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi-1/query',
+      expect.objectContaining({
+        method: 'POST',
+        signal: expect.any(AbortSignal)
+      })
+    )
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(JSON.parse(init.body)).toEqual({
+      sections: ['business-plan', 'prn-tonnage'],
+      reason: 'Please clarify'
+    })
+    // The backend resolves the transition itself — no action id is sent.
+    expect(init.body).not.toContain('actionId')
+    expect(init.headers['content-type']).toBe('application/json')
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test.each([
+    [400, 'invalid'],
+    [401, 'unauthorized'],
+    [403, 'not-authorized'],
+    [404, 'not-found'],
+    [409, 'not-allowed'],
+    [422, 'invalid'],
+    [500, 'server']
+  ])('maps HTTP %i to reason %s', async (status, reason) => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status,
+      json: () => Promise.resolve({ detail: 'nope' })
+    })
+
+    const result = await call(fetchImpl)
+
+    expect(result).toEqual({ ok: false, reason, status, message: 'nope' })
+  })
+
+  test('falls back to the problem title then a generic message', async () => {
+    const withTitle = await call(
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({ title: 'Conflict' })
+      })
+    )
+    expect(withTitle.message).toBe('Conflict')
+
+    const withNoBody = await call(
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: () => Promise.reject(new Error('not json'))
+      })
+    )
+    expect(withNoBody.message).toBe('Backend returned 409')
+  })
+
+  test('returns reason=network when fetch throws', async () => {
+    const result = await call(
+      vi.fn().mockRejectedValue(new Error('connection refused'))
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'connection refused'
+    })
+  })
+
+  test('returns a timeout message when the request aborts', async () => {
+    const abortError = new Error('aborted')
+    abortError.name = 'AbortError'
+
+    const result = await call(vi.fn().mockRejectedValue(abortError))
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'Request timed out'
     })
   })
 })

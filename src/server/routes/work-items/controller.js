@@ -248,6 +248,10 @@ const STATE_TAG_CLASSES = {
   submitted: 'govuk-tag--blue',
   'assessment-in-progress': 'govuk-tag--light-blue',
   'awaiting-decision': 'govuk-tag--yellow',
+  // RA-291. Orange reads as "paused, awaiting someone else" — distinct
+  // from the blue/light-blue in-flight states, the yellow decision state
+  // and the grey terminal withdrawn.
+  queried: 'govuk-tag--orange',
   approved: 'govuk-tag--green',
   rejected: 'govuk-tag--red',
   withdrawn: 'govuk-tag--grey'

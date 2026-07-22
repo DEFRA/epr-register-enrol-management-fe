@@ -8,6 +8,7 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   assignWorkItem: vi.fn(),
   unassignWorkItem: vi.fn(),
   getBackendHealth: vi.fn(),
+  raiseWorkItemQuery: vi.fn(),
   getWorkItem: vi.fn(),
   getWorkItems: vi.fn(),
   completeWorkItemTask: vi.fn(),

@@ -10,6 +10,7 @@ import {
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getBackendHealth: vi.fn(),
+  raiseWorkItemQuery: vi.fn(),
   getWorkItem: vi.fn(),
   getWorkItems: vi.fn(),
   completeWorkItemTask: vi.fn(),
@@ -339,6 +340,7 @@ describe('#workItemListController', () => {
           displayName: 'Assessment in progress'
         },
         { id: 'awaiting-decision', displayName: 'Awaiting decision' },
+        { id: 'queried', displayName: 'Queried' },
         { id: 'approved', displayName: 'Approved' },
         { id: 'rejected', displayName: 'Rejected' },
         { id: 'withdrawn', displayName: 'Withdrawn' }
@@ -351,6 +353,7 @@ describe('#workItemListController', () => {
           { stateId: 'submitted' },
           { stateId: 'assessment-in-progress' },
           { stateId: 'awaiting-decision' },
+          { stateId: 'queried' },
           { stateId: 'approved' },
           { stateId: 'rejected' },
           { stateId: 'withdrawn' },
@@ -363,7 +366,7 @@ describe('#workItemListController', () => {
           payload: {},
           ...s
         })),
-        totalCount: 7
+        totalCount: 8
       })
     )
 
@@ -376,6 +379,7 @@ describe('#workItemListController', () => {
       'govuk-tag--blue',
       'govuk-tag--light-blue',
       'govuk-tag--yellow',
+      'govuk-tag--orange',
       'govuk-tag--green',
       'govuk-tag--red',
       'govuk-tag--grey'

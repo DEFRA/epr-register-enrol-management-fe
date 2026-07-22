@@ -1,5 +1,6 @@
 import { workItemListController } from './controller.js'
 import { workItemApplicationDetailsController } from './application-details.controller.js'
+import { workItemDownloadFileController } from './download-file.controller.js'
 import {
   makeApplyActionController,
   makeAssignController,
@@ -21,6 +22,10 @@ import {
   makeShowWithdrawController,
   makeSubmitWithdrawController
 } from './withdraw.controller.js'
+import {
+  makeShowQueryController,
+  makeSubmitQueryController
+} from './query.controller.js'
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
@@ -52,6 +57,14 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}/application-details',
           ...workItemApplicationDetailsController
+        },
+        {
+          // Sampling-plan file download — direct S3 stream-through, gated
+          // on the same work-item tenancy check as application-details
+          // (enforced by the backend via getWorkItem, not re-implemented here).
+          method: 'GET',
+          path: '/work-items/{id}/files/{fileId}/download',
+          ...workItemDownloadFileController
         },
         {
           // RA-97. Standalone audit log page so the detail view stays
@@ -99,6 +112,26 @@ export const workItems = {
           method: 'POST',
           path: '/work-items/{id}/actions/{actionId}/confirm',
           ...makeSubmitWithdrawController()
+        },
+        {
+          // RA-291. Query an application: the caseworker picks the areas
+          // to unlock and gives a reason. The backend resolves the state
+          // transition itself, so no action id is sent.
+          method: 'GET',
+          path: '/work-items/{id}/query',
+          ...makeShowQueryController()
+        },
+        {
+          method: 'POST',
+          path: '/work-items/{id}/query',
+          options: {
+            payload: {
+              parse: true,
+              allow: 'application/x-www-form-urlencoded',
+              maxBytes: 32 * 1024
+            }
+          },
+          ...makeSubmitQueryController()
         },
         {
           // RA-323: assign / re-assign / self-assign are available to any
