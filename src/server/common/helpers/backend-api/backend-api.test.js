@@ -673,7 +673,9 @@ describe('#assignWorkItem', () => {
         })
       })
     )
-    expect(fetchImpl.mock.calls[0][1].headers['x-cdp-user-roles']).toBeUndefined()
+    expect(
+      fetchImpl.mock.calls[0][1].headers['x-cdp-user-roles']
+    ).toBeUndefined()
     expect(result).toEqual({ ok: true, workItem })
   })
 

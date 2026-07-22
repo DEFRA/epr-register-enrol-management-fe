@@ -55,14 +55,9 @@ describe('signRequestHeaders', () => {
       nonce
     })
 
-    const expectedPayload = [
-      'v3',
-      'frontend',
-      '',
-      '',
-      timestamp,
-      nonce
-    ].join('\n')
+    const expectedPayload = ['v3', 'frontend', '', '', timestamp, nonce].join(
+      '\n'
+    )
     const expectedSig = createHmac('sha256', SECRET)
       .update(expectedPayload, 'utf8')
       .digest('base64')
