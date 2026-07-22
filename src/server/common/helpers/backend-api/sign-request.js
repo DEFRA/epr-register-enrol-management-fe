@@ -9,9 +9,13 @@ const SIGNATURE_HEADER = 'x-cdp-auth-signature'
 /**
  * Adds HMAC-SHA256 auth headers to an already-assembled outbound header map.
  *
- * The canonical payload (v2 prefix + identity fields + timestamp + nonce)
+ * The canonical payload (v3 prefix + identity fields + timestamp + nonce)
  * lets the backend verify the trust headers originated from this BFF.
  * Returns an empty object when no shared secret is configured (local dev).
+ *
+ * v3 dropped the role-membership field carried by v2 — authorization is
+ * entirely this BFF's concern now, so role membership is never forwarded
+ * to the backend (see epr-register-enrol-management-be ADR-0005).
  *
  * @param {Record<string,string>} headers - assembled outbound headers
  * @param {object} [opts]
@@ -32,11 +36,10 @@ export function signRequestHeaders(
   }
 
   const payload = [
-    'v2',
+    'v3',
     headers['x-cdp-cognito-client-id'] ?? '',
     headers['x-cdp-user-id'] ?? '',
     headers['x-cdp-user-name'] ?? '',
-    headers['x-cdp-user-roles'] ?? '',
     timestamp,
     nonce
   ].join('\n')
