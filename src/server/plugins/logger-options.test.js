@@ -32,7 +32,7 @@ describe('production log redaction (epr-zld)', () => {
             cookie: 'session=abc',
             'x-cdp-user-id': 'u-1',
             'x-cdp-user-name': 'Alice Example',
-            'x-cdp-user-roles': 'standard,case-worker',
+            'x-cdp-cognito-client-id': 'frontend',
             'x-cdp-request-id': 'trace-123'
           }
         }
@@ -45,8 +45,8 @@ describe('production log redaction (epr-zld)', () => {
     expect(out.req.headers).not.toHaveProperty('x-cdp-user-name')
     expect(out.req.headers).not.toHaveProperty('authorization')
     expect(out.req.headers).not.toHaveProperty('cookie')
-    // Non-sensitive headers (roles list, trace id) are preserved.
-    expect(out.req.headers['x-cdp-user-roles']).toBe('standard,case-worker')
+    // Non-sensitive headers (service client id, trace id) are preserved.
+    expect(out.req.headers['x-cdp-cognito-client-id']).toBe('frontend')
     expect(out.req.headers['x-cdp-request-id']).toBe('trace-123')
   })
 })

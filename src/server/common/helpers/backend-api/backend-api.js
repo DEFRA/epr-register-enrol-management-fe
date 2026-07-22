@@ -409,9 +409,9 @@ export async function applyWorkItemAction({
 }
 
 /**
- * Assign (or re-assign) a work item to a user. The backend enforces the
- * role-based rules; this client just forwards the request and the acting
- * user's identity / roles.
+ * Assign (or re-assign) a work item to a user. Authorization (who is
+ * allowed to assign what) is this BFF's responsibility, not the backend's
+ * — this client just forwards the request and the acting user's identity.
  *
  * Same response shape as {@link completeWorkItemTask}, with the addition
  * that a 403 reaches the caller as `{ ok: false, status: 403, problem }` —
@@ -489,10 +489,11 @@ export async function addWorkItemNote({
  * (RA-132).
  *
  * Wraps `POST /work-items/re-accreditation/{id}/approve` on the backend.
- * No request body. The backend enforces actor identity, decision-maker
- * role membership, tenant filtering and the `assessment-in-progress`
- * state precondition; this client just forwards the call and the acting
- * user's identity / roles via the standard headers.
+ * No request body. The backend enforces actor identity and the
+ * `assessment-in-progress` state precondition; decision-maker role
+ * membership and tenant scoping are this BFF's responsibility, not the
+ * backend's. This client just forwards the call and the acting user's
+ * identity via the standard headers.
  *
  * Result shape mirrors {@link createWorkItem}:
  *  - 200 → { ok: true, workItem }
