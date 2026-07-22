@@ -25,6 +25,12 @@ const STATES = [
   { id: 'duly-made', displayName: 'Duly made' },
   { id: 'assessment-in-progress', displayName: 'Assessment in progress' },
   { id: 'awaiting-decision', displayName: 'Awaiting decision' },
+  // RA-211 / RA-291. Deliberately NOT terminal: a queried application is
+  // paused awaiting the operator's resubmission, after which it re-enters
+  // assessment. Added here so the state label resolves — the detail view,
+  // the cross-type list and the audit log all read display names from
+  // this array, and an unknown id falls back to the raw lowercase id.
+  { id: 'queried', displayName: 'Queried' },
   { id: 'approved', displayName: 'Approved', isTerminal: true },
   { id: 'rejected', displayName: 'Rejected', isTerminal: true },
   { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
@@ -138,7 +144,10 @@ const TASKS_BY_STATE = {
 export const reAccreditationType = {
   id: 're-accreditation',
   displayName: 'Re-accreditation',
-  templateVersion: 'v5',
+  // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
+  // the value actually stamped onto work items. Keep the two in lock-step
+  // and add the matching entry to the detail-template map below.
+  templateVersion: 'v6',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS,
@@ -155,12 +164,24 @@ export const reAccreditationModule = {
     // other UI for this type goes through the framework's generic routes.
     // v2: added duly-made state; v3: notify hook; v4: SLA clock
     // v5: removed duly-make action (auto-transition on task completion)
+    // v6: RA-291 query-during-* transitions + queried state
+    //
+    // ⚠ THIS MAP MUST GAIN AN ENTRY WHENEVER THE BACKEND BUMPS
+    // `ReAccreditationType.TemplateVersion`. The backend stamps its
+    // version onto every work item at submission and the framework
+    // resolves the detail template by that stamped value — an
+    // unregistered version silently falls back to the GENERIC detail
+    // template, losing this type's approve CTA and actions panel with
+    // no error anywhere. `module.test.js` guards the current version;
+    // the older entries stay registered so historical items keep
+    // rendering exactly as they were assessed.
     registerModuleDetailTemplates('re-accreditation', {
       v1: 're-accreditation/detail-v1',
       v2: 're-accreditation/detail-v1',
       v3: 're-accreditation/detail-v1',
       v4: 're-accreditation/detail-v1',
-      v5: 're-accreditation/detail-v1'
+      v5: 're-accreditation/detail-v1',
+      v6: 're-accreditation/detail-v1'
     })
 
     // RA-132. Approve-determination flow: confirmation interstitial + POST

@@ -22,6 +22,10 @@ import {
   makeShowWithdrawController,
   makeSubmitWithdrawController
 } from './withdraw.controller.js'
+import {
+  makeShowQueryController,
+  makeSubmitQueryController
+} from './query.controller.js'
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
@@ -108,6 +112,26 @@ export const workItems = {
           method: 'POST',
           path: '/work-items/{id}/actions/{actionId}/confirm',
           ...makeSubmitWithdrawController()
+        },
+        {
+          // RA-291. Query an application: the caseworker picks the areas
+          // to unlock and gives a reason. The backend resolves the state
+          // transition itself, so no action id is sent.
+          method: 'GET',
+          path: '/work-items/{id}/query',
+          ...makeShowQueryController()
+        },
+        {
+          method: 'POST',
+          path: '/work-items/{id}/query',
+          options: {
+            payload: {
+              parse: true,
+              allow: 'application/x-www-form-urlencoded',
+              maxBytes: 32 * 1024
+            }
+          },
+          ...makeSubmitQueryController()
         },
         {
           // RA-323: assign / re-assign / self-assign are available to any

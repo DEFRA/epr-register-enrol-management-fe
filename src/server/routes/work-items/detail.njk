@@ -222,6 +222,14 @@
                    data-testid="action-sla-override"
                    href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
               </div>
+            {% elif action.actionId == 'query' or action.actionId.startsWith('query-') %}
+              {# RA-291. Query is a secondary affordance: a link, not a    #}
+              {# button, sitting alongside Withdraw beneath the primary    #}
+              {# action. The dedicated page collects the sections and the  #}
+              {# reason before anything is sent.                           #}
+              <a class="govuk-link"
+                 data-testid="action-query"
+                 href="/work-items/{{ workItem.id }}/query">Query</a>
             {% elif action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
               {# RA-188. Withdraw goes through a confirmation interstitial    #}
               {# so the user can confirm or back out.                         #}

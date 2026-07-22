@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v5')
+    expect(reAccreditationType.templateVersion).toBe('v6')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -35,6 +35,26 @@ describe('reAccreditationModule', () => {
     expect(states.submitted.isTerminal).toBeFalsy()
     expect(states['assessment-in-progress'].isTerminal).toBeFalsy()
     expect(states['awaiting-decision'].isTerminal).toBeFalsy()
+    // RA-291: a queried application is paused awaiting the operator's
+    // resubmission, so it must stay non-terminal.
+    expect(states.queried.isTerminal).toBeFalsy()
+  })
+
+  test('declares the queried state so its label resolves (RA-211/RA-291)', () => {
+    const queried = reAccreditationType.states.find((s) => s.id === 'queried')
+
+    expect(queried).toBeDefined()
+    expect(queried.displayName).toBe('Queried')
+  })
+
+  test('every state declares a non-empty display name', () => {
+    // Guards the class of bug RA-291 hit: a state present in the backend
+    // but missing here renders as its raw lowercase id.
+    for (const state of reAccreditationType.states) {
+      expect(state.displayName).toEqual(expect.any(String))
+      expect(state.displayName.trim()).not.toBe('')
+      expect(state.displayName).not.toBe(state.id)
+    }
   })
 
   test.each([
@@ -99,11 +119,14 @@ describe('reAccreditationModule', () => {
     }
   )
 
-  test('register registers detail templates for all versions (v1–v5) resolvable from the framework', async () => {
+  test('register registers a detail template for every version up to the declared current one', async () => {
     // Resolve falls back to the generic detail before register runs.
-    expect(resolveDetailTemplate('re-accreditation', 'v5')).toBe(
-      'work-items/detail'
-    )
+    expect(
+      resolveDetailTemplate(
+        're-accreditation',
+        reAccreditationType.templateVersion
+      )
+    ).toBe('work-items/detail')
 
     const server = hapi.server()
     // The bare hapi server has no auth strategy, so wire up a permissive
@@ -124,8 +147,25 @@ describe('reAccreditationModule', () => {
       config.set(flagKey, previous)
     }
 
-    for (const version of ['v1', 'v2', 'v3', 'v4', 'v5']) {
-      expect(resolveDetailTemplate('re-accreditation', version)).toBe(
+    // The guard that would have caught RA-291's regression: the version
+    // this type currently declares — which mirrors the backend's
+    // `ReAccreditationType.TemplateVersion` and is what gets stamped onto
+    // every new work item — MUST have a registered type-specific
+    // template. An unregistered version silently falls back to the
+    // generic detail view, losing the approve CTA and actions panel with
+    // no error raised anywhere.
+    const current = reAccreditationType.templateVersion
+    expect(resolveDetailTemplate('re-accreditation', current)).toBe(
+      're-accreditation/detail-v1'
+    )
+
+    // And no gaps below it: every historical version must still resolve
+    // so items assessed under an older template keep rendering as they
+    // were assessed.
+    const currentNumber = Number(current.replace(/^v/, ''))
+    expect(currentNumber).toBeGreaterThanOrEqual(1)
+    for (let n = 1; n <= currentNumber; n++) {
+      expect(resolveDetailTemplate('re-accreditation', `v${n}`)).toBe(
         're-accreditation/detail-v1'
       )
     }
