@@ -601,7 +601,7 @@ describe('#getWorkItem', () => {
 })
 
 describe('#getWorkItems user identity headers', () => {
-  test('Forwards x-cdp-user-id, name, and roles when a user is supplied', async () => {
+  test('Forwards x-cdp-user-id and name, but not roles, when a user is supplied', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -619,10 +619,7 @@ describe('#getWorkItems user identity headers', () => {
     const headers = fetchImpl.mock.calls[0][1].headers
     expect(headers['x-cdp-user-id']).toBe('u-1')
     expect(headers['x-cdp-user-name']).toBe('Alice')
-    // The BFF always asserts the backend `case-worker` role on outbound
-    // calls — anyone signed into the case-management portal IS a case
-    // worker — independent of the BFF-level scopes.
-    expect(headers['x-cdp-user-roles']).toBe('standard,assign,case-worker')
+    expect(headers['x-cdp-user-roles']).toBeUndefined()
   })
 
   test('Encodes assigneeId and unassigned filters into the query string', async () => {
@@ -673,11 +670,13 @@ describe('#assignWorkItem', () => {
         body: JSON.stringify({ assigneeId: 'u-2', assigneeName: 'Bob' }),
         headers: expect.objectContaining({
           'content-type': 'application/json',
-          'x-cdp-user-id': 'u-1',
-          'x-cdp-user-roles': 'assign,case-worker'
+          'x-cdp-user-id': 'u-1'
         })
       })
     )
+    expect(
+      fetchImpl.mock.calls[0][1].headers['x-cdp-user-roles']
+    ).toBeUndefined()
     expect(result).toEqual({ ok: true, workItem })
   })
 
@@ -863,25 +862,6 @@ describe('#buildHeaders header injection guards (epr-zld)', () => {
     expect(result.error).toMatch(/CR or LF/)
   })
 
-  test('Rejects an array of roles where one entry contains CR', async () => {
-    const fetchImpl = vi.fn()
-
-    const result = await getWorkItems({
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl,
-      user: {
-        id: 'u-1',
-        name: 'Alice',
-        roles: ['standard', 'assign\r\nX-Injected: yes']
-      }
-    })
-
-    expect(fetchImpl).not.toHaveBeenCalled()
-    expect(result.ok).toBe(false)
-    expect(result.error).toMatch(/CR or LF/)
-  })
-
   test('A clean user passes through and headers are forwarded', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
@@ -902,7 +882,7 @@ describe('#buildHeaders header injection guards (epr-zld)', () => {
     const headers = fetchImpl.mock.calls[0][1].headers
     expect(headers['x-cdp-user-id']).toBe('u-1')
     expect(headers['x-cdp-user-name']).toBe('Alice')
-    expect(headers['x-cdp-user-roles']).toBe('standard,case-worker')
+    expect(headers['x-cdp-user-roles']).toBeUndefined()
   })
 })
 
@@ -935,7 +915,7 @@ describe('#createWorkItem (RA-127, RA-219)', () => {
     expect(init.headers['accept']).toBe('application/json')
     expect(init.headers['content-type']).toBe('application/json')
     expect(init.headers['x-cdp-user-id']).toBe('u-1')
-    expect(init.headers['x-cdp-user-roles']).toBe('standard,case-worker')
+    expect(init.headers['x-cdp-user-roles']).toBeUndefined()
     // RA-219: the BFF never sends an applicationReference; the backend
     // generates it server-side.
     const sentBody = JSON.parse(init.body)

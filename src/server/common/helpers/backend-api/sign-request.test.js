@@ -10,8 +10,7 @@ describe('signRequestHeaders', () => {
     const headers = {
       'x-cdp-cognito-client-id': 'frontend',
       'x-cdp-user-id': 'user-123',
-      'x-cdp-user-name': 'Alice Example',
-      'x-cdp-user-roles': 'standard,case-worker'
+      'x-cdp-user-name': 'Alice Example'
     }
     const timestamp = '2026-05-18T10:00:00Z'
     const nonce = 'abc123def456ghi7'
@@ -23,11 +22,10 @@ describe('signRequestHeaders', () => {
     })
 
     const expectedPayload = [
-      'v2',
+      'v3',
       'frontend',
       'user-123',
       'Alice Example',
-      'standard,case-worker',
       timestamp,
       nonce
     ].join('\n')
@@ -40,9 +38,9 @@ describe('signRequestHeaders', () => {
     expect(result['x-cdp-auth-signature']).toBe(expectedSig)
     // Hard-coded reference value guards against systematic payload reordering
     // bugs that would change both sides of the dynamic assertion equally.
-    // Computed with: printf 'v2\n...' | openssl dgst -sha256 -hmac '...' -binary | base64
+    // Computed with: printf 'v3\n...' | openssl dgst -sha256 -hmac '...' -binary | base64
     expect(result['x-cdp-auth-signature']).toBe(
-      'npHjUO2Pha5yBjDzKloEXodqx8oJMPMCOtKQRS2fYtE='
+      '1kJl6yZuv2+UeuyUZxjM0wqCAoi9x092HnWdP3+AkEU='
     )
   })
 
@@ -57,15 +55,9 @@ describe('signRequestHeaders', () => {
       nonce
     })
 
-    const expectedPayload = [
-      'v2',
-      'frontend',
-      '',
-      '',
-      '',
-      timestamp,
-      nonce
-    ].join('\n')
+    const expectedPayload = ['v3', 'frontend', '', '', timestamp, nonce].join(
+      '\n'
+    )
     const expectedSig = createHmac('sha256', SECRET)
       .update(expectedPayload, 'utf8')
       .digest('base64')

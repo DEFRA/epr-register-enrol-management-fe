@@ -9,18 +9,10 @@ const logger = createLogger()
 const COGNITO_CLIENT_ID_HEADER = 'x-cdp-cognito-client-id'
 const USER_ID_HEADER = 'x-cdp-user-id'
 const USER_NAME_HEADER = 'x-cdp-user-name'
-const USER_ROLES_HEADER = 'x-cdp-user-roles'
-
-// Backend-side role that bypasses the per-tenant submittedBy filter. The
-// case-management FE is, by definition, a case-worker portal — anyone who
-// has authenticated into this BFF is a case worker — so we always forward
-// it. This is independent of the FE-level scopes (`standard`, `assign`)
-// which still drive UI gating inside the BFF.
-const BACKEND_CASE_WORKER_ROLE = 'case-worker'
 
 /**
  * Defence-in-depth guard against HTTP header injection (CRLF). User-supplied
- * data (id, name, roles) flows from the session into outbound headers via
+ * data (id, name) flows from the session into outbound headers via
  * {@link buildHeaders}; undici will normally reject CR/LF in header values
  * but we must not rely on that as our only defence. Throws fast on any
  * non-string or any string containing CR or LF so the request fails before
@@ -46,8 +38,10 @@ export function assertSafeHeaderValue(value) {
  * Build the headers attached to every backend call. The Cognito client id
  * identifies the BFF *as a service* and is required (CDP itself adds it on
  * service-to-service calls); the optional user-* headers forward the
- * acting end-user's identity and role membership so the backend can make
- * role-based decisions and produce useful audit lines.
+ * acting end-user's identity for audit attribution. Authorization is not
+ * one of the backend's concerns — it trusts any caller that can produce a
+ * validly-signed request and defers all access decisions to this BFF, so
+ * role membership is not forwarded.
  *
  * Every forwarded value is run through {@link assertSafeHeaderValue} so a
  * malicious session payload cannot smuggle additional headers via CRLF.
@@ -70,14 +64,6 @@ function buildHeaders(extra = {}, user = null) {
       assertSafeHeaderValue(name)
       headers[USER_NAME_HEADER] = name
     }
-    const roles = Array.isArray(user.roles) ? user.roles.map(String) : []
-    if (!roles.includes(BACKEND_CASE_WORKER_ROLE)) {
-      roles.push(BACKEND_CASE_WORKER_ROLE)
-    }
-    for (const role of roles) {
-      assertSafeHeaderValue(role)
-    }
-    headers[USER_ROLES_HEADER] = roles.join(',')
   }
   return { ...headers, ...signRequestHeaders(headers) }
 }
@@ -423,9 +409,9 @@ export async function applyWorkItemAction({
 }
 
 /**
- * Assign (or re-assign) a work item to a user. The backend enforces the
- * role-based rules; this client just forwards the request and the acting
- * user's identity / roles.
+ * Assign (or re-assign) a work item to a user. Authorization (who is
+ * allowed to assign what) is this BFF's responsibility, not the backend's
+ * — this client just forwards the request and the acting user's identity.
  *
  * Same response shape as {@link completeWorkItemTask}, with the addition
  * that a 403 reaches the caller as `{ ok: false, status: 403, problem }` —
@@ -503,10 +489,11 @@ export async function addWorkItemNote({
  * (RA-132).
  *
  * Wraps `POST /work-items/re-accreditation/{id}/approve` on the backend.
- * No request body. The backend enforces actor identity, decision-maker
- * role membership, tenant filtering and the `assessment-in-progress`
- * state precondition; this client just forwards the call and the acting
- * user's identity / roles via the standard headers.
+ * No request body. The backend enforces actor identity and the
+ * `assessment-in-progress` state precondition; decision-maker role
+ * membership and tenant scoping are this BFF's responsibility, not the
+ * backend's. This client just forwards the call and the acting user's
+ * identity via the standard headers.
  *
  * Result shape mirrors {@link createWorkItem}:
  *  - 200 → { ok: true, workItem }
