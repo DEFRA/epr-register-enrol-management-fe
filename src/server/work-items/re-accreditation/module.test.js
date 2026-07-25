@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v6')
+    expect(reAccreditationType.templateVersion).toBe('v8')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -38,6 +38,9 @@ describe('reAccreditationModule', () => {
     // RA-291: a queried application is paused awaiting the operator's
     // resubmission, so it must stay non-terminal.
     expect(states.queried.isTerminal).toBeFalsy()
+    // RA-337: a resumed-but-not-yet-reviewed application is a checkpoint,
+    // not an outcome, so it must stay non-terminal too.
+    expect(states.updated.isTerminal).toBeFalsy()
   })
 
   test('declares the queried state so its label resolves (RA-211/RA-291)', () => {
@@ -45,6 +48,16 @@ describe('reAccreditationModule', () => {
 
     expect(queried).toBeDefined()
     expect(queried.displayName).toBe('Queried')
+  })
+
+  test('declares the updated state so its label resolves (RA-337)', () => {
+    // Guards the same class of bug as RA-211/RA-291: without this entry,
+    // `stateDisplayName` falls back to the raw id and a resumed item would
+    // show lowercase "updated" instead of "Updated" in CM.
+    const updated = reAccreditationType.states.find((s) => s.id === 'updated')
+
+    expect(updated).toBeDefined()
+    expect(updated.displayName).toBe('Updated')
   })
 
   test('every state declares a non-empty display name', () => {
