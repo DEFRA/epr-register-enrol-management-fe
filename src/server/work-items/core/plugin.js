@@ -1,6 +1,9 @@
 import { clearWorkItemRegistry, registerWorkItemType } from './registry.js'
 import { assertValidWorkItemModule } from './module.js'
-import { clearDetailTemplateRegistry } from './templates.js'
+import {
+  assertCurrentTemplateVersionIsRegistered,
+  clearDetailTemplateRegistry
+} from './templates.js'
 
 /**
  * Hapi plugin that registers a list of work item modules with the server.
@@ -29,6 +32,13 @@ export const workItemsPlugin = (modules) => ({
         assertValidWorkItemModule(mod)
         registerWorkItemType(mod.type)
         await mod.register(server)
+        // Catches backend/frontend template-version drift at boot rather
+        // than as a missing "View full application details" link someone
+        // eventually notices in production.
+        assertCurrentTemplateVersionIsRegistered(
+          mod.type.id,
+          mod.type.templateVersion
+        )
       }
     }
   }

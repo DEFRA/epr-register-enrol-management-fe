@@ -31,6 +31,12 @@ const STATES = [
   // the cross-type list and the audit log all read display names from
   // this array, and an unknown id falls back to the raw lowercase id.
   { id: 'queried', displayName: 'Queried' },
+  // RA-337. Deliberately NOT terminal: a resubmitted-but-not-yet-reviewed
+  // application lands here (instead of jumping straight back to the state
+  // it was queried from) so the state label resolves rather than falling
+  // back to the raw id — see the RA-291 comment above for the class of bug
+  // this guards against.
+  { id: 'updated', displayName: 'Updated' },
   { id: 'approved', displayName: 'Approved', isTerminal: true },
   { id: 'rejected', displayName: 'Rejected', isTerminal: true },
   { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
@@ -147,7 +153,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v6',
+  templateVersion: 'v8',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS,
@@ -165,6 +171,9 @@ export const reAccreditationModule = {
     // v2: added duly-made state; v3: notify hook; v4: SLA clock
     // v5: removed duly-make action (auto-transition on task completion)
     // v6: RA-291 query-during-* transitions + queried state
+    // v7: RA-311/MBE-1 resume-during-* transitions out of queried
+    // v8: RA-337 resume-during-* now lands on the new 'updated' state,
+    //     plus continue-review-during-* transitions out of it
     //
     // ⚠ THIS MAP MUST GAIN AN ENTRY WHENEVER THE BACKEND BUMPS
     // `ReAccreditationType.TemplateVersion`. The backend stamps its
@@ -172,16 +181,20 @@ export const reAccreditationModule = {
     // resolves the detail template by that stamped value — an
     // unregistered version silently falls back to the GENERIC detail
     // template, losing this type's approve CTA and actions panel with
-    // no error anywhere. `module.test.js` guards the current version;
-    // the older entries stay registered so historical items keep
-    // rendering exactly as they were assessed.
+    // no error anywhere. `module.test.js` guards the current version,
+    // and the framework itself asserts this at boot (see
+    // `assertCurrentTemplateVersionIsRegistered` in `core/templates.js`,
+    // invoked from `core/plugin.js`); the older entries stay registered
+    // so historical items keep rendering exactly as they were assessed.
     registerModuleDetailTemplates('re-accreditation', {
       v1: 're-accreditation/detail-v1',
       v2: 're-accreditation/detail-v1',
       v3: 're-accreditation/detail-v1',
       v4: 're-accreditation/detail-v1',
       v5: 're-accreditation/detail-v1',
-      v6: 're-accreditation/detail-v1'
+      v6: 're-accreditation/detail-v1',
+      v7: 're-accreditation/detail-v1',
+      v8: 're-accreditation/detail-v1'
     })
 
     // RA-132. Approve-determination flow: confirmation interstitial + POST

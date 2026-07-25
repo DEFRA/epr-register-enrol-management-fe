@@ -7,6 +7,10 @@ import {
   getWorkItemType,
   getWorkItemTypes
 } from './registry.js'
+import {
+  clearDetailTemplateRegistry,
+  registerModuleDetailTemplates
+} from './templates.js'
 
 const buildModule = (id, registerSpy = vi.fn()) => ({
   type: {
@@ -24,7 +28,10 @@ const buildModule = (id, registerSpy = vi.fn()) => ({
 const newServer = () => hapi.server()
 
 describe('workItemsPlugin', () => {
-  beforeEach(() => clearWorkItemRegistry())
+  beforeEach(() => {
+    clearWorkItemRegistry()
+    clearDetailTemplateRegistry()
+  })
 
   test('registers each module type and invokes its register callback with the server', async () => {
     const server = newServer()
@@ -91,5 +98,25 @@ describe('workItemsPlugin', () => {
         workItemsPlugin([buildModule('alpha'), buildModule('alpha')])
       )
     ).rejects.toThrow(/already registered/)
+  })
+
+  test('throws when a module registers detail templates but not for its own declared templateVersion', async () => {
+    const server = newServer()
+    const module = {
+      type: { ...buildModule('drifted').type, templateVersion: 'v2' },
+      register: async () => {
+        registerModuleDetailTemplates('drifted', { v1: 'drifted/detail-v1' })
+      }
+    }
+
+    await expect(server.register(workItemsPlugin([module]))).rejects.toThrow(
+      /declares templateVersion "v2"/
+    )
+  })
+
+  test('does not throw when a module never registers a bespoke detail template', async () => {
+    const server = newServer()
+    await server.register(workItemsPlugin([buildModule('generic-only')]))
+    expect(getWorkItemTypes().map((t) => t.id)).toEqual(['generic-only'])
   })
 })
