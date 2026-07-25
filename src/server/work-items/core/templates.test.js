@@ -1,6 +1,7 @@
 import { describe, expect, test, beforeEach } from 'vitest'
 
 import {
+  assertCurrentTemplateVersionIsRegistered,
   clearDetailTemplateRegistry,
   registerDetailTemplate,
   registerModuleDetailTemplates,
@@ -75,5 +76,36 @@ describe('#detail template registry', () => {
       /templateVersion/
     )
     expect(() => registerDetailTemplate('t', 'v1', '')).toThrow(/non-empty/)
+  })
+
+  describe('assertCurrentTemplateVersionIsRegistered', () => {
+    test('does not throw when the declared version is registered', () => {
+      registerModuleDetailTemplates('re-accreditation', {
+        v1: 're-accreditation/detail-v1',
+        v2: 're-accreditation/detail-v1'
+      })
+
+      expect(() =>
+        assertCurrentTemplateVersionIsRegistered('re-accreditation', 'v2')
+      ).not.toThrow()
+    })
+
+    test('throws when the type has registered templates but not for the declared version', () => {
+      registerModuleDetailTemplates('re-accreditation', {
+        v1: 're-accreditation/detail-v1'
+      })
+
+      expect(() =>
+        assertCurrentTemplateVersionIsRegistered('re-accreditation', 'v2')
+      ).toThrow(/declares templateVersion "v2"/)
+    })
+
+    test('does not throw for a type that has never registered a detail template', () => {
+      // A brand-new type with no bespoke UI yet is a deliberate choice to
+      // rely on the generic fallback, not drift — it must not trip the guard.
+      expect(() =>
+        assertCurrentTemplateVersionIsRegistered('brand-new-type', 'v1')
+      ).not.toThrow()
+    })
   })
 })

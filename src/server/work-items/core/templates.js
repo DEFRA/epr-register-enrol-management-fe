@@ -76,3 +76,37 @@ export function registerModuleDetailTemplates(
 export function clearDetailTemplateRegistry() {
   templates.clear()
 }
+
+/**
+ * Boot-time guard against the "bumped templateVersion but forgot the
+ * registry entry" class of bug (RA-291, and its recurrence at v7/v8):
+ * `resolveDetailTemplate` fails *silently*, falling back to the generic
+ * template with no error anywhere, so nothing else catches this until
+ * someone notices missing UI in production.
+ *
+ * If a type has registered at least one detail template, its currently
+ * declared `templateVersion` must be one of them. Types that never
+ * register a detail template at all (relying entirely on the generic
+ * fallback) are exempt — that is a deliberate, supported choice, not
+ * drift.
+ */
+export function assertCurrentTemplateVersionIsRegistered(
+  typeId,
+  templateVersion
+) {
+  const prefix = `${typeId}::`
+  const hasAnyRegisteredTemplate = Array.from(templates.keys()).some((k) =>
+    k.startsWith(prefix)
+  )
+  if (!hasAnyRegisteredTemplate) {
+    return
+  }
+  if (!templates.has(key(typeId, templateVersion))) {
+    throw new Error(
+      `Work item type "${typeId}" declares templateVersion "${templateVersion}" ` +
+        'but no detail template is registered for it. Add an entry to its ' +
+        'registerModuleDetailTemplates(...) call — an unregistered version ' +
+        'silently falls back to the generic detail template.'
+    )
+  }
+}
