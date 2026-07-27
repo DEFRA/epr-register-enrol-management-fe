@@ -65,8 +65,13 @@ describe('#workItemListController', () => {
     // RA-324. The page is now titled "Applications" (the nav link stays
     // "Work items").
     expect(result).toEqual(expect.stringContaining('Applications |'))
+    // Empty state (no items AND no filters) shows main's two-line message
+    // (merged from feature/work-items-empty-state-message).
+    expect(result).toEqual(expect.stringContaining('No items to process.'))
     expect(result).toEqual(
-      expect.stringContaining('No work items have been submitted yet.')
+      expect.stringContaining(
+        'There are currently no work items to display. New items will appear here as they are received.'
+      )
     )
   })
 

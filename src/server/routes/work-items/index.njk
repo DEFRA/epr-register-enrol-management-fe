@@ -214,18 +214,19 @@
           text: error or "Unknown error"
         }) }}
       {% else %}
-        <p class="govuk-body" data-testid="work-items-summary">
-          {% if totalCount === 0 %}
-            {% if hasFilters %}
+        {% if totalCount === 0 and not hasFilters %}
+          <p class="govuk-body govuk-!-font-weight-bold govuk-!-margin-bottom-1" data-testid="work-items-empty-title">No items to process.</p>
+          <p class="govuk-hint" data-testid="work-items-empty-message">There are currently no work items to display. New items will appear here as they are received.</p>
+        {% else %}
+          <p class="govuk-body" data-testid="work-items-summary">
+            {% if totalCount === 0 %}
               No work items match your filters.
             {% else %}
-              No work items have been submitted yet.
+              Showing page <strong>{{ page }}</strong> of <strong>{{ totalPages }}</strong>
+              ({{ totalCount }} work item{% if totalCount != 1 %}s{% endif %}{% if filterSummary.description %} — {{ filterSummary.description }}{% endif %})
             {% endif %}
-          {% else %}
-            Showing page <strong>{{ page }}</strong> of <strong>{{ totalPages }}</strong>
-            ({{ totalCount }} work item{% if totalCount != 1 %}s{% endif %}{% if filterSummary.description %} — {{ filterSummary.description }}{% endif %})
-          {% endif %}
-        </p>
+          </p>
+        {% endif %}
 
         {% if items.length > 0 %}
           {# RA-324 phase-2. Applications render as cards matching the         #}
