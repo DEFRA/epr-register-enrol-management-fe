@@ -37,4 +37,8 @@ export function stateTagClass(stateId) {
   return STATE_TAG_CLASSES[stateId] ?? DEFAULT_STATE_TAG_CLASS
 }
 
+// Exported purely for testability — production code resolves colours via
+// `stateTagClass()` only. The unit test imports the raw map/default to assert
+// the full contract in one place and to guard against the retired colours
+// reappearing.
 export { STATE_TAG_CLASSES, DEFAULT_STATE_TAG_CLASS }

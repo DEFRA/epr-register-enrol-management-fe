@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 
-import { formatDate, formatDateTimeGds } from './format-date.js'
+import { formatDate, formatDateTimeGds, formatDateGds } from './format-date.js'
 
 describe('#formatDate', () => {
   beforeAll(() => {
@@ -149,5 +149,47 @@ describe('#formatDateTimeGds', () => {
         '25 October 2026 at 1:30am'
       )
     })
+  })
+})
+
+// ---------------------------------------------------------------- //
+// formatDateGds — GDS *date* format ("16 July 2026"), date only.   //
+// RA-324 "Submitted on" tile field.                                //
+// ---------------------------------------------------------------- //
+describe('#formatDateGds', () => {
+  test('Formats an ISO-8601 string as a GDS date (no time)', () => {
+    expect(formatDateGds('2026-01-15T10:00:00Z')).toBe('15 January 2026')
+  })
+
+  test('Formats a single-digit day without a leading zero', () => {
+    expect(formatDateGds('2026-02-01T09:05:00Z')).toBe('1 February 2026')
+  })
+
+  test('Accepts a Date object', () => {
+    expect(formatDateGds(new Date('2026-12-10T08:00:00Z'))).toBe(
+      '10 December 2026'
+    )
+  })
+
+  test('Converts a BST instant to UK local time, rolling over the date', () => {
+    // 23:30 UTC on 15 July is 00:30 BST (UTC+1) the next day.
+    expect(formatDateGds('2026-07-15T23:30:00Z')).toBe('16 July 2026')
+  })
+
+  test('Returns an empty string for a null value', () => {
+    expect(formatDateGds(null)).toBe('')
+  })
+
+  test('Returns an empty string for an undefined value', () => {
+    expect(formatDateGds(undefined)).toBe('')
+  })
+
+  test('Returns an empty string for an unparseable string (never throws)', () => {
+    // The guard uses the SAME parser (parseISO) it formats with, so a value
+    // that would throw in `format` is caught here instead — e.g. a US-style
+    // date that `new Date` would accept but `parseISO` rejects.
+    expect(formatDateGds('not-a-date')).toBe('')
+    expect(formatDateGds('01/15/2026')).toBe('')
+    expect(formatDateGds('January 15, 2026')).toBe('')
   })
 })

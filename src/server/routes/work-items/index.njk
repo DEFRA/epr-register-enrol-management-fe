@@ -245,7 +245,7 @@
                     {% if item.showSubmittedOn %}
                     <div class="govuk-summary-list__row">
                       <dt class="govuk-summary-list__key">Submitted on</dt>
-                      <dd class="govuk-summary-list__value" data-testid="submitted-on">{{ item.submittedOnFormatted or "—" }}</dd>
+                      <dd class="govuk-summary-list__value" data-testid="submitted-on">{{ item.submittedAt | formatDateGds or "—" }}</dd>
                     </div>
                     {% endif %}
                     <div class="govuk-summary-list__row">

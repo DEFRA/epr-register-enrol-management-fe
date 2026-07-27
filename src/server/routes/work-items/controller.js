@@ -5,7 +5,6 @@ import {
 } from '#/server/work-items/core/registry.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
 import { stateTagClass as resolveStateTagClass } from '#/server/work-items/core/state-badge.js'
-import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { config } from '#/config/config.js'
@@ -313,25 +312,14 @@ function decorate(item) {
     orgId: item.payload?.operatorOrganisationId ?? null,
     material: item.payload?.material ?? null,
     // RA-324. Submitted-on tile field (AC05.6): shown only before assessment
-    // starts, formatted to the GDS date standard (e.g. "16 July 2026").
+    // starts. The template formats the raw timestamp with the `formatDateGds`
+    // filter (GDS date standard, e.g. "16 July 2026"), so no controller-side
+    // formatting/double-parse is needed here.
     showSubmittedOn: !slaStarted,
-    submittedOnFormatted: formatSubmittedOn(item.submittedAt),
     // RA-324. Due-date tile field (AC05.8): shown only once the SLA clock
     // has started. Rendered from the existing SLA tag + remaining text.
     showDueDate: slaStarted
   }
-}
-
-/**
- * Format the submitted-on date to the GDS date standard ("16 July 2026").
- * Returns null when the value is absent or unparseable so the template can
- * fall back to an em dash rather than rendering "Invalid Date".
- */
-function formatSubmittedOn(value) {
-  if (!value) return null
-  const parsed = new Date(value)
-  if (isNaN(parsed.getTime())) return null
-  return formatDate(value, 'd MMMM yyyy')
 }
 
 /**

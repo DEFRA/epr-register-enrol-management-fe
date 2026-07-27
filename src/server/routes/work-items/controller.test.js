@@ -340,16 +340,52 @@ describe('#workItemListController', () => {
     expect(result).not.toContain('data-testid="submitted-on"')
   })
 
-  // RA-324. When the SLA clock has started but no SLA tag data is available
-  // (defensive), the Due date field still renders with an em dash rather than
-  // being dropped, and a missing Submitted-on date renders an em dash too.
-  test('Renders em dashes for a missing SLA tag and a missing submitted date', async () => {
+  // RA-324. When the SLA clock has started (slaState is truthy) but the value
+  // is not a recognised SLA_TAG key, there is no tag to render — the Due date
+  // cell must fall back to an em dash rather than being dropped. Using an
+  // UNRECOGNISED slaState (not a real SLA_TAG key like 'Breached') is what
+  // actually exercises the template's `{% else %}—{% endif %}` fallback.
+  test('Renders an em dash in the Due date cell for an unrecognised SLA state', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
           {
             id: 'eeeeeeee-1111-1111-1111-111111111111',
+            typeId: 'unknown-type',
+            stateId: 'assessment-in-progress',
+            submittedAt: null,
+            submittedBy: null,
+            slaState: 'Unknown',
+            slaRemaining: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    // SLA clock started => due-date field is present, but with no recognised
+    // tag the cell renders exactly an em dash.
+    expect(result).toContain('data-testid="due-date">—</dd>')
+    // Submitted-on is suppressed once the SLA clock has started.
+    expect(result).not.toContain('data-testid="submitted-on"')
+  })
+
+  // RA-324. Sanity: a recognised SLA state DOES render its tag in the cell,
+  // proving the previous test's em-dash is the fallback, not the default.
+  test('Renders the SLA tag (not an em dash) in the Due date cell for Breached', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'eeeeeeee-3333-3333-3333-333333333333',
             typeId: 'unknown-type',
             stateId: 'assessment-in-progress',
             submittedAt: null,
@@ -368,16 +404,15 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    // SLA clock started (slaState present) => due-date field is present...
     expect(result).toContain('data-testid="due-date"')
-    // ...and Breached renders its red tag (no "remaining" text for a breach).
+    // Breached renders its red tag (no "remaining" text for a breach).
     expect(result).toContain('Breached')
-    expect(result).not.toContain('data-testid="submitted-on"')
+    expect(result).not.toContain('data-testid="due-date">—</dd>')
   })
 
-  // RA-324. Guard the formatSubmittedOn null-guards: an unparseable
-  // submittedAt (SLA clock not started) must render an em dash, never
-  // "Invalid Date".
+  // RA-324. An unparseable submittedAt (SLA clock not started) must render an
+  // em dash, never "Invalid Date" — the `formatDateGds` filter returns '' for
+  // a bad value, which the template's `or "—"` turns into an em dash.
   test('Renders an em dash for an unparseable submitted date', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
