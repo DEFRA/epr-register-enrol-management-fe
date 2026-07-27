@@ -10,13 +10,14 @@ describe('#stateTagClass', () => {
   // RA-324 (AC08). The contract colour for every registered state id. This is
   // the single source of truth shared by the Applications list and the detail
   // page, so a drift here is a visible cross-page inconsistency.
+  // RA-324 phase-2 prototype colours (AC06 labels unchanged).
   test.each([
     ['submitted', 'govuk-tag--grey'],
-    ['duly-made', 'govuk-tag--blue'],
-    ['assessment-in-progress', 'govuk-tag--light-blue'],
-    ['awaiting-decision', 'govuk-tag--purple'],
+    ['duly-made', 'govuk-tag--purple'],
+    ['assessment-in-progress', 'govuk-tag--blue'],
+    ['awaiting-decision', 'govuk-tag--light-blue'],
     ['queried', 'govuk-tag--yellow'],
-    ['updated', 'govuk-tag--light-blue'],
+    ['updated', 'govuk-tag--blue'],
     ['approved', 'govuk-tag--green'],
     ['rejected', 'govuk-tag--red'],
     ['withdrawn', 'govuk-tag--grey']

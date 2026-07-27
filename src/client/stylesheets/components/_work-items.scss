@@ -22,12 +22,13 @@
   max-width: 80%;
 }
 
-// Application tiles (AC04/AC07/AC10)
+// Application cards (RA-324 phase-2, AC04/AC07/AC10)
 //
 // One card per application, rendered as a list so the markup stays semantic
-// and JavaScript-free (RA-94). Each card holds the status badge (AC07) and a
-// summary list of the AC05 fields. The layout is fluid — cards fill their
-// column and the header wraps — so it stays readable on small screens (AC10).
+// and JavaScript-free (RA-94). Header = ref link + status badge; then a bold
+// "Reprocessor reaccreditation: {Material}" title, an "{Org} ({Org ID})" line,
+// and — only once the SLA clock has started — an "Assigned to / Due on"
+// footer. The layout is fluid so it stays readable on small screens (AC10).
 .app-application-cards {
   margin-bottom: 0;
 }
@@ -40,24 +41,91 @@
 }
 
 // Header: application ref link on the left, status badge on the right. Wraps
-// (rather than overflowing) when the tile is too narrow to hold both.
+// (rather than overflowing) when the card is too narrow to hold both; the
+// badge stays top-aligned per the prototype.
 .app-application-card__header {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   gap: govuk-spacing(2);
   margin-bottom: govuk-spacing(2);
 }
 
-.app-application-card__title {
+.app-application-card__ref {
   margin-bottom: 0;
 }
 
-// Tighten the per-tile summary list and drop its trailing margin so the card
-// padding is symmetric.
-.app-application-card__list {
+.app-application-card__title {
+  margin-bottom: govuk-spacing(1);
+}
+
+// Secondary "{Org} ({Org ID})" line — muted so the title leads.
+.app-application-card__org {
   margin-bottom: 0;
+  color: $govuk-secondary-text-colour;
+}
+
+// Footer meta line ("Assigned to / Due on"), separated from the body by a
+// hairline rule. Wraps on narrow cards.
+.app-application-card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: govuk-spacing(1) govuk-spacing(4);
+  margin-top: govuk-spacing(2);
+  padding-top: govuk-spacing(2);
+  border-top: 1px solid $govuk-border-colour;
+  color: $govuk-secondary-text-colour;
+  font-size: 0.875rem;
+}
+
+.app-application-card__archived {
+  margin-top: govuk-spacing(2);
+  margin-bottom: 0;
+  color: $govuk-secondary-text-colour;
+}
+
+// Active filters block (RA-324 phase-2)
+//
+// Removable filter tags at the top of the sidebar. Each tag is a link (removal
+// is server-side, no JavaScript). The × is decorative; the link carries a
+// visually-hidden "(remove this filter)" for screen readers.
+.app-active-filters {
+  padding-bottom: govuk-spacing(2);
+  margin-bottom: govuk-spacing(3);
+  border-bottom: 1px solid $govuk-border-colour;
+}
+
+.app-active-filters__list {
+  margin-bottom: govuk-spacing(2);
+}
+
+.app-active-filters__tag {
+  display: inline-flex;
+  align-items: baseline;
+  gap: govuk-spacing(1);
+  padding: govuk-spacing(1) govuk-spacing(2);
+  margin-bottom: govuk-spacing(1);
+  background-color: govuk-colour("light-grey");
+  text-decoration: none;
+
+  &:hover {
+    background-color: govuk-colour("mid-grey");
+  }
+}
+
+.app-active-filters__remove-icon {
+  font-weight: bold;
+}
+
+// Collapsible filter sections (native <details>) — trim the default GOV.UK
+// details spacing so the stacked sections read as a compact filter panel.
+.app-filter-section {
+  margin-bottom: govuk-spacing(2);
+
+  .govuk-details__text {
+    padding-bottom: 0;
+  }
 }
 
 // Audit-log failure entry (RA-234)

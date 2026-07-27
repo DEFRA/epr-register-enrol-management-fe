@@ -70,7 +70,7 @@ describe('#workItemListController', () => {
     )
   })
 
-  test('Renders submitted items as tiles with type and state display names', async () => {
+  test('Renders submitted items as cards with the state badge label', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       id: 're-accreditation',
@@ -109,8 +109,11 @@ describe('#workItemListController', () => {
     expect(result).toEqual(
       expect.stringContaining('11111111-1111-1111-1111-111111111111')
     )
-    // Applicant type = the work-item type display name (AC05.5).
-    expect(result).toEqual(expect.stringContaining('Re-accreditation'))
+    // RA-324 phase-2: applicant type on the card is always the literal
+    // "Reprocessor" (not the work-item type display name).
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="applicant-type">Reprocessor</span>')
+    )
     // State badge text = the state display name (RA-324 contract label).
     expect(result).toEqual(expect.stringContaining('Not started'))
     // Status renders as a coloured govuk-tag (AC07/AC08); submitted = grey.
@@ -268,11 +271,11 @@ describe('#workItemListController', () => {
     expect(result).not.toContain('app-work-items__table-wrapper')
   })
 
-  test('Renders "Submitted on" as a GDS date before assessment starts', async () => {
-    // Use a January date (UK GMT = UTC+0) for timezone-stable assertions.
-    // No slaState => the SLA clock has not started => assessment has not
-    // started, so the "Submitted on" field renders (AC05.6), formatted to the
-    // GDS date standard ("16 July 2026") — date only, no time.
+  // RA-324 phase-2. The card body: bold "Reprocessor reaccreditation:
+  // {Material}" title (applicant type is always "Reprocessor"), then an
+  // "{Org} ({Org ID})" line. Submitted-on is gone from the card entirely.
+  test('Renders the card title, applicant type, material and org line', async () => {
+    clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
@@ -282,7 +285,11 @@ describe('#workItemListController', () => {
             stateId: 'submitted',
             submittedAt: '2026-01-15T10:00:00Z',
             submittedBy: null,
-            payload: {}
+            payload: {
+              material: 'plastic',
+              organisationName: 'Acme Recycling',
+              operatorOrganisationId: 'ORG-4242'
+            }
           }
         ],
         totalCount: 1
@@ -294,17 +301,20 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    expect(result).toContain('data-testid="submitted-on"')
-    // Formatted GDS date must appear; no time component; raw ISO must not.
-    expect(result).toContain('15 January 2026')
-    expect(result).not.toContain('15 January 2026 at')
-    expect(result).not.toContain('2026-01-15T10:00:00Z')
+    expect(result).toContain('data-testid="application-card-title"')
+    expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
+    expect(result).toContain('data-testid="material">plastic</span>')
+    expect(result).toContain('data-testid="application-org"')
+    expect(result).toContain('data-testid="org-name">Acme Recycling</span>')
+    expect(result).toContain('data-testid="org-id">ORG-4242</span>')
+    // Submitted-on no longer appears on the card (prototype).
+    expect(result).not.toContain('data-testid="submitted-on"')
   })
 
-  // RA-324 (AC05.3 + AC05.8). Once the SLA clock has started the tile shows
-  // the Org ID and the Due date (SLA tag + remaining text) and HIDES the
-  // Submitted-on field (assessment has started).
-  test('Renders Org ID + Due date and hides Submitted on once the SLA clock has started', async () => {
+  // RA-324 phase-2 (footer). Once the SLA clock has started the card shows an
+  // "Assigned to / Due on" footer, with the absolute slaDueDate formatted to a
+  // GDS date.
+  test('Renders the Assigned to / Due on footer once the SLA clock has started', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
@@ -315,8 +325,10 @@ describe('#workItemListController', () => {
             stateId: 'assessment-in-progress',
             submittedAt: '2026-01-15T10:00:00Z',
             submittedBy: 'frontend',
+            assignedToName: 'Olga Officer',
             slaState: 'OnTrack',
-            slaRemaining: '14.00:00:00',
+            // January/February UK dates are GMT (UTC+0) so timezone-stable.
+            slaDueDate: '2026-02-10T00:00:00Z',
             payload: { operatorOrganisationId: 'ORG-4242' }
           }
         ],
@@ -329,23 +341,47 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    // Org ID field renders the payload value.
-    expect(result).toContain('data-testid="org-id"')
-    expect(result).toContain('ORG-4242')
-    // Due date renders the SLA tag + remaining text.
-    expect(result).toContain('data-testid="due-date"')
-    expect(result).toContain('On track')
-    expect(result).toContain('14 days remaining')
-    // Submitted-on is suppressed while the SLA clock runs.
+    expect(result).toContain('data-testid="application-card-footer"')
+    expect(result).toContain('data-testid="assigned-to">Olga Officer</span>')
+    expect(result).toContain('data-testid="due-on"')
+    expect(result).toContain('10 February 2026')
+    // Submitted-on is not on the card in any state.
     expect(result).not.toContain('data-testid="submitted-on"')
   })
 
-  // RA-324. When the SLA clock has started (slaState is truthy) but the value
-  // is not a recognised SLA_TAG key, there is no tag to render — the Due date
-  // cell must fall back to an em dash rather than being dropped. Using an
-  // UNRECOGNISED slaState (not a real SLA_TAG key like 'Breached') is what
-  // actually exercises the template's `{% else %}—{% endif %}` fallback.
-  test('Renders an em dash in the Due date cell for an unrecognised SLA state', async () => {
+  // RA-324 phase-2. A "Not started" card (no SLA clock) shows NO footer, so no
+  // assigned-to / due-on.
+  test('Omits the footer for a card whose SLA clock has not started', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-0000-0000-0000-000000000000',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).not.toContain('data-testid="application-card-footer"')
+    expect(result).not.toContain('data-testid="due-on"')
+    expect(result).not.toContain('data-testid="assigned-to"')
+  })
+
+  // RA-324 phase-2. When the SLA clock has started but slaDueDate is absent
+  // (defensive), the Due on cell renders an em dash — never "Invalid Date".
+  test('Renders an em dash for Due on when slaDueDate is missing', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
@@ -356,8 +392,8 @@ describe('#workItemListController', () => {
             stateId: 'assessment-in-progress',
             submittedAt: null,
             submittedBy: null,
-            slaState: 'Unknown',
-            slaRemaining: null,
+            slaState: 'OnTrack',
+            slaDueDate: null,
             payload: {}
           }
         ],
@@ -370,77 +406,12 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    // SLA clock started => due-date field is present, but with no recognised
-    // tag the cell renders exactly an em dash.
-    expect(result).toContain('data-testid="due-date">—</dd>')
-    // Submitted-on is suppressed once the SLA clock has started.
-    expect(result).not.toContain('data-testid="submitted-on"')
-  })
-
-  // RA-324. Sanity: a recognised SLA state DOES render its tag in the cell,
-  // proving the previous test's em-dash is the fallback, not the default.
-  test('Renders the SLA tag (not an em dash) in the Due date cell for Breached', async () => {
-    clearWorkItemRegistry()
-    getWorkItems.mockResolvedValue(
-      emptyPage({
-        items: [
-          {
-            id: 'eeeeeeee-3333-3333-3333-333333333333',
-            typeId: 'unknown-type',
-            stateId: 'assessment-in-progress',
-            submittedAt: null,
-            submittedBy: null,
-            slaState: 'Breached',
-            slaRemaining: null,
-            payload: {}
-          }
-        ],
-        totalCount: 1
-      })
-    )
-
-    const { result } = await server.inject({
-      method: 'GET',
-      url: '/work-items'
-    })
-
-    expect(result).toContain('data-testid="due-date"')
-    // Breached renders its red tag (no "remaining" text for a breach).
-    expect(result).toContain('Breached')
-    expect(result).not.toContain('data-testid="due-date">—</dd>')
-  })
-
-  // RA-324. An unparseable submittedAt (SLA clock not started) must render an
-  // em dash, never "Invalid Date" — the `formatDateGds` filter returns '' for
-  // a bad value, which the template's `or "—"` turns into an em dash.
-  test('Renders an em dash for an unparseable submitted date', async () => {
-    clearWorkItemRegistry()
-    getWorkItems.mockResolvedValue(
-      emptyPage({
-        items: [
-          {
-            id: 'eeeeeeee-2222-2222-2222-222222222222',
-            typeId: 'unknown-type',
-            stateId: 'submitted',
-            submittedAt: 'not-a-date',
-            submittedBy: null,
-            payload: {}
-          }
-        ],
-        totalCount: 1
-      })
-    )
-
-    const { result } = await server.inject({
-      method: 'GET',
-      url: '/work-items'
-    })
-
-    expect(result).toContain('data-testid="submitted-on"')
+    expect(result).toContain('data-testid="application-card-footer"')
+    expect(result).toContain('data-testid="due-on">—</span>')
     expect(result).not.toContain('Invalid Date')
   })
 
-  test('Renders in the constrained width with filter sidebar before the tiles', async () => {
+  test('Renders in the constrained width with filter sidebar before the cards', async () => {
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
@@ -500,11 +471,11 @@ describe('#workItemListController', () => {
     })
     const states = [
       { stateId: 'submitted', cls: 'govuk-tag--grey' },
-      { stateId: 'duly-made', cls: 'govuk-tag--blue' },
-      { stateId: 'assessment-in-progress', cls: 'govuk-tag--light-blue' },
-      { stateId: 'awaiting-decision', cls: 'govuk-tag--purple' },
+      { stateId: 'duly-made', cls: 'govuk-tag--purple' },
+      { stateId: 'assessment-in-progress', cls: 'govuk-tag--blue' },
+      { stateId: 'awaiting-decision', cls: 'govuk-tag--light-blue' },
       { stateId: 'queried', cls: 'govuk-tag--yellow' },
-      { stateId: 'updated', cls: 'govuk-tag--light-blue' },
+      { stateId: 'updated', cls: 'govuk-tag--blue' },
       { stateId: 'approved', cls: 'govuk-tag--green' },
       { stateId: 'rejected', cls: 'govuk-tag--red' },
       { stateId: 'withdrawn', cls: 'govuk-tag--grey' },
@@ -541,7 +512,7 @@ describe('#workItemListController', () => {
     expect(result).not.toContain('govuk-tag--orange')
   })
 
-  test('Falls back to raw type id when no module is registered for the type', async () => {
+  test('Falls back to the raw state id label when no module is registered', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
@@ -565,9 +536,9 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('unknown-type'))
+    // Unknown state id falls back to the raw id as the badge label.
     expect(result).toEqual(expect.stringContaining('mystery'))
-    // Empty submitter renders as an em-dash.
+    // Empty org name / material render as em dashes.
     expect(result).toEqual(expect.stringContaining('—'))
   })
 
@@ -586,42 +557,44 @@ describe('#workItemListController', () => {
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
   })
 
-  test('Forwards type, state, search and page filters to the backend', async () => {
+  // RA-324 phase-2. The new filter params (type, status group, material, sort,
+  // organisation) forward to the backend. The "Updated" status group expands
+  // to BOTH backend state ids.
+  test('Forwards type, status, material, sort and organisation filters to the backend', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       id: 're-accreditation',
       displayName: 'Re-accreditation',
-      initialState: { id: 'submitted', displayName: 'Submitted' },
+      initialState: { id: 'submitted', displayName: 'Not started' },
       states: [
-        { id: 'submitted', displayName: 'Submitted' },
-        { id: 'approved', displayName: 'Approved', isTerminal: true }
+        { id: 'submitted', displayName: 'Not started' },
+        { id: 'assessment-in-progress', displayName: 'Updated' },
+        { id: 'updated', displayName: 'Updated' },
+        { id: 'approved', displayName: 'Granted', isTerminal: true }
       ],
-      getTasksForState: () => []
-    })
-    registerWorkItemType({
-      id: 'other',
-      displayName: 'Other',
-      initialState: { id: 'submitted', displayName: 'Submitted' },
-      states: [{ id: 'submitted', displayName: 'Submitted' }],
       getTasksForState: () => []
     })
 
     getWorkItems.mockResolvedValue(
-      emptyPage({ totalCount: 0, page: 2, pageSize: 20 })
+      emptyPage({ totalCount: 0, page: 1, pageSize: 20 })
     )
 
     const { statusCode } = await server.inject({
       method: 'GET',
-      url: '/work-items?typeId=re-accreditation&typeId=other&stateId=approved&search=acme&page=2'
+      url: '/work-items?typeId=re-accreditation&typeId=exporter&status=updated&status=approved&material=plastic&material=glass&sort=due-date&organisation=acme'
     })
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        typeIds: ['re-accreditation', 'other'],
-        stateIds: ['approved'],
-        search: 'acme',
-        page: 2,
+        // Exporter is a placeholder typeId with no data — still forwarded so
+        // it returns zero results.
+        typeIds: ['re-accreditation', 'exporter'],
+        // "Updated" group expands to both ids; "Granted" -> approved.
+        stateIds: ['assessment-in-progress', 'updated', 'approved'],
+        materials: ['plastic', 'glass'],
+        sort: 'due-date',
+        organisation: 'acme',
         pageSize: 20
       })
     )
@@ -949,7 +922,7 @@ describe('#workItemListController', () => {
       )
     })
 
-    test('Regulator checkboxes appear in the rendered page with regulator body names', async () => {
+    test('Nation checkboxes appear with plain nation names', async () => {
       getWorkItems.mockResolvedValue(emptyPage())
 
       const { result } = await server.inject({
@@ -958,13 +931,15 @@ describe('#workItemListController', () => {
       })
 
       expect(result).toContain('filter-nation')
-      // Regulator body display names replace raw nation names
-      expect(result).toContain('Environment Agency (EA)')
-      expect(result).toContain('SEPA')
-      expect(result).toContain('Natural Resources Wales (NRW)')
-      expect(result).toContain('NIEA')
-      // Filter section heading uses "Regulator" not "Nation"
-      expect(result).toContain('Regulator')
+      // RA-324 phase-2: the prototype uses plain nation names (not regulator
+      // body names) and the section is labelled "Nation".
+      expect(result).toContain('England')
+      expect(result).toContain('Northern Ireland')
+      expect(result).toContain('Scotland')
+      expect(result).toContain('Wales')
+      expect(result).toContain('data-testid="filter-section-nation"')
+      // The old regulator body names are gone.
+      expect(result).not.toContain('Environment Agency (EA)')
     })
 
     test('Nation checkboxes reflect the active filter', async () => {
@@ -1286,5 +1261,259 @@ describe('#workItemListController', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('Acme Recycling Ltd'))
     expect(result).toEqual(expect.stringContaining('plastic'))
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-324 phase-2 filter sidebar: collapsible sections, active       //
+  // filters block, sort, material, status grouping, organisation.     //
+  // ---------------------------------------------------------------- //
+  describe('RA-324 phase-2 filter sidebar', () => {
+    test('Renders the collapsible filter sections with the AC labels', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      for (const key of [
+        'sort',
+        'type',
+        'nation',
+        'material',
+        'assignment',
+        'status',
+        'organisation'
+      ]) {
+        expect(result).toContain(`data-testid="filter-section-${key}"`)
+        expect(result).toContain(`data-testid="filter-section-${key}-toggle"`)
+      }
+      // Sort options carry per-option testids.
+      expect(result).toContain('data-testid="filter-sort-due-date"')
+      expect(result).toContain('data-testid="filter-sort-organisation"')
+      expect(result).toContain('data-testid="filter-sort-status"')
+      // Type labels (Reprocessor enabled + Exporter placeholder).
+      expect(result).toContain('Reprocessor reaccreditation')
+      expect(result).toContain('Exporter reaccreditation')
+      // Material labels.
+      expect(result).toContain('Fibre-based composite material')
+      expect(result).toContain('Paper or board')
+      // Status uses the AC06 labels, not the raw workflow names.
+      expect(result).toContain('Not started')
+      expect(result).toContain('Granted')
+      expect(result).toContain('Refused')
+      // Combined organisation input replaces the old three inputs.
+      expect(result).toContain('data-testid="work-items-filter-org-search"')
+      expect(result).not.toContain(
+        'data-testid="work-items-filter-registration-id"'
+      )
+      expect(result).not.toContain('data-testid="work-items-filter-org-name"')
+    })
+
+    test('Shows removable active-filter tags and a clear-all link', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?typeId=re-accreditation&nation=England&material=plastic&status=updated&organisation=acme&assigneeMode=unassigned&sort=due-date&filtersApplied=1'
+      })
+
+      expect(result).toContain('data-testid="active-filters"')
+      expect(result).toContain('data-testid="active-filter-remove"')
+      expect(result).toContain('data-testid="active-filters-clear"')
+      // One chip per active filter, each labelled by its dimension.
+      expect(result).toContain('Type: Reprocessor reaccreditation')
+      expect(result).toContain('Nation: England')
+      expect(result).toContain('Material: Plastic')
+      expect(result).toContain('Status: Updated')
+      expect(result).toContain('Organisation: acme')
+      expect(result).toContain('Assignment: Unassigned')
+      expect(result).toContain('Sorted by: Due date')
+      // The section with a selection is expanded and shows a count.
+      expect(result).toContain('(1 selected)')
+      // Clear-all points at the unfiltered page.
+      expect(result).toContain(
+        'href="/work-items" data-testid="active-filters-clear"'
+      )
+    })
+
+    test('Each active-filter removal href drops only that filter', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?nation=England&material=plastic&filtersApplied=1'
+      })
+
+      // Removing Nation keeps material; removing Material keeps nation.
+      expect(result).toContain(
+        'href="/work-items?material=plastic&amp;filtersApplied=1"'
+      )
+      expect(result).toContain(
+        'href="/work-items?nation=England&amp;filtersApplied=1"'
+      )
+    })
+
+    test('The specific-officer assignment chip shows the officer name', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?assigneeMode=user&assigneeUserId=stub-caseworker-2&filtersApplied=1'
+      })
+
+      expect(result).toContain('Assignment: Stub Caseworker Two')
+    })
+
+    test('Shows a "Your applications" chip for the mine assignment filter', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?assigneeMode=mine&filtersApplied=1'
+      })
+
+      expect(result).toContain('Assignment: Your applications')
+    })
+
+    test('Falls back to the raw id when the officer is not in the directory', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?assigneeMode=user&assigneeUserId=ghost-officer&filtersApplied=1'
+      })
+
+      expect(result).toContain('Assignment: ghost-officer')
+    })
+
+    test('Removal links preserve the specific-officer, search and organisation filters', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?nation=England&assigneeMode=user&assigneeUserId=stub-caseworker-2&search=widget&organisation=acme&filtersApplied=1'
+      })
+
+      // The nation chip's removal href carries every other active filter.
+      expect(result).toContain('assigneeMode=user')
+      expect(result).toContain('assigneeUserId=stub-caseworker-2')
+      expect(result).toContain('search=widget')
+      expect(result).toContain('organisation=acme')
+    })
+
+    test('Renders an em dash for Due on when slaDueDate is an unexpected shape', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'cccccccc-2222-2222-2222-222222222222',
+              typeId: 'unknown-type',
+              stateId: 'assessment-in-progress',
+              submittedAt: null,
+              submittedBy: null,
+              slaState: 'OnTrack',
+              slaDueDate: { notADate: true },
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('data-testid="due-on">—</span>')
+    })
+
+    test('No active-filters block or clear link when nothing is filtered', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1'
+      })
+
+      expect(result).not.toContain('data-testid="active-filters"')
+      expect(result).not.toContain('data-testid="work-items-filter-clear"')
+    })
+
+    test('The results summary describes the active filters', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: '99999999-9999-9999-9999-999999999999',
+              typeId: 'unknown-type',
+              stateId: 'submitted',
+              submittedAt: '2026-04-27T10:00:00Z',
+              submittedBy: null,
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&status=updated&sort=organisation&filtersApplied=1'
+      })
+
+      expect(result).toContain('material: Plastic')
+      expect(result).toContain('status: Updated')
+      expect(result).toContain('sorted by Organisation')
+    })
+
+    test('Renders the Due on date from the Mongo $date shape', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'cccccccc-1111-1111-1111-111111111111',
+              typeId: 'unknown-type',
+              stateId: 'assessment-in-progress',
+              submittedAt: null,
+              submittedBy: null,
+              slaState: 'OnTrack',
+              slaDueDate: { $date: '2026-02-10T00:00:00Z' },
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('data-testid="due-on"')
+      expect(result).toContain('10 February 2026')
+    })
+
+    test('Drops unknown material, status and sort values', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=unobtanium&status=ghost&sort=sideways'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          materials: [],
+          stateIds: [],
+          sort: null
+        })
+      )
+    })
   })
 })

@@ -155,6 +155,32 @@ describe('#getWorkItems', () => {
     expect(calledUrl).toContain('pageSize=5')
   })
 
+  // RA-324 phase-2. New list filters: repeated material tokens, server-side
+  // sort, and the combined organisation search.
+  test('Encodes material, sort and organisation query params', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ items: [], totalCount: 0 })
+    })
+
+    await getWorkItems({
+      materials: ['plastic', 'glass'],
+      sort: 'due-date',
+      organisation: '  Acme  ',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const calledUrl = fetchImpl.mock.calls[0][0]
+    expect(calledUrl).toContain('material=plastic')
+    expect(calledUrl).toContain('material=glass')
+    expect(calledUrl).toContain('sort=due-date')
+    // Trimmed and URL-encoded.
+    expect(calledUrl).toContain('organisation=Acme')
+  })
+
   test('Returns ok=false with status when the backend responds with an error', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,

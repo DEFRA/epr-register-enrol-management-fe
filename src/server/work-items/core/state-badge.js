@@ -12,16 +12,22 @@
  * grey tag so a newly-added backend state still renders a (muted) badge
  * rather than an unstyled one.
  */
+// RA-324 phase-2. Colours realigned to Tom's prototype feedback. The AC06
+// DisplayNames are UNCHANGED (Not started / Updated / Granted / Refused …) —
+// only the badge colours move. `awaiting-decision` keeps a colour DISTINCT
+// from the solid blue used by the two "Updated" states so a caseworker can
+// tell the decision-pending state apart at a glance (prototype allowed either
+// "blue" or a distinct colour here — we keep it distinct with light-blue).
 const STATE_TAG_CLASSES = {
-  submitted: 'govuk-tag--grey',
-  'duly-made': 'govuk-tag--blue',
-  'assessment-in-progress': 'govuk-tag--light-blue',
-  'awaiting-decision': 'govuk-tag--purple',
-  queried: 'govuk-tag--yellow',
-  updated: 'govuk-tag--light-blue',
-  approved: 'govuk-tag--green',
-  rejected: 'govuk-tag--red',
-  withdrawn: 'govuk-tag--grey'
+  submitted: 'govuk-tag--grey', // Not started
+  'duly-made': 'govuk-tag--purple', // Duly made
+  'assessment-in-progress': 'govuk-tag--blue', // Updated
+  'awaiting-decision': 'govuk-tag--light-blue', // Awaiting decision (distinct)
+  queried: 'govuk-tag--yellow', // Queried
+  updated: 'govuk-tag--blue', // Updated
+  approved: 'govuk-tag--green', // Granted
+  rejected: 'govuk-tag--red', // Refused
+  withdrawn: 'govuk-tag--grey' // Withdrawn
 }
 
 const DEFAULT_STATE_TAG_CLASS = 'govuk-tag--grey'

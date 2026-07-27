@@ -1,6 +1,6 @@
 {% extends 'layouts/page.njk' %}
-{# RA-324. Applications tiles page. Renders inside the default GOV.UK width  #}
-{# container (no widening) so it never scrolls horizontally.                 #}
+{# RA-324. Applications page. Renders inside the default GOV.UK width          #}
+{# container (no widening) so it never scrolls horizontally.                   #}
 
 {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
 {% from "govuk/components/checkboxes/macro.njk" import govukCheckboxes %}
@@ -10,6 +10,21 @@
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/pagination/macro.njk" import govukPagination %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
+
+{# RA-324 phase-2. Collapsible filter section built on the native <details>    #}
+{# element — collapses WITHOUT JavaScript (RA-94). The `open` attribute is set #}
+{# server-side when the section has an active selection, and the summary shows #}
+{# a "N selected" count when collapsed.                                        #}
+{% macro filterSection(key, title, count) %}
+  <details class="govuk-details app-filter-section" data-testid="filter-section-{{ key }}"{% if count > 0 %} open{% endif %}>
+    <summary class="govuk-details__summary" data-testid="filter-section-{{ key }}-toggle">
+      <span class="govuk-details__summary-text">{{ title }}{% if count > 0 %} ({{ count }} selected){% endif %}</span>
+    </summary>
+    <div class="govuk-details__text">
+      {{ caller() }}
+    </div>
+  </details>
+{% endmacro %}
 
 {% block content %}
   {# ── Row 1: heading + optional "Create work item" button ─────────────── #}
@@ -30,7 +45,7 @@
     </div>
   </div>
 
-  {# ── Row 2: filter sidebar (1/5) + application tiles (4/5) side-by-side ─ #}
+  {# ── Row 2: filter sidebar (1/4) + application cards (3/4) side-by-side ─ #}
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-one-quarter app-work-items__filter">
       <form method="get" action="/work-items" novalidate data-testid="work-items-filter-form">
@@ -38,135 +53,131 @@
         {# (possibly with everything unchecked) apart from a fresh GET of the #}
         {# page, and decide whether to apply role-based filter defaults (RA-125). #}
         <input type="hidden" name="filtersApplied" value="1">
+
+        {# ── Active filters: each active filter as a removable tag (a link #}
+        {# whose href rebuilds the query minus that one filter) + Clear all. #}
+        {# Progressive-enhancement friendly: removal is server-side via links. #}
+        {% if activeFilters.chips.length > 0 %}
+          <div class="app-active-filters" data-testid="active-filters">
+            <h2 class="govuk-heading-s govuk-!-margin-bottom-2">Active filters</h2>
+            <ul class="govuk-list app-active-filters__list">
+              {% for chip in activeFilters.chips %}
+                <li>
+                  <a class="govuk-link app-active-filters__tag" href="{{ chip.href }}" data-testid="active-filter-remove">
+                    <span class="app-active-filters__label">{{ chip.label }}</span>
+                    <span aria-hidden="true" class="app-active-filters__remove-icon">×</span>
+                    <span class="govuk-visually-hidden">(remove this filter)</span>
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+            <a class="govuk-link" href="{{ activeFilters.clearAllHref }}" data-testid="active-filters-clear">Clear all filters</a>
+          </div>
+        {% endif %}
+
         <h2 class="govuk-heading-m">Filter</h2>
 
-        {{ govukInput({
-          id: "orgId",
-          name: "orgId",
-          label: { text: "Organisation ID", classes: "govuk-label--s" },
-          value: filters.orgId,
-          spellcheck: false,
-          autocomplete: "off",
-          attributes: { "data-testid": "work-items-filter-org-id" }
-        }) }}
+        {# 1. Sort by (radios) #}
+        {% set sortRadioItems = [] %}
+        {% for o in sortOptions %}
+          {% set _ = sortRadioItems.push({ value: o.value, text: o.text, checked: o.checked, attributes: { "data-testid": "filter-sort-" + o.value } }) %}
+        {% endfor %}
+        {% call filterSection('sort', 'Sort by', filterCounts.sort) %}
+          {{ govukRadios({
+            idPrefix: "filter-sort",
+            name: "sort",
+            classes: "govuk-radios--small",
+            fieldset: { legend: { text: "Sort by", classes: "govuk-visually-hidden" } },
+            items: sortRadioItems
+          }) }}
+        {% endcall %}
 
-        {{ govukInput({
-          id: "registrationId",
-          name: "registrationId",
-          label: { text: "Registration ID", classes: "govuk-label--s" },
-          value: filters.registrationId,
-          spellcheck: false,
-          autocomplete: "off",
-          attributes: { "data-testid": "work-items-filter-registration-id" }
-        }) }}
-
-        {{ govukInput({
-          id: "orgName",
-          name: "orgName",
-          label: { text: "Organisation name", classes: "govuk-label--s" },
-          value: filters.orgName,
-          spellcheck: false,
-          autocomplete: "off",
-          attributes: { "data-testid": "work-items-filter-org-name" }
-        }) }}
-
-        {% if typeOptions.length > 0 %}
+        {# 2. Type (checkboxes) #}
+        {% call filterSection('type', 'Type', filterCounts.type) %}
           {{ govukCheckboxes({
             idPrefix: "filter-type",
             name: "typeId",
             classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Type", classes: "govuk-fieldset__legend--s" } },
+            fieldset: { legend: { text: "Type", classes: "govuk-visually-hidden" } },
             items: typeOptions
           }) }}
-        {% endif %}
+        {% endcall %}
 
-        {% if stateOptions.length > 0 %}
-          {{ govukCheckboxes({
-            idPrefix: "filter-state",
-            name: "stateId",
-            classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "State", classes: "govuk-fieldset__legend--s" } },
-            items: stateOptions
-          }) }}
-        {% endif %}
-
-        {% if nationOptions.length > 0 %}
+        {# 3. Nation (checkboxes) #}
+        {% call filterSection('nation', 'Nation', filterCounts.nation) %}
           {{ govukCheckboxes({
             idPrefix: "filter-nation",
             name: "nation",
             classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Regulator", classes: "govuk-fieldset__legend--s" } },
+            fieldset: { legend: { text: "Nation", classes: "govuk-visually-hidden" } },
             items: nationOptions
           }) }}
-        {% endif %}
+        {% endcall %}
 
-        {{ govukCheckboxes({
-          idPrefix: "filter-applicant-type",
-          name: "applicantType",
-          classes: "govuk-checkboxes--small",
-          fieldset: { legend: { text: "Applicant type", classes: "govuk-fieldset__legend--s" } },
-          hint: { text: "Filtering not yet available" },
-          items: [
-            { value: "reprocessor", text: "Reprocessor", disabled: true },
-            { value: "exporter", text: "Exporter", disabled: true }
-          ]
-        }) }}
+        {# 4. Material (checkboxes) #}
+        {% call filterSection('material', 'Material', filterCounts.material) %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-material",
+            name: "material",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "Material", classes: "govuk-visually-hidden" } },
+            items: materialOptions
+          }) }}
+        {% endcall %}
 
-        {# Assignee filter (RA-95). The "Specific user…" radio reveals a #}
-        {# select listing the assignable-users directory. Same options are #}
-        {# offered to every user; only the assign *write* is role-gated. #}
+        {# 5. Assignment (radios; "Specific officer" reveals a select). #}
         {% set assigneeUserSelectHtml %}
           {{ govukSelect({
             id: "filter-assignee-user",
             name: "assigneeUserId",
-            label: { text: "Assigned to", classes: "govuk-label--s" },
+            label: { text: "Officer", classes: "govuk-label--s" },
             items: assigneeUserOptions,
             attributes: { "data-testid": "work-items-filter-assignee-user" }
           }) }}
         {% endset %}
-
         {% set assigneeRadioItems = [] %}
         {% for option in assigneeFilterOptions %}
           {% if option.conditional %}
-            {% set _ = assigneeRadioItems.push({
-              value: option.value,
-              text: option.text,
-              checked: option.checked,
-              conditional: { html: assigneeUserSelectHtml }
-            }) %}
+            {% set _ = assigneeRadioItems.push({ value: option.value, text: option.text, checked: option.checked, conditional: { html: assigneeUserSelectHtml } }) %}
           {% else %}
-            {% set _ = assigneeRadioItems.push({
-              value: option.value,
-              text: option.text,
-              checked: option.checked
-            }) %}
+            {% set _ = assigneeRadioItems.push({ value: option.value, text: option.text, checked: option.checked }) %}
           {% endif %}
         {% endfor %}
+        {% call filterSection('assignment', 'Assignment', filterCounts.assignment) %}
+          {{ govukRadios({
+            idPrefix: "filter-assignee",
+            name: "assigneeMode",
+            classes: "govuk-radios--small",
+            fieldset: { legend: { text: "Assignment", classes: "govuk-visually-hidden" } },
+            items: assigneeRadioItems
+          }) }}
+        {% endcall %}
 
-        {{ govukRadios({
-          idPrefix: "filter-assignee",
-          name: "assigneeMode",
-          classes: "govuk-radios--small",
-          fieldset: { legend: { text: "Assignment", classes: "govuk-fieldset__legend--s" } },
-          items: assigneeRadioItems
-        }) }}
+        {# 6. Status (checkboxes, AC06 labels) #}
+        {% call filterSection('status', 'Status', filterCounts.status) %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-status",
+            name: "status",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "Status", classes: "govuk-visually-hidden" } },
+            items: statusOptions
+          }) }}
+        {% endcall %}
 
-        {{ govukCheckboxes({
-          idPrefix: "filter-include-archived",
-          name: "includeArchived",
-          classes: "govuk-checkboxes--small",
-          fieldset: { legend: { text: "Archived", classes: "govuk-fieldset__legend--s" } },
-          items: [
-            {
-              value: "true",
-              text: "Show archived",
-              checked: filters.includeArchived,
-              attributes: { "data-testid": "work-items-filter-include-archived" }
-            }
-          ]
-        }) }}
+        {# 7. Organisation (combined name-or-ID text input) #}
+        {% call filterSection('organisation', 'Organisation', filterCounts.organisation) %}
+          {{ govukInput({
+            id: "filter-organisation",
+            name: "organisation",
+            label: { text: "Organisation name or ID", classes: "govuk-label--s" },
+            value: filters.organisation,
+            spellcheck: false,
+            autocomplete: "off",
+            attributes: { "data-testid": "work-items-filter-org-search" }
+          }) }}
+        {% endcall %}
 
-        <div class="govuk-button-group">
+        <div class="govuk-button-group govuk-!-margin-top-4">
           {{ govukButton({ text: "Apply filters", attributes: { "data-testid": "work-items-filter-apply" } }) }}
           {% if hasFilters %}
             <a class="govuk-link" href="/work-items" data-testid="work-items-filter-clear">Clear filters</a>
@@ -199,72 +210,44 @@
         </p>
 
         {% if items.length > 0 %}
-          {# RA-324. Applications render as tiles (AC04): one card per      #}
-          {# application, fields in the AC05 order, status as a coloured     #}
-          {# badge contained in the tile (AC07/08). GOV.UK macros only — no  #}
-          {# JavaScript (RA-94). Field data-testids repeat across tiles and  #}
-          {# are scoped by the enclosing tile; per-item hooks (link, badge,  #}
-          {# archived) are id-keyed for the e2e suite.                        #}
-          {# The field list is hand-written (not the govukSummaryList macro)  #}
-          {# because the macro drops `attributes` on the value cell, and the  #}
-          {# e2e suite needs a data-testid on each field's <dd>. Every        #}
-          {# interpolation below is a plain `{{ ... }}` so Nunjucks           #}
-          {# auto-escapes it — no raw backend string is concatenated into     #}
-          {# markup (epr-6fi). Field order is the AC05 contract.              #}
+          {# RA-324 phase-2. Applications render as cards matching the         #}
+          {# prototype (AC04): a bold application-ref link + status badge in   #}
+          {# the header; a "Reprocessor reaccreditation: {Material}" title; an #}
+          {# "{Org} ({Org ID})" line; and — only once the SLA clock has        #}
+          {# started — an "Assigned to / Due on" footer. GOV.UK macros + plain #}
+          {# HTML only, no JavaScript (RA-94). Every interpolation is a plain  #}
+          {# `{{ ... }}` so Nunjucks auto-escapes it (epr-6fi). Field          #}
+          {# data-testids are scoped by the enclosing card; per-item hooks     #}
+          {# (link, badge, archived) are id-keyed for the e2e suite.           #}
           <ul class="govuk-list app-application-cards" data-testid="applications-list">
             {% for item in items %}
-              {% set assignedTo = item.assigneeDisplayName or "Unassigned" %}
               <li>
                 <article class="app-application-card" data-testid="application-tile" data-work-item-id="{{ item.id }}">
-                  {# Header: application ref (field 1) as the navigating link  #}
-                  {# + the status badge (AC07). RA-249: when a legacy item has #}
-                  {# no ref the link keeps an accessible name for SRs.         #}
                   <div class="app-application-card__header">
-                    <h2 class="govuk-heading-s app-application-card__title">
+                    <h2 class="govuk-heading-s app-application-card__ref">
                       <a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.applicationRef }}{% if not item.applicationRef %}<span class="govuk-visually-hidden">View application</span>{% endif %}</a>
                     </h2>
                     {{ govukTag({ text: item.stateDisplayName, classes: item.stateTagClass, attributes: { "data-testid": "work-item-state-tag-" + item.id } }) }}
                   </div>
-                  <dl class="govuk-summary-list govuk-summary-list--no-border app-application-card__list">
-                    <div class="govuk-summary-list__row">
-                      <dt class="govuk-summary-list__key">Organisation name</dt>
-                      <dd class="govuk-summary-list__value" data-testid="org-name">{{ item.orgName or "—" }}</dd>
+
+                  <p class="govuk-body govuk-!-font-weight-bold app-application-card__title" data-testid="application-card-title">
+                    <span data-testid="applicant-type">Reprocessor</span> reaccreditation: <span data-testid="material">{{ item.material or "—" }}</span>
+                  </p>
+
+                  <p class="govuk-body app-application-card__org" data-testid="application-org">
+                    <span data-testid="org-name">{{ item.orgName or "—" }}</span>{% if item.orgId %} (<span data-testid="org-id">{{ item.orgId }}</span>){% endif %}
+                  </p>
+
+                  {% if item.showDueDate %}
+                    <div class="app-application-card__footer" data-testid="application-card-footer">
+                      <span class="app-application-card__meta">Assigned to: <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
+                      <span class="app-application-card__meta">Due on: <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
                     </div>
-                    <div class="govuk-summary-list__row">
-                      <dt class="govuk-summary-list__key">Organisation ID</dt>
-                      <dd class="govuk-summary-list__value" data-testid="org-id">{{ item.orgId or "—" }}</dd>
-                    </div>
-                    <div class="govuk-summary-list__row">
-                      <dt class="govuk-summary-list__key">Material type</dt>
-                      <dd class="govuk-summary-list__value" data-testid="material">{{ item.material or "—" }}</dd>
-                    </div>
-                    <div class="govuk-summary-list__row">
-                      <dt class="govuk-summary-list__key">Applicant type</dt>
-                      <dd class="govuk-summary-list__value" data-testid="applicant-type">{{ item.typeDisplayName }}</dd>
-                    </div>
-                    {% if item.showSubmittedOn %}
-                    <div class="govuk-summary-list__row">
-                      <dt class="govuk-summary-list__key">Submitted on</dt>
-                      <dd class="govuk-summary-list__value" data-testid="submitted-on">{{ item.submittedAt | formatDateGds or "—" }}</dd>
-                    </div>
-                    {% endif %}
-                    <div class="govuk-summary-list__row">
-                      <dt class="govuk-summary-list__key">Assigned to</dt>
-                      <dd class="govuk-summary-list__value" data-testid="assigned-to">{{ assignedTo }}</dd>
-                    </div>
-                    {% if item.showDueDate %}
-                    <div class="govuk-summary-list__row">
-                      <dt class="govuk-summary-list__key">Due date</dt>
-                      <dd class="govuk-summary-list__value" data-testid="due-date">{% if item.slaTagText %}{{ govukTag({ text: item.slaTagText, classes: item.slaTagClass }) }}{% if item.slaRemainingText %} <span class="govuk-body-s">{{ item.slaRemainingText }}</span>{% endif %}{% else %}—{% endif %}</dd>
-                    </div>
-                    {% endif %}
-                    {% if item.archivedAt %}
-                    <div class="govuk-summary-list__row">
-                      <dt class="govuk-summary-list__key">Archived</dt>
-                      <dd class="govuk-summary-list__value" data-testid="work-item-archived-at-{{ item.id }}">{{ item.archivedAt }}</dd>
-                    </div>
-                    {% endif %}
-                  </dl>
+                  {% endif %}
+
+                  {% if item.archivedAt %}
+                    <p class="govuk-body-s app-application-card__archived" data-testid="work-item-archived-at-{{ item.id }}">Archived: {{ item.archivedAt }}</p>
+                  {% endif %}
                 </article>
               </li>
             {% endfor %}

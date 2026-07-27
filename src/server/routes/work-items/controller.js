@@ -1,10 +1,12 @@
 import { getWorkItems } from '#/server/common/helpers/backend-api/backend-api.js'
-import {
-  getWorkItemType,
-  getWorkItemTypes
-} from '#/server/work-items/core/registry.js'
+import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
 import { stateTagClass as resolveStateTagClass } from '#/server/work-items/core/state-badge.js'
+import {
+  MATERIAL_FILTER_OPTIONS,
+  MATERIAL_TOKENS,
+  materialLabel
+} from '#/server/work-items/core/materials.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { config } from '#/config/config.js'
@@ -22,6 +24,67 @@ const ASSIGNEE_FILTER_ANY = 'any'
 const ASSIGNEE_FILTER_MINE = 'mine'
 const ASSIGNEE_FILTER_UNASSIGNED = 'unassigned'
 const ASSIGNEE_FILTER_USER = 'user'
+
+// RA-324 phase-2. The "Type" filter is a frontend-only mapping (the backend
+// has no reprocessor/exporter field): Reprocessor -> the real
+// `re-accreditation` typeId (filters all current data); Exporter -> a
+// not-yet-existing typeId, so selecting it correctly returns zero results.
+const TYPE_FILTER_OPTIONS = [
+  { value: 're-accreditation', text: 'Reprocessor reaccreditation' },
+  { value: 'exporter', text: 'Exporter reaccreditation' }
+]
+const ALLOWED_TYPE_IDS = new Set(TYPE_FILTER_OPTIONS.map((o) => o.value))
+
+// RA-324 phase-2. The "Status" filter groups the backend state ids under the
+// AC06 labels. The single "Updated" option deliberately expands to BOTH
+// `assessment-in-progress` and `updated` (they share the "Updated" label), so
+// the UI shows one checkbox while the backend receives both state ids. The
+// `value` is the stable UI/URL token (submitted via `status=`), decoupled from
+// the raw `stateId` backend param.
+const STATUS_FILTER_OPTIONS = [
+  { value: 'submitted', text: 'Not started', stateIds: ['submitted'] },
+  { value: 'duly-made', text: 'Duly made', stateIds: ['duly-made'] },
+  {
+    value: 'updated',
+    text: 'Updated',
+    stateIds: ['assessment-in-progress', 'updated']
+  },
+  {
+    value: 'awaiting-decision',
+    text: 'Awaiting decision',
+    stateIds: ['awaiting-decision']
+  },
+  { value: 'queried', text: 'Queried', stateIds: ['queried'] },
+  { value: 'approved', text: 'Granted', stateIds: ['approved'] },
+  { value: 'rejected', text: 'Refused', stateIds: ['rejected'] },
+  { value: 'withdrawn', text: 'Withdrawn', stateIds: ['withdrawn'] }
+]
+const STATUS_OPTION_BY_VALUE = new Map(
+  STATUS_FILTER_OPTIONS.map((o) => [o.value, o])
+)
+
+// RA-324 phase-2. Server-side sort of the FULL filtered result set. Tokens are
+// the wire contract agreed with the backend (epr-z069.6); absent = the
+// backend default (newest submitted first).
+const SORT_OPTIONS = [
+  { value: 'due-date', text: 'Due date' },
+  { value: 'organisation', text: 'Organisation' },
+  { value: 'status', text: 'Status' }
+]
+const SORT_VALUES = new Set(SORT_OPTIONS.map((o) => o.value))
+
+// RA-324 phase-2. Nation filter uses plain nation names in the prototype
+// order (the role-based single-nation default still applies via
+// resolveNations).
+const NATION_FILTER_OPTIONS = [
+  { value: 'England', text: 'England' },
+  { value: 'NorthernIreland', text: 'Northern Ireland' },
+  { value: 'Scotland', text: 'Scotland' },
+  { value: 'Wales', text: 'Wales' }
+]
+const NATION_LABEL = new Map(
+  NATION_FILTER_OPTIONS.map((o) => [o.value, o.text])
+)
 
 /**
  * Renders the cross-type work item list, with filter, search and pagination.
@@ -45,10 +108,10 @@ export const workItemListController = {
     const result = await getWorkItems({
       typeIds: filters.typeIds,
       stateIds: filters.stateIds,
+      materials: filters.materials,
+      sort: filters.sort,
+      organisation: filters.organisation,
       search: filters.search,
-      orgId: filters.orgId,
-      registrationId: filters.registrationId,
-      orgName: filters.orgName,
       assigneeId: filters.backendAssigneeId,
       unassigned: filters.backendUnassignedOnly,
       nations: filters.nations,
@@ -78,11 +141,18 @@ export const workItemListController = {
       error: result.error,
       items,
       filters,
+      // RA-324 phase-2 filter sidebar model.
       typeOptions: buildTypeOptions(filters.typeIds),
-      stateOptions: buildStateOptions(filters.stateIds),
+      statusOptions: buildStatusOptions(filters.statusGroups),
+      materialOptions: buildMaterialOptions(filters.materials),
+      sortOptions: buildSortOptions(filters.sort),
       nationOptions: buildNationOptions(filters.nations),
-      assigneeFilterOptions: buildAssigneeFilterOptions(filters, user),
+      assigneeFilterOptions: buildAssigneeFilterOptions(filters),
       assigneeUserOptions: buildAssigneeUserOptions(filters.assigneeUserId),
+      // Active-filters block (removable tags) + counts for the collapsible
+      // section summaries.
+      activeFilters: buildActiveFilters(filters),
+      filterCounts: buildFilterCounts(filters),
       totalCount,
       page,
       pageSize,
@@ -91,40 +161,51 @@ export const workItemListController = {
       filterSummary: buildFilterSummary({ filters, totalCount }),
       // RA-127. Surface the create button only when the demo flag is on.
       showCreateWorkItem: config.get('featureFlags.workItemCreationEnabled'),
-      hasFilters:
-        filters.typeIds.length > 0 ||
-        filters.stateIds.length > 0 ||
-        filters.search !== '' ||
-        filters.orgId !== '' ||
-        filters.registrationId !== '' ||
-        filters.orgName !== '' ||
-        filters.assigneeMode !== ASSIGNEE_FILTER_ANY ||
-        filters.nations.length > 0 ||
-        filters.includeArchived,
+      hasFilters: hasActiveFilters(filters),
       filtersApplied: filters.filtersApplied
     })
   }
 }
 
 function readFilters(query, user) {
-  const typeIds = uniqueStringList(query.typeId).filter(
-    (id) => getWorkItemType(id) !== null
+  // Type: only the two Type-filter values are accepted (Reprocessor ->
+  // re-accreditation, Exporter -> exporter). Unlike phase-1 we do NOT drop the
+  // unregistered `exporter` id — it is passed to the backend so selecting
+  // Exporter returns zero results (there is no exporter data yet).
+  const typeIds = uniqueStringList(query.typeId).filter((id) =>
+    ALLOWED_TYPE_IDS.has(id)
   )
 
-  const knownStateIds = new Set(
-    getWorkItemTypes().flatMap((type) =>
-      (type.states ?? []).map((state) => state.id)
+  // Status is a UI grouping over backend state ids. Validate the submitted
+  // `status` group tokens, then expand to the flattened set of backend state
+  // ids (the single "Updated" group expands to two ids).
+  const statusGroups = uniqueStringList(query.status).filter((v) =>
+    STATUS_OPTION_BY_VALUE.has(v)
+  )
+  const stateIds = [
+    ...new Set(
+      statusGroups.flatMap((v) => STATUS_OPTION_BY_VALUE.get(v).stateIds)
     )
-  )
-  const stateIds = uniqueStringList(query.stateId).filter((id) =>
-    knownStateIds.has(id)
-  )
+  ]
 
+  // Material: repeated `material=` tokens, lower-cased and validated against
+  // the canonical token set.
+  const materials = uniqueStringList(query.material)
+    .map((m) => m.toLowerCase())
+    .filter((m) => MATERIAL_TOKENS.includes(m))
+
+  // Sort: one of the agreed tokens, else null (backend default order).
+  const sort = SORT_VALUES.has(query.sort) ? query.sort : null
+
+  // Combined "Organisation name or ID" search (backend matches org name OR
+  // operatorOrganisationId). Replaces the phase-1 orgId/orgName/registrationId
+  // inputs.
+  const organisation =
+    typeof query.organisation === 'string' ? query.organisation.trim() : ''
+
+  // Preserved free-text search param (no dedicated input in the new UI, but
+  // honoured for bookmarked links / existing behaviour).
   const search = typeof query.search === 'string' ? query.search.trim() : ''
-  const orgId = typeof query.orgId === 'string' ? query.orgId.trim() : ''
-  const registrationId =
-    typeof query.registrationId === 'string' ? query.registrationId.trim() : ''
-  const orgName = typeof query.orgName === 'string' ? query.orgName.trim() : ''
 
   const page = clampPositiveInt(query.page, 1)
 
@@ -159,11 +240,12 @@ function readFilters(query, user) {
 
   return {
     typeIds,
+    statusGroups,
     stateIds,
+    materials,
+    sort,
+    organisation,
     search,
-    orgId,
-    registrationId,
-    orgName,
     page,
     assigneeMode,
     assigneeUserId,
@@ -241,55 +323,18 @@ function clampPositiveInt(value, fallback) {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback
 }
 
-const SLA_TAG = {
-  OnTrack: { text: 'On track', classes: 'govuk-tag--green' },
-  AtRisk: { text: 'At risk', classes: 'govuk-tag--yellow' },
-  Breached: { text: 'Breached', classes: 'govuk-tag--red' }
-}
-
-/**
- * Parse the integer day count from a .NET "c" format TimeSpan string.
- * Format: [-][d.]hh:mm:ss[.fraction]  e.g. "84.00:00:00", "14.12:30:00".
- * Returns null when the value is absent or not parseable.
- */
-function parseDotNetTimeSpanDays(value) {
-  if (!value || typeof value !== 'string') return null
-  const negative = value.startsWith('-')
-  const s = negative ? value.slice(1) : value
-  const dotIdx = s.indexOf('.')
-  const colonIdx = s.indexOf(':')
-  if (dotIdx !== -1 && dotIdx < colonIdx) {
-    const days = parseInt(s.slice(0, dotIdx), 10)
-    return negative ? -days : days
-  }
-  return 0
-}
-
-function formatSlaRemaining(slaRemaining) {
-  const days = parseDotNetTimeSpanDays(slaRemaining)
-  if (days === null || days <= 0) return null
-  return days === 1 ? '1 day remaining' : `${days} days remaining`
-}
-
 function decorate(item) {
   const type = getWorkItemType(item.typeId)
   const stateId = item.stateId
   const stateDisplayName =
     type?.states?.find((state) => state.id === stateId)?.displayName ?? stateId
 
-  const slaTag = item.slaState ? SLA_TAG[item.slaState] : null
-  const slaRemainingText =
-    item.slaState && item.slaState !== 'Breached'
-      ? formatSlaRemaining(item.slaRemaining)
-      : null
-
   const archivedAtRaw = item.payload?.archivedAt
   const archivedAt = formatArchivedAt(archivedAtRaw)
 
-  // RA-324. The SLA clock starts when assessment starts, so `slaState` is the
-  // single signal that discriminates the two mutually-exclusive tile fields:
-  // "Submitted on" shows only before assessment (no SLA state yet); "Due date"
-  // shows only once the SLA clock has started (AC05.6 / AC05.8).
+  // RA-324 phase-2. The SLA clock starts when assessment starts, so `slaState`
+  // is the single signal that gates the card footer ("Assigned to / Due on"):
+  // it renders only once the clock has started.
   const slaStarted = Boolean(item.slaState)
 
   return {
@@ -298,27 +343,22 @@ function decorate(item) {
     stateDisplayName,
     stateTagClass: resolveStateTagClass(stateId),
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
-    slaTagText: slaTag?.text ?? null,
-    slaTagClass: slaTag?.classes ?? null,
-    slaRemainingText,
     archivedAt,
-    // RA-249. The "Application ref" column must show the human RA-*
-    // reference or nothing — never the work-item Guid. The row's link still
-    // navigates via `item.id` (see index.njk), so dropping the id fallback
-    // here loses no navigation.
+    // RA-249. The "Application ref" must show the human RA-* reference or
+    // nothing — never the work-item Guid. The card link still navigates via
+    // `item.id`, so dropping the id fallback here loses no navigation.
     applicationRef: item.payload?.applicationReference ?? null,
     orgName: item.payload?.organisationName ?? null,
-    // RA-324. Org ID tile field (AC05.3).
     orgId: item.payload?.operatorOrganisationId ?? null,
     material: item.payload?.material ?? null,
-    // RA-324. Submitted-on tile field (AC05.6): shown only before assessment
-    // starts. The template formats the raw timestamp with the `formatDateGds`
-    // filter (GDS date standard, e.g. "16 July 2026"), so no controller-side
-    // formatting/double-parse is needed here.
-    showSubmittedOn: !slaStarted,
-    // RA-324. Due-date tile field (AC05.8): shown only once the SLA clock
-    // has started. Rendered from the existing SLA tag + remaining text.
-    showDueDate: slaStarted
+    // RA-324 phase-2. The card footer renders only once the SLA clock has
+    // started.
+    showDueDate: slaStarted,
+    // RA-324 phase-2. Absolute SLA due date for the card footer "Due on"
+    // (formatted to a GDS date in the template via `formatDateGds`). The
+    // backend supplies `slaDueDate` once the clock has started; null before
+    // then / when unavailable, so the template renders an em dash.
+    dueOn: resolveDueOn(item)
   }
 }
 
@@ -348,63 +388,75 @@ function formatArchivedAt(value) {
   })
 }
 
+/**
+ * RA-324 phase-2. Extract the raw ISO-8601 string for the SLA due date from
+ * the backend list projection (`slaDueDate`), tolerating the Mongo relaxed
+ * extended-JSON `{ $date }` shape as well as a plain string. Returns null when
+ * absent (no SLA clock started) so the template renders an em dash. The
+ * template formats it to a GDS date via the `formatDateGds` filter.
+ */
+function resolveDueOn(item) {
+  const raw = item.slaDueDate
+  if (!raw) return null
+  if (typeof raw === 'string') return raw
+  if (typeof raw === 'object' && typeof raw.$date === 'string') {
+    return raw.$date
+  }
+  return null
+}
+
 function buildTypeOptions(selectedTypeIds) {
   const selected = new Set(selectedTypeIds)
-  return getWorkItemTypes().map((type) => ({
-    value: type.id,
-    text: type.displayName,
-    checked: selected.has(type.id)
+  return TYPE_FILTER_OPTIONS.map((o) => ({
+    value: o.value,
+    text: o.text,
+    checked: selected.has(o.value)
   }))
 }
 
-function buildStateOptions(selectedStateIds) {
-  const selected = new Set(selectedStateIds)
-  // Deduplicate states across all registered types by id, preserving the
-  // first-encountered display name.
-  const seen = new Map()
-  for (const type of getWorkItemTypes()) {
-    for (const state of type.states ?? []) {
-      if (!seen.has(state.id)) {
-        seen.set(state.id, state.displayName)
-      }
-    }
-  }
-  return Array.from(seen.entries()).map(([id, displayName]) => ({
-    value: id,
-    text: displayName,
-    checked: selected.has(id)
+function buildStatusOptions(selectedStatusGroups) {
+  const selected = new Set(selectedStatusGroups)
+  return STATUS_FILTER_OPTIONS.map((o) => ({
+    value: o.value,
+    text: o.text,
+    checked: selected.has(o.value)
   }))
 }
 
-const REGULATOR_DISPLAY_NAMES = {
-  England: 'Environment Agency (EA)',
-  Scotland: 'SEPA',
-  Wales: 'Natural Resources Wales (NRW)',
-  NorthernIreland: 'NIEA'
+function buildMaterialOptions(selectedMaterials) {
+  const selected = new Set(selectedMaterials)
+  return MATERIAL_FILTER_OPTIONS.map((o) => ({
+    value: o.value,
+    text: o.text,
+    checked: selected.has(o.value)
+  }))
+}
+
+function buildSortOptions(selectedSort) {
+  return SORT_OPTIONS.map((o) => ({
+    value: o.value,
+    text: o.text,
+    checked: selectedSort === o.value
+  }))
 }
 
 function buildNationOptions(selectedNations) {
   const selected = new Set(selectedNations)
-  return VALID_NATIONS.map((nation) => ({
-    value: nation,
-    text: REGULATOR_DISPLAY_NAMES[nation] ?? nation,
-    checked: selected.has(nation)
+  return NATION_FILTER_OPTIONS.map((o) => ({
+    value: o.value,
+    text: o.text,
+    checked: selected.has(o.value)
   }))
 }
 
-function buildAssigneeFilterOptions(filters, user) {
-  // The radio options the user picks between. "Mine" is only meaningful
-  // for an authenticated user, but we always include it so the same
-  // template works regardless.
-  const options = [
-    {
-      value: ASSIGNEE_FILTER_ANY,
-      text: 'Anyone',
-      checked: filters.assigneeMode === ASSIGNEE_FILTER_ANY
-    },
+function buildAssigneeFilterOptions(filters) {
+  // RA-324 phase-2 Assignment radios (prototype labels). No explicit "Anyone"
+  // option — the unfiltered state is simply nothing selected; the user reverts
+  // to it via the active-filter tag or "Clear all filters".
+  return [
     {
       value: ASSIGNEE_FILTER_MINE,
-      text: user?.name ? `Assigned to me (${user.name})` : 'Assigned to me',
+      text: 'Your applications',
       checked: filters.assigneeMode === ASSIGNEE_FILTER_MINE
     },
     {
@@ -414,12 +466,11 @@ function buildAssigneeFilterOptions(filters, user) {
     },
     {
       value: ASSIGNEE_FILTER_USER,
-      text: 'Specific user…',
+      text: 'Specific officer',
       checked: filters.assigneeMode === ASSIGNEE_FILTER_USER,
       conditional: { html: '__assignee-user-select__' }
     }
   ]
-  return options
 }
 
 function buildAssigneeUserOptions(selectedUserId) {
@@ -462,20 +513,21 @@ function buildPagination({ page, totalPages, filters }) {
 }
 
 function buildHref(filters) {
+  // `filters` always comes from readFilters (directly, or via a spread in
+  // withoutFilter / buildPagination), so every list field is guaranteed to be
+  // an array — no nullish guards needed on the loops.
   const params = new URLSearchParams()
-  for (const id of filters.typeIds ?? []) params.append('typeId', id)
-  for (const id of filters.stateIds ?? []) params.append('stateId', id)
-  for (const n of filters.nations ?? []) params.append('nation', n)
+  for (const id of filters.typeIds) params.append('typeId', id)
+  for (const v of filters.statusGroups) params.append('status', v)
+  for (const n of filters.nations) params.append('nation', n)
+  for (const m of filters.materials) params.append('material', m)
+  if (filters.sort) params.append('sort', filters.sort)
   // Carry the form-submission marker through pagination/back-links so
   // role-based defaults don't silently re-apply mid-paging (RA-125).
   if (filters.filtersApplied) params.append('filtersApplied', '1')
   if (filters.includeArchived) params.append('includeArchived', 'true')
   if (filters.search) params.append('search', filters.search)
-  if (filters.orgId) params.append('orgId', filters.orgId)
-  if (filters.registrationId) {
-    params.append('registrationId', filters.registrationId)
-  }
-  if (filters.orgName) params.append('orgName', filters.orgName)
+  if (filters.organisation) params.append('organisation', filters.organisation)
   if (filters.assigneeMode && filters.assigneeMode !== ASSIGNEE_FILTER_ANY) {
     params.append('assigneeMode', filters.assigneeMode)
     if (
@@ -492,42 +544,174 @@ function buildHref(filters) {
   return qs === '' ? '/work-items' : `/work-items?${qs}`
 }
 
+/**
+ * Per-section counts for the collapsible filter section summaries
+ * ("N selected"). Assignment / sort / organisation are single-select, so each
+ * contributes 0 or 1.
+ */
+function buildFilterCounts(filters) {
+  return {
+    type: filters.typeIds.length,
+    status: filters.statusGroups.length,
+    nation: filters.nations.length,
+    material: filters.materials.length,
+    assignment: filters.assigneeMode !== ASSIGNEE_FILTER_ANY ? 1 : 0,
+    sort: filters.sort ? 1 : 0,
+    organisation: filters.organisation ? 1 : 0
+  }
+}
+
+/** True when any filter (or the archived / free-text search) is active. */
+function hasActiveFilters(filters) {
+  const c = buildFilterCounts(filters)
+  return (
+    c.type > 0 ||
+    c.status > 0 ||
+    c.nation > 0 ||
+    c.material > 0 ||
+    c.assignment > 0 ||
+    c.sort > 0 ||
+    c.organisation > 0 ||
+    filters.includeArchived ||
+    filters.search !== ''
+  )
+}
+
+function assigneeUserName(userId) {
+  return getAssignableUsers().find((u) => u.id === userId)?.name ?? userId
+}
+
+/**
+ * Clone the active filters with a single value removed, so a removal link can
+ * rebuild the query without that one filter. Always resets to page 1 (the
+ * result set changes) and stamps `filtersApplied` so the nation role-default
+ * cannot silently re-apply (RA-125).
+ */
+function withoutFilter(filters, key, value) {
+  const next = { ...filters, page: 1, filtersApplied: true }
+  switch (key) {
+    case 'type':
+      next.typeIds = filters.typeIds.filter((v) => v !== value)
+      break
+    case 'status':
+      next.statusGroups = filters.statusGroups.filter((v) => v !== value)
+      break
+    case 'nation':
+      next.nations = filters.nations.filter((v) => v !== value)
+      break
+    case 'material':
+      next.materials = filters.materials.filter((v) => v !== value)
+      break
+    case 'assignment':
+      next.assigneeMode = ASSIGNEE_FILTER_ANY
+      next.assigneeUserId = null
+      break
+    case 'organisation':
+      next.organisation = ''
+      break
+    case 'sort':
+      next.sort = null
+      break
+  }
+  return next
+}
+
+/**
+ * Build the "Active filters" block: one removable tag per active filter value,
+ * each with an href that rebuilds the query minus that one filter. Sort is
+ * included so the user can revert to the default order without JavaScript
+ * (there is no explicit "default" sort radio).
+ */
+function buildActiveFilters(filters) {
+  // Every value below has already been validated by readFilters against its
+  // option list, so the label lookups always resolve — no `?? value` fallback.
+  const chips = []
+  const add = (key, value, label) =>
+    chips.push({
+      key,
+      label,
+      href: buildHref(withoutFilter(filters, key, value))
+    })
+
+  const typeLabel = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
+  for (const id of filters.typeIds) {
+    add('type', id, `Type: ${typeLabel.get(id)}`)
+  }
+  for (const v of filters.statusGroups) {
+    add('status', v, `Status: ${STATUS_OPTION_BY_VALUE.get(v).text}`)
+  }
+  for (const n of filters.nations) {
+    add('nation', n, `Nation: ${NATION_LABEL.get(n)}`)
+  }
+  for (const m of filters.materials) {
+    add('material', m, `Material: ${materialLabel(m)}`)
+  }
+  if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
+    add('assignment', null, `Assignment: Your applications`)
+  } else if (filters.assigneeMode === ASSIGNEE_FILTER_UNASSIGNED) {
+    add('assignment', null, `Assignment: Unassigned`)
+  } else if (
+    filters.assigneeMode === ASSIGNEE_FILTER_USER &&
+    filters.assigneeUserId
+  ) {
+    add(
+      'assignment',
+      null,
+      `Assignment: ${assigneeUserName(filters.assigneeUserId)}`
+    )
+  }
+  if (filters.organisation) {
+    add(
+      'organisation',
+      filters.organisation,
+      `Organisation: ${filters.organisation}`
+    )
+  }
+  if (filters.sort) {
+    const label = SORT_OPTIONS.find((o) => o.value === filters.sort).text
+    add('sort', filters.sort, `Sorted by: ${label}`)
+  }
+
+  return { chips, clearAllHref: '/work-items' }
+}
+
 function buildFilterSummary({ filters, totalCount }) {
   const parts = []
   if (filters.typeIds.length > 0) {
-    const names = filters.typeIds.map(
-      (id) => getWorkItemType(id)?.displayName ?? id
+    const typeLabel = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
+    parts.push(
+      `type: ${filters.typeIds.map((id) => typeLabel.get(id)).join(', ')}`
     )
-    parts.push(`type: ${names.join(', ')}`)
   }
-  if (filters.stateIds.length > 0) {
-    parts.push(`state: ${filters.stateIds.join(', ')}`)
+  if (filters.statusGroups.length > 0) {
+    const labels = filters.statusGroups.map(
+      (v) => STATUS_OPTION_BY_VALUE.get(v).text
+    )
+    parts.push(`status: ${labels.join(', ')}`)
   }
   if (filters.nations.length > 0) {
-    const labels = filters.nations.map((n) => REGULATOR_DISPLAY_NAMES[n] ?? n)
-    parts.push(`regulator: ${labels.join(', ')}`)
+    const labels = filters.nations.map((n) => NATION_LABEL.get(n))
+    parts.push(`nation: ${labels.join(', ')}`)
   }
-  if (filters.search) {
-    parts.push(`search: "${filters.search}"`)
+  if (filters.materials.length > 0) {
+    parts.push(`material: ${filters.materials.map(materialLabel).join(', ')}`)
   }
-  if (filters.orgId) {
-    parts.push(`org ID: "${filters.orgId}"`)
-  }
-  if (filters.registrationId) {
-    parts.push(`registration ID: "${filters.registrationId}"`)
-  }
-  if (filters.orgName) {
-    parts.push(`org name: "${filters.orgName}"`)
+  if (filters.organisation) {
+    parts.push(`organisation: "${filters.organisation}"`)
   }
   if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
-    parts.push('assigned to me')
+    parts.push('your applications')
   } else if (filters.assigneeMode === ASSIGNEE_FILTER_UNASSIGNED) {
     parts.push('unassigned')
   } else if (
     filters.assigneeMode === ASSIGNEE_FILTER_USER &&
     filters.assigneeUserId
   ) {
-    parts.push(`assignee: ${filters.assigneeUserId}`)
+    parts.push(`assignee: ${assigneeUserName(filters.assigneeUserId)}`)
+  }
+  if (filters.sort) {
+    const label = SORT_OPTIONS.find((o) => o.value === filters.sort).text
+    parts.push(`sorted by ${label}`)
   }
   return {
     totalCount,
