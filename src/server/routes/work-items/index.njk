@@ -64,8 +64,8 @@
               {% for chip in activeFilters.chips %}
                 <li>
                   <a class="govuk-link app-active-filters__tag" href="{{ chip.href }}" data-testid="active-filter-remove">
-                    <span class="app-active-filters__label" data-testid="active-filter-label">{{ chip.label }}</span>
                     <span aria-hidden="true" class="app-active-filters__remove-icon">×</span>
+                    <span class="app-active-filters__label" data-testid="active-filter-label">{{ chip.label }}</span>
                     <span class="govuk-visually-hidden">(remove this filter)</span>
                   </a>
                 </li>
