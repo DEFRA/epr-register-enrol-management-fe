@@ -600,7 +600,7 @@ describe('#workItemListController', () => {
 
     const { statusCode } = await server.inject({
       method: 'GET',
-      url: '/work-items?typeId=re-accreditation&typeId=exporter&status=updated&status=approved&material=plastic&material=glass&sort=due-date&organisation=acme'
+      url: '/work-items?typeId=re-accreditation&typeId=exporter&status=updated&status=approved&material=plastic&material=glass-remelt&sort=due-date&organisation=acme&filtersApplied=1'
     })
 
     expect(statusCode).toBe(statusCodes.ok)
@@ -611,11 +611,62 @@ describe('#workItemListController', () => {
         typeIds: ['re-accreditation', 'exporter'],
         // "Updated" group expands to both ids; "Granted" -> approved.
         stateIds: ['assessment-in-progress', 'updated', 'approved'],
+        // RA-299 AC05: the UI filter value 'glass-remelt' maps to the real
+        // backend 'glass' token (see materials.js — no data can currently
+        // distinguish remelt/other).
         materials: ['plastic', 'glass'],
         sort: 'due-date',
         organisation: 'acme',
         pageSize: 20
       })
+    )
+  })
+
+  // RA-299 AC01/15. "Application type" is a second, independent filter
+  // section from "Applicant type" (typeId) above; both merge into the same
+  // backend typeIds query.
+  test('Forwards the applicationType filter, merged with typeId, into a single typeIds list', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation&applicationType=accreditation&applicationType=registration-application&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typeIds: [
+          're-accreditation',
+          'accreditation',
+          'registration-application'
+        ]
+      })
+    )
+  })
+
+  test('De-dupes typeId and applicationType when both select re-accreditation', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation&applicationType=re-accreditation&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({ typeIds: ['re-accreditation'] })
+    )
+  })
+
+  test('Drops unknown applicationType values', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?applicationType=ghost&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({ typeIds: [] })
     )
   })
 
@@ -1447,13 +1498,13 @@ describe('#workItemListController', () => {
 
       const { result } = await server.inject({
         method: 'GET',
-        url: '/work-items?material=plastic&material=glass&status=updated&status=approved&filtersApplied=1'
+        url: '/work-items?material=plastic&material=glass-remelt&status=updated&status=approved&filtersApplied=1'
       })
 
-      // Removing the "plastic" material chip keeps material=glass (and the
-      // other status pair intact), and vice versa.
+      // Removing the "plastic" material chip keeps material=glass-remelt
+      // (and the other status pair intact), and vice versa.
       expect(result).toContain(
-        'href="/work-items?status=updated&amp;status=approved&amp;material=glass&amp;filtersApplied=1"'
+        'href="/work-items?status=updated&amp;status=approved&amp;material=glass-remelt&amp;filtersApplied=1"'
       )
       expect(result).toContain(
         'href="/work-items?status=updated&amp;status=approved&amp;material=plastic&amp;filtersApplied=1"'
@@ -1461,10 +1512,10 @@ describe('#workItemListController', () => {
       // Removing the "updated" status chip keeps status=approved (+ both
       // materials), and vice versa.
       expect(result).toContain(
-        'href="/work-items?status=approved&amp;material=plastic&amp;material=glass&amp;filtersApplied=1"'
+        'href="/work-items?status=approved&amp;material=plastic&amp;material=glass-remelt&amp;filtersApplied=1"'
       )
       expect(result).toContain(
-        'href="/work-items?status=updated&amp;material=plastic&amp;material=glass&amp;filtersApplied=1"'
+        'href="/work-items?status=updated&amp;material=plastic&amp;material=glass-remelt&amp;filtersApplied=1"'
       )
     })
 
@@ -1730,6 +1781,392 @@ describe('#workItemListController', () => {
           stateIds: [],
           sort: null
         })
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Application-type filter (AC01/15)                       //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 application-type filter', () => {
+    test('Renders a distinct "Application type" section alongside "Applicant type"', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('data-testid="filter-section-type"')
+      expect(result).toContain('data-testid="filter-section-application-type"')
+      expect(result).toContain(
+        'data-testid="filter-section-application-type-toggle"'
+      )
+      expect(result).toContain('Applicant type')
+      expect(result).toContain('Application type')
+      // The four AC01/15 options.
+      expect(result).toContain('Re-accreditation')
+      expect(result).toContain('Accreditation')
+      expect(result).toContain('Registration application')
+      expect(result).toContain('Payment of annual registration fee')
+      // Submitted via its own param, distinct from typeId.
+      expect(result).toContain('name="applicationType"')
+    })
+
+    test('Only "Re-accreditation" maps to the real typeId; the others are zero-result stubs', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=accreditation&applicationType=registration-application&applicationType=annual-fee-payment&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          typeIds: [
+            'accreditation',
+            'registration-application',
+            'annual-fee-payment'
+          ]
+        })
+      )
+    })
+
+    test('An application-type chip removal drops only that value', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=re-accreditation&applicationType=accreditation&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">Re-accreditation</span>'
+      )
+      expect(result).toContain(
+        'data-testid="active-filter-label">Accreditation</span>'
+      )
+      expect(result).toContain(
+        'href="/work-items?applicationType=accreditation&amp;filtersApplied=1"'
+      )
+      expect(result).toContain(
+        'href="/work-items?applicationType=re-accreditation&amp;filtersApplied=1"'
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Material: split "Glass" filter (AC05)                    //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 material glass split', () => {
+    test('Renders "Glass- remelt" and "Glass- other" instead of a single "Glass" option', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('Glass- remelt')
+      expect(result).toContain('Glass- other')
+      expect(result).not.toContain('value="glass"')
+      expect(result).toContain('value="glass-remelt"')
+      expect(result).toContain('value="glass-other"')
+    })
+
+    // RA-299 AC05 judgement call (see materials.js): the operator backend has
+    // no remelt/other distinction in the data model, so BOTH new filter
+    // values map to the single real 'glass' backend token — either checkbox
+    // surfaces the same (current) Glass work items, rather than each
+    // returning zero results.
+    test('Both glass filter values forward the same real "glass" backend token', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=glass-remelt&filtersApplied=1'
+      })
+      expect(getWorkItems).toHaveBeenLastCalledWith(
+        expect.objectContaining({ materials: ['glass'] })
+      )
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=glass-other&filtersApplied=1'
+      })
+      expect(getWorkItems).toHaveBeenLastCalledWith(
+        expect.objectContaining({ materials: ['glass'] })
+      )
+    })
+
+    test('Selecting both glass options dedupes to a single backend token', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=glass-remelt&material=glass-other&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['glass'] })
+      )
+    })
+
+    test('Each glass option renders its own distinct active-filter chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=glass-remelt&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">Glass- remelt</span>'
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Default sort (AC06)                                      //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 default sort', () => {
+    test('Defaults to due-date sort on a bare landing (no query string)', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({ method: 'GET', url: '/work-items' })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'due-date' })
+      )
+    })
+
+    test('The default sort does NOT render a "Sorted by" active-filter chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).not.toContain('Sorted by:')
+    })
+
+    test('An explicit form submission with no sort picked clears the default (no sort)', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: null })
+      )
+    })
+
+    test('An explicit sort choice still renders its "Sorted by" chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?sort=organisation&filtersApplied=1'
+      })
+
+      expect(result).toContain('Sorted by: Organisation')
+    })
+
+    test('A defaulted sort is not carried into pagination hrefs as if explicit', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue({
+        ok: true,
+        items: [
+          {
+            id: '55555555-5555-5555-5555-555555555555',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 45,
+        page: 1,
+        pageSize: 20
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).not.toContain('sort=due-date')
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Default assignee = mine (AC08/09)                        //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 default assignee', () => {
+    test('Defaults to the signed-in user on a bare landing (no query string)', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({ method: 'GET', url: '/work-items' })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assigneeId: 'test-standard-id',
+          unassigned: false
+        })
+      )
+    })
+
+    test('The default "mine" assignee does NOT render a "Your applications" chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).not.toContain('Your applications</span>')
+    })
+
+    test('An explicit form submission with no assignee ticked shows all (clears the default)', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeId: null, unassigned: false })
+      )
+    })
+
+    test('An explicit "mine" selection still renders its chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?assigneeMode=mine&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">Your applications</span>'
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Session persistence within the current session (AC10/14) //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 filter session persistence', () => {
+    function sessionCookie(res) {
+      return [].concat(res.headers['set-cookie'] ?? []).join('; ')
+    }
+
+    test('A bare landing after applying filters restores them from the session', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const cookie = sessionCookie(applied)
+
+      getWorkItems.mockClear()
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['plastic'] })
+      )
+    })
+
+    test('An explicit empty submission (filtersApplied=1, nothing ticked) is itself the restorable state, not the AC06/AC08 defaults', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      // First apply a real filter, then explicitly clear it (a real
+      // "Clear all filters" / empty resubmission carries filtersApplied=1).
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const firstCookie = sessionCookie(applied)
+
+      const cleared = await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1',
+        headers: { cookie: firstCookie }
+      })
+      // yar re-issues a cookie on every write, so the SECOND response's
+      // cookie (not the first) is the one carrying the now-cleared session.
+      const cookie = sessionCookie(cleared) || firstCookie
+
+      getWorkItems.mockClear()
+      // A later bare landing restores the explicitly-cleared state (no
+      // materials, and no AC06/AC08 defaults reapplied) rather than reviving
+      // the earlier 'plastic' filter or the hard defaults.
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          materials: [],
+          sort: null,
+          assigneeId: null,
+          unassigned: false
+        })
+      )
+    })
+
+    test("A brand-new session (no cookie) does not restore another session's filters", async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+
+      getWorkItems.mockClear()
+      // No cookie forwarded — a genuinely separate session — falls back to
+      // the AC06/AC08 hard defaults, not the previous session's 'plastic'.
+      await server.inject({ method: 'GET', url: '/work-items' })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          materials: [],
+          sort: 'due-date',
+          assigneeId: 'test-standard-id'
+        })
+      )
+    })
+
+    test('A query string on the request itself always wins over any saved session filters', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const cookie = sessionCookie(applied)
+
+      getWorkItems.mockClear()
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=steel&filtersApplied=1',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['steel'] })
       )
     })
   })
