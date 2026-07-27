@@ -34,6 +34,7 @@ const TYPE_FILTER_OPTIONS = [
   { value: 'exporter', text: 'Exporter reaccreditation' }
 ]
 const ALLOWED_TYPE_IDS = new Set(TYPE_FILTER_OPTIONS.map((o) => o.value))
+const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
 
 // RA-324 phase-2. The "Status" filter groups the backend state ids under the
 // AC06 labels. The single "Updated" option deliberately expands to BOTH
@@ -72,6 +73,7 @@ const SORT_OPTIONS = [
   { value: 'status', text: 'Status' }
 ]
 const SORT_VALUES = new Set(SORT_OPTIONS.map((o) => o.value))
+const SORT_LABEL = new Map(SORT_OPTIONS.map((o) => [o.value, o.text]))
 
 // RA-324 phase-2. Nation filter uses plain nation names in the prototype
 // order (the role-based single-nation default still applies via
@@ -189,10 +191,12 @@ function readFilters(query, user) {
   ]
 
   // Material: repeated `material=` tokens, lower-cased and validated against
-  // the canonical token set.
-  const materials = uniqueStringList(query.material)
-    .map((m) => m.toLowerCase())
-    .filter((m) => MATERIAL_TOKENS.includes(m))
+  // the canonical token set. Dedup AFTER lower-casing so `?material=Plastic&
+  // material=plastic` collapses to a single token (uniqueStringList dedups
+  // case-sensitively, which would otherwise leak a duplicate chip).
+  const materials = [
+    ...new Set(uniqueStringList(query.material).map((m) => m.toLowerCase()))
+  ].filter((m) => MATERIAL_TOKENS.includes(m))
 
   // Sort: one of the agreed tokens, else null (backend default order).
   const sort = SORT_VALUES.has(query.sort) ? query.sort : null
@@ -339,7 +343,6 @@ function decorate(item) {
 
   return {
     ...item,
-    typeDisplayName: type?.displayName ?? item.typeId,
     stateDisplayName,
     stateTagClass: resolveStateTagClass(stateId),
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
@@ -350,7 +353,10 @@ function decorate(item) {
     applicationRef: item.payload?.applicationReference ?? null,
     orgName: item.payload?.organisationName ?? null,
     orgId: item.payload?.operatorOrganisationId ?? null,
-    material: item.payload?.material ?? null,
+    // RA-324. Present the material DISPLAY LABEL on the card (e.g. "Plastic",
+    // "Fibre-based composite material"), matching the filter checkboxes,
+    // active-filter chips and summary — never the raw lowercase token.
+    material: materialLabel(item.payload?.material),
     // RA-324 phase-2. The card footer renders only once the SLA clock has
     // started.
     showDueDate: slaStarted,
@@ -363,20 +369,26 @@ function decorate(item) {
 }
 
 /**
- * Format the archivedAt value from the payload. The backend serialises
- * BsonDateTime values in relaxed extended JSON as `{ "$date": "ISO-8601" }`,
- * so we handle both that shape and a plain ISO-8601 string.
+ * Extract a plain ISO-8601 string from a value that is either a string or the
+ * Mongo relaxed extended-JSON `{ "$date": "ISO-8601" }` shape the backend
+ * serialises BsonDateTime values as. Returns null for anything else (absent,
+ * or an unexpected object).
+ */
+function unwrapMongoDate(value) {
+  if (!value) return null
+  if (typeof value === 'string') return value
+  if (typeof value === 'object' && typeof value.$date === 'string') {
+    return value.$date
+  }
+  return null
+}
+
+/**
+ * Format the archivedAt value from the payload into a GDS date, or null when
+ * it is absent / unparseable.
  */
 function formatArchivedAt(value) {
-  if (!value) return null
-  const iso =
-    typeof value === 'object' &&
-    value !== null &&
-    typeof value.$date === 'string'
-      ? value.$date
-      : typeof value === 'string'
-        ? value
-        : null
+  const iso = unwrapMongoDate(value)
   if (!iso) return null
   const d = new Date(iso)
   if (isNaN(d.getTime())) return null
@@ -389,20 +401,12 @@ function formatArchivedAt(value) {
 }
 
 /**
- * RA-324 phase-2. Extract the raw ISO-8601 string for the SLA due date from
- * the backend list projection (`slaDueDate`), tolerating the Mongo relaxed
- * extended-JSON `{ $date }` shape as well as a plain string. Returns null when
- * absent (no SLA clock started) so the template renders an em dash. The
- * template formats it to a GDS date via the `formatDateGds` filter.
+ * RA-324 phase-2. The raw ISO-8601 SLA due date from the backend list
+ * projection (`slaDueDate`), or null when absent (no SLA clock started) so the
+ * template renders an em dash. The template formats it via `formatDateGds`.
  */
 function resolveDueOn(item) {
-  const raw = item.slaDueDate
-  if (!raw) return null
-  if (typeof raw === 'string') return raw
-  if (typeof raw === 'object' && typeof raw.$date === 'string') {
-    return raw.$date
-  }
-  return null
+  return unwrapMongoDate(item.slaDueDate)
 }
 
 function buildTypeOptions(selectedTypeIds) {
@@ -637,9 +641,8 @@ function buildActiveFilters(filters) {
       href: buildHref(withoutFilter(filters, key, value))
     })
 
-  const typeLabel = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
   for (const id of filters.typeIds) {
-    add('type', id, `Type: ${typeLabel.get(id)}`)
+    add('type', id, `Type: ${TYPE_LABEL.get(id)}`)
   }
   for (const v of filters.statusGroups) {
     add('status', v, `Status: ${STATUS_OPTION_BY_VALUE.get(v).text}`)
@@ -672,8 +675,7 @@ function buildActiveFilters(filters) {
     )
   }
   if (filters.sort) {
-    const label = SORT_OPTIONS.find((o) => o.value === filters.sort).text
-    add('sort', filters.sort, `Sorted by: ${label}`)
+    add('sort', filters.sort, `Sorted by: ${SORT_LABEL.get(filters.sort)}`)
   }
   if (filters.includeArchived) {
     add('archived', 'true', 'Archived: shown')
@@ -685,9 +687,8 @@ function buildActiveFilters(filters) {
 function buildFilterSummary({ filters, totalCount }) {
   const parts = []
   if (filters.typeIds.length > 0) {
-    const typeLabel = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
     parts.push(
-      `type: ${filters.typeIds.map((id) => typeLabel.get(id)).join(', ')}`
+      `type: ${filters.typeIds.map((id) => TYPE_LABEL.get(id)).join(', ')}`
     )
   }
   if (filters.statusGroups.length > 0) {

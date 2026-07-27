@@ -64,7 +64,7 @@
               {% for chip in activeFilters.chips %}
                 <li>
                   <a class="govuk-link app-active-filters__tag" href="{{ chip.href }}" data-testid="active-filter-remove">
-                    <span class="app-active-filters__label">{{ chip.label }}</span>
+                    <span class="app-active-filters__label" data-testid="active-filter-label">{{ chip.label }}</span>
                     <span aria-hidden="true" class="app-active-filters__remove-icon">×</span>
                     <span class="govuk-visually-hidden">(remove this filter)</span>
                   </a>
@@ -248,6 +248,12 @@
                     {{ govukTag({ text: item.stateDisplayName, classes: item.stateTagClass, attributes: { "data-testid": "work-item-state-tag-" + item.id } }) }}
                   </div>
 
+                  {# Applicant type is hard-coded "Reprocessor" BY DESIGN: this #}
+                  {# service is reprocessor-only for now — the backend has no    #}
+                  {# reprocessor/exporter type distinction on a work item yet, so #}
+                  {# there is no per-item value to read. When the backend models  #}
+                  {# that distinction (see follow-up bead) this must switch to a  #}
+                  {# real field, otherwise a second type would be mislabelled.    #}
                   <p class="govuk-body govuk-!-font-weight-bold app-application-card__title" data-testid="application-card-title">
                     <span data-testid="applicant-type">Reprocessor</span> reaccreditation: <span data-testid="material">{{ item.material or "—" }}</span>
                   </p>

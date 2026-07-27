@@ -303,7 +303,9 @@ describe('#workItemListController', () => {
 
     expect(result).toContain('data-testid="application-card-title"')
     expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
-    expect(result).toContain('data-testid="material">plastic</span>')
+    // Card shows the material DISPLAY LABEL, not the raw token.
+    expect(result).toContain('data-testid="material">Plastic</span>')
+    expect(result).not.toContain('data-testid="material">plastic</span>')
     expect(result).toContain('data-testid="application-org"')
     expect(result).toContain('data-testid="org-name">Acme Recycling</span>')
     expect(result).toContain('data-testid="org-id">ORG-4242</span>')
@@ -1171,6 +1173,35 @@ describe('#workItemListController', () => {
       expect(result).toContain('—')
     })
 
+    test('Ignores an unparseable archivedAt (no archived line rendered)', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'cccccccc-dddd-dddd-dddd-dddddddddddd',
+              typeId: 'unknown-type',
+              stateId: 'submitted',
+              submittedAt: '2026-04-01T10:00:00Z',
+              submittedBy: null,
+              payload: { archivedAt: 'not-a-real-date' }
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      // formatArchivedAt returns null for an unparseable value, so the card
+      // renders no archived line at all (never "Invalid Date").
+      expect(result).not.toContain('data-testid="work-item-archived-at-')
+      expect(result).not.toContain('Invalid Date')
+    })
+
     test('Pagination links preserve includeArchived so the filter survives page changes', async () => {
       clearWorkItemRegistry()
       registerWorkItemType({
@@ -1260,7 +1291,8 @@ describe('#workItemListController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('Acme Recycling Ltd'))
-    expect(result).toEqual(expect.stringContaining('plastic'))
+    // Card renders the material display label, not the raw 'plastic' token.
+    expect(result).toEqual(expect.stringContaining('Plastic'))
   })
 
   // ---------------------------------------------------------------- //
@@ -1356,6 +1388,74 @@ describe('#workItemListController', () => {
       )
       expect(result).toContain(
         'href="/work-items?nation=England&amp;filtersApplied=1"'
+      )
+    })
+
+    // Guards against a withoutFilter regression that drops a whole dimension
+    // rather than the single value: with REPEATED tokens, removing one chip
+    // must keep the other value of the SAME dimension.
+    test('Removing one repeated-token chip keeps the other value of that dimension', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&material=glass&status=updated&status=approved&filtersApplied=1'
+      })
+
+      // Removing the "plastic" material chip keeps material=glass (and the
+      // other status pair intact), and vice versa.
+      expect(result).toContain(
+        'href="/work-items?status=updated&amp;status=approved&amp;material=glass&amp;filtersApplied=1"'
+      )
+      expect(result).toContain(
+        'href="/work-items?status=updated&amp;status=approved&amp;material=plastic&amp;filtersApplied=1"'
+      )
+      // Removing the "updated" status chip keeps status=approved (+ both
+      // materials), and vice versa.
+      expect(result).toContain(
+        'href="/work-items?status=approved&amp;material=plastic&amp;material=glass&amp;filtersApplied=1"'
+      )
+      expect(result).toContain(
+        'href="/work-items?status=updated&amp;material=plastic&amp;material=glass&amp;filtersApplied=1"'
+      )
+    })
+
+    test('The sort chip removal drops sort= and the archived chip drops includeArchived', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?sort=due-date&includeArchived=true&filtersApplied=1'
+      })
+
+      // Removing "Sorted by" leaves only the archived filter (no sort=).
+      expect(result).toContain(
+        'href="/work-items?filtersApplied=1&amp;includeArchived=true"'
+      )
+      // Removing "Archived" leaves only the sort (no includeArchived).
+      expect(result).toContain(
+        'href="/work-items?sort=due-date&amp;filtersApplied=1"'
+      )
+    })
+
+    // De-dup material tokens AFTER lower-casing: ?material=Plastic&material=plastic
+    // must collapse to a single token, one chip, and one backend value.
+    test('De-duplicates material tokens case-insensitively', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=Plastic&material=plastic&filtersApplied=1'
+      })
+
+      // Exactly one Material chip (one removal link for material).
+      const chipCount = (
+        result.match(/data-testid="active-filter-label">Material: /g) ?? []
+      ).length
+      expect(chipCount).toBe(1)
+      // Backend receives a single 'plastic' token.
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['plastic'] })
       )
     })
 
