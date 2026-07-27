@@ -1467,9 +1467,10 @@ describe('#workItemListController', () => {
       expect(result).not.toContain('Assignment: Unassigned')
       // The section with a selection is expanded and shows a count.
       expect(result).toContain('(1 selected)')
-      // Clear-all points at the unfiltered page.
+      // Clear-all points at the explicit reset (RA-299 AC12) rather than a
+      // bare /work-items, which would restore the session-persisted filters.
       expect(result).toContain(
-        'href="/work-items" data-testid="active-filters-clear"'
+        'href="/work-items?clear=1" data-testid="active-filters-clear"'
       )
     })
 
@@ -2124,6 +2125,36 @@ describe('#workItemListController', () => {
           assigneeId: null,
           unassigned: false
         })
+      )
+    })
+
+    test('Clear all (?clear=1) drops the saved filters and lands on the AC06/AC08 defaults', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const firstCookie = sessionCookie(applied)
+
+      const cleared = await server.inject({
+        method: 'GET',
+        url: '/work-items?clear=1',
+        headers: { cookie: firstCookie }
+      })
+      const cookie = sessionCookie(cleared) || firstCookie
+
+      getWorkItems.mockClear()
+      // The whole point of AC12: a bare landing after Clear all must NOT
+      // resurrect 'plastic' from the session — it lands on the defaults.
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: [], sort: 'due-date' })
       )
     })
 

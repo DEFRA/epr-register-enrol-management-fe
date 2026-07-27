@@ -163,9 +163,18 @@ export const workItemListController = {
     // AC06/AC08 hard defaults (due-date sort, "mine" assignee) reserved for
     // the true first-ever bare landing of a session — restored filters are
     // used as-is, defaults are never re-applied on top of them.
+    // RA-299 AC12. "Clear all filters" must forget the saved state as well as
+    // the current query. It cannot simply link to a bare `/work-items`: that
+    // is the restore path above, so the filters the user just cleared would
+    // come straight back. `?clear=1` drops the saved filters and lands on the
+    // AC06/AC08 default view with no active-filter chips.
+    const isClearAll = request.query.clear === '1'
     const hasQueryString = Object.keys(request.query).length > 0
     let effectiveQuery = request.query
-    if (hasQueryString) {
+    if (isClearAll) {
+      request.yar.clear(SESSION_FILTERS_KEY)
+      effectiveQuery = {}
+    } else if (hasQueryString) {
       request.yar.set(SESSION_FILTERS_KEY, request.query)
     } else {
       const savedQuery = request.yar.get(SESSION_FILTERS_KEY)
@@ -898,5 +907,7 @@ function buildActiveFilters(filters) {
     add('archived', 'true', 'Archived')
   }
 
-  return { chips, clearAllHref: '/work-items' }
+  // `?clear=1` rather than a bare `/work-items` so the handler also drops the
+  // session-persisted filters (RA-299 AC12) instead of restoring them.
+  return { chips, clearAllHref: '/work-items?clear=1' }
 }
