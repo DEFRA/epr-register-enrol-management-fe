@@ -1,20 +1,12 @@
 @use "govuk-frontend" as *;
 
-// Work items list table
+// Applications list (RA-324)
 //
-// Prevents specific columns from wrapping their content onto multiple lines.
-// Applied via the `classes:` parameter on govukTable head/body cells so no
-// inline styles are needed (which would be blocked by the strict CSP).
-
-.app-\!-white-space-nowrap {
-  white-space: nowrap;
-}
-
-// Wider page container for the work items list.
-//
-.app-width-container--wide {
-  max-width: 1600px;
-}
+// The list was previously a wide (1600 px container) table that overflowed and
+// scrolled horizontally. It is now a constrained-width page of application
+// tiles, so the widened container and the horizontal-overflow workaround are
+// both gone — the page sits inside the default GOV.UK width container and
+// never scrolls sideways.
 
 // Filter sidebar — 1/5 of the container width.
 .app-work-items__filter {
@@ -30,17 +22,42 @@
   max-width: 80%;
 }
 
-// Work items results table wrapper.
+// Application tiles (AC04/AC07/AC10)
 //
-// The table has white-space: nowrap on several columns which can make it
-// wider than its three-quarters container column. Without this wrapper the
-// overflow leaks out at the page level, consuming the right-hand margin and
-// making the container appear uncentred. Constraining overflow to this
-// wrapper keeps the page margins intact while still allowing the table to
-// be scrolled horizontally if it is genuinely too wide for the viewport.
+// One card per application, rendered as a list so the markup stays semantic
+// and JavaScript-free (RA-94). Each card holds the status badge (AC07) and a
+// summary list of the AC05 fields. The layout is fluid — cards fill their
+// column and the header wraps — so it stays readable on small screens (AC10).
+.app-application-cards {
+  margin-bottom: 0;
+}
 
-.app-work-items__table-wrapper {
-  overflow-x: auto;
+.app-application-card {
+  padding: govuk-spacing(3);
+  margin-bottom: govuk-spacing(4);
+  border: 1px solid $govuk-border-colour;
+  background-color: govuk-colour("white");
+}
+
+// Header: application ref link on the left, status badge on the right. Wraps
+// (rather than overflowing) when the tile is too narrow to hold both.
+.app-application-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: govuk-spacing(2);
+  margin-bottom: govuk-spacing(2);
+}
+
+.app-application-card__title {
+  margin-bottom: 0;
+}
+
+// Tighten the per-tile summary list and drop its trailing margin so the card
+// padding is symmetric.
+.app-application-card__list {
+  margin-bottom: 0;
 }
 
 // Audit-log failure entry (RA-234)

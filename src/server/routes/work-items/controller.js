@@ -4,6 +4,8 @@ import {
   getWorkItemTypes
 } from '#/server/work-items/core/registry.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
+import { stateTagClass as resolveStateTagClass } from '#/server/work-items/core/state-badge.js'
+import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { config } from '#/config/config.js'
@@ -66,14 +68,13 @@ export const workItemListController = {
       pageSize > 0 ? Math.max(1, Math.ceil(totalCount / pageSize)) : 1
 
     return h.view('work-items/index', {
-      pageTitle: 'Work items',
-      heading: 'Work items',
-      breadcrumbs: [{ text: 'Work items' }],
-      // Widen the govuk-width-container to 1200 px so the filter sidebar and
-      // table have enough room and the page centres symmetrically on screen.
-      // Passed here (not via {% set %} in the template) so hapi-vision injects
-      // it directly into the Nunjucks context, where govuk/template.njk reads it.
-      containerClasses: 'app-width-container--wide',
+      // RA-324. Page is now the "Applications" tiles view. The nav LINK stays
+      // labelled "Work items" (AC01) and the route stays /work-items (AC02);
+      // only the page heading / title change. No widened container — tiles fit
+      // the default constrained width, removing the horizontal-scroll table.
+      pageTitle: 'Applications',
+      heading: 'Applications',
+      breadcrumbs: [{ text: 'Applications' }],
       ok: result.ok,
       error: result.error,
       items,
@@ -241,22 +242,6 @@ function clampPositiveInt(value, fallback) {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback
 }
 
-// GOV.UK Design system tag colours for the cross-type work item State
-// column. Keys match registered state ids; unknown ids fall through to
-// the neutral grey tag.
-const STATE_TAG_CLASSES = {
-  submitted: 'govuk-tag--blue',
-  'assessment-in-progress': 'govuk-tag--light-blue',
-  'awaiting-decision': 'govuk-tag--yellow',
-  // RA-291. Orange reads as "paused, awaiting someone else" — distinct
-  // from the blue/light-blue in-flight states, the yellow decision state
-  // and the grey terminal withdrawn.
-  queried: 'govuk-tag--orange',
-  approved: 'govuk-tag--green',
-  rejected: 'govuk-tag--red',
-  withdrawn: 'govuk-tag--grey'
-}
-
 const SLA_TAG = {
   OnTrack: { text: 'On track', classes: 'govuk-tag--green' },
   AtRisk: { text: 'At risk', classes: 'govuk-tag--yellow' },
@@ -302,11 +287,17 @@ function decorate(item) {
   const archivedAtRaw = item.payload?.archivedAt
   const archivedAt = formatArchivedAt(archivedAtRaw)
 
+  // RA-324. The SLA clock starts when assessment starts, so `slaState` is the
+  // single signal that discriminates the two mutually-exclusive tile fields:
+  // "Submitted on" shows only before assessment (no SLA state yet); "Due date"
+  // shows only once the SLA clock has started (AC05.6 / AC05.8).
+  const slaStarted = Boolean(item.slaState)
+
   return {
     ...item,
     typeDisplayName: type?.displayName ?? item.typeId,
     stateDisplayName,
-    stateTagClass: STATE_TAG_CLASSES[stateId] ?? 'govuk-tag--grey',
+    stateTagClass: resolveStateTagClass(stateId),
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
     slaTagText: slaTag?.text ?? null,
     slaTagClass: slaTag?.classes ?? null,
@@ -318,8 +309,29 @@ function decorate(item) {
     // here loses no navigation.
     applicationRef: item.payload?.applicationReference ?? null,
     orgName: item.payload?.organisationName ?? null,
-    material: item.payload?.material ?? null
+    // RA-324. Org ID tile field (AC05.3).
+    orgId: item.payload?.operatorOrganisationId ?? null,
+    material: item.payload?.material ?? null,
+    // RA-324. Submitted-on tile field (AC05.6): shown only before assessment
+    // starts, formatted to the GDS date standard (e.g. "16 July 2026").
+    showSubmittedOn: !slaStarted,
+    submittedOnFormatted: formatSubmittedOn(item.submittedAt),
+    // RA-324. Due-date tile field (AC05.8): shown only once the SLA clock
+    // has started. Rendered from the existing SLA tag + remaining text.
+    showDueDate: slaStarted
   }
+}
+
+/**
+ * Format the submitted-on date to the GDS date standard ("16 July 2026").
+ * Returns null when the value is absent or unparseable so the template can
+ * fall back to an em dash rather than rendering "Invalid Date".
+ */
+function formatSubmittedOn(value) {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (isNaN(parsed.getTime())) return null
+  return formatDate(value, 'd MMMM yyyy')
 }
 
 /**

@@ -1,8 +1,7 @@
 {% extends 'layouts/page.njk' %}
-{# containerClasses = "app-width-container--wide" is injected by the        #}
-{# controller so govuk/template.njk widens the container to 1600 px.        #}
+{# RA-324. Applications tiles page. Renders inside the default GOV.UK width  #}
+{# container (no widening) so it never scrolls horizontally.                 #}
 
-{% from "govuk/components/table/macro.njk" import govukTable %}
 {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
 {% from "govuk/components/checkboxes/macro.njk" import govukCheckboxes %}
 {% from "govuk/components/radios/macro.njk" import govukRadios %}
@@ -31,9 +30,7 @@
     </div>
   </div>
 
-  {# ── Row 2: filter sidebar (1/5) + results area (4/5) side-by-side ───── #}
-  {# The 1600 px container gives the table ~1280 px of width, comfortably   #}
-  {# preventing column wrapping at typical viewport sizes.                  #}
+  {# ── Row 2: filter sidebar (1/5) + application tiles (4/5) side-by-side ─ #}
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-one-quarter app-work-items__filter">
       <form method="get" action="/work-items" novalidate data-testid="work-items-filter-form">
@@ -202,57 +199,76 @@
         </p>
 
         {% if items.length > 0 %}
-          {% set rows = [] %}
-          {% for item in items %}
-            {% set stateTagHtml %}{{ govukTag({ text: item.stateDisplayName, classes: item.stateTagClass, attributes: { "data-testid": "work-item-state-tag-" + item.id } }) }}{% endset %}
-            {# Render the link via a Nunjucks capture so each interpolation #}
-            {# is auto-escaped — never concatenate `item.id` raw into       #}
-            {# `html:` (epr-6fi). `urlencode` for the href, `escape` for    #}
-            {# the attribute and link text.                                  #}
-            {# RA-249: the visible link text is the RA-* application ref (never the #}
-            {# work-item Guid). When a legacy item has no ref the cell stays blank, #}
-            {# so give the link an accessible name for screen readers (WCAG 2.4.4). #}
-            {% set itemLinkHtml %}<a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.applicationRef }}{% if not item.applicationRef %}<span class="govuk-visually-hidden">View work item</span>{% endif %}</a>{% endset %}
-            {% set slaTagHtml %}
-              {%- if item.slaTagText %}
-                {{- govukTag({ text: item.slaTagText, classes: item.slaTagClass, attributes: { "data-testid": "work-item-sla-tag-" + item.id } }) }}
-                {%- if item.slaRemainingText %}
-                  <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0">{{ item.slaRemainingText }}</p>
-                {%- endif %}
-              {%- else %}—{% endif %}
-            {% endset %}
-            {% set _ = rows.push([
-              { html: itemLinkHtml },
-              { text: item.typeDisplayName, classes: "app-!-white-space-nowrap" },
-              { html: stateTagHtml },
-              { text: item.orgName or "—" },
-              { text: item.material or "—" },
-              { text: item.submittedAt | formatDateTimeGds, classes: "app-!-white-space-nowrap" },
-              { text: item.submittedBy or "—" },
-              { text: item.assigneeDisplayName or "Unassigned" },
-              { html: slaTagHtml },
-              { text: item.archivedAt or "—", classes: "app-!-white-space-nowrap", attributes: { "data-testid": "work-item-archived-at-" + item.id } }
-            ]) %}
-          {% endfor %}
-
-          <div class="app-work-items__table-wrapper">
-            {{ govukTable({
-              head: [
-                { text: "Application ref" },
-                { text: "Type", classes: "app-!-white-space-nowrap" },
-                { text: "State" },
-                { text: "Org name" },
-                { text: "Material" },
-                { text: "Submitted", classes: "app-!-white-space-nowrap" },
-                { text: "Submitted by", classes: "app-!-white-space-nowrap" },
-                { text: "Assigned to", classes: "app-!-white-space-nowrap" },
-                { text: "Due date (SLA)" },
-                { text: "Archived", classes: "app-!-white-space-nowrap" }
-              ],
-              rows: rows,
-              attributes: { "data-testid": "work-items-table" }
-            }) }}
-          </div>
+          {# RA-324. Applications render as tiles (AC04): one card per      #}
+          {# application, fields in the AC05 order, status as a coloured     #}
+          {# badge contained in the tile (AC07/08). GOV.UK macros only — no  #}
+          {# JavaScript (RA-94). Field data-testids repeat across tiles and  #}
+          {# are scoped by the enclosing tile; per-item hooks (link, badge,  #}
+          {# archived) are id-keyed for the e2e suite.                        #}
+          {# The field list is hand-written (not the govukSummaryList macro)  #}
+          {# because the macro drops `attributes` on the value cell, and the  #}
+          {# e2e suite needs a data-testid on each field's <dd>. Every        #}
+          {# interpolation below is a plain `{{ ... }}` so Nunjucks           #}
+          {# auto-escapes it — no raw backend string is concatenated into     #}
+          {# markup (epr-6fi). Field order is the AC05 contract.              #}
+          <ul class="govuk-list app-application-cards" data-testid="applications-list">
+            {% for item in items %}
+              {% set assignedTo = item.assigneeDisplayName or "Unassigned" %}
+              <li>
+                <article class="app-application-card" data-testid="application-tile" data-work-item-id="{{ item.id }}">
+                  {# Header: application ref (field 1) as the navigating link  #}
+                  {# + the status badge (AC07). RA-249: when a legacy item has #}
+                  {# no ref the link keeps an accessible name for SRs.         #}
+                  <div class="app-application-card__header">
+                    <h2 class="govuk-heading-s app-application-card__title">
+                      <a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.applicationRef }}{% if not item.applicationRef %}<span class="govuk-visually-hidden">View application</span>{% endif %}</a>
+                    </h2>
+                    {{ govukTag({ text: item.stateDisplayName, classes: item.stateTagClass, attributes: { "data-testid": "work-item-state-tag-" + item.id } }) }}
+                  </div>
+                  <dl class="govuk-summary-list govuk-summary-list--no-border app-application-card__list">
+                    <div class="govuk-summary-list__row">
+                      <dt class="govuk-summary-list__key">Organisation name</dt>
+                      <dd class="govuk-summary-list__value" data-testid="org-name">{{ item.orgName or "—" }}</dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                      <dt class="govuk-summary-list__key">Organisation ID</dt>
+                      <dd class="govuk-summary-list__value" data-testid="org-id">{{ item.orgId or "—" }}</dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                      <dt class="govuk-summary-list__key">Material type</dt>
+                      <dd class="govuk-summary-list__value" data-testid="material">{{ item.material or "—" }}</dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                      <dt class="govuk-summary-list__key">Applicant type</dt>
+                      <dd class="govuk-summary-list__value" data-testid="applicant-type">{{ item.typeDisplayName }}</dd>
+                    </div>
+                    {% if item.showSubmittedOn %}
+                    <div class="govuk-summary-list__row">
+                      <dt class="govuk-summary-list__key">Submitted on</dt>
+                      <dd class="govuk-summary-list__value" data-testid="submitted-on">{{ item.submittedOnFormatted or "—" }}</dd>
+                    </div>
+                    {% endif %}
+                    <div class="govuk-summary-list__row">
+                      <dt class="govuk-summary-list__key">Assigned to</dt>
+                      <dd class="govuk-summary-list__value" data-testid="assigned-to">{{ assignedTo }}</dd>
+                    </div>
+                    {% if item.showDueDate %}
+                    <div class="govuk-summary-list__row">
+                      <dt class="govuk-summary-list__key">Due date</dt>
+                      <dd class="govuk-summary-list__value" data-testid="due-date">{% if item.slaTagText %}{{ govukTag({ text: item.slaTagText, classes: item.slaTagClass }) }}{% if item.slaRemainingText %} <span class="govuk-body-s">{{ item.slaRemainingText }}</span>{% endif %}{% else %}—{% endif %}</dd>
+                    </div>
+                    {% endif %}
+                    {% if item.archivedAt %}
+                    <div class="govuk-summary-list__row">
+                      <dt class="govuk-summary-list__key">Archived</dt>
+                      <dd class="govuk-summary-list__value" data-testid="work-item-archived-at-{{ item.id }}">{{ item.archivedAt }}</dd>
+                    </div>
+                    {% endif %}
+                  </dl>
+                </article>
+              </li>
+            {% endfor %}
+          </ul>
 
           {% if pagination %}
             {{ govukPagination(pagination) }}

@@ -62,21 +62,23 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Work items |'))
+    // RA-324. The page is now titled "Applications" (the nav link stays
+    // "Work items").
+    expect(result).toEqual(expect.stringContaining('Applications |'))
     expect(result).toEqual(
       expect.stringContaining('No work items have been submitted yet.')
     )
   })
 
-  test('Renders submitted items in a table with type and state display names', async () => {
+  test('Renders submitted items as tiles with type and state display names', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       id: 're-accreditation',
       displayName: 'Re-accreditation',
-      initialState: { id: 'submitted', displayName: 'Submitted' },
+      initialState: { id: 'submitted', displayName: 'Not started' },
       states: [
-        { id: 'submitted', displayName: 'Submitted' },
-        { id: 'approved', displayName: 'Approved', isTerminal: true }
+        { id: 'submitted', displayName: 'Not started' },
+        { id: 'approved', displayName: 'Granted', isTerminal: true }
       ],
       getTasksForState: () => []
     })
@@ -103,20 +105,28 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
+    // The tile is keyed by the work item id (href + testids).
     expect(result).toEqual(
       expect.stringContaining('11111111-1111-1111-1111-111111111111')
     )
+    // Applicant type = the work-item type display name (AC05.5).
     expect(result).toEqual(expect.stringContaining('Re-accreditation'))
-    expect(result).toEqual(expect.stringContaining('Submitted'))
-    expect(result).toEqual(expect.stringContaining('frontend'))
-    // State column renders as a coloured govuk-tag matching the design
-    // tokens used by the work item detail page (epr-3x2 follow-up).
+    // State badge text = the state display name (RA-324 contract label).
+    expect(result).toEqual(expect.stringContaining('Not started'))
+    // Status renders as a coloured govuk-tag (AC07/AC08); submitted = grey.
     expect(result).toEqual(
       expect.stringContaining(
         'data-testid="work-item-state-tag-11111111-1111-1111-1111-111111111111"'
       )
     )
-    expect(result).toEqual(expect.stringContaining('govuk-tag govuk-tag--blue'))
+    expect(result).toEqual(expect.stringContaining('govuk-tag govuk-tag--grey'))
+    // Rendered as a tile, not the old table.
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="application-tile"')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="work-items-table"')
+    )
   })
 
   // RA-196: the visible link text shows the user-facing application
@@ -218,19 +228,17 @@ describe('#workItemListController', () => {
     // so it is never a text-less link.
     expect(result).toEqual(
       expect.stringContaining(
-        `data-testid="work-item-link-${id}"><span class="govuk-visually-hidden">View work item</span></a>`
+        `data-testid="work-item-link-${id}"><span class="govuk-visually-hidden">View application</span></a>`
       )
     )
   })
 
   // ---------------------------------------------------------------- //
-  // Work items list usability improvements                            //
+  // RA-324 Applications tiles page                                    //
   //                                                                  //
-  // AC1: "ID" column header renamed to "Application ref"             //
-  // AC2: Submitted date rendered in GDS date-time format             //
-  // AC3: Table is in a govuk-grid-column-full section                //
+  // AC04: applications render as tiles (not a table).                //
   // ---------------------------------------------------------------- //
-  test('Renders "Application ref" as the first column header (not "ID")', async () => {
+  test('Renders applications as tiles, not the old table', async () => {
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
@@ -252,18 +260,19 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    expect(result).toContain('Application ref')
-    // The old "ID" header must not appear as an isolated table heading.
-    // (The string "ID" may still appear inside GDS component markup, so
-    // we specifically check the govukTable head cell text.)
-    const tableSection = result.slice(
-      result.indexOf('data-testid="work-items-table"')
-    )
-    expect(tableSection).not.toMatch(/<th[^>]*>\s*ID\s*<\/th>/)
+    // Tiles container + one tile per application.
+    expect(result).toContain('data-testid="applications-list"')
+    expect(result).toContain('data-testid="application-tile"')
+    // The old wide, horizontally-scrolling table is gone entirely.
+    expect(result).not.toContain('data-testid="work-items-table"')
+    expect(result).not.toContain('app-work-items__table-wrapper')
   })
 
-  test('Renders the submitted timestamp in GDS date-time format', async () => {
+  test('Renders "Submitted on" as a GDS date before assessment starts', async () => {
     // Use a January date (UK GMT = UTC+0) for timezone-stable assertions.
+    // No slaState => the SLA clock has not started => assessment has not
+    // started, so the "Submitted on" field renders (AC05.6), formatted to the
+    // GDS date standard ("16 July 2026") — date only, no time.
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
@@ -285,12 +294,118 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    // Formatted GDS date-time must appear; raw ISO string must not.
-    expect(result).toContain('15 January 2026 at 10:00am')
+    expect(result).toContain('data-testid="submitted-on"')
+    // Formatted GDS date must appear; no time component; raw ISO must not.
+    expect(result).toContain('15 January 2026')
+    expect(result).not.toContain('15 January 2026 at')
     expect(result).not.toContain('2026-01-15T10:00:00Z')
   })
 
-  test('Renders with a wider container, narrow filter sidebar left and wider table right', async () => {
+  // RA-324 (AC05.3 + AC05.8). Once the SLA clock has started the tile shows
+  // the Org ID and the Due date (SLA tag + remaining text) and HIDES the
+  // Submitted-on field (assessment has started).
+  test('Renders Org ID + Due date and hides Submitted on once the SLA clock has started', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+            typeId: 'unknown-type',
+            stateId: 'assessment-in-progress',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: 'frontend',
+            slaState: 'OnTrack',
+            slaRemaining: '14.00:00:00',
+            payload: { operatorOrganisationId: 'ORG-4242' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    // Org ID field renders the payload value.
+    expect(result).toContain('data-testid="org-id"')
+    expect(result).toContain('ORG-4242')
+    // Due date renders the SLA tag + remaining text.
+    expect(result).toContain('data-testid="due-date"')
+    expect(result).toContain('On track')
+    expect(result).toContain('14 days remaining')
+    // Submitted-on is suppressed while the SLA clock runs.
+    expect(result).not.toContain('data-testid="submitted-on"')
+  })
+
+  // RA-324. When the SLA clock has started but no SLA tag data is available
+  // (defensive), the Due date field still renders with an em dash rather than
+  // being dropped, and a missing Submitted-on date renders an em dash too.
+  test('Renders em dashes for a missing SLA tag and a missing submitted date', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'eeeeeeee-1111-1111-1111-111111111111',
+            typeId: 'unknown-type',
+            stateId: 'assessment-in-progress',
+            submittedAt: null,
+            submittedBy: null,
+            slaState: 'Breached',
+            slaRemaining: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    // SLA clock started (slaState present) => due-date field is present...
+    expect(result).toContain('data-testid="due-date"')
+    // ...and Breached renders its red tag (no "remaining" text for a breach).
+    expect(result).toContain('Breached')
+    expect(result).not.toContain('data-testid="submitted-on"')
+  })
+
+  // RA-324. Guard the formatSubmittedOn null-guards: an unparseable
+  // submittedAt (SLA clock not started) must render an em dash, never
+  // "Invalid Date".
+  test('Renders an em dash for an unparseable submitted date', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'eeeeeeee-2222-2222-2222-222222222222',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: 'not-a-date',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="submitted-on"')
+    expect(result).not.toContain('Invalid Date')
+  })
+
+  test('Renders in the constrained width with filter sidebar before the tiles', async () => {
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
@@ -312,61 +427,65 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    // Controller must inject containerClasses so govuk/template.njk widens
-    // the govuk-width-container from 960 px to 1200 px, giving equal margins
-    // on both sides of the screen and more room for the table.
-    expect(result).toContain('app-width-container--wide')
-    // Filter sidebar uses the narrower one-quarter column (25% of 1200 px = 300 px).
+    // RA-324 width fix: the page no longer widens the container to 1600 px —
+    // it sits in the default GOV.UK width container and never scrolls sideways.
+    expect(result).not.toContain('app-width-container--wide')
+    // Filter sidebar (one-quarter) + tiles column (three-quarters) retained.
     expect(result).toContain('govuk-grid-column-one-quarter')
-    // Results area uses three-quarters (75% of 1200 px ≈ 900 px).
     expect(result).toContain('govuk-grid-column-three-quarters')
-    // Filter form must appear before the results table in document order.
+    // Filter form must appear before the tiles in document order.
     const filterIdx = result.indexOf('data-testid="work-items-filter-form"')
-    const tableIdx = result.indexOf('data-testid="work-items-table"')
+    const tilesIdx = result.indexOf('data-testid="applications-list"')
     expect(filterIdx).toBeGreaterThan(-1)
-    expect(tableIdx).toBeGreaterThan(filterIdx)
+    expect(tilesIdx).toBeGreaterThan(filterIdx)
   })
 
-  test('Maps each registered state id to its GOV.UK tag colour', async () => {
+  // RA-324 (AC08). Every registered state id maps to its contract badge
+  // colour, and an unknown id falls back to the neutral grey tag. The colours
+  // come from the shared state-badge map so the list and the detail page stay
+  // consistent.
+  test('Maps each registered state id to its RA-324 GOV.UK tag colour', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       id: 're-accreditation',
       displayName: 'Re-accreditation',
-      initialState: { id: 'submitted', displayName: 'Submitted' },
+      initialState: { id: 'submitted', displayName: 'Not started' },
       states: [
-        { id: 'submitted', displayName: 'Submitted' },
-        {
-          id: 'assessment-in-progress',
-          displayName: 'Assessment in progress'
-        },
+        { id: 'submitted', displayName: 'Not started' },
+        { id: 'duly-made', displayName: 'Duly made' },
+        { id: 'assessment-in-progress', displayName: 'Updated' },
         { id: 'awaiting-decision', displayName: 'Awaiting decision' },
         { id: 'queried', displayName: 'Queried' },
-        { id: 'approved', displayName: 'Approved' },
-        { id: 'rejected', displayName: 'Rejected' },
+        { id: 'updated', displayName: 'Updated' },
+        { id: 'approved', displayName: 'Granted' },
+        { id: 'rejected', displayName: 'Refused' },
         { id: 'withdrawn', displayName: 'Withdrawn' }
       ],
       getTasksForState: () => []
     })
+    const states = [
+      { stateId: 'submitted', cls: 'govuk-tag--grey' },
+      { stateId: 'duly-made', cls: 'govuk-tag--blue' },
+      { stateId: 'assessment-in-progress', cls: 'govuk-tag--light-blue' },
+      { stateId: 'awaiting-decision', cls: 'govuk-tag--purple' },
+      { stateId: 'queried', cls: 'govuk-tag--yellow' },
+      { stateId: 'updated', cls: 'govuk-tag--light-blue' },
+      { stateId: 'approved', cls: 'govuk-tag--green' },
+      { stateId: 'rejected', cls: 'govuk-tag--red' },
+      { stateId: 'withdrawn', cls: 'govuk-tag--grey' },
+      { stateId: 'mystery', cls: 'govuk-tag--grey' }
+    ]
     getWorkItems.mockResolvedValue(
       emptyPage({
-        items: [
-          { stateId: 'submitted' },
-          { stateId: 'assessment-in-progress' },
-          { stateId: 'awaiting-decision' },
-          { stateId: 'queried' },
-          { stateId: 'approved' },
-          { stateId: 'rejected' },
-          { stateId: 'withdrawn' },
-          { stateId: 'mystery' }
-        ].map((s, i) => ({
+        items: states.map((s, i) => ({
           id: `00000000-0000-0000-0000-00000000000${i}`,
           typeId: 're-accreditation',
+          stateId: s.stateId,
           submittedAt: '2026-04-27T10:00:00Z',
           submittedBy: 'frontend',
-          payload: {},
-          ...s
+          payload: {}
         })),
-        totalCount: 8
+        totalCount: states.length
       })
     )
 
@@ -375,17 +494,16 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    for (const cls of [
-      'govuk-tag--blue',
-      'govuk-tag--light-blue',
-      'govuk-tag--yellow',
-      'govuk-tag--orange',
-      'govuk-tag--green',
-      'govuk-tag--red',
-      'govuk-tag--grey'
-    ]) {
-      expect(result).toEqual(expect.stringContaining(cls))
+    // Each state's badge renders with its contract colour on its own tile.
+    for (const [i, s] of states.entries()) {
+      const id = `00000000-0000-0000-0000-00000000000${i}`
+      const badgeIdx = result.indexOf(`data-testid="work-item-state-tag-${id}"`)
+      expect(badgeIdx).toBeGreaterThan(-1)
+      const badgeMarkup = result.slice(badgeIdx - 120, badgeIdx)
+      expect(badgeMarkup).toContain(s.cls)
     }
+    // The retired orange (RA-291 queried) colour is gone.
+    expect(result).not.toContain('govuk-tag--orange')
   })
 
   test('Falls back to raw type id when no module is registered for the type', async () => {
@@ -956,17 +1074,6 @@ describe('#workItemListController', () => {
       })
 
       expect(result).toContain('Clear filters')
-    })
-
-    test('Renders the Archived column header in the work-items table', async () => {
-      getWorkItems.mockResolvedValue(emptyPage())
-
-      const { result } = await server.inject({
-        method: 'GET',
-        url: '/work-items'
-      })
-
-      expect(result).toContain('Archived')
     })
 
     test('Renders archivedAt from extended-JSON $date shape as a human-readable date', async () => {
