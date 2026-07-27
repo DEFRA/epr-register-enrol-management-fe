@@ -316,6 +316,10 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="org-id">ORG-4242</span>')
     // Submitted-on no longer appears on the card (prototype).
     expect(result).not.toContain('data-testid="submitted-on"')
+    // RA-324 prototype fix: the title is normal weight, not bold.
+    expect(result).not.toContain(
+      'govuk-!-font-weight-bold app-application-card__title'
+    )
   })
 
   // RA-324 phase-2 (footer). Once the SLA clock has started the card shows an
@@ -354,6 +358,14 @@ describe('#workItemListController', () => {
     expect(result).toContain('10 February 2026')
     // Submitted-on is not on the card in any state.
     expect(result).not.toContain('data-testid="submitted-on"')
+    // RA-324 prototype fix: "Assigned to:" / "Due on:" labels are bold (their
+    // own span), the values are not individually bolded.
+    expect(result).toContain(
+      '<span class="app-application-card__meta-label">Assigned to:</span>'
+    )
+    expect(result).toContain(
+      '<span class="app-application-card__meta-label">Due on:</span>'
+    )
   })
 
   // RA-324 phase-2. A "Not started" card (no SLA clock) shows NO footer, so no
@@ -667,8 +679,11 @@ describe('#workItemListController', () => {
     expect(result).toEqual(expect.stringContaining('href="/work-items?page=3"'))
     // RA-324 phase-2 (prototype). Just the item range + total, no "page X of
     // Y" or filter recap. rangeStart = (page-1)*pageSize+1 = 21; rangeEnd
-    // reflects the actual rendered item count (1 mocked item) = 21.
-    expect(result).toEqual(expect.stringContaining('Showing 21-21 of 45'))
+    // reflects the actual rendered item count (1 mocked item) = 21. Bold per
+    // the prototype.
+    expect(result).toEqual(
+      expect.stringContaining('<strong>Showing 21-21 of 45</strong>')
+    )
   })
 
   test('Shows a filtered empty-state message when filters are active but nothing matches', async () => {
@@ -1373,14 +1388,32 @@ describe('#workItemListController', () => {
       expect(result).toContain('data-testid="active-filters"')
       expect(result).toContain('data-testid="active-filter-remove"')
       expect(result).toContain('data-testid="active-filters-clear"')
-      // One chip per active filter, each labelled by its dimension.
-      expect(result).toContain('Type: Reprocessor reaccreditation')
-      expect(result).toContain('Nation: England')
-      expect(result).toContain('Material: Plastic')
-      expect(result).toContain('Status: Updated')
-      expect(result).toContain('Organisation: acme')
-      expect(result).toContain('Assignment: Unassigned')
+      // RA-324 prototype fix: chips show ONLY the value — no category prefix
+      // — except Sort, which keeps its "Sorted by: " prefix.
+      expect(result).toContain(
+        'data-testid="active-filter-label">Reprocessor reaccreditation</span>'
+      )
+      expect(result).toContain(
+        'data-testid="active-filter-label">England</span>'
+      )
+      expect(result).toContain(
+        'data-testid="active-filter-label">Plastic</span>'
+      )
+      expect(result).toContain(
+        'data-testid="active-filter-label">Updated</span>'
+      )
+      expect(result).toContain('data-testid="active-filter-label">acme</span>')
+      expect(result).toContain(
+        'data-testid="active-filter-label">Unassigned</span>'
+      )
       expect(result).toContain('Sorted by: Due date')
+      // None of the non-sort chips carry a category prefix.
+      expect(result).not.toContain('Type: Reprocessor reaccreditation')
+      expect(result).not.toContain('Nation: England')
+      expect(result).not.toContain('Material: Plastic')
+      expect(result).not.toContain('Status: Updated')
+      expect(result).not.toContain('Organisation: acme')
+      expect(result).not.toContain('Assignment: Unassigned')
       // The section with a selection is expanded and shows a count.
       expect(result).toContain('(1 selected)')
       // Clear-all points at the unfiltered page.
@@ -1463,9 +1496,10 @@ describe('#workItemListController', () => {
         url: '/work-items?material=Plastic&material=plastic&filtersApplied=1'
       })
 
-      // Exactly one Material chip (one removal link for material).
+      // Exactly one Material chip (one removal link for material). Chips
+      // carry no category prefix, so match on the bare value.
       const chipCount = (
-        result.match(/data-testid="active-filter-label">Material: /g) ?? []
+        result.match(/data-testid="active-filter-label">Plastic<\/span>/g) ?? []
       ).length
       expect(chipCount).toBe(1)
       // Backend receives a single 'plastic' token.
@@ -1482,7 +1516,11 @@ describe('#workItemListController', () => {
         url: '/work-items?assigneeMode=user&assigneeUserId=stub-caseworker-2&filtersApplied=1'
       })
 
-      expect(result).toContain('Assignment: Stub Caseworker Two')
+      // RA-324 prototype fix: no "Assignment: " prefix — just the value.
+      expect(result).toContain(
+        'data-testid="active-filter-label">Stub Caseworker Two</span>'
+      )
+      expect(result).not.toContain('Assignment: Stub Caseworker Two')
     })
 
     test('Shows a "Your applications" chip for the mine assignment filter', async () => {
@@ -1493,7 +1531,10 @@ describe('#workItemListController', () => {
         url: '/work-items?assigneeMode=mine&filtersApplied=1'
       })
 
-      expect(result).toContain('Assignment: Your applications')
+      expect(result).toContain(
+        'data-testid="active-filter-label">Your applications</span>'
+      )
+      expect(result).not.toContain('Assignment: Your applications')
     })
 
     test('Falls back to the raw id when the officer is not in the directory', async () => {
@@ -1504,7 +1545,10 @@ describe('#workItemListController', () => {
         url: '/work-items?assigneeMode=user&assigneeUserId=ghost-officer&filtersApplied=1'
       })
 
-      expect(result).toContain('Assignment: ghost-officer')
+      expect(result).toContain(
+        'data-testid="active-filter-label">ghost-officer</span>'
+      )
+      expect(result).not.toContain('Assignment: ghost-officer')
     })
 
     test('Removal links preserve the specific-officer, search and organisation filters', async () => {
@@ -1592,7 +1636,8 @@ describe('#workItemListController', () => {
       })
 
       expect(result).toContain('data-testid="work-items-summary"')
-      expect(result).toContain('Showing 1-1 of 1')
+      // Bold per the prototype.
+      expect(result).toContain('<strong>Showing 1-1 of 1</strong>')
       // No filter/sort recap leaks into the summary text.
       expect(result).not.toContain('material: Plastic')
       expect(result).not.toContain('status: Updated')
@@ -1628,8 +1673,12 @@ describe('#workItemListController', () => {
       expect(result).toContain(
         'data-testid="work-items-filter-include-archived"'
       )
-      // Removable active-filter chip.
-      expect(result).toContain('Archived: shown')
+      // Removable active-filter chip. RA-324 prototype fix: no "Archived: "
+      // prefix — just the bare value.
+      expect(result).toContain(
+        'data-testid="active-filter-label">Archived</span>'
+      )
+      expect(result).not.toContain('Archived: shown')
       // Its removal href drops includeArchived (keeping the page unfiltered).
       expect(result).toContain('data-testid="active-filter-remove"')
       // Backend still receives includeArchived=true (ra-224 param unchanged).

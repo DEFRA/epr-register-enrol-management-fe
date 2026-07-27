@@ -634,9 +634,12 @@ function withoutFilter(filters, key, value) {
 
 /**
  * Build the "Active filters" block: one removable tag per active filter value,
- * each with an href that rebuilds the query minus that one filter. Sort is
- * included so the user can revert to the default order without JavaScript
- * (there is no explicit "default" sort radio).
+ * each with an href that rebuilds the query minus that one filter. Chip
+ * labels are just the value ("England", "Reprocessor reaccreditation") — no
+ * category prefix — except Sort, which keeps "Sorted by: {value}" since a
+ * bare sort value reads ambiguously as a chip. Sort is included so the user
+ * can revert to the default order without JavaScript (there is no explicit
+ * "default" sort radio).
  */
 function buildActiveFilters(filters) {
   // Every value below has already been validated by readFilters against its
@@ -649,44 +652,41 @@ function buildActiveFilters(filters) {
       href: buildHref(withoutFilter(filters, key, value))
     })
 
+  // RA-324 prototype fix: chips show ONLY the value (e.g. "England",
+  // "Reprocessor reaccreditation") — no "Nation:" / "Type:" category prefix,
+  // since the category is inferable from the value itself. Sort is the sole
+  // exception (kept below): a bare sort value ("Due date") reads ambiguously
+  // as a chip, so it keeps its "Sorted by: " prefix.
   for (const id of filters.typeIds) {
-    add('type', id, `Type: ${TYPE_LABEL.get(id)}`)
+    add('type', id, TYPE_LABEL.get(id))
   }
   for (const v of filters.statusGroups) {
-    add('status', v, `Status: ${STATUS_OPTION_BY_VALUE.get(v).text}`)
+    add('status', v, STATUS_OPTION_BY_VALUE.get(v).text)
   }
   for (const n of filters.nations) {
-    add('nation', n, `Nation: ${NATION_LABEL.get(n)}`)
+    add('nation', n, NATION_LABEL.get(n))
   }
   for (const m of filters.materials) {
-    add('material', m, `Material: ${materialLabel(m)}`)
+    add('material', m, materialLabel(m))
   }
   if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
-    add('assignment', null, `Assignment: Your applications`)
+    add('assignment', null, 'Your applications')
   } else if (filters.assigneeMode === ASSIGNEE_FILTER_UNASSIGNED) {
-    add('assignment', null, `Assignment: Unassigned`)
+    add('assignment', null, 'Unassigned')
   } else if (
     filters.assigneeMode === ASSIGNEE_FILTER_USER &&
     filters.assigneeUserId
   ) {
-    add(
-      'assignment',
-      null,
-      `Assignment: ${assigneeUserName(filters.assigneeUserId)}`
-    )
+    add('assignment', null, assigneeUserName(filters.assigneeUserId))
   }
   if (filters.organisation) {
-    add(
-      'organisation',
-      filters.organisation,
-      `Organisation: ${filters.organisation}`
-    )
+    add('organisation', filters.organisation, filters.organisation)
   }
   if (filters.sort) {
     add('sort', filters.sort, `Sorted by: ${SORT_LABEL.get(filters.sort)}`)
   }
   if (filters.includeArchived) {
-    add('archived', 'true', 'Archived: shown')
+    add('archived', 'true', 'Archived')
   }
 
   return { chips, clearAllHref: '/work-items' }

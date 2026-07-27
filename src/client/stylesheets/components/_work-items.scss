@@ -71,17 +71,22 @@
   color: $govuk-secondary-text-colour;
 }
 
-// Footer meta line ("Assigned to / Due on"), separated from the body by a
-// hairline rule. Wraps on narrow cards.
+// Footer meta line ("Assigned to / Due on"). No divider rule above it per the
+// prototype — it's just the next line, with normal spacing. Wraps on narrow
+// cards.
 .app-application-card__footer {
   display: flex;
   flex-wrap: wrap;
   gap: govuk-spacing(1) govuk-spacing(4);
   margin-top: govuk-spacing(2);
-  padding-top: govuk-spacing(2);
-  border-top: 1px solid $govuk-border-colour;
   color: $govuk-secondary-text-colour;
   font-size: 0.875rem;
+}
+
+// "Assigned to:" / "Due on:" labels are bold; the values (name/date) stay
+// normal weight, matching the prototype.
+.app-application-card__meta-label {
+  font-weight: bold;
 }
 
 .app-application-card__archived {

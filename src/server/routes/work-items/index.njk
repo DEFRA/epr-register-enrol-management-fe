@@ -221,8 +221,8 @@
             {% else %}
               {# RA-324 phase-2 (prototype). Just the item range + total —    #}
               {# no filter/sort recap here, the Active filters chips above    #}
-              {# already communicate what's applied.                          #}
-              Showing {{ rangeStart }}-{{ rangeEnd }} of {{ totalCount }}
+              {# already communicate what's applied. Bold per the prototype.  #}
+              <strong>Showing {{ rangeStart }}-{{ rangeEnd }} of {{ totalCount }}</strong>
             {% endif %}
           </p>
         {% endif %}
@@ -254,7 +254,7 @@
                   {# there is no per-item value to read. When the backend models  #}
                   {# that distinction (see follow-up bead) this must switch to a  #}
                   {# real field, otherwise a second type would be mislabelled.    #}
-                  <p class="govuk-body govuk-!-font-weight-bold app-application-card__title" data-testid="application-card-title">
+                  <p class="govuk-body app-application-card__title" data-testid="application-card-title">
                     <span data-testid="applicant-type">Reprocessor</span> reaccreditation: <span data-testid="material">{{ item.material or "—" }}</span>
                   </p>
 
@@ -264,8 +264,8 @@
 
                   {% if item.showDueDate %}
                     <div class="app-application-card__footer" data-testid="application-card-footer">
-                      <span class="app-application-card__meta">Assigned to: <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
-                      <span class="app-application-card__meta">Due on: <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
+                      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
+                      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Due on:</span> <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
                     </div>
                   {% endif %}
 
