@@ -63,8 +63,11 @@ describe('#workItemListController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('Work items |'))
+    expect(result).toEqual(expect.stringContaining('No items to process.'))
     expect(result).toEqual(
-      expect.stringContaining('No work items have been submitted yet.')
+      expect.stringContaining(
+        'There are currently no work items to display. New items will appear here as they are received.'
+      )
     )
   })
 
