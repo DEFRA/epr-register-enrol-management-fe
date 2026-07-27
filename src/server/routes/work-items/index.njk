@@ -90,14 +90,30 @@
           }) }}
         {% endcall %}
 
-        {# 2. Type (checkboxes) #}
-        {% call filterSection('type', 'Type', filterCounts.type) %}
+        {# 2. Applicant type (checkboxes). RA-299: relabelled from "Type" to  #}
+        {# "Applicant type" to disambiguate from the new "Application type"  #}
+        {# section below — the param name/values (typeId=) are unchanged.    #}
+        {% call filterSection('type', 'Applicant type', filterCounts.type) %}
           {{ govukCheckboxes({
             idPrefix: "filter-type",
             name: "typeId",
             classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Type", classes: "govuk-visually-hidden" } },
+            fieldset: { legend: { text: "Applicant type", classes: "govuk-visually-hidden" } },
             items: typeOptions
+          }) }}
+        {% endcall %}
+
+        {# 2b. Application type (checkboxes). RA-299 AC01/15: a SECOND,      #}
+        {# distinct type filter (what kind of application it is), separate  #}
+        {# from "Applicant type" above (who is applying). Submitted via its #}
+        {# own `applicationType=` param.                                    #}
+        {% call filterSection('application-type', 'Application type', filterCounts.applicationType) %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-application-type",
+            name: "applicationType",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "Application type", classes: "govuk-visually-hidden" } },
+            items: applicationTypeOptions
           }) }}
         {% endcall %}
 

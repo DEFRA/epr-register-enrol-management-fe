@@ -5,13 +5,30 @@ import { stateTagClass as resolveStateTagClass } from '#/server/work-items/core/
 import {
   MATERIAL_FILTER_OPTIONS,
   MATERIAL_TOKENS,
-  materialLabel
+  materialLabel,
+  materialFilterLabel,
+  toBackendMaterialTokens
 } from '#/server/work-items/core/materials.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { config } from '#/config/config.js'
 
 const DEFAULT_PAGE_SIZE = 20
+
+// RA-299 (AC10/AC14). yar session key the last-applied filter query is
+// persisted under, scoped to this route so it can't collide with other
+// session data (e.g. 'user', OAuth state). Reset on every (re-)login (see
+// auth/controller.js's OAuth callback and the stub login controller — both
+// call request.yar.reset() / start a fresh session), so a new session never
+// inherits a previous user's filters. Only ever READ on a genuinely bare
+// `/work-items` landing (no query string at all) — an explicit
+// filter-cleared submission always carries at least `filtersApplied=1`, so
+// it is never mistaken for a bare landing and never triggers a restore.
+const SESSION_FILTERS_KEY = 'workItemsListFilters'
+
+// RA-299 AC06. The sort token applied by default on a fresh, unfiltered
+// landing (see `resolveSort` below).
+const DEFAULT_SORT = 'due-date'
 
 /**
  * Valid nation values accepted by the backend (RA-125). Derived from
@@ -25,16 +42,47 @@ const ASSIGNEE_FILTER_MINE = 'mine'
 const ASSIGNEE_FILTER_UNASSIGNED = 'unassigned'
 const ASSIGNEE_FILTER_USER = 'user'
 
-// RA-324 phase-2. The "Type" filter is a frontend-only mapping (the backend
-// has no reprocessor/exporter field): Reprocessor -> the real
-// `re-accreditation` typeId (filters all current data); Exporter -> a
-// not-yet-existing typeId, so selecting it correctly returns zero results.
+// RA-324 phase-2 (RA-299: relabelled "Applicant type" in the UI to
+// disambiguate from the new "Application type" filter below — the underlying
+// param name/values are unchanged). Frontend-only mapping (the backend has no
+// reprocessor/exporter field): Reprocessor -> the real `re-accreditation`
+// typeId (filters all current data); Exporter -> a not-yet-existing typeId,
+// so selecting it correctly returns zero results.
 const TYPE_FILTER_OPTIONS = [
   { value: 're-accreditation', text: 'Reprocessor reaccreditation' },
   { value: 'exporter', text: 'Exporter reaccreditation' }
 ]
 const ALLOWED_TYPE_IDS = new Set(TYPE_FILTER_OPTIONS.map((o) => o.value))
 const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
+
+// RA-299 AC01/15. A SECOND, distinct type-style filter: "Application type"
+// (what kind of application it is), separate from "Applicant type" (who is
+// applying) above. Both dimensions ultimately constrain the same backend
+// `typeIds` field (the handler merges the two selections before calling
+// getWorkItems), submitted via a separate `applicationType=` query param so
+// the two checkbox groups don't collide in the form / active-filter chips.
+// Mirrors the SAME not-yet-existing-typeId stub pattern as Exporter above:
+// only "Re-accreditation" maps to the real `re-accreditation` typeId (today's
+// only work item type); "Accreditation", "Registration application" and
+// "Payment of annual registration fee" are BA-requested options with no
+// backend type yet, so they are given not-yet-existing typeId tokens and
+// correctly return zero results via the backend's `builder.In(w => w.TypeId,
+// typeIds)` until those work item types exist.
+const APPLICATION_TYPE_FILTER_OPTIONS = [
+  { value: 're-accreditation', text: 'Re-accreditation' },
+  { value: 'accreditation', text: 'Accreditation' },
+  { value: 'registration-application', text: 'Registration application' },
+  {
+    value: 'annual-fee-payment',
+    text: 'Payment of annual registration fee'
+  }
+]
+const ALLOWED_APPLICATION_TYPE_IDS = new Set(
+  APPLICATION_TYPE_FILTER_OPTIONS.map((o) => o.value)
+)
+const APPLICATION_TYPE_LABEL = new Map(
+  APPLICATION_TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text])
+)
 
 // RA-324 phase-2. The "Status" filter groups the backend state ids under the
 // AC06 labels. The single "Updated" option deliberately expands to BOTH
@@ -105,12 +153,41 @@ const NATION_LABEL = new Map(
 export const workItemListController = {
   async handler(request, h) {
     const user = getUser(request)
-    const filters = readFilters(request.query, user)
+
+    // RA-299 AC10/14. A genuinely bare landing (NO query string at all — not
+    // even `?filtersApplied=1`) restores the last-applied filters from the
+    // yar session, if any were saved this session. Any request WITH a query
+    // string (a real filter-form submission, a chip-removal link, a
+    // pagination link, a bookmarked filtered URL, ...) is itself the
+    // "last-applied" state and overwrites the saved value. This keeps the
+    // AC06/AC08 hard defaults (due-date sort, "mine" assignee) reserved for
+    // the true first-ever bare landing of a session — restored filters are
+    // used as-is, defaults are never re-applied on top of them.
+    const hasQueryString = Object.keys(request.query).length > 0
+    let effectiveQuery = request.query
+    if (hasQueryString) {
+      request.yar.set(SESSION_FILTERS_KEY, request.query)
+    } else {
+      const savedQuery = request.yar.get(SESSION_FILTERS_KEY)
+      if (savedQuery) {
+        effectiveQuery = savedQuery
+      }
+    }
+
+    const filters = readFilters(effectiveQuery, user)
 
     const result = await getWorkItems({
-      typeIds: filters.typeIds,
+      // RA-299 AC01/15. "Applicant type" and "Application type" are two
+      // separate filter sections in the UI but both constrain the same
+      // backend field — merge (and de-dup) the two selections here.
+      typeIds: [
+        ...new Set([...filters.typeIds, ...filters.applicationTypeIds])
+      ],
       stateIds: filters.stateIds,
-      materials: filters.materials,
+      // RA-299 AC05. `filters.materials` holds the UI-facing filter values
+      // (e.g. the split 'glass-remelt' / 'glass-other'); translate to the
+      // real backend material token(s) before querying.
+      materials: toBackendMaterialTokens(filters.materials),
       sort: filters.sort,
       organisation: filters.organisation,
       search: filters.search,
@@ -152,6 +229,9 @@ export const workItemListController = {
       filters,
       // RA-324 phase-2 filter sidebar model.
       typeOptions: buildTypeOptions(filters.typeIds),
+      applicationTypeOptions: buildApplicationTypeOptions(
+        filters.applicationTypeIds
+      ),
       statusOptions: buildStatusOptions(filters.statusGroups),
       materialOptions: buildMaterialOptions(filters.materials),
       sortOptions: buildSortOptions(filters.sort),
@@ -178,12 +258,29 @@ export const workItemListController = {
 }
 
 function readFilters(query, user) {
-  // Type: only the two Type-filter values are accepted (Reprocessor ->
-  // re-accreditation, Exporter -> exporter). Unlike phase-1 we do NOT drop the
-  // unregistered `exporter` id — it is passed to the backend so selecting
-  // Exporter returns zero results (there is no exporter data yet).
+  // Hidden form marker that lets the controller distinguish 'user
+  // submitted the filter form' from 'fresh GET of /work-items'. Without
+  // this, role-based defaults (e.g. nation) would silently re-apply when
+  // the user explicitly cleared them (RA-125). Computed up-front: the
+  // RA-299 sort/assignee defaults below need it too.
+  const filtersApplied = query.filtersApplied === '1'
+
+  // Type ("Applicant type" in the UI): only the two Type-filter values are
+  // accepted (Reprocessor -> re-accreditation, Exporter -> exporter). Unlike
+  // phase-1 we do NOT drop the unregistered `exporter` id — it is passed to
+  // the backend so selecting Exporter returns zero results (there is no
+  // exporter data yet).
   const typeIds = uniqueStringList(query.typeId).filter((id) =>
     ALLOWED_TYPE_IDS.has(id)
+  )
+
+  // RA-299 AC01/15. "Application type": a second, independent typeId-style
+  // filter (see APPLICATION_TYPE_FILTER_OPTIONS above for the stub-typeId
+  // reasoning). Read exactly like `typeIds` above, just from a different
+  // query param and option list; merged with `typeIds` by the handler before
+  // querying the backend.
+  const applicationTypeIds = uniqueStringList(query.applicationType).filter(
+    (id) => ALLOWED_APPLICATION_TYPE_IDS.has(id)
   )
 
   // Status is a UI grouping over backend state ids. Validate the submitted
@@ -206,8 +303,15 @@ function readFilters(query, user) {
     ...new Set(uniqueStringList(query.material).map((m) => m.toLowerCase()))
   ].filter((m) => MATERIAL_TOKENS.includes(m))
 
-  // Sort: one of the agreed tokens, else null (backend default order).
-  const sort = SORT_VALUES.has(query.sort) ? query.sort : null
+  // Sort: one of the agreed tokens, else the RA-299 AC06 filtersApplied-aware
+  // default (mirrors resolveNations' shape exactly). `sortExplicit` tracks
+  // whether the user actually chose the sort (vs it being silently defaulted)
+  // so buildActiveFilters can suppress a spurious "Sorted by: Due date" chip
+  // for the default.
+  const { value: sort, explicit: sortExplicit } = resolveSort(
+    query.sort,
+    filtersApplied
+  )
 
   // Combined "Organisation name or ID" search (backend matches org name OR
   // operatorOrganisationId). Replaces the phase-1 orgId/orgName/registrationId
@@ -221,7 +325,14 @@ function readFilters(query, user) {
 
   const page = clampPositiveInt(query.page, 1)
 
-  const assigneeMode = normaliseAssigneeMode(query.assigneeMode)
+  // RA-299 AC08/09. Mirrors resolveNations' filtersApplied-aware shape
+  // exactly: an explicit `assigneeMode` value wins; a form submission
+  // (filtersApplied) with no assignee option ticked honours that as "show
+  // all"; otherwise (a fresh, non-explicit landing) default to "mine".
+  // `assigneeModeExplicit` mirrors `sortExplicit`: false for the silent
+  // default, so it doesn't render as a removable active-filter chip.
+  const { value: assigneeMode, explicit: assigneeModeExplicit } =
+    resolveAssigneeMode(query.assigneeMode, filtersApplied)
   const assigneeUserId =
     typeof query.assigneeUserId === 'string' &&
     query.assigneeUserId.trim() !== ''
@@ -241,25 +352,22 @@ function readFilters(query, user) {
     backendAssigneeId = assigneeUserId
   }
 
-  // Hidden form marker that lets the controller distinguish 'user
-  // submitted the filter form' from 'fresh GET of /work-items'. Without
-  // this, role-based defaults (e.g. nation) would silently re-apply when
-  // the user explicitly cleared them (RA-125).
-  const filtersApplied = query.filtersApplied === '1'
-
   const includeArchived =
     query.includeArchived === 'true' || query.includeArchived === '1'
 
   return {
     typeIds,
+    applicationTypeIds,
     statusGroups,
     stateIds,
     materials,
     sort,
+    sortExplicit,
     organisation,
     search,
     page,
     assigneeMode,
+    assigneeModeExplicit,
     assigneeUserId,
     backendAssigneeId,
     backendUnassignedOnly,
@@ -304,15 +412,60 @@ function resolveNations(nationParam, user, filtersApplied) {
   return []
 }
 
-function normaliseAssigneeMode(value) {
-  if (
-    value === ASSIGNEE_FILTER_MINE ||
-    value === ASSIGNEE_FILTER_UNASSIGNED ||
-    value === ASSIGNEE_FILTER_USER
-  ) {
-    return value
+/**
+ * Resolve the active sort order (RA-299 AC06).
+ *
+ * An explicit, recognised `sort` query value always wins. A present-but-
+ * unrecognised value (e.g. a stale/bookmarked `sort=sideways`) is treated as
+ * an explicit "no sort" — same as the pre-RA-299 behaviour for junk input —
+ * rather than reviving the default. Only a genuinely ABSENT `sort` param,
+ * on a request that is not an explicit filter-form submission
+ * (`filtersApplied`), defaults to `DEFAULT_SORT` ('due-date'). The returned
+ * `explicit` flag is false for the defaulted case so the caller (
+ * `buildActiveFilters`) can avoid rendering a spurious "Sorted by: Due date"
+ * chip for a value the user never actually chose.
+ */
+function resolveSort(rawValue, filtersApplied) {
+  if (SORT_VALUES.has(rawValue)) {
+    return { value: rawValue, explicit: true }
   }
-  return ASSIGNEE_FILTER_ANY
+  if (rawValue !== undefined) {
+    return { value: null, explicit: false }
+  }
+  if (filtersApplied) {
+    return { value: null, explicit: false }
+  }
+  return { value: DEFAULT_SORT, explicit: false }
+}
+
+/**
+ * Resolve the active assignee filter mode (RA-299 AC08/09).
+ *
+ * Mirrors `resolveSort` above: an explicit, recognised `assigneeMode` value
+ * wins; a present-but-unrecognised value is an explicit "no filter" (matches
+ * the pre-RA-299 behaviour); a genuinely ABSENT `assigneeMode`, on a request
+ * that is not an explicit filter-form submission, defaults to "mine" so a
+ * caseworker's own queue is pre-selected without having to apply the filter
+ * every time. A submitted form with no assignee option ticked
+ * (`filtersApplied` true, `assigneeMode` absent) honours that as "show all",
+ * exactly like `resolveNations` does for an emptied nation selection
+ * (RA-125).
+ */
+function resolveAssigneeMode(rawValue, filtersApplied) {
+  if (
+    rawValue === ASSIGNEE_FILTER_MINE ||
+    rawValue === ASSIGNEE_FILTER_UNASSIGNED ||
+    rawValue === ASSIGNEE_FILTER_USER
+  ) {
+    return { value: rawValue, explicit: true }
+  }
+  if (rawValue !== undefined) {
+    return { value: ASSIGNEE_FILTER_ANY, explicit: false }
+  }
+  if (filtersApplied) {
+    return { value: ASSIGNEE_FILTER_ANY, explicit: false }
+  }
+  return { value: ASSIGNEE_FILTER_MINE, explicit: false }
 }
 
 function uniqueStringList(value) {
@@ -426,6 +579,15 @@ function buildTypeOptions(selectedTypeIds) {
   }))
 }
 
+function buildApplicationTypeOptions(selectedApplicationTypeIds) {
+  const selected = new Set(selectedApplicationTypeIds)
+  return APPLICATION_TYPE_FILTER_OPTIONS.map((o) => ({
+    value: o.value,
+    text: o.text,
+    checked: selected.has(o.value)
+  }))
+}
+
 function buildStatusOptions(selectedStatusGroups) {
   const selected = new Set(selectedStatusGroups)
   return STATUS_FILTER_OPTIONS.map((o) => ({
@@ -530,17 +692,35 @@ function buildHref(filters) {
   // an array — no nullish guards needed on the loops.
   const params = new URLSearchParams()
   for (const id of filters.typeIds) params.append('typeId', id)
+  for (const id of filters.applicationTypeIds) {
+    params.append('applicationType', id)
+  }
   for (const v of filters.statusGroups) params.append('status', v)
   for (const n of filters.nations) params.append('nation', n)
   for (const m of filters.materials) params.append('material', m)
-  if (filters.sort) params.append('sort', filters.sort)
+  // RA-299 AC06. Only carry `sort=` forward when it was an explicit user
+  // choice — a silently-defaulted sort must not "leak" into the URL as if it
+  // were user-chosen (readFilters re-derives the same default on every
+  // request where filtersApplied is still false, so nothing is lost by
+  // omitting it here).
+  if (filters.sort && filters.sortExplicit) {
+    params.append('sort', filters.sort)
+  }
   // Carry the form-submission marker through pagination/back-links so
   // role-based defaults don't silently re-apply mid-paging (RA-125).
   if (filters.filtersApplied) params.append('filtersApplied', '1')
   if (filters.includeArchived) params.append('includeArchived', 'true')
   if (filters.search) params.append('search', filters.search)
   if (filters.organisation) params.append('organisation', filters.organisation)
-  if (filters.assigneeMode && filters.assigneeMode !== ASSIGNEE_FILTER_ANY) {
+  // RA-299 AC08/09. Same reasoning as `sort` above: only carry
+  // `assigneeMode=` forward when it was an explicit user choice, so the
+  // silent "mine" default doesn't leak into pagination/chip-removal hrefs as
+  // if the user had picked it (readFilters re-derives the same default on
+  // every request where filtersApplied is still false).
+  if (
+    filters.assigneeModeExplicit &&
+    filters.assigneeMode !== ASSIGNEE_FILTER_ANY
+  ) {
     params.append('assigneeMode', filters.assigneeMode)
     if (
       filters.assigneeMode === ASSIGNEE_FILTER_USER &&
@@ -564,11 +744,17 @@ function buildHref(filters) {
 function buildFilterCounts(filters) {
   return {
     type: filters.typeIds.length,
+    applicationType: filters.applicationTypeIds.length,
     status: filters.statusGroups.length,
     nation: filters.nations.length,
     material: filters.materials.length,
-    assignment: filters.assigneeMode !== ASSIGNEE_FILTER_ANY ? 1 : 0,
-    sort: filters.sort ? 1 : 0,
+    // RA-299 AC08/09/AC06: gated on the *explicit* flag, not the resolved
+    // value, so the AC06/AC08 silent defaults (due-date sort, "mine"
+    // assignee) don't count as an "active filter" — they must not flip the
+    // empty-state message to "No work items match your filters." or open/
+    // count the collapsible section on a plain default landing.
+    assignment: filters.assigneeModeExplicit ? 1 : 0,
+    sort: filters.sortExplicit ? 1 : 0,
     organisation: filters.organisation ? 1 : 0,
     archived: filters.includeArchived ? 1 : 0
   }
@@ -579,6 +765,7 @@ function hasActiveFilters(filters) {
   const c = buildFilterCounts(filters)
   return (
     c.type > 0 ||
+    c.applicationType > 0 ||
     c.status > 0 ||
     c.nation > 0 ||
     c.material > 0 ||
@@ -612,11 +799,17 @@ function withoutFilter(filters, key, value) {
     case 'nation':
       next.nations = filters.nations.filter((v) => v !== value)
       break
+    case 'applicationType':
+      next.applicationTypeIds = filters.applicationTypeIds.filter(
+        (v) => v !== value
+      )
+      break
     case 'material':
       next.materials = filters.materials.filter((v) => v !== value)
       break
     case 'assignment':
       next.assigneeMode = ASSIGNEE_FILTER_ANY
+      next.assigneeModeExplicit = false
       next.assigneeUserId = null
       break
     case 'organisation':
@@ -624,6 +817,7 @@ function withoutFilter(filters, key, value) {
       break
     case 'sort':
       next.sort = null
+      next.sortExplicit = false
       break
     case 'archived':
       next.includeArchived = false
@@ -660,29 +854,44 @@ function buildActiveFilters(filters) {
   for (const id of filters.typeIds) {
     add('type', id, TYPE_LABEL.get(id))
   }
+  // RA-299 AC01/15. Application-type chips, same shape as Applicant-type.
+  for (const id of filters.applicationTypeIds) {
+    add('applicationType', id, APPLICATION_TYPE_LABEL.get(id))
+  }
   for (const v of filters.statusGroups) {
     add('status', v, STATUS_OPTION_BY_VALUE.get(v).text)
   }
   for (const n of filters.nations) {
     add('nation', n, NATION_LABEL.get(n))
   }
+  // RA-299 AC05. `m` is the UI filter value (e.g. 'glass-remelt'), not the
+  // raw backend payload token — use materialFilterLabel, not materialLabel.
   for (const m of filters.materials) {
-    add('material', m, materialLabel(m))
+    add('material', m, materialFilterLabel(m))
   }
-  if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
-    add('assignment', null, 'Your applications')
-  } else if (filters.assigneeMode === ASSIGNEE_FILTER_UNASSIGNED) {
-    add('assignment', null, 'Unassigned')
-  } else if (
-    filters.assigneeMode === ASSIGNEE_FILTER_USER &&
-    filters.assigneeUserId
-  ) {
-    add('assignment', null, assigneeUserName(filters.assigneeUserId))
+  // RA-299 AC08/09. Only render the assignment chip for an EXPLICIT
+  // selection — the silent "mine" default must not appear as a removable
+  // chip (there'd be nothing meaningful to "remove" back to; the user just
+  // wouldn't see a chip for the view they're already on).
+  if (filters.assigneeModeExplicit) {
+    if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
+      add('assignment', null, 'Your applications')
+    } else if (filters.assigneeMode === ASSIGNEE_FILTER_UNASSIGNED) {
+      add('assignment', null, 'Unassigned')
+    } else if (
+      filters.assigneeMode === ASSIGNEE_FILTER_USER &&
+      filters.assigneeUserId
+    ) {
+      add('assignment', null, assigneeUserName(filters.assigneeUserId))
+    }
   }
   if (filters.organisation) {
     add('organisation', filters.organisation, filters.organisation)
   }
-  if (filters.sort) {
+  // RA-299 AC06. Same reasoning as assignment above: only an EXPLICIT sort
+  // choice renders a "Sorted by: " chip — the silent due-date default must
+  // not appear as one (the prototype screenshot shows no such chip).
+  if (filters.sortExplicit) {
     add('sort', filters.sort, `Sorted by: ${SORT_LABEL.get(filters.sort)}`)
   }
   if (filters.includeArchived) {
