@@ -75,8 +75,6 @@
           </div>
         {% endif %}
 
-        <h2 class="govuk-heading-m">Filter</h2>
-
         {# 1. Sort by (radios) #}
         {% set sortRadioItems = [] %}
         {% for o in sortOptions %}
@@ -195,11 +193,10 @@
           }) }}
         {% endcall %}
 
+        {# The only "clear" affordance is the "Clear all filters" link in the #}
+        {# Active filters block above — no duplicate link down here (prototype). #}
         <div class="govuk-button-group govuk-!-margin-top-4">
           {{ govukButton({ text: "Apply filters", attributes: { "data-testid": "work-items-filter-apply" } }) }}
-          {% if hasFilters %}
-            <a class="govuk-link" href="/work-items" data-testid="work-items-filter-clear">Clear filters</a>
-          {% endif %}
         </div>
       </form>
     </div>
@@ -222,8 +219,10 @@
             {% if totalCount === 0 %}
               No work items match your filters.
             {% else %}
-              Showing page <strong>{{ page }}</strong> of <strong>{{ totalPages }}</strong>
-              ({{ totalCount }} work item{% if totalCount != 1 %}s{% endif %}{% if filterSummary.description %} — {{ filterSummary.description }}{% endif %})
+              {# RA-324 phase-2 (prototype). Just the item range + total —    #}
+              {# no filter/sort recap here, the Active filters chips above    #}
+              {# already communicate what's applied.                          #}
+              Showing {{ rangeStart }}-{{ rangeEnd }} of {{ totalCount }}
             {% endif %}
           </p>
         {% endif %}

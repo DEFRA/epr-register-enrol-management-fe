@@ -94,11 +94,11 @@
 //
 // Removable filter tags at the top of the sidebar. Each tag is a link (removal
 // is server-side, no JavaScript). The × is decorative; the link carries a
-// visually-hidden "(remove this filter)" for screen readers.
+// visually-hidden "(remove this filter)" for screen readers. No border here —
+// the first .app-filter-section below supplies the single divider line, so
+// the two blocks don't stack a doubled border.
 .app-active-filters {
-  padding-bottom: govuk-spacing(2);
   margin-bottom: govuk-spacing(3);
-  border-bottom: 1px solid $govuk-border-colour;
 }
 
 .app-active-filters__list {
@@ -120,9 +120,16 @@
   border: 1px solid $govuk-border-colour;
   border-radius: 4px;
   background-color: govuk-colour("white");
+  // The chip is a real link (removal navigates), but must read as plain text,
+  // not a blue hyperlink — the × conveys "removable" on its own. Override the
+  // inherited govuk-link colour/underline on both default and hover/visited
+  // states.
+  color: $govuk-text-colour;
   text-decoration: none;
 
-  &:hover {
+  &:hover,
+  &:visited {
+    color: $govuk-text-colour;
     background-color: govuk-colour("light-grey");
   }
 }
@@ -137,13 +144,71 @@
   overflow-wrap: break-word;
 }
 
-// Collapsible filter sections (native <details>) — trim the default GOV.UK
-// details spacing so the stacked sections read as a compact filter panel.
+// Collapsible filter sections (native <details>), restyled to match the
+// prototype: no left border / boxed marker (the GOV.UK default styles
+// <details> as an inset-text-style link with a solid triangle marker and a
+// border-left on the expanded content) — instead each section is a plain row
+// with a bottom divider, comfortable spacing around the title, and a small
+// plain chevron that flips when expanded.
 .app-filter-section {
-  margin-bottom: govuk-spacing(2);
+  margin-bottom: 0;
+  border-bottom: 1px solid $govuk-border-colour;
+
+  &:first-of-type {
+    border-top: 1px solid $govuk-border-colour;
+  }
+
+  .govuk-details__summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: govuk-spacing(3) 0;
+    // Remove the GOV.UK default: link-blue colour, underline, and the
+    // absolutely-positioned solid-triangle marker (::before) + its reserved
+    // left gutter.
+    padding-left: 0;
+    color: $govuk-text-colour;
+    text-decoration: none;
+
+    &::before {
+      content: none;
+    }
+
+    &:hover {
+      color: $govuk-text-colour;
+    }
+  }
+
+  .govuk-details__summary-text {
+    text-decoration: none;
+  }
+
+  .govuk-details__summary:hover .govuk-details__summary-text,
+  .govuk-details__summary:focus .govuk-details__summary-text {
+    text-decoration: none;
+  }
+
+  // Plain small chevron-down, flips to point up when the section is open.
+  .govuk-details__summary::after {
+    content: "";
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    margin-left: govuk-spacing(2);
+    border-right: 2px solid currentcolor;
+    border-bottom: 2px solid currentcolor;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+  }
+
+  &[open] .govuk-details__summary::after {
+    transform: rotate(225deg);
+  }
 
   .govuk-details__text {
-    padding-bottom: 0;
+    padding: govuk-spacing(1) 0 govuk-spacing(3);
+    border-left: none;
   }
 }
 

@@ -665,11 +665,10 @@ describe('#workItemListController', () => {
     // Previous and next links preserve the page parameter.
     expect(result).toEqual(expect.stringContaining('href="/work-items"'))
     expect(result).toEqual(expect.stringContaining('href="/work-items?page=3"'))
-    expect(result).toEqual(
-      expect.stringContaining(
-        'Showing page <strong>2</strong> of <strong>3</strong>'
-      )
-    )
+    // RA-324 phase-2 (prototype). Just the item range + total, no "page X of
+    // Y" or filter recap. rangeStart = (page-1)*pageSize+1 = 21; rangeEnd
+    // reflects the actual rendered item count (1 mocked item) = 21.
+    expect(result).toEqual(expect.stringContaining('Showing 21-21 of 45'))
   })
 
   test('Shows a filtered empty-state message when filters are active but nothing matches', async () => {
@@ -692,7 +691,9 @@ describe('#workItemListController', () => {
     expect(result).toEqual(
       expect.stringContaining('No work items match your filters.')
     )
-    expect(result).toEqual(expect.stringContaining('Clear filters'))
+    // RA-324 phase-2. The only "clear" affordance is the "Clear all filters"
+    // link in the Active filters block — no duplicate link below the sections.
+    expect(result).toEqual(expect.stringContaining('Clear all filters'))
   })
 
   test('Translates assigneeMode=mine into the signed-in user id', async () => {
@@ -1050,8 +1051,9 @@ describe('#workItemListController', () => {
         url: '/work-items?nation=England'
       })
 
-      // The "Clear filters" link is only rendered when hasFilters=true.
-      expect(result).toContain('Clear filters')
+      // The "Clear all filters" link is only rendered when hasFilters=true
+      // (via the Active filters block).
+      expect(result).toContain('Clear all filters')
     })
   })
 
@@ -1090,7 +1092,7 @@ describe('#workItemListController', () => {
         url: '/work-items?includeArchived=true'
       })
 
-      expect(result).toContain('Clear filters')
+      expect(result).toContain('Clear all filters')
     })
 
     test('Renders archivedAt from extended-JSON $date shape as a human-readable date', async () => {
@@ -1350,6 +1352,14 @@ describe('#workItemListController', () => {
         'data-testid="work-items-filter-registration-id"'
       )
       expect(result).not.toContain('data-testid="work-items-filter-org-name"')
+      // RA-324 prototype fixes: no separate "Filter" heading above the
+      // sections (they start directly after Active filters / the form), and
+      // no duplicate "Clear filters" link at the bottom of the sidebar — the
+      // only clear affordance is "Clear all filters" in the Active filters
+      // block (only rendered when a filter is active).
+      expect(result).not.toContain('>Filter</h2>')
+      expect(result).not.toContain('data-testid="work-items-filter-clear"')
+      expect(result).toContain('data-testid="work-items-filter-apply"')
     })
 
     test('Shows removable active-filter tags and a clear-all link', async () => {
@@ -1552,7 +1562,11 @@ describe('#workItemListController', () => {
       expect(result).not.toContain('data-testid="work-items-filter-clear"')
     })
 
-    test('The results summary describes the active filters', async () => {
+    // RA-324 prototype fix: the results count is just the item range + total
+    // ("Showing 1-10 of 277") — the filter/sort recap that used to be
+    // appended is gone; the Active filters chips are the single source of
+    // truth for "what's applied".
+    test('The results summary is just the range and total, with no filter recap', async () => {
       clearWorkItemRegistry()
       getWorkItems.mockResolvedValue(
         emptyPage({
@@ -1566,7 +1580,9 @@ describe('#workItemListController', () => {
               payload: {}
             }
           ],
-          totalCount: 1
+          totalCount: 1,
+          page: 1,
+          pageSize: 20
         })
       )
 
@@ -1575,12 +1591,16 @@ describe('#workItemListController', () => {
         url: '/work-items?material=plastic&status=updated&sort=organisation&filtersApplied=1'
       })
 
-      expect(result).toContain('material: Plastic')
-      expect(result).toContain('status: Updated')
-      expect(result).toContain('sorted by Organisation')
+      expect(result).toContain('data-testid="work-items-summary"')
+      expect(result).toContain('Showing 1-1 of 1')
+      // No filter/sort recap leaks into the summary text.
+      expect(result).not.toContain('material: Plastic')
+      expect(result).not.toContain('status: Updated')
+      expect(result).not.toContain('sorted by Organisation')
+      expect(result).not.toContain('Showing page')
     })
 
-    test('Archived toggle appears as a removable chip and in the summary', async () => {
+    test('Archived toggle appears as a removable active-filter chip', async () => {
       clearWorkItemRegistry()
       getWorkItems.mockResolvedValue(
         emptyPage({
@@ -1608,9 +1628,8 @@ describe('#workItemListController', () => {
       expect(result).toContain(
         'data-testid="work-items-filter-include-archived"'
       )
-      // Removable active-filter chip + it is reflected in the summary.
+      // Removable active-filter chip.
       expect(result).toContain('Archived: shown')
-      expect(result).toContain('including archived')
       // Its removal href drops includeArchived (keeping the page unfiltered).
       expect(result).toContain('data-testid="active-filter-remove"')
       // Backend still receives includeArchived=true (ra-224 param unchanged).

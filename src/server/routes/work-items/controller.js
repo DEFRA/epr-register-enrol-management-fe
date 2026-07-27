@@ -130,6 +130,13 @@ export const workItemListController = {
     const pageSize = result.ok ? result.pageSize : DEFAULT_PAGE_SIZE
     const totalPages =
       pageSize > 0 ? Math.max(1, Math.ceil(totalCount / pageSize)) : 1
+    // RA-324 phase-2. The results count is just the item range + total
+    // ("Showing 1-10 of 277") — no filter/sort recap, which the Active
+    // filters chips already communicate. `rangeEnd` uses the actual rendered
+    // item count (not `page * pageSize`) so a partial last page reports
+    // correctly (e.g. "271-277 of 277").
+    const rangeStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1
+    const rangeEnd = totalCount === 0 ? 0 : rangeStart + items.length - 1
 
     return h.view('work-items/index', {
       // RA-324. Page is now the "Applications" tiles view. The nav LINK stays
@@ -159,8 +166,9 @@ export const workItemListController = {
       page,
       pageSize,
       totalPages,
+      rangeStart,
+      rangeEnd,
       pagination: buildPagination({ page, totalPages, filters }),
-      filterSummary: buildFilterSummary({ filters, totalCount }),
       // RA-127. Surface the create button only when the demo flag is on.
       showCreateWorkItem: config.get('featureFlags.workItemCreationEnabled'),
       hasFilters: hasActiveFilters(filters),
@@ -682,50 +690,4 @@ function buildActiveFilters(filters) {
   }
 
   return { chips, clearAllHref: '/work-items' }
-}
-
-function buildFilterSummary({ filters, totalCount }) {
-  const parts = []
-  if (filters.typeIds.length > 0) {
-    parts.push(
-      `type: ${filters.typeIds.map((id) => TYPE_LABEL.get(id)).join(', ')}`
-    )
-  }
-  if (filters.statusGroups.length > 0) {
-    const labels = filters.statusGroups.map(
-      (v) => STATUS_OPTION_BY_VALUE.get(v).text
-    )
-    parts.push(`status: ${labels.join(', ')}`)
-  }
-  if (filters.nations.length > 0) {
-    const labels = filters.nations.map((n) => NATION_LABEL.get(n))
-    parts.push(`nation: ${labels.join(', ')}`)
-  }
-  if (filters.materials.length > 0) {
-    parts.push(`material: ${filters.materials.map(materialLabel).join(', ')}`)
-  }
-  if (filters.organisation) {
-    parts.push(`organisation: "${filters.organisation}"`)
-  }
-  if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
-    parts.push('your applications')
-  } else if (filters.assigneeMode === ASSIGNEE_FILTER_UNASSIGNED) {
-    parts.push('unassigned')
-  } else if (
-    filters.assigneeMode === ASSIGNEE_FILTER_USER &&
-    filters.assigneeUserId
-  ) {
-    parts.push(`assignee: ${assigneeUserName(filters.assigneeUserId)}`)
-  }
-  if (filters.sort) {
-    const label = SORT_OPTIONS.find((o) => o.value === filters.sort).text
-    parts.push(`sorted by ${label}`)
-  }
-  if (filters.includeArchived) {
-    parts.push('including archived')
-  }
-  return {
-    totalCount,
-    description: parts.length === 0 ? null : parts.join(' · ')
-  }
 }
