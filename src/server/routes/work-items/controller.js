@@ -557,7 +557,8 @@ function buildFilterCounts(filters) {
     material: filters.materials.length,
     assignment: filters.assigneeMode !== ASSIGNEE_FILTER_ANY ? 1 : 0,
     sort: filters.sort ? 1 : 0,
-    organisation: filters.organisation ? 1 : 0
+    organisation: filters.organisation ? 1 : 0,
+    archived: filters.includeArchived ? 1 : 0
   }
 }
 
@@ -611,6 +612,9 @@ function withoutFilter(filters, key, value) {
       break
     case 'sort':
       next.sort = null
+      break
+    case 'archived':
+      next.includeArchived = false
       break
   }
   return next
@@ -671,6 +675,9 @@ function buildActiveFilters(filters) {
     const label = SORT_OPTIONS.find((o) => o.value === filters.sort).text
     add('sort', filters.sort, `Sorted by: ${label}`)
   }
+  if (filters.includeArchived) {
+    add('archived', 'true', 'Archived: shown')
+  }
 
   return { chips, clearAllHref: '/work-items' }
 }
@@ -712,6 +719,9 @@ function buildFilterSummary({ filters, totalCount }) {
   if (filters.sort) {
     const label = SORT_OPTIONS.find((o) => o.value === filters.sort).text
     parts.push(`sorted by ${label}`)
+  }
+  if (filters.includeArchived) {
+    parts.push('including archived')
   }
   return {
     totalCount,

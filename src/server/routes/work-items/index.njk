@@ -177,6 +177,24 @@
           }) }}
         {% endcall %}
 
+        {# 8. Archived (toggle; reveals archived work items) #}
+        {% call filterSection('archived', 'Archived', filterCounts.archived) %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-archived",
+            name: "includeArchived",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "Archived", classes: "govuk-visually-hidden" } },
+            items: [
+              {
+                value: "true",
+                text: "Show archived items",
+                checked: filters.includeArchived,
+                attributes: { "data-testid": "work-items-filter-include-archived" }
+              }
+            ]
+          }) }}
+        {% endcall %}
+
         <div class="govuk-button-group govuk-!-margin-top-4">
           {{ govukButton({ text: "Apply filters", attributes: { "data-testid": "work-items-filter-apply" } }) }}
           {% if hasFilters %}

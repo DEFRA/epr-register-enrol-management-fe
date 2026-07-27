@@ -1283,11 +1283,16 @@ describe('#workItemListController', () => {
         'material',
         'assignment',
         'status',
-        'organisation'
+        'organisation',
+        'archived'
       ]) {
         expect(result).toContain(`data-testid="filter-section-${key}"`)
         expect(result).toContain(`data-testid="filter-section-${key}-toggle"`)
       }
+      // Archived toggle keeps its phase-1 testid + includeArchived param.
+      expect(result).toContain(
+        'data-testid="work-items-filter-include-archived"'
+      )
       // Sort options carry per-option testids.
       expect(result).toContain('data-testid="filter-sort-due-date"')
       expect(result).toContain('data-testid="filter-sort-organisation"')
@@ -1468,6 +1473,45 @@ describe('#workItemListController', () => {
       expect(result).toContain('material: Plastic')
       expect(result).toContain('status: Updated')
       expect(result).toContain('sorted by Organisation')
+    })
+
+    test('Archived toggle appears as a removable chip and in the summary', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: '88888888-8888-8888-8888-888888888888',
+              typeId: 'unknown-type',
+              stateId: 'submitted',
+              submittedAt: '2026-04-27T10:00:00Z',
+              submittedBy: null,
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true&filtersApplied=1'
+      })
+
+      // Section is expanded (has a selection) and the toggle is checked.
+      expect(result).toContain('data-testid="filter-section-archived"')
+      expect(result).toContain(
+        'data-testid="work-items-filter-include-archived"'
+      )
+      // Removable active-filter chip + it is reflected in the summary.
+      expect(result).toContain('Archived: shown')
+      expect(result).toContain('including archived')
+      // Its removal href drops includeArchived (keeping the page unfiltered).
+      expect(result).toContain('data-testid="active-filter-remove"')
+      // Backend still receives includeArchived=true (ra-224 param unchanged).
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ includeArchived: true })
+      )
     })
 
     test('Renders the Due on date from the Mongo $date shape', async () => {
