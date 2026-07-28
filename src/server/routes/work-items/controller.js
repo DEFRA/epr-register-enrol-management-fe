@@ -20,11 +20,30 @@ const DEFAULT_PAGE_SIZE = 20
 // session data (e.g. 'user', OAuth state). Reset on every (re-)login (see
 // auth/controller.js's OAuth callback and the stub login controller — both
 // call request.yar.reset() / start a fresh session), so a new session never
-// inherits a previous user's filters. Only ever READ on a genuinely bare
-// `/work-items` landing (no query string at all) — an explicit
-// filter-cleared submission always carries at least `filtersApplied=1`, so
-// it is never mistaken for a bare landing and never triggers a restore.
+// inherits a previous user's filters. Only ever READ on a bare `/work-items`
+// landing (no RECOGNISED_FILTER_PARAMS present) — an explicit filter-cleared
+// submission always carries at least `filtersApplied=1`, so it is never
+// mistaken for a bare landing and never triggers a restore.
 const SESSION_FILTERS_KEY = 'workItemsListFilters'
+
+// Every query param this route reads (see readFilters) plus the form's own
+// filtersApplied marker and the pagination page. Used to tell a real filter
+// state apart from a bare landing that merely carries an unrelated param.
+const RECOGNISED_FILTER_PARAMS = new Set([
+  'typeId',
+  'applicationType',
+  'status',
+  'material',
+  'nation',
+  'sort',
+  'organisation',
+  'search',
+  'assigneeMode',
+  'assigneeUserId',
+  'includeArchived',
+  'filtersApplied',
+  'page'
+])
 
 // RA-299 AC06. The sort token applied by default on a fresh, unfiltered
 // landing (see `resolveSort` below).
@@ -169,12 +188,18 @@ export const workItemListController = {
     // come straight back. `?clear=1` drops the saved filters and lands on the
     // AC06/AC08 default view with no active-filter chips.
     const isClearAll = request.query.clear === '1'
-    const hasQueryString = Object.keys(request.query).length > 0
+    // Only a query string carrying at least one param we actually understand
+    // counts as "the user applied filters". An incidental param on an external
+    // link (a tracking tag on a shared/bookmarked URL, say) must not be read as
+    // an empty filter submission that silently overwrites the saved filters.
+    const hasFilterParams = Object.keys(request.query).some((k) =>
+      RECOGNISED_FILTER_PARAMS.has(k)
+    )
     let effectiveQuery = request.query
     if (isClearAll) {
       request.yar.clear(SESSION_FILTERS_KEY)
       effectiveQuery = {}
-    } else if (hasQueryString) {
+    } else if (hasFilterParams) {
       request.yar.set(SESSION_FILTERS_KEY, request.query)
     } else {
       const savedQuery = request.yar.get(SESSION_FILTERS_KEY)

@@ -2128,6 +2128,37 @@ describe('#workItemListController', () => {
       )
     })
 
+    test('An unrecognised query param does not overwrite the saved filters', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const firstCookie = sessionCookie(applied)
+
+      // A shared/bookmarked link carrying only an incidental tracking param is
+      // not a filter submission — it must not be read as "user cleared
+      // everything" and wipe the saved state.
+      const incidental = await server.inject({
+        method: 'GET',
+        url: '/work-items?utm_source=email',
+        headers: { cookie: firstCookie }
+      })
+      const cookie = sessionCookie(incidental) || firstCookie
+
+      getWorkItems.mockClear()
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['plastic'] })
+      )
+    })
+
     test('Clear all (?clear=1) drops the saved filters and lands on the AC06/AC08 defaults', async () => {
       getWorkItems.mockResolvedValue(emptyPage())
 
