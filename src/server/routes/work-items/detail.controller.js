@@ -1,6 +1,7 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { notificationFailureDetected } from '#/server/work-items/core/audit-log.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
+import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import {
@@ -432,11 +433,6 @@ const RE_ACCREDITATION_TERMINAL_STATES = new Set([
   'rejected',
   'withdrawn'
 ])
-const RE_ACCREDITATION_STATE_TAG_CLASSES = {
-  approved: 'govuk-tag--green',
-  rejected: 'govuk-tag--red',
-  withdrawn: 'govuk-tag--grey'
-}
 
 function applyReAccreditationViewModel({ workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
@@ -447,8 +443,9 @@ function applyReAccreditationViewModel({ workItem }) {
     workItem.stateId === RE_ACCREDITATION_ELIGIBLE_STATE
 
   const isReadOnlyState = RE_ACCREDITATION_TERMINAL_STATES.has(workItem.stateId)
-  const stateTagClasses =
-    RE_ACCREDITATION_STATE_TAG_CLASSES[workItem.stateId] ?? ''
+  // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
+  // state-badge map so it matches the list and the envelope State badge.
+  const stateTagClasses = stateTagClass(workItem.stateId)
 
   const decisionMetadata = buildDecisionMetadata(workItem)
 
@@ -564,6 +561,10 @@ function decorate(workItem) {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
+    // RA-324 (AC08). The State badge colour is resolved from the shared
+    // state-badge map so the detail page and the Applications list colour a
+    // given status identically.
+    stateTagClass: stateTagClass(workItem.stateId),
     // RA-249. A field LABELLED "Application ref" must only ever show the
     // human RA-* reference or nothing — never the work-item Guid. Do NOT
     // fall back to the id here.

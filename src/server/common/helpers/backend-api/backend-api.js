@@ -127,6 +127,9 @@ export async function getWorkItems({
   typeIds,
   stateIds,
   nations,
+  materials,
+  sort,
+  organisation,
   search,
   orgId,
   registrationId,
@@ -145,6 +148,9 @@ export async function getWorkItems({
     typeIds,
     stateIds,
     nations,
+    materials,
+    sort,
+    organisation,
     search,
     orgId,
     registrationId,
@@ -191,6 +197,9 @@ function buildWorkItemsUrl(
     typeIds,
     stateIds,
     nations,
+    materials,
+    sort,
+    organisation,
     search,
     orgId,
     registrationId,
@@ -213,6 +222,18 @@ function buildWorkItemsUrl(
   }
   for (const nation of toArray(nations)) {
     if (nation) params.append('nation', nation)
+  }
+  // RA-324 phase-2. Repeated material tokens (?material=plastic&material=glass).
+  for (const material of toArray(materials)) {
+    if (material) params.append('material', material)
+  }
+  // RA-324 phase-2. Server-side sort of the full result set.
+  if (sort && String(sort).trim() !== '') {
+    params.append('sort', String(sort).trim())
+  }
+  // RA-324 phase-2. Combined "Organisation name or ID" search.
+  if (organisation && String(organisation).trim() !== '') {
+    params.append('organisation', String(organisation).trim())
   }
   if (search && String(search).trim() !== '') {
     params.append('search', String(search).trim())

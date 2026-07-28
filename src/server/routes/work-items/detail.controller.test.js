@@ -134,6 +134,30 @@ describe('#workItemDetailController', () => {
     expect(result).not.toEqual(expect.stringContaining('Acme'))
   })
 
+  // RA-324 (AC08). The State row renders as a coloured govuk-tag using the
+  // shared state-badge colours, so the detail page and the Applications list
+  // colour a given status identically.
+  test('Renders the State as a coloured badge matching the shared colours', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ stateId: 'approved' })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // The envelope State row carries the badge with the shared testid...
+    const badgeIdx = result.indexOf('data-testid="work-item-state-tag"')
+    expect(badgeIdx).toBeGreaterThan(-1)
+    // ...and approved renders green (the contract colour), never a plain
+    // uncoloured value.
+    expect(result.slice(badgeIdx - 120, badgeIdx)).toContain('govuk-tag--green')
+  })
+
   // RA-196: the caption, "Application ref" summary row and the final
   // breadcrumb show the user-facing application reference, while the
   // assign/tasks/audit-log routes keep using the internal id.

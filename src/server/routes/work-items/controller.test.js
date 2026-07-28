@@ -62,21 +62,28 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Work items |'))
+    // RA-324. The page is now titled "Applications" (the nav link stays
+    // "Work items").
+    expect(result).toEqual(expect.stringContaining('Applications |'))
+    // Empty state (no items AND no filters) shows main's two-line message
+    // (merged from feature/work-items-empty-state-message).
+    expect(result).toEqual(expect.stringContaining('No items to process.'))
     expect(result).toEqual(
-      expect.stringContaining('No work items have been submitted yet.')
+      expect.stringContaining(
+        'There are currently no work items to display. New items will appear here as they are received.'
+      )
     )
   })
 
-  test('Renders submitted items in a table with type and state display names', async () => {
+  test('Renders submitted items as cards with the state badge label', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       id: 're-accreditation',
       displayName: 'Re-accreditation',
-      initialState: { id: 'submitted', displayName: 'Submitted' },
+      initialState: { id: 'submitted', displayName: 'Not started' },
       states: [
-        { id: 'submitted', displayName: 'Submitted' },
-        { id: 'approved', displayName: 'Approved', isTerminal: true }
+        { id: 'submitted', displayName: 'Not started' },
+        { id: 'approved', displayName: 'Granted', isTerminal: true }
       ],
       getTasksForState: () => []
     })
@@ -103,20 +110,31 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
+    // The tile is keyed by the work item id (href + testids).
     expect(result).toEqual(
       expect.stringContaining('11111111-1111-1111-1111-111111111111')
     )
-    expect(result).toEqual(expect.stringContaining('Re-accreditation'))
-    expect(result).toEqual(expect.stringContaining('Submitted'))
-    expect(result).toEqual(expect.stringContaining('frontend'))
-    // State column renders as a coloured govuk-tag matching the design
-    // tokens used by the work item detail page (epr-3x2 follow-up).
+    // RA-324 phase-2: applicant type on the card is always the literal
+    // "Reprocessor" (not the work-item type display name).
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="applicant-type">Reprocessor</span>')
+    )
+    // State badge text = the state display name (RA-324 contract label).
+    expect(result).toEqual(expect.stringContaining('Not started'))
+    // Status renders as a coloured govuk-tag (AC07/AC08); submitted = grey.
     expect(result).toEqual(
       expect.stringContaining(
         'data-testid="work-item-state-tag-11111111-1111-1111-1111-111111111111"'
       )
     )
-    expect(result).toEqual(expect.stringContaining('govuk-tag govuk-tag--blue'))
+    expect(result).toEqual(expect.stringContaining('govuk-tag govuk-tag--grey'))
+    // Rendered as a tile, not the old table.
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="application-tile"')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="work-items-table"')
+    )
   })
 
   // RA-196: the visible link text shows the user-facing application
@@ -218,19 +236,17 @@ describe('#workItemListController', () => {
     // so it is never a text-less link.
     expect(result).toEqual(
       expect.stringContaining(
-        `data-testid="work-item-link-${id}"><span class="govuk-visually-hidden">View work item</span></a>`
+        `data-testid="work-item-link-${id}"><span class="govuk-visually-hidden">View application</span></a>`
       )
     )
   })
 
   // ---------------------------------------------------------------- //
-  // Work items list usability improvements                            //
+  // RA-324 Applications tiles page                                    //
   //                                                                  //
-  // AC1: "ID" column header renamed to "Application ref"             //
-  // AC2: Submitted date rendered in GDS date-time format             //
-  // AC3: Table is in a govuk-grid-column-full section                //
+  // AC04: applications render as tiles (not a table).                //
   // ---------------------------------------------------------------- //
-  test('Renders "Application ref" as the first column header (not "ID")', async () => {
+  test('Renders applications as tiles, not the old table', async () => {
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
@@ -252,23 +268,115 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    expect(result).toContain('Application ref')
-    // The old "ID" header must not appear as an isolated table heading.
-    // (The string "ID" may still appear inside GDS component markup, so
-    // we specifically check the govukTable head cell text.)
-    const tableSection = result.slice(
-      result.indexOf('data-testid="work-items-table"')
-    )
-    expect(tableSection).not.toMatch(/<th[^>]*>\s*ID\s*<\/th>/)
+    // Tiles container + one tile per application.
+    expect(result).toContain('data-testid="applications-list"')
+    expect(result).toContain('data-testid="application-tile"')
+    // The old wide, horizontally-scrolling table is gone entirely.
+    expect(result).not.toContain('data-testid="work-items-table"')
+    expect(result).not.toContain('app-work-items__table-wrapper')
   })
 
-  test('Renders the submitted timestamp in GDS date-time format', async () => {
-    // Use a January date (UK GMT = UTC+0) for timezone-stable assertions.
+  // RA-324 phase-2. The card body: bold "Reprocessor reaccreditation:
+  // {Material}" title (applicant type is always "Reprocessor"), then an
+  // "{Org} ({Org ID})" line. Submitted-on is gone from the card entirely.
+  test('Renders the card title, applicant type, material and org line', async () => {
+    clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
           {
             id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {
+              material: 'plastic',
+              organisationName: 'Acme Recycling',
+              operatorOrganisationId: 'ORG-4242'
+            }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="application-card-title"')
+    expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
+    // Card shows the material DISPLAY LABEL, not the raw token.
+    expect(result).toContain('data-testid="material">Plastic</span>')
+    expect(result).not.toContain('data-testid="material">plastic</span>')
+    expect(result).toContain('data-testid="application-org"')
+    expect(result).toContain('data-testid="org-name">Acme Recycling</span>')
+    expect(result).toContain('data-testid="org-id">ORG-4242</span>')
+    // Submitted-on no longer appears on the card (prototype).
+    expect(result).not.toContain('data-testid="submitted-on"')
+    // RA-324 prototype fix: the title is normal weight, not bold.
+    expect(result).not.toContain(
+      'govuk-!-font-weight-bold app-application-card__title'
+    )
+  })
+
+  // RA-324 phase-2 (footer). Once the SLA clock has started the card shows an
+  // "Assigned to / Due on" footer, with the absolute slaDueDate formatted to a
+  // GDS date.
+  test('Renders the Assigned to / Due on footer once the SLA clock has started', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+            typeId: 'unknown-type',
+            stateId: 'assessment-in-progress',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: 'frontend',
+            assignedToName: 'Olga Officer',
+            slaState: 'OnTrack',
+            // January/February UK dates are GMT (UTC+0) so timezone-stable.
+            slaDueDate: '2026-02-10T00:00:00Z',
+            payload: { operatorOrganisationId: 'ORG-4242' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="application-card-footer"')
+    expect(result).toContain('data-testid="assigned-to">Olga Officer</span>')
+    expect(result).toContain('data-testid="due-on"')
+    expect(result).toContain('10 February 2026')
+    // Submitted-on is not on the card in any state.
+    expect(result).not.toContain('data-testid="submitted-on"')
+    // RA-324 prototype fix: "Assigned to:" / "Due on:" labels are bold (their
+    // own span), the values are not individually bolded.
+    expect(result).toContain(
+      '<span class="app-application-card__meta-label">Assigned to:</span>'
+    )
+    expect(result).toContain(
+      '<span class="app-application-card__meta-label">Due on:</span>'
+    )
+  })
+
+  // RA-324 phase-2. A "Not started" card (no SLA clock) shows NO footer, so no
+  // assigned-to / due-on.
+  test('Omits the footer for a card whose SLA clock has not started', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-0000-0000-0000-000000000000',
             typeId: 'unknown-type',
             stateId: 'submitted',
             submittedAt: '2026-01-15T10:00:00Z',
@@ -285,12 +393,44 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    // Formatted GDS date-time must appear; raw ISO string must not.
-    expect(result).toContain('15 January 2026 at 10:00am')
-    expect(result).not.toContain('2026-01-15T10:00:00Z')
+    expect(result).not.toContain('data-testid="application-card-footer"')
+    expect(result).not.toContain('data-testid="due-on"')
+    expect(result).not.toContain('data-testid="assigned-to"')
   })
 
-  test('Renders with a wider container, narrow filter sidebar left and wider table right', async () => {
+  // RA-324 phase-2. When the SLA clock has started but slaDueDate is absent
+  // (defensive), the Due on cell renders an em dash — never "Invalid Date".
+  test('Renders an em dash for Due on when slaDueDate is missing', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'eeeeeeee-1111-1111-1111-111111111111',
+            typeId: 'unknown-type',
+            stateId: 'assessment-in-progress',
+            submittedAt: null,
+            submittedBy: null,
+            slaState: 'OnTrack',
+            slaDueDate: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="application-card-footer"')
+    expect(result).toContain('data-testid="due-on">—</span>')
+    expect(result).not.toContain('Invalid Date')
+  })
+
+  test('Renders in the constrained width with filter sidebar before the cards', async () => {
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
@@ -312,61 +452,65 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    // Controller must inject containerClasses so govuk/template.njk widens
-    // the govuk-width-container from 960 px to 1200 px, giving equal margins
-    // on both sides of the screen and more room for the table.
-    expect(result).toContain('app-width-container--wide')
-    // Filter sidebar uses the narrower one-quarter column (25% of 1200 px = 300 px).
+    // RA-324 width fix: the page no longer widens the container to 1600 px —
+    // it sits in the default GOV.UK width container and never scrolls sideways.
+    expect(result).not.toContain('app-width-container--wide')
+    // Filter sidebar (one-quarter) + tiles column (three-quarters) retained.
     expect(result).toContain('govuk-grid-column-one-quarter')
-    // Results area uses three-quarters (75% of 1200 px ≈ 900 px).
     expect(result).toContain('govuk-grid-column-three-quarters')
-    // Filter form must appear before the results table in document order.
+    // Filter form must appear before the tiles in document order.
     const filterIdx = result.indexOf('data-testid="work-items-filter-form"')
-    const tableIdx = result.indexOf('data-testid="work-items-table"')
+    const tilesIdx = result.indexOf('data-testid="applications-list"')
     expect(filterIdx).toBeGreaterThan(-1)
-    expect(tableIdx).toBeGreaterThan(filterIdx)
+    expect(tilesIdx).toBeGreaterThan(filterIdx)
   })
 
-  test('Maps each registered state id to its GOV.UK tag colour', async () => {
+  // RA-324 (AC08). Every registered state id maps to its contract badge
+  // colour, and an unknown id falls back to the neutral grey tag. The colours
+  // come from the shared state-badge map so the list and the detail page stay
+  // consistent.
+  test('Maps each registered state id to its RA-324 GOV.UK tag colour', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       id: 're-accreditation',
       displayName: 'Re-accreditation',
-      initialState: { id: 'submitted', displayName: 'Submitted' },
+      initialState: { id: 'submitted', displayName: 'Not started' },
       states: [
-        { id: 'submitted', displayName: 'Submitted' },
-        {
-          id: 'assessment-in-progress',
-          displayName: 'Assessment in progress'
-        },
+        { id: 'submitted', displayName: 'Not started' },
+        { id: 'duly-made', displayName: 'Duly made' },
+        { id: 'assessment-in-progress', displayName: 'Updated' },
         { id: 'awaiting-decision', displayName: 'Awaiting decision' },
         { id: 'queried', displayName: 'Queried' },
-        { id: 'approved', displayName: 'Approved' },
-        { id: 'rejected', displayName: 'Rejected' },
+        { id: 'updated', displayName: 'Updated' },
+        { id: 'approved', displayName: 'Granted' },
+        { id: 'rejected', displayName: 'Refused' },
         { id: 'withdrawn', displayName: 'Withdrawn' }
       ],
       getTasksForState: () => []
     })
+    const states = [
+      { stateId: 'submitted', cls: 'govuk-tag--grey' },
+      { stateId: 'duly-made', cls: 'govuk-tag--purple' },
+      { stateId: 'assessment-in-progress', cls: 'govuk-tag--blue' },
+      { stateId: 'awaiting-decision', cls: 'govuk-tag--light-blue' },
+      { stateId: 'queried', cls: 'govuk-tag--yellow' },
+      { stateId: 'updated', cls: 'govuk-tag--blue' },
+      { stateId: 'approved', cls: 'govuk-tag--green' },
+      { stateId: 'rejected', cls: 'govuk-tag--red' },
+      { stateId: 'withdrawn', cls: 'govuk-tag--grey' },
+      { stateId: 'mystery', cls: 'govuk-tag--grey' }
+    ]
     getWorkItems.mockResolvedValue(
       emptyPage({
-        items: [
-          { stateId: 'submitted' },
-          { stateId: 'assessment-in-progress' },
-          { stateId: 'awaiting-decision' },
-          { stateId: 'queried' },
-          { stateId: 'approved' },
-          { stateId: 'rejected' },
-          { stateId: 'withdrawn' },
-          { stateId: 'mystery' }
-        ].map((s, i) => ({
+        items: states.map((s, i) => ({
           id: `00000000-0000-0000-0000-00000000000${i}`,
           typeId: 're-accreditation',
+          stateId: s.stateId,
           submittedAt: '2026-04-27T10:00:00Z',
           submittedBy: 'frontend',
-          payload: {},
-          ...s
+          payload: {}
         })),
-        totalCount: 8
+        totalCount: states.length
       })
     )
 
@@ -375,20 +519,19 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    for (const cls of [
-      'govuk-tag--blue',
-      'govuk-tag--light-blue',
-      'govuk-tag--yellow',
-      'govuk-tag--orange',
-      'govuk-tag--green',
-      'govuk-tag--red',
-      'govuk-tag--grey'
-    ]) {
-      expect(result).toEqual(expect.stringContaining(cls))
+    // Each state's badge renders with its contract colour on its own tile.
+    for (const [i, s] of states.entries()) {
+      const id = `00000000-0000-0000-0000-00000000000${i}`
+      const badgeIdx = result.indexOf(`data-testid="work-item-state-tag-${id}"`)
+      expect(badgeIdx).toBeGreaterThan(-1)
+      const badgeMarkup = result.slice(badgeIdx - 120, badgeIdx)
+      expect(badgeMarkup).toContain(s.cls)
     }
+    // The retired orange (RA-291 queried) colour is gone.
+    expect(result).not.toContain('govuk-tag--orange')
   })
 
-  test('Falls back to raw type id when no module is registered for the type', async () => {
+  test('Falls back to the raw state id label when no module is registered', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
@@ -412,9 +555,9 @@ describe('#workItemListController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('unknown-type'))
+    // Unknown state id falls back to the raw id as the badge label.
     expect(result).toEqual(expect.stringContaining('mystery'))
-    // Empty submitter renders as an em-dash.
+    // Empty org name / material render as em dashes.
     expect(result).toEqual(expect.stringContaining('—'))
   })
 
@@ -433,44 +576,97 @@ describe('#workItemListController', () => {
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
   })
 
-  test('Forwards type, state, search and page filters to the backend', async () => {
+  // RA-324 phase-2. The new filter params (type, status group, material, sort,
+  // organisation) forward to the backend. The "Updated" status group expands
+  // to BOTH backend state ids.
+  test('Forwards type, status, material, sort and organisation filters to the backend', async () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       id: 're-accreditation',
       displayName: 'Re-accreditation',
-      initialState: { id: 'submitted', displayName: 'Submitted' },
+      initialState: { id: 'submitted', displayName: 'Not started' },
       states: [
-        { id: 'submitted', displayName: 'Submitted' },
-        { id: 'approved', displayName: 'Approved', isTerminal: true }
+        { id: 'submitted', displayName: 'Not started' },
+        { id: 'assessment-in-progress', displayName: 'Updated' },
+        { id: 'updated', displayName: 'Updated' },
+        { id: 'approved', displayName: 'Granted', isTerminal: true }
       ],
-      getTasksForState: () => []
-    })
-    registerWorkItemType({
-      id: 'other',
-      displayName: 'Other',
-      initialState: { id: 'submitted', displayName: 'Submitted' },
-      states: [{ id: 'submitted', displayName: 'Submitted' }],
       getTasksForState: () => []
     })
 
     getWorkItems.mockResolvedValue(
-      emptyPage({ totalCount: 0, page: 2, pageSize: 20 })
+      emptyPage({ totalCount: 0, page: 1, pageSize: 20 })
     )
 
     const { statusCode } = await server.inject({
       method: 'GET',
-      url: '/work-items?typeId=re-accreditation&typeId=other&stateId=approved&search=acme&page=2'
+      url: '/work-items?typeId=re-accreditation&typeId=exporter&status=updated&status=approved&material=plastic&material=glass-remelt&sort=due-date&organisation=acme&filtersApplied=1'
     })
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        typeIds: ['re-accreditation', 'other'],
-        stateIds: ['approved'],
-        search: 'acme',
-        page: 2,
+        // Exporter is a placeholder typeId with no data — still forwarded so
+        // it returns zero results.
+        typeIds: ['re-accreditation', 'exporter'],
+        // "Updated" group expands to both ids; "Granted" -> approved.
+        stateIds: ['assessment-in-progress', 'updated', 'approved'],
+        // RA-299 AC05: the UI filter value 'glass-remelt' maps to the real
+        // backend 'glass' token (see materials.js — no data can currently
+        // distinguish remelt/other).
+        materials: ['plastic', 'glass'],
+        sort: 'due-date',
+        organisation: 'acme',
         pageSize: 20
       })
+    )
+  })
+
+  // RA-299 AC01/15. "Application type" is a second, independent filter
+  // section from "Applicant type" (typeId) above; both merge into the same
+  // backend typeIds query.
+  test('Forwards the applicationType filter, merged with typeId, into a single typeIds list', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation&applicationType=accreditation&applicationType=registration-application&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typeIds: [
+          're-accreditation',
+          'accreditation',
+          'registration-application'
+        ]
+      })
+    )
+  })
+
+  test('De-dupes typeId and applicationType when both select re-accreditation', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation&applicationType=re-accreditation&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({ typeIds: ['re-accreditation'] })
+    )
+  })
+
+  test('Drops unknown applicationType values', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?applicationType=ghost&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({ typeIds: [] })
     )
   })
 
@@ -532,10 +728,12 @@ describe('#workItemListController', () => {
     // Previous and next links preserve the page parameter.
     expect(result).toEqual(expect.stringContaining('href="/work-items"'))
     expect(result).toEqual(expect.stringContaining('href="/work-items?page=3"'))
+    // RA-324 phase-2 (prototype). Just the item range + total, no "page X of
+    // Y" or filter recap. rangeStart = (page-1)*pageSize+1 = 21; rangeEnd
+    // reflects the actual rendered item count (1 mocked item) = 21. Bold per
+    // the prototype.
     expect(result).toEqual(
-      expect.stringContaining(
-        'Showing page <strong>2</strong> of <strong>3</strong>'
-      )
+      expect.stringContaining('<strong>Showing 21-21 of 45</strong>')
     )
   })
 
@@ -559,7 +757,9 @@ describe('#workItemListController', () => {
     expect(result).toEqual(
       expect.stringContaining('No work items match your filters.')
     )
-    expect(result).toEqual(expect.stringContaining('Clear filters'))
+    // RA-324 phase-2. The only "clear" affordance is the "Clear all filters"
+    // link in the Active filters block — no duplicate link below the sections.
+    expect(result).toEqual(expect.stringContaining('Clear all filters'))
   })
 
   test('Translates assigneeMode=mine into the signed-in user id', async () => {
@@ -796,7 +996,7 @@ describe('#workItemListController', () => {
       )
     })
 
-    test('Regulator checkboxes appear in the rendered page with regulator body names', async () => {
+    test('Nation checkboxes appear with plain nation names', async () => {
       getWorkItems.mockResolvedValue(emptyPage())
 
       const { result } = await server.inject({
@@ -805,13 +1005,15 @@ describe('#workItemListController', () => {
       })
 
       expect(result).toContain('filter-nation')
-      // Regulator body display names replace raw nation names
-      expect(result).toContain('Environment Agency (EA)')
-      expect(result).toContain('SEPA')
-      expect(result).toContain('Natural Resources Wales (NRW)')
-      expect(result).toContain('NIEA')
-      // Filter section heading uses "Regulator" not "Nation"
-      expect(result).toContain('Regulator')
+      // RA-324 phase-2: the prototype uses plain nation names (not regulator
+      // body names) and the section is labelled "Nation".
+      expect(result).toContain('England')
+      expect(result).toContain('Northern Ireland')
+      expect(result).toContain('Scotland')
+      expect(result).toContain('Wales')
+      expect(result).toContain('data-testid="filter-section-nation"')
+      // The old regulator body names are gone.
+      expect(result).not.toContain('Environment Agency (EA)')
     })
 
     test('Nation checkboxes reflect the active filter', async () => {
@@ -915,8 +1117,9 @@ describe('#workItemListController', () => {
         url: '/work-items?nation=England'
       })
 
-      // The "Clear filters" link is only rendered when hasFilters=true.
-      expect(result).toContain('Clear filters')
+      // The "Clear all filters" link is only rendered when hasFilters=true
+      // (via the Active filters block).
+      expect(result).toContain('Clear all filters')
     })
   })
 
@@ -955,18 +1158,7 @@ describe('#workItemListController', () => {
         url: '/work-items?includeArchived=true'
       })
 
-      expect(result).toContain('Clear filters')
-    })
-
-    test('Renders the Archived column header in the work-items table', async () => {
-      getWorkItems.mockResolvedValue(emptyPage())
-
-      const { result } = await server.inject({
-        method: 'GET',
-        url: '/work-items'
-      })
-
-      expect(result).toContain('Archived')
+      expect(result).toContain('Clear all filters')
     })
 
     test('Renders archivedAt from extended-JSON $date shape as a human-readable date', async () => {
@@ -1052,6 +1244,35 @@ describe('#workItemListController', () => {
 
       // The Nunjucks `item.archivedAt or "—"` renders a dash when null.
       expect(result).toContain('—')
+    })
+
+    test('Ignores an unparseable archivedAt (no archived line rendered)', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'cccccccc-dddd-dddd-dddd-dddddddddddd',
+              typeId: 'unknown-type',
+              stateId: 'submitted',
+              submittedAt: '2026-04-01T10:00:00Z',
+              submittedBy: null,
+              payload: { archivedAt: 'not-a-real-date' }
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true'
+      })
+
+      // formatArchivedAt returns null for an unparseable value, so the card
+      // renders no archived line at all (never "Invalid Date").
+      expect(result).not.toContain('data-testid="work-item-archived-at-')
+      expect(result).not.toContain('Invalid Date')
     })
 
     test('Pagination links preserve includeArchived so the filter survives page changes', async () => {
@@ -1143,6 +1364,872 @@ describe('#workItemListController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('Acme Recycling Ltd'))
-    expect(result).toEqual(expect.stringContaining('plastic'))
+    // Card renders the material display label, not the raw 'plastic' token.
+    expect(result).toEqual(expect.stringContaining('Plastic'))
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-324 phase-2 filter sidebar: collapsible sections, active       //
+  // filters block, sort, material, status grouping, organisation.     //
+  // ---------------------------------------------------------------- //
+  describe('RA-324 phase-2 filter sidebar', () => {
+    test('Renders the collapsible filter sections with the AC labels', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      for (const key of [
+        'sort',
+        'type',
+        'nation',
+        'material',
+        'assignment',
+        'status',
+        'organisation',
+        'archived'
+      ]) {
+        expect(result).toContain(`data-testid="filter-section-${key}"`)
+        expect(result).toContain(`data-testid="filter-section-${key}-toggle"`)
+      }
+      // Archived toggle keeps its phase-1 testid + includeArchived param.
+      expect(result).toContain(
+        'data-testid="work-items-filter-include-archived"'
+      )
+      // Sort options carry per-option testids.
+      expect(result).toContain('data-testid="filter-sort-due-date"')
+      expect(result).toContain('data-testid="filter-sort-organisation"')
+      expect(result).toContain('data-testid="filter-sort-status"')
+      // Type labels (Reprocessor enabled + Exporter placeholder).
+      expect(result).toContain('Reprocessor reaccreditation')
+      expect(result).toContain('Exporter reaccreditation')
+      // Material labels.
+      expect(result).toContain('Fibre-based composite material')
+      expect(result).toContain('Paper or board')
+      // Status uses the AC06 labels, not the raw workflow names.
+      expect(result).toContain('Not started')
+      expect(result).toContain('Granted')
+      expect(result).toContain('Refused')
+      // Combined organisation input replaces the old three inputs.
+      expect(result).toContain('data-testid="work-items-filter-org-search"')
+      expect(result).not.toContain(
+        'data-testid="work-items-filter-registration-id"'
+      )
+      expect(result).not.toContain('data-testid="work-items-filter-org-name"')
+      // RA-324 prototype fixes: no separate "Filter" heading above the
+      // sections (they start directly after Active filters / the form), and
+      // no duplicate "Clear filters" link at the bottom of the sidebar — the
+      // only clear affordance is "Clear all filters" in the Active filters
+      // block (only rendered when a filter is active).
+      expect(result).not.toContain('>Filter</h2>')
+      expect(result).not.toContain('data-testid="work-items-filter-clear"')
+      expect(result).toContain('data-testid="work-items-filter-apply"')
+    })
+
+    test('Shows removable active-filter tags and a clear-all link', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?typeId=re-accreditation&nation=England&material=plastic&status=updated&organisation=acme&assigneeMode=unassigned&sort=due-date&filtersApplied=1'
+      })
+
+      expect(result).toContain('data-testid="active-filters"')
+      expect(result).toContain('data-testid="active-filter-remove"')
+      expect(result).toContain('data-testid="active-filters-clear"')
+      // RA-324 prototype fix: chips show ONLY the value — no category prefix
+      // — except Sort, which keeps its "Sorted by: " prefix.
+      expect(result).toContain(
+        'data-testid="active-filter-label">Reprocessor reaccreditation</span>'
+      )
+      expect(result).toContain(
+        'data-testid="active-filter-label">England</span>'
+      )
+      expect(result).toContain(
+        'data-testid="active-filter-label">Plastic</span>'
+      )
+      expect(result).toContain(
+        'data-testid="active-filter-label">Updated</span>'
+      )
+      expect(result).toContain('data-testid="active-filter-label">acme</span>')
+      expect(result).toContain(
+        'data-testid="active-filter-label">Unassigned</span>'
+      )
+      expect(result).toContain('Sorted by: Due date')
+      // None of the non-sort chips carry a category prefix.
+      expect(result).not.toContain('Type: Reprocessor reaccreditation')
+      expect(result).not.toContain('Nation: England')
+      expect(result).not.toContain('Material: Plastic')
+      expect(result).not.toContain('Status: Updated')
+      expect(result).not.toContain('Organisation: acme')
+      expect(result).not.toContain('Assignment: Unassigned')
+      // The section with a selection is expanded and shows a count.
+      expect(result).toContain('(1 selected)')
+      // Clear-all points at the explicit reset (RA-299 AC12) rather than a
+      // bare /work-items, which would restore the session-persisted filters.
+      expect(result).toContain(
+        'href="/work-items?clear=1" data-testid="active-filters-clear"'
+      )
+    })
+
+    test('Each active-filter removal href drops only that filter', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?nation=England&material=plastic&filtersApplied=1'
+      })
+
+      // Removing Nation keeps material; removing Material keeps nation.
+      expect(result).toContain(
+        'href="/work-items?material=plastic&amp;filtersApplied=1"'
+      )
+      expect(result).toContain(
+        'href="/work-items?nation=England&amp;filtersApplied=1"'
+      )
+    })
+
+    // Guards against a withoutFilter regression that drops a whole dimension
+    // rather than the single value: with REPEATED tokens, removing one chip
+    // must keep the other value of the SAME dimension.
+    test('Removing one repeated-token chip keeps the other value of that dimension', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&material=glass-remelt&status=updated&status=approved&filtersApplied=1'
+      })
+
+      // Removing the "plastic" material chip keeps material=glass-remelt
+      // (and the other status pair intact), and vice versa.
+      expect(result).toContain(
+        'href="/work-items?status=updated&amp;status=approved&amp;material=glass-remelt&amp;filtersApplied=1"'
+      )
+      expect(result).toContain(
+        'href="/work-items?status=updated&amp;status=approved&amp;material=plastic&amp;filtersApplied=1"'
+      )
+      // Removing the "updated" status chip keeps status=approved (+ both
+      // materials), and vice versa.
+      expect(result).toContain(
+        'href="/work-items?status=approved&amp;material=plastic&amp;material=glass-remelt&amp;filtersApplied=1"'
+      )
+      expect(result).toContain(
+        'href="/work-items?status=updated&amp;material=plastic&amp;material=glass-remelt&amp;filtersApplied=1"'
+      )
+    })
+
+    test('The sort chip removal drops sort= and the archived chip drops includeArchived', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?sort=due-date&includeArchived=true&filtersApplied=1'
+      })
+
+      // Removing "Sorted by" leaves only the archived filter (no sort=).
+      expect(result).toContain(
+        'href="/work-items?filtersApplied=1&amp;includeArchived=true"'
+      )
+      // Removing "Archived" leaves only the sort (no includeArchived).
+      expect(result).toContain(
+        'href="/work-items?sort=due-date&amp;filtersApplied=1"'
+      )
+    })
+
+    // De-dup material tokens AFTER lower-casing: ?material=Plastic&material=plastic
+    // must collapse to a single token, one chip, and one backend value.
+    test('De-duplicates material tokens case-insensitively', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=Plastic&material=plastic&filtersApplied=1'
+      })
+
+      // Exactly one Material chip (one removal link for material). Chips
+      // carry no category prefix, so match on the bare value.
+      const chipCount = (
+        result.match(/data-testid="active-filter-label">Plastic<\/span>/g) ?? []
+      ).length
+      expect(chipCount).toBe(1)
+      // Backend receives a single 'plastic' token.
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['plastic'] })
+      )
+    })
+
+    test('The specific-officer assignment chip shows the officer name', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?assigneeMode=user&assigneeUserId=stub-caseworker-2&filtersApplied=1'
+      })
+
+      // RA-324 prototype fix: no "Assignment: " prefix — just the value.
+      expect(result).toContain(
+        'data-testid="active-filter-label">Stub Caseworker Two</span>'
+      )
+      expect(result).not.toContain('Assignment: Stub Caseworker Two')
+    })
+
+    test('Shows a "Your applications" chip for the mine assignment filter', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?assigneeMode=mine&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">Your applications</span>'
+      )
+      expect(result).not.toContain('Assignment: Your applications')
+    })
+
+    test('Falls back to the raw id when the officer is not in the directory', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?assigneeMode=user&assigneeUserId=ghost-officer&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">ghost-officer</span>'
+      )
+      expect(result).not.toContain('Assignment: ghost-officer')
+    })
+
+    test('Removal links preserve the specific-officer, search and organisation filters', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?nation=England&assigneeMode=user&assigneeUserId=stub-caseworker-2&search=widget&organisation=acme&filtersApplied=1'
+      })
+
+      // The nation chip's removal href carries every other active filter.
+      expect(result).toContain('assigneeMode=user')
+      expect(result).toContain('assigneeUserId=stub-caseworker-2')
+      expect(result).toContain('search=widget')
+      expect(result).toContain('organisation=acme')
+    })
+
+    test('Renders an em dash for Due on when slaDueDate is an unexpected shape', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'cccccccc-2222-2222-2222-222222222222',
+              typeId: 'unknown-type',
+              stateId: 'assessment-in-progress',
+              submittedAt: null,
+              submittedBy: null,
+              slaState: 'OnTrack',
+              slaDueDate: { notADate: true },
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('data-testid="due-on">—</span>')
+    })
+
+    test('No active-filters block or clear link when nothing is filtered', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1'
+      })
+
+      expect(result).not.toContain('data-testid="active-filters"')
+      expect(result).not.toContain('data-testid="work-items-filter-clear"')
+    })
+
+    // RA-324 prototype fix: the results count is just the item range + total
+    // ("Showing 1-10 of 277") — the filter/sort recap that used to be
+    // appended is gone; the Active filters chips are the single source of
+    // truth for "what's applied".
+    test('The results summary is just the range and total, with no filter recap', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: '99999999-9999-9999-9999-999999999999',
+              typeId: 'unknown-type',
+              stateId: 'submitted',
+              submittedAt: '2026-04-27T10:00:00Z',
+              submittedBy: null,
+              payload: {}
+            }
+          ],
+          totalCount: 1,
+          page: 1,
+          pageSize: 20
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&status=updated&sort=organisation&filtersApplied=1'
+      })
+
+      expect(result).toContain('data-testid="work-items-summary"')
+      // Bold per the prototype.
+      expect(result).toContain('<strong>Showing 1-1 of 1</strong>')
+      // No filter/sort recap leaks into the summary text.
+      expect(result).not.toContain('material: Plastic')
+      expect(result).not.toContain('status: Updated')
+      expect(result).not.toContain('sorted by Organisation')
+      expect(result).not.toContain('Showing page')
+    })
+
+    test('Archived toggle appears as a removable active-filter chip', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: '88888888-8888-8888-8888-888888888888',
+              typeId: 'unknown-type',
+              stateId: 'submitted',
+              submittedAt: '2026-04-27T10:00:00Z',
+              submittedBy: null,
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?includeArchived=true&filtersApplied=1'
+      })
+
+      // Section is expanded (has a selection) and the toggle is checked.
+      expect(result).toContain('data-testid="filter-section-archived"')
+      expect(result).toContain(
+        'data-testid="work-items-filter-include-archived"'
+      )
+      // Removable active-filter chip. RA-324 prototype fix: no "Archived: "
+      // prefix — just the bare value.
+      expect(result).toContain(
+        'data-testid="active-filter-label">Archived</span>'
+      )
+      expect(result).not.toContain('Archived: shown')
+      // Its removal href drops includeArchived (keeping the page unfiltered).
+      expect(result).toContain('data-testid="active-filter-remove"')
+      // Backend still receives includeArchived=true (ra-224 param unchanged).
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ includeArchived: true })
+      )
+    })
+
+    test('Renders the Due on date from the Mongo $date shape', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'cccccccc-1111-1111-1111-111111111111',
+              typeId: 'unknown-type',
+              stateId: 'assessment-in-progress',
+              submittedAt: null,
+              submittedBy: null,
+              slaState: 'OnTrack',
+              slaDueDate: { $date: '2026-02-10T00:00:00Z' },
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('data-testid="due-on"')
+      expect(result).toContain('10 February 2026')
+    })
+
+    test('Drops unknown material, status and sort values', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=unobtanium&status=ghost&sort=sideways'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          materials: [],
+          stateIds: [],
+          sort: null
+        })
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Application-type filter (AC01/15)                       //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 application-type filter', () => {
+    test('Renders a distinct "Application type" section alongside "Applicant type"', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('data-testid="filter-section-type"')
+      expect(result).toContain('data-testid="filter-section-application-type"')
+      expect(result).toContain(
+        'data-testid="filter-section-application-type-toggle"'
+      )
+      expect(result).toContain('Applicant type')
+      expect(result).toContain('Application type')
+      // The four AC01/15 options.
+      expect(result).toContain('Re-accreditation')
+      expect(result).toContain('Accreditation')
+      expect(result).toContain('Registration application')
+      expect(result).toContain('Payment of annual registration fee')
+      // Submitted via its own param, distinct from typeId.
+      expect(result).toContain('name="applicationType"')
+    })
+
+    test('Only "Re-accreditation" maps to the real typeId; the others are zero-result stubs', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=accreditation&applicationType=registration-application&applicationType=annual-fee-payment&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          typeIds: [
+            'accreditation',
+            'registration-application',
+            'annual-fee-payment'
+          ]
+        })
+      )
+    })
+
+    test('An application-type chip removal drops only that value', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=re-accreditation&applicationType=accreditation&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">Re-accreditation</span>'
+      )
+      expect(result).toContain(
+        'data-testid="active-filter-label">Accreditation</span>'
+      )
+      expect(result).toContain(
+        'href="/work-items?applicationType=accreditation&amp;filtersApplied=1"'
+      )
+      expect(result).toContain(
+        'href="/work-items?applicationType=re-accreditation&amp;filtersApplied=1"'
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Material: split "Glass" filter (AC05)                    //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 material glass split', () => {
+    test('Renders "Glass- remelt" and "Glass- other" instead of a single "Glass" option', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).toContain('Glass- remelt')
+      expect(result).toContain('Glass- other')
+      expect(result).not.toContain('value="glass"')
+      expect(result).toContain('value="glass-remelt"')
+      expect(result).toContain('value="glass-other"')
+    })
+
+    // RA-299 AC05 judgement call (see materials.js): the operator backend has
+    // no remelt/other distinction in the data model, so BOTH new filter
+    // values map to the single real 'glass' backend token — either checkbox
+    // surfaces the same (current) Glass work items, rather than each
+    // returning zero results.
+    test('Both glass filter values forward the same real "glass" backend token', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=glass-remelt&filtersApplied=1'
+      })
+      expect(getWorkItems).toHaveBeenLastCalledWith(
+        expect.objectContaining({ materials: ['glass'] })
+      )
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=glass-other&filtersApplied=1'
+      })
+      expect(getWorkItems).toHaveBeenLastCalledWith(
+        expect.objectContaining({ materials: ['glass'] })
+      )
+    })
+
+    test('Selecting both glass options dedupes to a single backend token', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=glass-remelt&material=glass-other&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['glass'] })
+      )
+    })
+
+    test('Each glass option renders its own distinct active-filter chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=glass-remelt&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">Glass- remelt</span>'
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Default sort (AC06)                                      //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 default sort', () => {
+    test('Defaults to due-date sort on a bare landing (no query string)', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({ method: 'GET', url: '/work-items' })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'due-date' })
+      )
+    })
+
+    test('The default sort does NOT render a "Sorted by" active-filter chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).not.toContain('Sorted by:')
+    })
+
+    test('An explicit form submission with no sort picked clears the default (no sort)', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: null })
+      )
+    })
+
+    test('An explicit sort choice still renders its "Sorted by" chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?sort=organisation&filtersApplied=1'
+      })
+
+      expect(result).toContain('Sorted by: Organisation')
+    })
+
+    test('A defaulted sort is not carried into pagination hrefs as if explicit', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue({
+        ok: true,
+        items: [
+          {
+            id: '55555555-5555-5555-5555-555555555555',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 45,
+        page: 1,
+        pageSize: 20
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).not.toContain('sort=due-date')
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Default assignee = mine (AC08/09)                        //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 default assignee', () => {
+    test('Defaults to the signed-in user on a bare landing (no query string)', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({ method: 'GET', url: '/work-items' })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assigneeId: 'test-standard-id',
+          unassigned: false
+        })
+      )
+    })
+
+    test('The default "mine" assignee does NOT render a "Your applications" chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(result).not.toContain('Your applications</span>')
+    })
+
+    test('An explicit form submission with no assignee ticked shows all (clears the default)', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeId: null, unassigned: false })
+      )
+    })
+
+    test('An explicit "mine" selection still renders its chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?assigneeMode=mine&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">Your applications</span>'
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-299 — Session persistence within the current session (AC10/14) //
+  // ---------------------------------------------------------------- //
+  describe('RA-299 filter session persistence', () => {
+    function sessionCookie(res) {
+      return [].concat(res.headers['set-cookie'] ?? []).join('; ')
+    }
+
+    test('A bare landing after applying filters restores them from the session', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const cookie = sessionCookie(applied)
+
+      getWorkItems.mockClear()
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['plastic'] })
+      )
+    })
+
+    test('An explicit empty submission (filtersApplied=1, nothing ticked) is itself the restorable state, not the AC06/AC08 defaults', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      // First apply a real filter, then explicitly clear it (a real
+      // "Clear all filters" / empty resubmission carries filtersApplied=1).
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const firstCookie = sessionCookie(applied)
+
+      const cleared = await server.inject({
+        method: 'GET',
+        url: '/work-items?filtersApplied=1',
+        headers: { cookie: firstCookie }
+      })
+      // yar re-issues a cookie on every write, so the SECOND response's
+      // cookie (not the first) is the one carrying the now-cleared session.
+      const cookie = sessionCookie(cleared) || firstCookie
+
+      getWorkItems.mockClear()
+      // A later bare landing restores the explicitly-cleared state (no
+      // materials, and no AC06/AC08 defaults reapplied) rather than reviving
+      // the earlier 'plastic' filter or the hard defaults.
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          materials: [],
+          sort: null,
+          assigneeId: null,
+          unassigned: false
+        })
+      )
+    })
+
+    test('An unrecognised query param does not overwrite the saved filters', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const firstCookie = sessionCookie(applied)
+
+      // A shared/bookmarked link carrying only an incidental tracking param is
+      // not a filter submission — it must not be read as "user cleared
+      // everything" and wipe the saved state.
+      const incidental = await server.inject({
+        method: 'GET',
+        url: '/work-items?utm_source=email',
+        headers: { cookie: firstCookie }
+      })
+      const cookie = sessionCookie(incidental) || firstCookie
+
+      getWorkItems.mockClear()
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['plastic'] })
+      )
+    })
+
+    test('Clear all (?clear=1) drops the saved filters and lands on the AC06/AC08 defaults', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const firstCookie = sessionCookie(applied)
+
+      const cleared = await server.inject({
+        method: 'GET',
+        url: '/work-items?clear=1',
+        headers: { cookie: firstCookie }
+      })
+      const cookie = sessionCookie(cleared) || firstCookie
+
+      getWorkItems.mockClear()
+      // The whole point of AC12: a bare landing after Clear all must NOT
+      // resurrect 'plastic' from the session — it lands on the defaults.
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: [], sort: 'due-date' })
+      )
+    })
+
+    test("A brand-new session (no cookie) does not restore another session's filters", async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+
+      getWorkItems.mockClear()
+      // No cookie forwarded — a genuinely separate session — falls back to
+      // the AC06/AC08 hard defaults, not the previous session's 'plastic'.
+      await server.inject({ method: 'GET', url: '/work-items' })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          materials: [],
+          sort: 'due-date',
+          assigneeId: 'test-standard-id'
+        })
+      )
+    })
+
+    test('A query string on the request itself always wins over any saved session filters', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?material=plastic&filtersApplied=1'
+      })
+      const cookie = sessionCookie(applied)
+
+      getWorkItems.mockClear()
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?material=steel&filtersApplied=1',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ materials: ['steel'] })
+      )
+    })
   })
 })

@@ -38,7 +38,9 @@
   </header>
 
   {% if user %}
-    {% set serviceNavItems = navigation.concat([{ text: 'Sign out', href: '/auth/logout' }]) %}
+    {# RA-324 (AC01/AC03). Sign out is appended on every authenticated page, #}
+    {# alongside the persistent "Work items" nav link. Stable e2e hook.       #}
+    {% set serviceNavItems = navigation.concat([{ text: 'Sign out', href: '/auth/logout', attributes: { 'data-testid': 'nav-sign-out' } }]) %}
   {% else %}
     {% set serviceNavItems = navigation %}
   {% endif %}
