@@ -310,8 +310,12 @@
       {# decision actions once a re-accreditation reaches a terminal state. #}
       <div class="app-case-panel" data-testid="actions-panel">
         {% block actionsPanel %}
-        <h2 class="govuk-heading-m">Actions</h2>
-
+        {# RA-295. The prototype's action card carries no "Actions" heading:  #}
+        {# a full-width primary button, then Query and Withdraw as a single   #}
+        {# row of secondary links (Query left, Withdraw right, destructive    #}
+        {# red). Withdraw is a LINK here, not a warning button — it still     #}
+        {# goes through the RA-188 confirmation interstitial, so no state     #}
+        {# changes on the click.                                              #}
         {% if workItem.availableActions and workItem.availableActions.length > 0 %}
           <div data-testid="work-item-actions">
             {% block approveAction %}{% endblock %}
@@ -319,38 +323,41 @@
             {# controller (it renders as "Change the due date" in the        #}
             {# assignment panel), so it never reaches this loop and the      #}
             {# length check above stays honest.                              #}
+
+            {# Primary actions — full-width buttons, stacked. #}
             {% for action in workItem.availableActions %}
-              {% if action.actionId == 'query' or action.actionId.startsWith('query-') %}
-                {# RA-291. Query is a secondary affordance: a link, not a    #}
-                {# button. The dedicated page collects the sections and the  #}
-                {# reason before anything is sent.                           #}
-                <p class="govuk-body">
-                  <a class="govuk-link"
-                     data-testid="action-query"
-                     href="/work-items/{{ workItem.id }}/query">Query the application</a>
-                </p>
-              {% elif action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
-                {# RA-188. Withdraw goes through a confirmation interstitial #}
-                {# so the user can confirm or back out.                      #}
-                <a class="govuk-button govuk-button--warning"
-                   data-module="govuk-button"
-                   role="button"
-                   draggable="false"
-                   data-testid="action-{{ action.actionId }}"
-                   href="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}/confirm">{{ action.displayName }}</a>
-              {% else %}
+              {% if not (action.actionId == 'query' or action.actionId.startsWith('query-')
+                         or action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-')) %}
                 <form method="post"
                       action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
                       novalidate>
                   <input type="hidden" name="crumb" value="{{ crumb }}" />
                   {{ govukButton({
                     text: action.displayName,
-                    classes: action.actionId == 'reject' and 'govuk-button--warning' or '',
+                    classes: "app-case-panel__primary-action" + (action.actionId == 'reject' and ' govuk-button--warning' or ''),
                     attributes: { "data-testid": "action-" + action.actionId }
                   }) }}
                 </form>
               {% endif %}
             {% endfor %}
+
+            {# Secondary link row. #}
+            <div class="app-case-panel__action-links">
+              {% for action in workItem.availableActions %}
+                {% if action.actionId == 'query' or action.actionId.startsWith('query-') %}
+                  <a class="govuk-link"
+                     data-testid="action-query"
+                     href="/work-items/{{ workItem.id }}/query">Query</a>
+                {% endif %}
+              {% endfor %}
+              {% for action in workItem.availableActions %}
+                {% if action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
+                  <a class="govuk-link app-case-panel__link--destructive"
+                     data-testid="action-{{ action.actionId }}"
+                     href="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}/confirm">{{ action.displayName }}</a>
+                {% endif %}
+              {% endfor %}
+            </div>
           </div>
         {% else %}
           <p class="govuk-body" data-testid="work-item-no-actions">

@@ -126,6 +126,40 @@
   background-color: govuk-colour("white");
 }
 
+// RA-295. The prototype's primary action fills the card width rather than
+// sizing to its label, so a short label ("Duly make") and a long one
+// ("Payment received") produce the same button.
+.app-case-panel__primary-action {
+  width: 100%;
+  margin-bottom: govuk-spacing(3);
+}
+
+// Query on the left, Withdraw on the right, on one row.
+.app-case-panel__action-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: govuk-spacing(2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+// Withdraw reads as destructive without being a button — it only opens the
+// RA-188 confirmation interstitial, so it must not look like the commit.
+.app-case-panel__link--destructive {
+  &:link,
+  &:visited {
+    color: $govuk-error-colour;
+  }
+
+  &:hover {
+    color: govuk-shade($govuk-error-colour, 20%);
+  }
+
+  &:focus {
+    color: $govuk-focus-text-colour;
+  }
+}
+
 .app-case-panel__divider {
   margin: govuk-spacing(3) 0;
   border: 0;
