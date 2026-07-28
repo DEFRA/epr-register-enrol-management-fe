@@ -49,7 +49,17 @@ const ID = '11111111-1111-1111-1111-111111111111'
  */
 function detailRow(html, key) {
   const start = html.indexOf(`data-testid="app-detail-row-${key}"`)
-  if (start === -1) return ''
+  // THROW rather than returning '' for a missing row. An empty string
+  // silently satisfies every `.not.toContain(...)` assertion, so a row that
+  // vanished entirely would read as a pass — the same vacuous-green failure
+  // mode as the SLA badge test that supplies a live `slaState` before
+  // asserting absence. A negative assertion is only meaningful once the
+  // thing it is scoped to is known to exist.
+  if (start === -1) {
+    throw new Error(
+      `No application-details row "${key}" in the rendered page — a scoped assertion against it would pass vacuously.`
+    )
+  }
   const end = html.indexOf('</div>', start)
   return html.slice(start, end === -1 ? undefined : end)
 }
@@ -2067,9 +2077,11 @@ describe('RA-295 individual work item page', () => {
       'data-testid="overseas-site-address"'
     )
     expect(result).toContain('1 Overseas Lane, Rotterdam')
-    // The exporter applicant kind is reflected in the Type row.
-    // Even here the Type row must not assert "Exporter": the overseasSites
-    // signal gates the BES/ORS SECTIONS, it is not evidence of a type.
+    // Even on an exporter the Type row must not claim "Exporter": the
+    // overseasSites signal gates the BES/ORS SECTIONS, it is not evidence of
+    // an applicant type. Positive assertion first, so the negative below is
+    // scoped to a row that demonstrably exists.
+    expect(detailRow(result, 'type')).toContain('Re-accreditation')
     expect(detailRow(result, 'type')).not.toContain('Exporter')
   })
 
