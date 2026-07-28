@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vitest'
 
+import { realOperatorSubmissionPayload } from '#/test-helpers/real-operator-submission-payload.js'
+import { buildCaseHeader } from './case-header.js'
 import {
   buildApplicationSummary,
   buildBusinessPlanPairs,
@@ -245,14 +247,23 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     expect(ors.sites[0].files).toEqual([])
   })
 
-  test('describes the type as applicant kind plus the registry display name', () => {
+  test('describes the type using the registry display name alone', () => {
     expect(
-      row(buildApplicationSummary({ workItem: REPROCESSOR }).rows, 'type')
-        .values
-    ).toEqual(['Reprocessor', 'Re-accreditation'])
-    expect(
-      row(buildApplicationSummary({ workItem: EXPORTER }).rows, 'type').values
-    ).toEqual(['Exporter', 'Re-accreditation'])
+      row(buildApplicationSummary({ workItem: REPROCESSOR }).rows, 'type').value
+    ).toBe('Re-accreditation')
+  })
+
+  // The `overseasSites` proxy is safe for HIDING BES/ORS but not for
+  // asserting an applicant kind: printing "Reprocessor" would be a positive
+  // factual claim the backend never makes, and by that proxy's own logic an
+  // exporter who has not yet added a site would be mislabelled "Reprocessor"
+  // on a regulator's case screen.
+  test('never claims an applicant kind the backend does not send', () => {
+    for (const workItem of [REPROCESSOR, EXPORTER]) {
+      const typeRow = row(buildApplicationSummary({ workItem }).rows, 'type')
+      expect(typeRow.value).not.toContain('Reprocessor')
+      expect(typeRow.value).not.toContain('Exporter')
+    }
   })
 
   test('falls back to the type id, then an em dash, when there is no display name', () => {
@@ -262,12 +273,12 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
           workItem: { typeId: 'mystery', payload: {} }
         }).rows,
         'type'
-      ).values
-    ).toEqual(['Reprocessor', 'mystery'])
+      ).value
+    ).toBe('mystery')
     expect(
       row(buildApplicationSummary({ workItem: { payload: {} } }).rows, 'type')
-        .values
-    ).toEqual(['Reprocessor', EM_DASH])
+        .value
+    ).toBe(EM_DASH)
   })
 
   test('shows the material display label, not the raw token', () => {
@@ -311,54 +322,28 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     ])
   })
 
-  test('prefers an explicit authority-to-issue list over the authorisers', () => {
+  // The producer emits no separate authority-to-issue field, so the row is
+  // DERIVED from the PRN authorisers. The speculative reads of
+  // `prns.authorityToIssue` / `payload.authorityToIssue` were removed as
+  // unreachable — this pins that they stay removed, so nobody reintroduces a
+  // branch that looks like a working feature but can never fire.
+  test('derives authority to issue from the PRN authorisers, ignoring speculative fields', () => {
     const { rows } = buildApplicationSummary({
       workItem: {
         payload: {
+          authorityToIssue: 'Dana Scully',
           prns: {
-            authorityToIssue: ['Dana Scully', { fullName: 'Fox Mulder' }],
-            authorisers: [{ fullName: 'Harry Edge' }]
+            authorityToIssue: ['Fox Mulder'],
+            authorisers: [
+              { fullName: 'Harry Edge', email: 'harry@example.com' }
+            ]
           }
         }
       }
     })
     expect(row(rows, 'authority-to-issue').values).toEqual([
-      'Dana Scully',
-      'Fox Mulder'
+      'Harry Edge (harry@example.com)'
     ])
-  })
-
-  test('accepts an explicit authority-to-issue supplied as a single string', () => {
-    const { rows } = buildApplicationSummary({
-      workItem: { payload: { authorityToIssue: '  Dana Scully  ' } }
-    })
-    expect(row(rows, 'authority-to-issue').values).toEqual(['Dana Scully'])
-  })
-
-  test('ignores a blank explicit authority-to-issue and falls back', () => {
-    const { rows } = buildApplicationSummary({
-      workItem: {
-        payload: {
-          authorityToIssue: '   ',
-          prns: { authorisers: [{ fullName: 'Harry Edge' }] }
-        }
-      }
-    })
-    expect(row(rows, 'authority-to-issue').values).toEqual(['Harry Edge'])
-  })
-
-  test('ignores an empty explicit authority-to-issue array and falls back', () => {
-    const { rows } = buildApplicationSummary({
-      workItem: {
-        payload: {
-          prns: {
-            authorityToIssue: [],
-            authorisers: [{ fullName: 'Harry Edge' }]
-          }
-        }
-      }
-    })
-    expect(row(rows, 'authority-to-issue').values).toEqual(['Harry Edge'])
   })
 
   test('lists EVERY supporting document, with download links only for clean files', () => {
@@ -517,5 +502,107 @@ describe('#buildCaseFooterRows (RA-295: reference retained at the bottom)', () =
 
   test('tolerates an absent work item', () => {
     expect(buildCaseFooterRows({})).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------
+// Consumer contract (ported from the deleted application-details
+// controller test by RA-295).
+//
+// The detail page reads MORE of the operator submission than the two-step
+// page it replaced, so this guard matters more now, not less. It asserts
+// against a literal copy of HttpCaseWorkingApiAdapter.BuildPayload's output
+// rather than a hand-picked subset, so a field-name drift on the producer
+// side fails here instead of surfacing as a blank field in CDP — which is
+// exactly how `material` vs `materialsHandled` escaped.
+//
+// If one of these fails, fix the READER or confirm the producer genuinely
+// renamed the field. Never edit the fixture to match the frontend.
+// ---------------------------------------------------------------------
+describe('real operator submission payload contract', () => {
+  const workItem = {
+    id: 'w-1',
+    typeId: 're-accreditation',
+    typeDisplayName: 'Re-accreditation',
+    submittedAt: '2026-01-05T10:00:00Z',
+    lastModifiedAt: '2026-01-06T10:00:00Z',
+    submittedBy: 'stub-portal-client',
+    payload: realOperatorSubmissionPayload()
+  }
+
+  test('every AC02 row resolves a real value from the adapter payload', () => {
+    const { rows } = buildApplicationSummary({ workItem })
+
+    expect(row(rows, 'site-address').values).toEqual([
+      '123 High Street, London, SW1A 1AA'
+    ])
+    expect(row(rows, 'type').value).toBe('Re-accreditation')
+    expect(row(rows, 'material').value).toBe('Plastic')
+    expect(row(rows, 'prn-tonnage').value).toBe('Up to 1,000 tonnes')
+    expect(row(rows, 'prn-authorisers').values).toEqual(['Bob Jones'])
+    expect(row(rows, 'authority-to-issue').values).toEqual([
+      'Bob Jones (bob@example.com)'
+    ])
+
+    const files = row(rows, 'sampling-inspection-plan').files
+    expect(files).toHaveLength(1)
+    expect(files[0].filename).toBe('sampling-plan.pdf')
+    expect(files[0].uploadedAt).toBe('5 January 2026 at 10:00am')
+
+    // All six business-plan categories are emitted by the adapter, each with
+    // a percentage AND a narrative.
+    const pairs = row(rows, 'business-plan').pairs
+    expect(pairs).toHaveLength(6)
+    expect(pairs.every((p) => p.percent !== null && p.detail !== null)).toBe(
+      true
+    )
+    expect(pairs[0]).toEqual({
+      label: 'New infrastructure',
+      percent: '20% of PRN income',
+      detail: 'New sorting line'
+    })
+
+    // No overseas sites in a reprocessor submission, so BES/ORS stay hidden.
+    expect(rows.map((r) => r.key)).not.toContain('bes')
+    expect(rows.map((r) => r.key)).not.toContain('ors')
+  })
+
+  test('no AC02 row silently degrades to an em dash against the real payload', () => {
+    const { rows } = buildApplicationSummary({ workItem })
+    for (const r of rows) {
+      if (r.kind === 'text') expect(r.value).not.toBe(EM_DASH)
+      if (r.kind === 'lines') expect(r.values.length).toBeGreaterThan(0)
+    }
+  })
+
+  test('the reference block resolves every envelope and operator field', () => {
+    const rows = buildCaseFooterRows({ workItem })
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+
+    expect(byKey['work-item-id']).toBe('w-1')
+    expect(byKey['registration-number']).toBe('EPR-100023')
+    expect(byKey['accreditation-year']).toBe('2026')
+    expect(byKey['previous-accreditation-year']).toBe('2025')
+    expect(byKey['compliance-issues-reported']).toBe('0')
+    expect(byKey['operator-application-id']).toBe('app-001')
+    expect(byKey['operator-organisation-id']).toBe('12345')
+    expect(byKey['operator-registration-id']).toBe('reg-001')
+    expect(byKey['operator-email']).toBe('jane@example.com')
+    expect(byKey.declaration).toBe(
+      'Jane Smith, Operations Manager, jane@example.com'
+    )
+    expect(byKey['submitted-by']).toBe('stub-portal-client')
+    expect(byKey['submitted-at']).toBe('5 January 2026 at 10:00am')
+    expect(byKey['last-modified']).toBe('6 January 2026 at 10:00am')
+  })
+
+  test('the case header resolves org, material and registration number', () => {
+    const header = buildCaseHeader({ workItem })
+    expect(header.organisationName).toBe('Acme Recycling Ltd')
+    expect(header.organisationId).toBe('12345')
+    expect(header.meta.find((m) => m.key === 'material').value).toBe('Plastic')
+    expect(header.meta.find((m) => m.key === 'registration-number').value).toBe(
+      'EPR-100023'
+    )
   })
 })

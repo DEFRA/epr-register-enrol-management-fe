@@ -888,18 +888,101 @@ describe('#workItemDetailController', () => {
         expect.stringContaining('data-testid="unassign-link"')
       )
       expect(panel).toEqual(
-        expect.stringContaining('data-testid="action-sla-extend"')
-      )
-      expect(panel).toEqual(
-        expect.stringContaining('data-testid="action-sla-override"')
-      )
-      expect(panel).toEqual(
         expect.stringContaining(`href="/work-items/${ID}/assign"`)
       )
       expect(panel).toEqual(
         expect.stringContaining(`href="/work-items/${ID}/unassign"`)
       )
     }
+  })
+
+  // The due-date links are NOT part of AC03's "available throughout" — that
+  // is about assignment. They follow the engine's `sla-extend` projection,
+  // because SlaService.ExtendAsync has no terminal-state check of its own:
+  // an ungated link would let a caseworker move the due date on a closed
+  // case and the backend would accept it.
+  test('due-date links follow the engine projection, not the assignment panel', async () => {
+    registerReaccreditation()
+
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        availableActions: [
+          { actionId: 'sla-extend', displayName: 'Extend SLA' }
+        ]
+      })
+    })
+    const live = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+    expect(live.result).toEqual(
+      expect.stringContaining('data-testid="action-sla-extend"')
+    )
+    expect(live.result).toEqual(
+      expect.stringContaining('data-testid="action-sla-override"')
+    )
+
+    // Terminal / no SLA action projected: both links must disappear.
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ stateId: 'approved', availableActions: [] })
+    })
+    const closed = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+    expect(closed.result).not.toEqual(
+      expect.stringContaining('data-testid="action-sla-extend"')
+    )
+    expect(closed.result).not.toEqual(
+      expect.stringContaining('data-testid="action-sla-override"')
+    )
+    expect(closed.result).not.toEqual(
+      expect.stringContaining(`/work-items/${ID}/sla/extend`)
+    )
+    expect(closed.result).not.toEqual(
+      expect.stringContaining(`/work-items/${ID}/sla/override`)
+    )
+    // ...while assignment stays available, per AC03.
+    expect(closed.result).toEqual(
+      expect.stringContaining('data-testid="reassign-link"')
+    )
+    expect(closed.result).toEqual(
+      expect.stringContaining('data-testid="unassign-link"')
+    )
+  })
+
+  // `sla-extend` is filtered out of availableActions rather than skipped in
+  // the template, so the length check stays honest: an item whose ONLY
+  // action is sla-extend must report "no actions", not render an empty
+  // Actions panel.
+  test('an item whose only action is sla-extend reports no actions', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        availableActions: [
+          { actionId: 'sla-extend', displayName: 'Extend SLA' }
+        ]
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-no-actions"')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="work-item-actions"')
+    )
+    // The affordance itself still renders, in the assignment panel.
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="action-sla-extend"')
+    )
   })
 
   describe('POST /work-items/{id}/self-assign (RA-153)', () => {
@@ -1674,13 +1757,24 @@ describe('RA-295 individual work item page', () => {
     registerWorkItemType(reAccreditationType)
   })
 
-  function fullPayloadWorkItem(overrides = {}) {
+  // `payload` is destructured OUT of the rest so the trailing `...overrides`
+  // cannot clobber the merged payload — it previously did, which silently
+  // reduced every `fullPayloadWorkItem({ payload: … })` call to a work item
+  // carrying ONLY the override's keys. That mattered most for the exporter
+  // BES/ORS test, which was proving those rows render in isolation rather
+  // than alongside the rest of a real submission. Payload merging is now
+  // structurally guaranteed by ordering, not by convention.
+  function fullPayloadWorkItem({
+    payload: payloadOverrides,
+    ...overrides
+  } = {}) {
     return aWorkItem({
       stateId: 'duly-made',
       slaDueDate: '2026-08-24T09:00:00Z',
       assignedToId: null,
       assignedToName: null,
       availableActions: [],
+      ...overrides,
       payload: {
         applicationReference: 'RA-2026-00001',
         organisationName: 'GreenLoop Recovery',
@@ -1712,9 +1806,8 @@ describe('RA-295 individual work item page', () => {
           newInfrastructurePercent: 80,
           newInfrastructureDetail: 'Sorting line investment'
         },
-        ...(overrides.payload ?? {})
-      },
-      ...overrides
+        ...(payloadOverrides ?? {})
+      }
     })
   }
 
@@ -1922,7 +2015,10 @@ describe('RA-295 individual work item page', () => {
     expect(result).not.toContain('Broadly Equivalent Standards')
     expect(result).not.toContain('Overseas Reprocessing Site')
     // ...and the Type row names the applicant kind.
-    expect(detailRow(result, 'type')).toContain('Reprocessor')
+    // ...and the Type row states only the registry display name — it must
+    // NOT claim an applicant kind the backend never sends.
+    expect(detailRow(result, 'type')).toContain('Re-accreditation')
+    expect(detailRow(result, 'type')).not.toContain('Reprocessor')
   })
 
   test('AC02: shows BES then ORS, last and in that order, for an exporter', async () => {
@@ -1972,7 +2068,9 @@ describe('RA-295 individual work item page', () => {
     )
     expect(result).toContain('1 Overseas Lane, Rotterdam')
     // The exporter applicant kind is reflected in the Type row.
-    expect(detailRow(result, 'type')).toContain('Exporter')
+    // Even here the Type row must not assert "Exporter": the overseasSites
+    // signal gates the BES/ORS SECTIONS, it is not evidence of a type.
+    expect(detailRow(result, 'type')).not.toContain('Exporter')
   })
 
   test('AC02: an unscanned BES evidence file is named but not linked', async () => {
@@ -2036,7 +2134,6 @@ describe('RA-295 individual work item page', () => {
     // indefinitely by the browser, stranding anyone who followed the link
     // once if this route ever has to come back or point elsewhere.
     expect(statusCode).toBe(statusCodes.redirect)
-    expect(statusCode).not.toBe(statusCodes.movedPermanently)
     expect(headers.location).toBe(`/work-items/${ID}`)
     // The redirect must not need the backend at all.
     expect(getWorkItem).not.toHaveBeenCalled()
@@ -2085,7 +2182,46 @@ describe('RA-295 individual work item page', () => {
 
     expect(result).toContain('data-testid="prior-year-authorisers"')
     expect(result).toContain('data-testid="prior-year-business-plan"')
+    // ...and each empty cell actually shows the em dash, rather than the
+    // assertion merely proving the containers exist.
+    const cell = (testid) => {
+      const start = result.indexOf(`data-testid="${testid}"`)
+      return result.slice(start, result.indexOf('</dd>', start))
+    }
+    expect(cell('prior-year-tonnage')).toContain('—')
+    expect(cell('prior-year-authorisers')).toContain('—')
+    expect(cell('prior-year-business-plan')).toContain('—')
   })
+
+  // The section is supplementary, so it must never break the page around it.
+  // `ok: true` only means the CALL succeeded — a 200 carrying a null or
+  // non-object body still satisfies it, and dereferencing that would throw
+  // out of the handler and 500 the entire detail page.
+  test.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a string', 'nope'],
+    ['a number', 42]
+  ])(
+    'RA-254: a previous-year 200 carrying %s does not break the page',
+    async (_label, priorYear) => {
+      getReAccreditationPriorYear.mockResolvedValue({ ok: true, priorYear })
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: fullPayloadWorkItem()
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toContain('data-testid="prior-year-heading"')
+      // The rest of the page still renders.
+      expect(result).toContain('data-testid="application-details"')
+    }
+  )
 
   test('RA-254: a failed previous-year lookup omits the section rather than the page', async () => {
     getReAccreditationPriorYear.mockResolvedValue({ ok: false, status: 502 })

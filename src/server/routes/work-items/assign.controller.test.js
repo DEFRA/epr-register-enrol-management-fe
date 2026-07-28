@@ -1,8 +1,20 @@
 import { describe, expect, test, vi, beforeEach } from 'vitest'
 
+// The end-to-end render tests below boot the real server, which wires every
+// route — so the whole backend-api surface has to be stubbed, not just the
+// two functions this controller calls.
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getReAccreditationPriorYear: vi.fn(),
-  getWorkItem: vi.fn()
+  getWorkItem: vi.fn(),
+  getWorkItems: vi.fn(),
+  getBackendHealth: vi.fn(),
+  assignWorkItem: vi.fn(),
+  unassignWorkItem: vi.fn(),
+  completeWorkItemTask: vi.fn(),
+  setWorkItemTaskStatus: vi.fn(),
+  applyWorkItemAction: vi.fn(),
+  addWorkItemNote: vi.fn(),
+  raiseWorkItemQuery: vi.fn()
 }))
 
 vi.mock('#/server/common/helpers/auth/get-user.js', () => ({
@@ -216,5 +228,113 @@ describe('#makeShowUnassignController (RA-295 AC03)', () => {
 
     expect(captured.viewPath).toBe('work-items/detail-error')
     expect(captured.statusCode).toBe(502)
+  })
+})
+
+// ---------------------------------------------------------------------
+// Render tests against the REAL server and the REAL Nunjucks templates.
+//
+// The unit tests above drive the handlers with a fake `h`, which proves the
+// view model but would happily ship a Nunjucks syntax error, a wrong view
+// path or a missing `crumb`. These mount the actual routes so the templates
+// are compiled and rendered for real.
+// ---------------------------------------------------------------------
+describe('RA-295 AC03 interstitials render end-to-end', () => {
+  let server
+
+  beforeAll(async () => {
+    const { createServer } = await import('#/server/server.js')
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  beforeEach(() => {
+    getWorkItem.mockReset()
+  })
+
+  test('GET /assign renders the picker, the CSRF crumb and a cancel link', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: '/work-items/wi%201/assign'
+    })
+
+    expect(statusCode).toBe(200)
+    expect(result).toContain('data-testid="assign-form"')
+    expect(result).toContain('data-testid="assign-select"')
+    expect(result).toContain('data-testid="assign-submit"')
+    expect(result).toContain('data-testid="assign-cancel"')
+    expect(result).toContain('Currently assigned to Bob')
+    expect(result).toContain('action="/work-items/wi%201/assign"')
+    // Without a crumb the POST would be rejected as a CSRF failure.
+    expect(result).toMatch(/name="crumb" value="[^"]+"/)
+  })
+
+  test('GET /assign copes with an unassigned work item', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ assignedToId: null, assignedToName: null })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: '/work-items/wi%201/assign'
+    })
+
+    expect(statusCode).toBe(200)
+    expect(result).toContain('not currently assigned to anyone')
+  })
+
+  test('GET /unassign renders the confirmation with a crumb', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: '/work-items/wi%201/unassign'
+    })
+
+    expect(statusCode).toBe(200)
+    expect(result).toContain('data-testid="unassign-form"')
+    expect(result).toContain('data-testid="unassign-submit"')
+    expect(result).toContain('data-testid="unassign-current"')
+    expect(result).toContain('currently assigned to Bob')
+    expect(result).toContain('action="/work-items/wi%201/unassign"')
+    expect(result).toMatch(/name="crumb" value="[^"]+"/)
+  })
+
+  test('GET /unassign explains itself instead of offering a no-op confirm', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ assignedToId: null, assignedToName: null })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: '/work-items/wi%201/unassign'
+    })
+
+    expect(statusCode).toBe(200)
+    expect(result).toContain('data-testid="unassign-already-unassigned"')
+    expect(result).toContain('nothing to unassign')
+    expect(result).not.toContain('data-testid="unassign-submit"')
+    expect(result).toContain('data-testid="unassign-cancel"')
+  })
+
+  test('both interstitials render the not-found page for a missing work item', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 404 })
+
+    for (const path of ['assign', 'unassign']) {
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/wi%201/${path}`
+      })
+      expect(statusCode).toBe(404)
+      expect(result).toContain('Work item not found')
+    }
   })
 })

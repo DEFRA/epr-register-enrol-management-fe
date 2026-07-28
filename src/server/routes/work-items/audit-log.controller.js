@@ -72,7 +72,6 @@ export const workItemAuditLogController = {
 
     return h.view(AUDIT_LOG_VIEW, {
       pageTitle: `Application history — ${applicationRef}`,
-      heading: 'Application history',
       // RA-295. The audit log is the "Application history" tab of the
       // individual work item page, so it carries the same case header and
       // the same tab strip as the summary tab. The header's own

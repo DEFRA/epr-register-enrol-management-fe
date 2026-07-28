@@ -5,6 +5,39 @@
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 
+{# Shared row fragments — defined once and reused by both the AC02          #}
+{# application-details rows and the previous-year section, which render the #}
+{# same shapes.                                                             #}
+
+{# One supporting document: a link when the file has passed the virus scan, #}
+{# otherwise its name plus the scan-status tag. The `app-detail-document`   #}
+{# testid is repeated (not indexed) so the e2e suite can count them and     #}
+{# prove EVERY document renders, not just files[0] (AC02 item 7).           #}
+{% macro documentItem(file) %}
+  <li>
+    {% if file.href %}
+      <a class="govuk-link"
+         href="{{ file.href }}"
+         data-testid="app-detail-document">{{ file.filename }}</a>
+    {% else %}
+      <span data-testid="app-detail-document">{{ file.filename }}</span>
+      {{ govukTag({ text: file.scanStatus, classes: file.scanTagClass }) }}
+    {% endif %}
+    {% if file.uploadedAt or file.uploadedBy %}
+      {# "S&I updated by" — retained per RA-295's Jira notes. #}
+      <span class="govuk-hint govuk-!-margin-bottom-0"
+            data-testid="app-detail-sampling-updated-by">Updated{% if file.uploadedAt %} {{ file.uploadedAt }}{% endif %}{% if file.uploadedBy %} by {{ file.uploadedBy }}{% endif %}</span>
+    {% endif %}
+  </li>
+{% endmacro %}
+
+{# One business-plan category: bold label, PRN-income share, narrative. #}
+{% macro businessPlanPair(pair) %}
+  <p class="govuk-body govuk-!-margin-bottom-1" data-testid="app-detail-pair">
+    <strong>{{ pair.label }}</strong>{% if pair.percent %} — {{ pair.percent }}{% endif %}{% if pair.detail %}<br>{{ pair.detail }}{% endif %}
+  </p>
+{% endmacro %}
+
 {# ---------------------------------------------------------------- #}
 {# Generic work item detail template — "Application summary" tab.     #}
 {#                                                                   #}
@@ -118,39 +151,15 @@
 
               {% elif row.kind == 'files' %}
                 {% if row.files.length %}
-                  {# One `app-detail-document` per supporting document — a  #}
-                  {# repeated (not indexed) testid so the e2e suite can     #}
-                  {# count them and prove EVERY document renders, not just  #}
-                  {# files[0] (AC02 item 7).                                #}
                   <ul class="govuk-list">
-                    {% for file in row.files %}
-                      <li>
-                        {% if file.href %}
-                          <a class="govuk-link"
-                             href="{{ file.href }}"
-                             data-testid="app-detail-document">{{ file.filename }}</a>
-                        {% else %}
-                          <span data-testid="app-detail-document">{{ file.filename }}</span>
-                          {{ govukTag({ text: file.scanStatus, classes: file.scanTagClass }) }}
-                        {% endif %}
-                        {% if file.uploadedAt or file.uploadedBy %}
-                          {# "S&I updated by" — retained per RA-295's notes. #}
-                          <span class="govuk-hint govuk-!-margin-bottom-0"
-                                data-testid="app-detail-sampling-updated-by">Updated{% if file.uploadedAt %} {{ file.uploadedAt }}{% endif %}{% if file.uploadedBy %} by {{ file.uploadedBy }}{% endif %}</span>
-                        {% endif %}
-                      </li>
-                    {% endfor %}
+                    {% for file in row.files %}{{ documentItem(file) }}{% endfor %}
                   </ul>
                 {% else %}
                   <span data-testid="app-detail-documents-none">No documents uploaded.</span>
                 {% endif %}
 
               {% elif row.kind == 'pairs' %}
-                {% for pair in row.pairs %}
-                  <p class="govuk-body govuk-!-margin-bottom-1"
-                     data-testid="app-detail-pair">
-                    <strong>{{ pair.label }}</strong>{% if pair.percent %} — {{ pair.percent }}{% endif %}{% if pair.detail %}<br>{{ pair.detail }}{% endif %}
-                  </p>
+                {% for pair in row.pairs %}{{ businessPlanPair(pair) }}
                 {% else %}
                   —
                 {% endfor %}
@@ -167,18 +176,7 @@
                     {% endif %}
                     {% if site.files.length %}
                       <ul class="govuk-list">
-                        {% for file in site.files %}
-                          <li>
-                            {% if file.href %}
-                              <a class="govuk-link"
-                                 href="{{ file.href }}"
-                                 data-testid="app-detail-document">{{ file.filename }}</a>
-                            {% else %}
-                              <span data-testid="app-detail-document">{{ file.filename }}</span>
-                              {{ govukTag({ text: file.scanStatus, classes: file.scanTagClass }) }}
-                            {% endif %}
-                          </li>
-                        {% endfor %}
+                        {% for file in site.files %}{{ documentItem(file) }}{% endfor %}
                       </ul>
                     {% endif %}
                   </div>
@@ -219,10 +217,7 @@
           <div class="govuk-summary-list__row">
             <dt class="govuk-summary-list__key">Business plan</dt>
             <dd class="govuk-summary-list__value" data-testid="prior-year-business-plan">
-              {% for pair in priorYear.businessPlanPairs %}
-                <p class="govuk-body govuk-!-margin-bottom-1">
-                  <strong>{{ pair.label }}</strong>{% if pair.percent %} — {{ pair.percent }}{% endif %}{% if pair.detail %}<br>{{ pair.detail }}{% endif %}
-                </p>
+              {% for pair in priorYear.businessPlanPairs %}{{ businessPlanPair(pair) }}
               {% else %}
                 —
               {% endfor %}
@@ -288,18 +283,24 @@
                data-testid="unassign-link"
                href="/work-items/{{ workItem.id }}/unassign">Unassign the application</a>
           </li>
-          <li>
-            {# RA-131's Extend SLA affordance, relabelled to the prototype's #}
-            {# wording. Testid unchanged so existing journeys keep working.  #}
-            <a class="govuk-link"
-               data-testid="action-sla-extend"
-               href="/work-items/{{ workItem.id }}/sla/extend">Change the due date</a>
-          </li>
-          <li>
-            <a class="govuk-link"
-               data-testid="action-sla-override"
-               href="/work-items/{{ workItem.id }}/sla/override">Override the due date</a>
-          </li>
+          {# RA-131's Extend / Override SLA affordances, relabelled to the   #}
+          {# prototype's wording. Testids unchanged so existing journeys     #}
+          {# keep working. Gated on the engine still projecting `sla-extend` #}
+          {# — see `canChangeDueDate` in the controller: the backend has no  #}
+          {# terminal-state check of its own, so an ungated link would let a #}
+          {# caseworker move the due date on a closed case.                   #}
+          {% if workItem.canChangeDueDate %}
+            <li>
+              <a class="govuk-link"
+                 data-testid="action-sla-extend"
+                 href="/work-items/{{ workItem.id }}/sla/extend">Change the due date</a>
+            </li>
+            <li>
+              <a class="govuk-link"
+                 data-testid="action-sla-override"
+                 href="/work-items/{{ workItem.id }}/sla/override">Override the due date</a>
+            </li>
+          {% endif %}
         </ul>
       </div>
 
@@ -314,12 +315,12 @@
         {% if workItem.availableActions and workItem.availableActions.length > 0 %}
           <div data-testid="work-item-actions">
             {% block approveAction %}{% endblock %}
+            {# `sla-extend` is filtered out of `availableActions` by the     #}
+            {# controller (it renders as "Change the due date" in the        #}
+            {# assignment panel), so it never reaches this loop and the      #}
+            {# length check above stays honest.                              #}
             {% for action in workItem.availableActions %}
-              {% if action.actionId == 'sla-extend' %}
-                {# RA-295. Rendered as "Change the due date" in the          #}
-                {# assignment panel above — skipped here so it isn't shown   #}
-                {# twice.                                                    #}
-              {% elif action.actionId == 'query' or action.actionId.startsWith('query-') %}
+              {% if action.actionId == 'query' or action.actionId.startsWith('query-') %}
                 {# RA-291. Query is a secondary affordance: a link, not a    #}
                 {# button. The dedicated page collects the sections and the  #}
                 {# reason before anything is sent.                           #}

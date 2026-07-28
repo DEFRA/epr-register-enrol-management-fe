@@ -1,6 +1,9 @@
 import { formatDateGds } from '#/config/nunjucks/filters/format-date.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
+// Single definition of the "no value" glyph, shared with the application
+// summary rather than redeclared here.
+import { EM_DASH } from './application-summary.js'
 
 /**
  * Case header view model (RA-295 AC01).
@@ -21,8 +24,6 @@ import { materialLabel } from '#/server/work-items/core/materials.js'
  * The model is intentionally pre-formatted strings only: the macro that
  * renders it stays pure presentation and cannot reach into the payload.
  */
-
-export const EM_DASH = '—'
 
 const BACK_HREF = '/work-items'
 const BACK_TEXT = 'Applications'

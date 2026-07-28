@@ -134,8 +134,18 @@ function fileViewModel(file, workItemId) {
         : null,
     scanStatus: scanStatus || 'Pending',
     scanTagClass: scanTagClass(scanStatus),
-    // "S&I updated by" (retained per RA-295's Jira notes): the upload
-    // metadata carried on each supporting document.
+    // "S&I updated by" (retained per RA-295's Jira notes) — but note the
+    // producer only ever emits `uploadedAt`, never an uploader identity:
+    // `BuildPayload` writes sampling-plan files as
+    // `{ fileId, filename, contentType, uploadedAt, scanStatus, s3Key,
+    // s3Bucket }`. So the rendered line is "Updated {date}" and the "by
+    // {name}" half is unreachable today.
+    //
+    // The read is kept — unlike the speculative authority-to-issue reads
+    // below, which were removed — because the template already renders the
+    // two halves independently and an uploader name is a natural additive
+    // field. TODO(epr-ow16): drop this if the producer confirms it will
+    // never emit one.
     uploadedAt: file?.uploadedAt ? formatDateTimeGds(file.uploadedAt) : null,
     uploadedBy: file?.uploadedBy || null
   }
@@ -147,7 +157,7 @@ function scanTagClass(scanStatus) {
   return 'govuk-tag--grey'
 }
 
-function authoriserName(authoriser) {
+export function authoriserName(authoriser) {
   return authoriser?.fullName || authoriser?.email || EM_DASH
 }
 
@@ -161,20 +171,20 @@ function authoriserLine(authoriser) {
 /**
  * Resolve "Authority to issue" (AC02 item 6).
  *
- * The backend has no dedicated field for this today, so the PRN authorisers
- * are the people holding authority to issue. An explicit backend field is
- * preferred the moment one exists, hence the lookup order.
+ * TODO(epr-ow16): there is no separate authority-to-issue field on the wire.
+ * `HttpCaseWorkingApiAdapter.BuildPayload` emits `prns` as exactly
+ * `{ plannedTonnageBand, authorisers[] }`, so the PRN authorisers ARE the
+ * people holding authority to issue, and AC02's items 5 and 6 necessarily
+ * show the same people — item 5 by name, item 6 with contact detail.
+ *
+ * An earlier revision speculatively read `prns.authorityToIssue` /
+ * `payload.authorityToIssue` first. Both are dead on every real payload, and
+ * an unreachable branch that looks like a working feature is precisely what
+ * the `isExporterApplication` comment above warns against — so the
+ * speculative reads are gone. Add one back when the producer actually emits
+ * the field, with a contract-fixture update proving it.
  */
-function buildAuthorityToIssue(prns, payload) {
-  const explicit = prns?.authorityToIssue ?? payload?.authorityToIssue
-  if (Array.isArray(explicit) && explicit.length > 0) {
-    return explicit.map((entry) =>
-      typeof entry === 'string' ? entry : authoriserLine(entry)
-    )
-  }
-  if (typeof explicit === 'string' && explicit.trim() !== '') {
-    return [explicit.trim()]
-  }
+function buildAuthorityToIssue(prns) {
   const authorisers = Array.isArray(prns?.authorisers) ? prns.authorisers : []
   return authorisers.map(authoriserLine)
 }
@@ -212,15 +222,19 @@ export function buildApplicationSummary({ workItem }) {
     {
       key: 'type',
       label: 'Type',
-      kind: 'lines',
-      // Two lines rather than one concatenated string: the applicant kind
-      // (Reprocessor / Exporter) and the work item type's own display name,
-      // which stays sourced from the registry so no type-specific wording is
-      // hard-coded into this generic route.
-      values: [
-        isExporter ? 'Exporter' : 'Reprocessor',
-        workItem?.typeDisplayName || workItem?.typeId || EM_DASH
-      ]
+      kind: 'text',
+      // Sourced from the registry, so no type-specific wording is hard-coded
+      // into this generic route.
+      //
+      // Deliberately NOT prefixed with an applicant kind ("Reprocessor" /
+      // "Exporter"). The `overseasSites` proxy below is only safe in one
+      // direction: hiding BES/ORS when the signal is missing is a
+      // conservative default, whereas PRINTING "Reprocessor" is a positive
+      // factual claim — and by that proxy's own logic an exporter who has
+      // not yet added a site would be labelled a Reprocessor on a
+      // regulator's case screen. Restore the prefix only once a real
+      // discriminator reaches the payload (epr-ow16).
+      value: workItem?.typeDisplayName || workItem?.typeId || EM_DASH
     },
     {
       key: 'material',
@@ -244,7 +258,7 @@ export function buildApplicationSummary({ workItem }) {
       key: 'authority-to-issue',
       label: 'Authority to issue',
       kind: 'lines',
-      values: buildAuthorityToIssue(prns, payload)
+      values: buildAuthorityToIssue(prns)
     },
     {
       key: 'sampling-inspection-plan',
