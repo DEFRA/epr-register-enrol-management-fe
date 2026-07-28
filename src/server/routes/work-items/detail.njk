@@ -245,17 +245,21 @@
       {# permissions; the backend remains the source of truth and rejects  #}
       {# anything the caller may not do.                                   #}
       <div class="app-case-panel" data-testid="case-assignment-panel">
-        <h2 class="govuk-heading-m">Assignment</h2>
-
-        <p class="govuk-body" data-testid="assignment-current">
-          {% if assignment.callerIsAssignee %}
-            Assigned to you
-          {% elif assignment.assignedToName %}
-            Assigned to {{ assignment.assignedToName }}
-          {% else %}
-            Unassigned
-          {% endif %}
-        </p>
+        {# RA-295. No heading in the prototype — the card is identified by    #}
+        {# its primary button. The assignee is already the case header's      #}
+        {# "Assigned to" field (AC01), so it is only repeated here when the   #}
+        {# item is actually assigned: the prototype's unassigned card shows   #}
+        {# no status line at all, and "Unassigned" here only restates the     #}
+        {# header directly above the button that resolves it.                 #}
+        {% if assignment.callerIsAssignee or assignment.assignedToName %}
+          <p class="govuk-body" data-testid="assignment-current">
+            {% if assignment.callerIsAssignee %}
+              Assigned to you
+            {% else %}
+              Assigned to {{ assignment.assignedToName }}
+            {% endif %}
+          </p>
+        {% endif %}
 
         {% if assignment.canSelfAssign %}
           <form method="post"
@@ -264,7 +268,7 @@
             <input type="hidden" name="crumb" value="{{ crumb }}" />
             {{ govukButton({
               text: "Assign to yourself and start",
-              classes: "govuk-!-margin-bottom-0",
+              classes: "app-case-panel__primary-action govuk-!-margin-bottom-0",
               attributes: { "data-testid": "self-assign-submit" }
             }) }}
           </form>
