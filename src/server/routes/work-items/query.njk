@@ -72,10 +72,17 @@
           attributes: { "data-testid": "query-reason" }
         }) }}
 
-        {{ govukInsetText({
-          text: "When you send the query, the application will also be assigned to you.",
-          attributes: { "data-testid": "query-assignment-notice" }
-        }) }}
+        {# RA-295 AC04. Shown if — and ONLY if — the application is           #}
+        {# currently unassigned. Sending a query assigns the application to   #}
+        {# the caseworker, so telling an assignee (or a colleague looking at  #}
+        {# someone else's assigned case) that it "will also be assigned to    #}
+        {# you" is either redundant or wrong.                                 #}
+        {% if isUnassigned %}
+          {{ govukInsetText({
+            text: "When you send the query, the application will also be assigned to you.",
+            attributes: { "data-testid": "query-assignment-notice" }
+          }) }}
+        {% endif %}
 
         <div class="govuk-button-group">
           {{ govukButton({

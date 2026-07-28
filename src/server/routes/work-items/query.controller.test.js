@@ -307,6 +307,98 @@ describe('GET /work-items/{id}/query', () => {
     }
   })
 
+  // RA-295 AC04. The "…will also be assigned to you" notice must appear if
+  // AND ONLY IF the application is currently unassigned — the "and only
+  // then" is the whole point of the criterion.
+  describe('RA-295 AC04: assignment notice conditionality', () => {
+    const NOTICE = 'data-testid="query-assignment-notice"'
+
+    test('shows the notice when the application is unassigned', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ assignedToId: null, assignedToName: null })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: QUERY_HREF
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(expect.stringContaining(NOTICE))
+      expect(result).toEqual(
+        expect.stringContaining(
+          'When you send the query, the application will also be assigned to you.'
+        )
+      )
+    })
+
+    test('hides the notice when the application is already assigned', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          assignedToId: 'someone-1',
+          assignedToName: 'Someone Else'
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: QUERY_HREF
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(expect.stringContaining(NOTICE))
+      expect(result).not.toEqual(
+        expect.stringContaining('will also be assigned to you')
+      )
+    })
+
+    test('keeps the notice on a validation re-render while still unassigned', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ assignedToId: null })
+      })
+
+      const { statusCode, result } = await postQuery(
+        server,
+        form({ sections: [], reason: '' })
+      )
+
+      expect(statusCode).toBe(statusCodes.badRequest)
+      expect(result).toEqual(expect.stringContaining(NOTICE))
+    })
+
+    test('drops the notice on a validation re-render once assigned', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ assignedToId: 'someone-1' })
+      })
+
+      const { statusCode, result } = await postQuery(
+        server,
+        form({ sections: [], reason: '' })
+      )
+
+      expect(statusCode).toBe(statusCodes.badRequest)
+      expect(result).not.toEqual(expect.stringContaining(NOTICE))
+    })
+
+    test('hides the notice when the work item could not be re-read', async () => {
+      // Conservative default: if we cannot tell whether it is assigned, do
+      // not assert something that may not be true.
+      getWorkItem.mockResolvedValue({ ok: false, status: 503, error: 'boom' })
+
+      const { statusCode, result } = await postQuery(
+        server,
+        form({ sections: [], reason: '' })
+      )
+
+      expect(statusCode).toBe(statusCodes.badRequest)
+      expect(result).not.toEqual(expect.stringContaining(NOTICE))
+    })
+  })
+
   test('renders the page copy, word limit, inset text and cancel link', async () => {
     const { result } = await server.inject({ method: 'GET', url: QUERY_HREF })
 

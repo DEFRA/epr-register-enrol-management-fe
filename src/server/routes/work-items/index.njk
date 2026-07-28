@@ -278,6 +278,14 @@
                     <span data-testid="org-name">{{ item.orgName or "—" }}</span>{% if item.orgId %} (<span data-testid="org-id">{{ item.orgId }}</span>){% endif %}
                   </p>
 
+                  {# RA-295 AC06. Registration number on every card. This is  #}
+                  {# `registrationNumber` (EPR-xxxxxx), NOT the similarly     #}
+                  {# named `operatorRegistrationId` (reg-xxx) from RA-223.    #}
+                  <p class="govuk-body app-application-card__org" data-testid="application-registration">
+                    <span class="app-application-card__meta-label">Registration number:</span>
+                    <span data-testid="registration-number">{{ item.registrationNumber or "—" }}</span>
+                  </p>
+
                   {% if item.showDueDate %}
                     <div class="app-application-card__footer" data-testid="application-card-footer">
                       <span class="app-application-card__meta"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>

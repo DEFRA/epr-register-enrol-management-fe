@@ -8,6 +8,7 @@ import {
 } from '#/server/work-items/core/registry.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
+  getReAccreditationPriorYear: vi.fn(),
   assignWorkItem: vi.fn(),
   unassignWorkItem: vi.fn(),
   getBackendHealth: vi.fn(),
@@ -121,7 +122,12 @@ describe('#workItemAuditLogController', () => {
       workItemId: ID,
       user: expect.objectContaining({ id: expect.any(String) })
     })
-    expect(result).toEqual(expect.stringContaining('Audit log'))
+    // RA-295: the audit log is the "Application history" tab of the
+    // individual work item page.
+    expect(result).toEqual(expect.stringContaining('Application history'))
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="tab-application-history"')
+    )
     expect(result).toEqual(expect.stringContaining('Task completed'))
     expect(result).toEqual(expect.stringContaining('Check eligibility'))
     expect(result).toEqual(expect.stringContaining('Action applied'))
@@ -162,9 +168,9 @@ describe('#workItemAuditLogController', () => {
     )
   })
 
-  // RA-196: caption and breadcrumb show the application reference when
-  // present in the payload; the breadcrumb href keeps the internal id.
-  test('Shows the application reference in the caption and breadcrumb, keeping the id in the breadcrumb href', async () => {
+  // RA-196 / RA-295: the case header shows the application reference when
+  // present in the payload; the summary tab link keeps the internal id.
+  test('Shows the application reference in the case header, keeping the id in the tab href', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -179,9 +185,15 @@ describe('#workItemAuditLogController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Work item RA-555000111'))
+    expect(result).toMatch(
+      /data-testid="case-header-accreditation-ref">RA-555000111</
+    )
     expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
     expect(result).toEqual(expect.stringContaining(`/work-items/${ID}`))
+    // The case header's own back link replaces the GOV.UK breadcrumbs.
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="case-header-applications-link"')
+    )
   })
 
   test('Exposes the body of a note-added entry inside a "Show details" disclosure, preserving line breaks and escaping HTML', async () => {

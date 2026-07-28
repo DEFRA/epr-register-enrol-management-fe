@@ -1,0 +1,49 @@
+{% extends 'layouts/page.njk' %}
+
+{# ---------------------------------------------------------------- #}
+{# Unassign confirmation (RA-295 AC03).                              #}
+{#                                                                   #}
+{# Reached from the "Unassign the application" link in the detail    #}
+{# page's assignment panel. AC03 keeps that link available in every  #}
+{# state, so this page also has to handle an application that is     #}
+{# already unassigned — it says so rather than offering a no-op      #}
+{# confirm button.                                                   #}
+{# ---------------------------------------------------------------- #}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: applicationRef or "Application"
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      {% if isUnassigned %}
+        <p class="govuk-body" data-testid="unassign-already-unassigned">
+          This application is not assigned to anyone, so there is nothing to unassign.
+        </p>
+        <p class="govuk-body">
+          <a class="govuk-link" data-testid="unassign-cancel" href="{{ cancelHref }}">Back to the application</a>
+        </p>
+      {% else %}
+        <p class="govuk-body" data-testid="unassign-current">
+          This application is currently assigned to {{ assignedToName }}.
+        </p>
+
+        <form method="post" action="{{ formAction }}" novalidate data-testid="unassign-form">
+          <input type="hidden" name="crumb" value="{{ crumb }}" />
+          <div class="govuk-button-group">
+            {{ govukButton({
+              text: "Unassign the application",
+              classes: "govuk-button--warning",
+              attributes: { "data-testid": "unassign-submit" }
+            }) }}
+            <a class="govuk-link" data-testid="unassign-cancel" href="{{ cancelHref }}">Cancel</a>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -5,6 +5,7 @@ import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { injectWithCrumb } from '#/test-helpers/csrf.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
+  getReAccreditationPriorYear: vi.fn(),
   assignWorkItem: vi.fn(),
   unassignWorkItem: vi.fn(),
   getBackendHealth: vi.fn(),

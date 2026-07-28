@@ -1,0 +1,28 @@
+{# ------------------------------------------------------------------ #}
+{# Case tabs (RA-295).                                                 #}
+{#                                                                     #}
+{# "Application summary" (the detail page) and "Application history"   #}
+{# (the audit log page). Plain links rather than the govuk-frontend    #}
+{# tabs component, because each tab is a real, separately-addressable  #}
+{# page — which is what keeps them working with JavaScript disabled    #}
+{# (RA-94) and keeps each tab bookmarkable.                            #}
+{#                                                                     #}
+{# `params.tabs` comes from `buildCaseTabs()`.                         #}
+{# ------------------------------------------------------------------ #}
+<nav class="app-case-tabs" aria-label="Application" data-testid="case-tabs">
+  <ul class="app-case-tabs__list">
+    {% for tab in params.tabs %}
+      <li class="app-case-tabs__item{% if tab.active %} app-case-tabs__item--active{% endif %}">
+        {% if tab.active %}
+          <span class="app-case-tabs__link app-case-tabs__link--active"
+                aria-current="page"
+                data-testid="tab-{{ tab.key }}">{{ tab.text }}</span>
+        {% else %}
+          <a class="govuk-link app-case-tabs__link"
+             href="{{ tab.href }}"
+             data-testid="tab-{{ tab.key }}">{{ tab.text }}</a>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</nav>

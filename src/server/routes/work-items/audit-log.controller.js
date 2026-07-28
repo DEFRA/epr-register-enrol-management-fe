@@ -2,6 +2,8 @@ import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { decorateAuditLog } from '#/server/work-items/core/audit-log.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { stateTagClass } from '#/server/work-items/core/state-badge.js'
+import { buildCaseHeader, buildCaseTabs } from './case-header.js'
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
@@ -69,16 +71,20 @@ export const workItemAuditLogController = {
     }
 
     return h.view(AUDIT_LOG_VIEW, {
-      pageTitle: `Audit log — work item ${applicationRef}`,
-      heading: 'Audit log',
-      breadcrumbs: [
-        { text: 'Work items', href: '/work-items' },
-        {
-          text: applicationRef,
-          href: `/work-items/${encodeURIComponent(workItem.id)}`
-        },
-        { text: 'Audit log' }
-      ],
+      pageTitle: `Application history — ${applicationRef}`,
+      heading: 'Application history',
+      // RA-295. The audit log is the "Application history" tab of the
+      // individual work item page, so it carries the same case header and
+      // the same tab strip as the summary tab. The header's own
+      // "Applications" back link replaces the GOV.UK breadcrumbs.
+      caseHeader: buildCaseHeader({
+        workItem: {
+          ...workItem,
+          stateDisplayName,
+          stateTagClass: stateTagClass(workItem.stateId)
+        }
+      }),
+      caseTabs: buildCaseTabs({ workItemId: workItem.id, active: 'history' }),
       workItem: {
         id: workItem.id,
         applicationRef,

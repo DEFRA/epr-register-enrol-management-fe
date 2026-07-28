@@ -2,28 +2,34 @@
 
 {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
 {% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
-{% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
-{% from "govuk/components/task-list/macro.njk" import govukTaskList %}
 {% from "govuk/components/button/macro.njk" import govukButton %}
-{% from "govuk/components/select/macro.njk" import govukSelect %}
-{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 
 {# ---------------------------------------------------------------- #}
-{# Generic work item detail template.                                #}
+{# Generic work item detail template — "Application summary" tab.     #}
 {#                                                                   #}
-{# Used as the fallback when the work item's `(typeId,                #}
+{# Used as the fallback when the work item's `(typeId,               #}
 {# templateVersion)` pair has no module-specific template registered. #}
-{# Renders the envelope (id, type, state, submitter, payload), the   #}
-{# tasks projected by the engine, and the available actions, all in  #}
-{# GOV.UK Design System macros only — no JavaScript dependency.       #}
+{#                                                                   #}
+{# RA-295 realigned the page to the case-management prototype:        #}
+{#  - the case header (AC01) is rendered full-bleed by the layout     #}
+{#    from the `caseHeader` view model, so there is no page heading   #}
+{#    here and no green RA-98 notification banner;                    #}
+{#  - "Application summary" / "Application history" tabs sit above    #}
+{#    the body;                                                       #}
+{#  - ALL submitted application data is on this one page in the AC02  #}
+{#    order (the two-step application-details page is gone);          #}
+{#  - assignment and the available actions live in bordered panels in #}
+{#    the right-hand third (AC03);                                    #}
+{#  - the application ref / provenance block is retained for          #}
+{#    debugging but demoted to the bottom of the page.                #}
+{#                                                                   #}
+{# GOV.UK Design System macros only — no JavaScript (RA-94), and the  #}
+{# grid columns give the responsive behaviour AC05 requires.          #}
 {# ---------------------------------------------------------------- #}
 
 {% block content %}
-  {{ appHeading({
-    text: heading,
-    caption: "Work item " + workItem.workItemLabel
-  }) }}
+  {{ appCaseTabs({ tabs: caseTabs }) }}
 
   {# RA-132. Generic flash-banner rendered above the existing per-feature  #}
   {# banners. Set by handlers via `request.yar.flash('flashBanner', ...)`  #}
@@ -66,238 +72,342 @@
   {% endif %}
 
   {# RA-211: surfaces when the audit log has an unresolved                #}
-  {# notification-failed entry (no later notification-sent). Placement    #}
-  {# (top of page, below the other banners) is a developer working        #}
-  {# assumption pending real UI/UX input — not final.                      #}
+  {# notification-failed entry (no later notification-sent).              #}
   {% if notificationFailedBanner %}
     {{ govukNotificationBanner({
       type: 'error',
       titleText: 'There is a problem',
-      text: 'A notification email for this application could not be sent. Check the audit log for details.',
+      text: 'A notification email for this application could not be sent. Check the application history for details.',
       attributes: { "data-testid": "work-item-notification-failed-banner" }
     }) }}
   {% endif %}
 
   <div class="govuk-grid-row">
+    {# ==================== Application information ==================== #}
     <div class="govuk-grid-column-two-thirds">
-      {# Block for type-specific content rendered ABOVE the generic envelope #}
-      {# summary — used by RA-177 to surface the re-accreditation "issued"   #}
-      {# confirmation panel + metadata as the first thing the user sees      #}
-      {# after approving, with the envelope attributes below it.             #}
+      {# Block for type-specific content rendered ABOVE the application    #}
+      {# details — used by RA-177 to surface the re-accreditation "issued" #}
+      {# confirmation panel as the first thing the user sees after         #}
+      {# approving.                                                        #}
       {% block summaryListBefore %}{% endblock %}
 
-      {# RA-324 (AC08). Render the status as a coloured badge — the same       #}
-      {# state-badge colours used on the Applications list — via a Nunjucks    #}
-      {# capture so the govukTag macro auto-escapes the label (never           #}
-      {# concatenate backend strings into `html:` raw, epr-6fi).               #}
-      {% set stateTagHtml %}{{ govukTag({ text: workItem.stateDisplayName, classes: workItem.stateTagClass, attributes: { "data-testid": "work-item-state-tag" } }) }}{% endset %}
+      <h2 class="govuk-heading-m">Application details</h2>
 
-      {{ govukSummaryList({
-        attributes: { "data-testid": "work-item-summary" },
-        rows: [
-          { key: { text: "Application ref" }, value: { text: workItem.applicationRef or "" } },
-          { key: { text: "Registration ID" }, value: { text: workItem.registrationId or "—" } },
-          { key: { text: "Type" },         value: { text: workItem.typeDisplayName } },
-          { key: { text: "State" },        value: { html: stateTagHtml } },
-          { key: { text: "Submitted at" }, value: { text: workItem.submittedAt | formatDateTimeGds } },
-          { key: { text: "Submitted by" }, value: { text: workItem.submittedBy or "—" } },
-          { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt | formatDateTimeGds } },
-          { key: { text: "Assigned to" }, value: { text: assignment.assignedToName or "Unassigned" } }
-        ]
-      }) }}
+      {# RA-295 AC02. One ordered container; every row is a direct sibling #}
+      {# in the AC02 order so the order itself is assertable. Borderless   #}
+      {# per the prototype (no dividing rules between rows).               #}
+      <dl class="govuk-summary-list app-summary-list--borderless"
+          data-testid="application-details">
+        {% for row in applicationDetails %}
+          <div class="govuk-summary-list__row"
+               data-testid="app-detail-row-{{ row.key }}">
+            <dt class="govuk-summary-list__key">{{ row.label }}</dt>
+            <dd class="govuk-summary-list__value"
+                data-testid="app-detail-value-{{ row.key }}">
 
-      {# Block for type-specific summary content rendered immediately below #}
-      {# the generic envelope summary — used by RA-132 for the accredited   #}
-      {# determination metadata once a re-accreditation reaches `approved`. #}
+              {% if row.kind == 'text' %}
+                {{ row.value }}
+
+              {% elif row.kind == 'lines' %}
+                {% for line in row.values %}
+                  <p class="govuk-body govuk-!-margin-bottom-1"
+                     data-testid="app-detail-line">{{ line }}</p>
+                {% else %}
+                  —
+                {% endfor %}
+
+              {% elif row.kind == 'files' %}
+                {% if row.files.length %}
+                  {# One `app-detail-document` per supporting document — a  #}
+                  {# repeated (not indexed) testid so the e2e suite can     #}
+                  {# count them and prove EVERY document renders, not just  #}
+                  {# files[0] (AC02 item 7).                                #}
+                  <ul class="govuk-list">
+                    {% for file in row.files %}
+                      <li>
+                        {% if file.href %}
+                          <a class="govuk-link"
+                             href="{{ file.href }}"
+                             data-testid="app-detail-document">{{ file.filename }}</a>
+                        {% else %}
+                          <span data-testid="app-detail-document">{{ file.filename }}</span>
+                          {{ govukTag({ text: file.scanStatus, classes: file.scanTagClass }) }}
+                        {% endif %}
+                        {% if file.uploadedAt or file.uploadedBy %}
+                          {# "S&I updated by" — retained per RA-295's notes. #}
+                          <span class="govuk-hint govuk-!-margin-bottom-0"
+                                data-testid="app-detail-sampling-updated-by">Updated{% if file.uploadedAt %} {{ file.uploadedAt }}{% endif %}{% if file.uploadedBy %} by {{ file.uploadedBy }}{% endif %}</span>
+                        {% endif %}
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <span data-testid="app-detail-documents-none">No documents uploaded.</span>
+                {% endif %}
+
+              {% elif row.kind == 'pairs' %}
+                {% for pair in row.pairs %}
+                  <p class="govuk-body govuk-!-margin-bottom-1"
+                     data-testid="app-detail-pair">
+                    <strong>{{ pair.label }}</strong>{% if pair.percent %} — {{ pair.percent }}{% endif %}{% if pair.detail %}<br>{{ pair.detail }}{% endif %}
+                  </p>
+                {% else %}
+                  —
+                {% endfor %}
+
+              {% elif row.kind == 'sites' %}
+                {% for site in row.sites %}
+                  <div data-testid="overseas-site">
+                    <p class="govuk-body govuk-!-margin-bottom-1">
+                      <strong>{{ site.siteName }}</strong>{% if site.country %} ({{ site.country }}){% endif %}
+                    </p>
+                    {% if site.siteAddress %}
+                      <p class="govuk-body govuk-!-margin-bottom-1"
+                         data-testid="overseas-site-address">{{ site.siteAddress }}</p>
+                    {% endif %}
+                    {% if site.files.length %}
+                      <ul class="govuk-list">
+                        {% for file in site.files %}
+                          <li>
+                            {% if file.href %}
+                              <a class="govuk-link"
+                                 href="{{ file.href }}"
+                                 data-testid="app-detail-document">{{ file.filename }}</a>
+                            {% else %}
+                              <span data-testid="app-detail-document">{{ file.filename }}</span>
+                              {{ govukTag({ text: file.scanStatus, classes: file.scanTagClass }) }}
+                            {% endif %}
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% endif %}
+                  </div>
+                {% else %}
+                  —
+                {% endfor %}
+              {% endif %}
+
+            </dd>
+          </div>
+        {% endfor %}
+      </dl>
+
+      {# RA-254. Prior-year accreditation reference data, when the backend  #}
+      {# can supply it. Additive and failure-tolerant: absent when the      #}
+      {# lookup fails, so it can never block the page.                      #}
+      {% if priorYear %}
+        <h2 class="govuk-heading-m" data-testid="prior-year-heading">
+          Previous year ({{ priorYear.year }})
+        </h2>
+        <dl class="govuk-summary-list app-summary-list--borderless"
+            data-testid="prior-year-details">
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">PRN tonnage</dt>
+            <dd class="govuk-summary-list__value"
+                data-testid="prior-year-tonnage">{{ priorYear.tonnageBand }}</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">PRN authorisers</dt>
+            <dd class="govuk-summary-list__value" data-testid="prior-year-authorisers">
+              {% for line in priorYear.authoriserLines %}
+                <p class="govuk-body govuk-!-margin-bottom-1">{{ line }}</p>
+              {% else %}
+                —
+              {% endfor %}
+            </dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Business plan</dt>
+            <dd class="govuk-summary-list__value" data-testid="prior-year-business-plan">
+              {% for pair in priorYear.businessPlanPairs %}
+                <p class="govuk-body govuk-!-margin-bottom-1">
+                  <strong>{{ pair.label }}</strong>{% if pair.percent %} — {{ pair.percent }}{% endif %}{% if pair.detail %}<br>{{ pair.detail }}{% endif %}
+                </p>
+              {% else %}
+                —
+              {% endfor %}
+            </dd>
+          </div>
+        </dl>
+      {% endif %}
+
+      {# Block for type-specific content rendered immediately below the     #}
+      {# application details.                                               #}
       {% block summaryListExtra %}{% endblock %}
+    </div>
 
-      {# Block for type-specific primary actions rendered above the         #}
-      {# assignment / tasks / actions panels — used by RA-132 to host the   #}
-      {# "Approve" CTA on the re-accreditation detail page.                 #}
+    {# ======================= Right-hand panels ======================= #}
+    <div class="govuk-grid-column-one-third">
+      {# Block for type-specific primary actions rendered above the        #}
+      {# assignment panel.                                                 #}
       {% block primaryActions %}{% endblock %}
 
-      {# --------------------------- Assignment --------------------------- #}
-      {# RA-323: every caseworker has the same permissions, so the         #}
-      {# assign-to-anyone picker and re-assign / unassign buttons are      #}
-      {# always shown. RA-153's one-click "Take this work item" shortcut   #}
-      {# is offered alongside the picker whenever the item is currently    #}
-      {# unassigned. Backend enforces the same rules — the BFF is just     #}
-      {# providing a sensible UI.                                          #}
-      <h2 class="govuk-heading-m">Assignment</h2>
-      <div data-testid="work-item-assignment">
+      {# -------------------------- Assignment -------------------------- #}
+      {# RA-295 AC03. Assignment lives in the bordered right-hand panel,   #}
+      {# and every affordance is available in every state: a primary       #}
+      {# "Assign to yourself and start" button, then the reassign /        #}
+      {# unassign / due-date links. RA-323: every caseworker has the same  #}
+      {# permissions; the backend remains the source of truth and rejects  #}
+      {# anything the caller may not do.                                   #}
+      <div class="app-case-panel" data-testid="case-assignment-panel">
+        <h2 class="govuk-heading-m">Assignment</h2>
+
+        <p class="govuk-body" data-testid="assignment-current">
+          {% if assignment.callerIsAssignee %}
+            Assigned to you
+          {% elif assignment.assignedToName %}
+            Assigned to {{ assignment.assignedToName }}
+          {% else %}
+            Unassigned
+          {% endif %}
+        </p>
+
         {% if assignment.canSelfAssign %}
           <form method="post"
                 action="/work-items/{{ workItem.id }}/self-assign"
-                class="govuk-!-margin-bottom-3"
                 novalidate>
             <input type="hidden" name="crumb" value="{{ crumb }}" />
             {{ govukButton({
-              text: "Take this work item",
+              text: "Assign to yourself and start",
+              classes: "govuk-!-margin-bottom-0",
               attributes: { "data-testid": "self-assign-submit" }
             }) }}
           </form>
         {% endif %}
-        <form method="post"
-              action="/work-items/{{ workItem.id }}/assign"
-              class="govuk-!-margin-bottom-3"
-              novalidate>
-          <input type="hidden" name="crumb" value="{{ crumb }}" />
-          {{ govukSelect({
-            id: "assign-assignee-id",
-            name: "assigneeId",
-            label: { text: "Assign to", classes: "govuk-label--s" },
-            items: assignment.assignableUsers,
-            attributes: { "data-testid": "assign-select" }
-          }) }}
-          <div class="govuk-button-group">
-            {{ govukButton({
-              text: assignment.isUnassigned and "Assign" or "Re-assign",
-              attributes: { "data-testid": "assign-submit" }
-            }) }}
-          </div>
-        </form>
-        {% if assignment.canUnassign %}
-          <form method="post"
-                action="/work-items/{{ workItem.id }}/unassign"
-                novalidate>
-            <input type="hidden" name="crumb" value="{{ crumb }}" />
-            {{ govukButton({
-              text: "Unassign",
-              classes: "govuk-button--secondary",
-              attributes: { "data-testid": "unassign-submit" }
-            }) }}
-          </form>
-        {% endif %}
+
+        <hr class="app-case-panel__divider">
+
+        <ul class="app-case-panel__links">
+          <li>
+            <a class="govuk-link"
+               data-testid="reassign-link"
+               href="/work-items/{{ workItem.id }}/assign">Reassign the application</a>
+          </li>
+          <li>
+            <a class="govuk-link"
+               data-testid="unassign-link"
+               href="/work-items/{{ workItem.id }}/unassign">Unassign the application</a>
+          </li>
+          <li>
+            {# RA-131's Extend SLA affordance, relabelled to the prototype's #}
+            {# wording. Testid unchanged so existing journeys keep working.  #}
+            <a class="govuk-link"
+               data-testid="action-sla-extend"
+               href="/work-items/{{ workItem.id }}/sla/extend">Change the due date</a>
+          </li>
+          <li>
+            <a class="govuk-link"
+               data-testid="action-sla-override"
+               href="/work-items/{{ workItem.id }}/sla/override">Override the due date</a>
+          </li>
+        </ul>
       </div>
 
-      {# ------------------------------ Tasks ------------------------------ #}
-      {# RA-129. Task progression lives on a dedicated /tasks page so the   #}
-      {# summary stays focused on envelope, assignment, available actions   #}
-      {# and the audit log. The summary keeps a read-only progress          #}
-      {# indicator + a deep link.                                           #}
-      <h2 class="govuk-heading-m">Tasks</h2>
-
-      {% if workItem.taskProgress.total > 0 %}
-        <p class="govuk-body" data-testid="work-item-task-progress">
-          {{ workItem.taskProgress.completed }} of {{ workItem.taskProgress.total }} tasks complete.
-        </p>
-        <p class="govuk-body">
-          <a class="govuk-link"
-             data-testid="work-item-tasks-link"
-             href="/work-items/{{ workItem.id }}/tasks">Tasks ({{ workItem.taskProgress.total }})</a>
-        </p>
-      {% else %}
-        <p class="govuk-body" data-testid="work-item-no-tasks">
-          No tasks are required for this work item in its current state.
-        </p>
-        <p class="govuk-body">
-          <a class="govuk-link"
-             data-testid="work-item-tasks-link"
-             href="/work-items/{{ workItem.id }}/tasks">Tasks</a>
-        </p>
-      {% endif %}
-
-      {# ---------------------------- Actions ----------------------------- #}
+      {# ---------------------------- Actions ---------------------------- #}
       {# Wrapped in an override-able block so type-specific templates can   #}
-      {# replace the generic action list — used by RA-132 to suppress      #}
-      {# decision actions once a re-accreditation reaches a terminal state.#}
-      {% block actionsPanel %}
-      <h2 class="govuk-heading-m">Actions</h2>
+      {# replace the generic action list — used by RA-132 to suppress       #}
+      {# decision actions once a re-accreditation reaches a terminal state. #}
+      <div class="app-case-panel" data-testid="actions-panel">
+        {% block actionsPanel %}
+        <h2 class="govuk-heading-m">Actions</h2>
 
-      {% if workItem.availableActions and workItem.availableActions.length > 0 %}
-        <div class="govuk-button-group" data-testid="work-item-actions">
-          {% block approveAction %}{% endblock %}
-          {% for action in workItem.availableActions %}
-            {% if action.actionId == 'sla-extend' %}
-              <div class="govuk-!-display-inline-block">
-                <a class="govuk-button"
-                   data-module="govuk-button"
-                   role="button"
-                   draggable="false"
-                   data-testid="action-sla-extend"
-                   href="/work-items/{{ workItem.id }}/sla/extend">{{ action.displayName }}</a>
-              </div>
-              {# RA-131. Override SLA is BFF-only (no backend workflow        #}
-              {# transition) so it isn't projected into availableActions.     #}
-              {# Render it immediately after Extend SLA, matching its style.  #}
-              <div class="govuk-!-display-inline-block">
-                <a class="govuk-button"
-                   data-module="govuk-button"
-                   role="button"
-                   draggable="false"
-                   data-testid="action-sla-override"
-                   href="/work-items/{{ workItem.id }}/sla/override">Override SLA</a>
-              </div>
-            {% elif action.actionId == 'query' or action.actionId.startsWith('query-') %}
-              {# RA-291. Query is a secondary affordance: a link, not a    #}
-              {# button, sitting alongside Withdraw beneath the primary    #}
-              {# action. The dedicated page collects the sections and the  #}
-              {# reason before anything is sent.                           #}
-              <a class="govuk-link"
-                 data-testid="action-query"
-                 href="/work-items/{{ workItem.id }}/query">Query</a>
-            {% elif action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
-              {# RA-188. Withdraw goes through a confirmation interstitial    #}
-              {# so the user can confirm or back out.                         #}
-              <div class="govuk-!-display-inline-block">
+        {% if workItem.availableActions and workItem.availableActions.length > 0 %}
+          <div data-testid="work-item-actions">
+            {% block approveAction %}{% endblock %}
+            {% for action in workItem.availableActions %}
+              {% if action.actionId == 'sla-extend' %}
+                {# RA-295. Rendered as "Change the due date" in the          #}
+                {# assignment panel above — skipped here so it isn't shown   #}
+                {# twice.                                                    #}
+              {% elif action.actionId == 'query' or action.actionId.startsWith('query-') %}
+                {# RA-291. Query is a secondary affordance: a link, not a    #}
+                {# button. The dedicated page collects the sections and the  #}
+                {# reason before anything is sent.                           #}
+                <p class="govuk-body">
+                  <a class="govuk-link"
+                     data-testid="action-query"
+                     href="/work-items/{{ workItem.id }}/query">Query the application</a>
+                </p>
+              {% elif action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
+                {# RA-188. Withdraw goes through a confirmation interstitial #}
+                {# so the user can confirm or back out.                      #}
                 <a class="govuk-button govuk-button--warning"
                    data-module="govuk-button"
                    role="button"
                    draggable="false"
                    data-testid="action-{{ action.actionId }}"
                    href="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}/confirm">{{ action.displayName }}</a>
-              </div>
-            {% else %}
-              <form method="post"
-                    action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
-                    class="govuk-!-display-inline-block"
-                    novalidate>
-                <input type="hidden" name="crumb" value="{{ crumb }}" />
-                {{ govukButton({
-                  text: action.displayName,
-                  classes: action.actionId == 'reject' and 'govuk-button--warning' or '',
-                  attributes: { "data-testid": "action-" + action.actionId }
-                }) }}
-              </form>
-            {% endif %}
+              {% else %}
+                <form method="post"
+                      action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
+                      novalidate>
+                  <input type="hidden" name="crumb" value="{{ crumb }}" />
+                  {{ govukButton({
+                    text: action.displayName,
+                    classes: action.actionId == 'reject' and 'govuk-button--warning' or '',
+                    attributes: { "data-testid": "action-" + action.actionId }
+                  }) }}
+                </form>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="govuk-body" data-testid="work-item-no-actions">
+            No actions are currently available for this work item.
+          </p>
+        {% endif %}
+        {% endblock %}
+      </div>
+
+      {# ------------------------------ Tasks ------------------------------ #}
+      {# RA-129. Task progression lives on a dedicated /tasks page so the   #}
+      {# summary stays focused on the application data. The panel keeps a   #}
+      {# read-only progress indicator + a deep link.                        #}
+      <div class="app-case-panel" data-testid="tasks-panel">
+        <h2 class="govuk-heading-m">Tasks</h2>
+        {% if workItem.taskProgress.total > 0 %}
+          <p class="govuk-body" data-testid="work-item-task-progress">
+            {{ workItem.taskProgress.completed }} of {{ workItem.taskProgress.total }} tasks complete.
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-0">
+            <a class="govuk-link"
+               data-testid="work-item-tasks-link"
+               href="/work-items/{{ workItem.id }}/tasks">Tasks ({{ workItem.taskProgress.total }})</a>
+          </p>
+        {% else %}
+          <p class="govuk-body" data-testid="work-item-no-tasks">
+            No tasks are required for this work item in its current state.
+          </p>
+          <p class="govuk-body govuk-!-margin-bottom-0">
+            <a class="govuk-link"
+               data-testid="work-item-tasks-link"
+               href="/work-items/{{ workItem.id }}/tasks">Tasks</a>
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ------------------------- Reference footer ------------------------- #}
+  {# RA-295. The application ref / work item id are retained for debugging #}
+  {# but demoted to the bottom of the page, together with the envelope and #}
+  {# operator-reference fields that used to live on the standalone         #}
+  {# application-details page — so folding that page in loses no data.     #}
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <div class="app-case-footer">
+        <h2 class="govuk-heading-s">Reference</h2>
+        <dl class="govuk-summary-list app-summary-list--borderless govuk-!-font-size-16"
+            data-testid="work-item-application-ref-footer">
+          {% for row in caseFooterRows %}
+            <div class="govuk-summary-list__row"
+                 data-testid="work-item-reference-row-{{ row.key }}">
+              <dt class="govuk-summary-list__key">{{ row.label }}</dt>
+              <dd class="govuk-summary-list__value">{{ row.value }}</dd>
+            </div>
           {% endfor %}
-        </div>
-      {% else %}
-        <p class="govuk-body" data-testid="work-item-no-actions">
-          No actions are currently available for this work item.
-        </p>
-      {% endif %}
-      {% endblock %}
-
-      {# ----------------------------- SLA -------------------------------- #}
-      {# RA-131. Extend SLA and Override SLA buttons live in the Actions   #}
-      {# panel above. This section shows the SLA clock status (when the    #}
-      {# backend exposes it) so caseworkers can see what they're acting    #}
-      {# on before clicking the buttons.                                   #}
-      {% if workItem.slaState %}
-        <h2 class="govuk-heading-m">SLA status</h2>
-        <p class="govuk-body" data-testid="sla-clock-info">
-          {% if workItem.slaState === 'Breached' %}
-            <strong class="govuk-tag govuk-tag--red">Breached</strong>
-          {% elif workItem.slaState === 'AtRisk' %}
-            <strong class="govuk-tag govuk-tag--yellow">At risk</strong>
-          {% else %}
-            <strong class="govuk-tag govuk-tag--green">On track</strong>
-          {% endif %}
-        </p>
-      {% endif %}
-
-      {# --------------------------- Audit log ---------------------------- #}
-      {# RA-97. The audit log lives on its own page (`/work-items/{id}/    #}
-      {# audit-log`) so the detail view stays focused on current state,   #}
-      {# tasks and actions. Link out so users can still reach it in a     #}
-      {# single click.                                                    #}
-      <h2 class="govuk-heading-m">Audit log</h2>
-      <p class="govuk-body">
-        <a class="govuk-link"
-           data-testid="work-item-audit-log-link"
-           href="/work-items/{{ workItem.id }}/audit-log">View audit log</a>
-      </p>
+        </dl>
+      </div>
     </div>
   </div>
 {% endblock %}
