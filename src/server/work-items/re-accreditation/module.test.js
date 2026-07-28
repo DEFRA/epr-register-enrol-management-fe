@@ -21,11 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    // RA-324. Bumped in lock-step with the backend snapshot re-stamp
-    // (ReAccreditationType.TemplateVersion => "v9") for the state
-    // DisplayName rename; the matching v9 detail-template entry is asserted
-    // by the "registers a detail template for the current version" test.
-    expect(reAccreditationType.templateVersion).toBe('v9')
+    expect(reAccreditationType.templateVersion).toBe('v10')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -110,7 +106,9 @@ describe('reAccreditationModule', () => {
       'withdrawn',
       false
     ],
-    ['withdraw-during-decision', 'awaiting-decision', 'withdrawn', false]
+    ['withdraw-during-decision', 'awaiting-decision', 'withdrawn', false],
+    ['withdraw-during-query', 'queried', 'withdrawn', false],
+    ['withdraw-during-updated', 'updated', 'withdrawn', false]
   ])(
     'declares transition %s: %s -> %s (requires=%s)',
     (actionId, fromStateId, toStateId, requires) => {

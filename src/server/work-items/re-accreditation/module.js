@@ -111,6 +111,20 @@ const TRANSITIONS = [
     fromStateId: 'awaiting-decision',
     toStateId: 'withdrawn',
     requiresAllTasksComplete: false
+  },
+  {
+    actionId: 'withdraw-during-query',
+    displayName: 'Withdraw',
+    fromStateId: 'queried',
+    toStateId: 'withdrawn',
+    requiresAllTasksComplete: false
+  },
+  {
+    actionId: 'withdraw-during-updated',
+    displayName: 'Withdraw',
+    fromStateId: 'updated',
+    toStateId: 'withdrawn',
+    requiresAllTasksComplete: false
   }
 ]
 
@@ -159,7 +173,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v9',
+  templateVersion: 'v10',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS,
@@ -180,8 +194,8 @@ export const reAccreditationModule = {
     // v7: RA-311/MBE-1 resume-during-* transitions out of queried
     // v8: RA-337 resume-during-* now lands on the new 'updated' state,
     //     plus continue-review-during-* transitions out of it
-    // v9: RA-324 backend snapshot re-stamp for the state DisplayName rename
-    //     (Applications page). No structural change — same detail template.
+    // v9: RA-252 withdraw-during-query transition out of 'queried'
+    // v10: RA-252 withdraw-during-updated transition out of 'updated'
     //
     // ⚠ THIS MAP MUST GAIN AN ENTRY WHENEVER THE BACKEND BUMPS
     // `ReAccreditationType.TemplateVersion`. The backend stamps its
@@ -203,7 +217,8 @@ export const reAccreditationModule = {
       v6: 're-accreditation/detail-v1',
       v7: 're-accreditation/detail-v1',
       v8: 're-accreditation/detail-v1',
-      v9: 're-accreditation/detail-v1'
+      v9: 're-accreditation/detail-v1',
+      v10: 're-accreditation/detail-v1'
     })
 
     // RA-132. Approve-determination flow: confirmation interstitial + POST
