@@ -51,6 +51,12 @@
 
 .app-header__logo-img {
   width: 300px;
+  // RA-295 AC05. Without this cap the logo is 300px wide come what may, and
+  // 300px + GOV.UK's two 15px gutters needs a 330px viewport — so every page
+  // in the service scrolled sideways below ~330px, including at 320px, the
+  // narrowest width the GOV.UK Design System supports (iPhone SE and
+  // equivalent). `height: auto` above keeps the aspect ratio once this bites.
+  max-width: 100%;
   height: auto;
   display: block;
 }
