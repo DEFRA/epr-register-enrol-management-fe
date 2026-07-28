@@ -200,6 +200,39 @@ describe('#isExporterApplication (RA-295 AC02 items 9 & 10)', () => {
     expect(isExporterApplication(EXPORTER)).toBe(true)
   })
 
+  // KNOWN LIMITATION, pinned deliberately (epr-ow16).
+  //
+  // These two assert the proxy's WRONG answers, not desired behaviour, so
+  // the limitation is executable rather than only a comment. Both should
+  // FAIL the moment a real `isExporter` discriminator lands — that failure
+  // is the point: it forces whoever implements epr-ow16 to confront both
+  // directions instead of fixing the one they happened to think of.
+  test('KNOWN WRONG: an Exporter with no sites yet is misread as not-exporter', () => {
+    // AC02 items 9-10 require BES/ORS to be shown for this application; the
+    // proxy hides them, because "declared an overseas site" is not the same
+    // question as "is an Exporter".
+    const exporterBeforeAddingSites = {
+      typeId: 're-accreditation',
+      payload: {
+        organisationName: 'Exporter Ltd',
+        overseasSites: { sites: [] }
+      }
+    }
+    expect(isExporterApplication(exporterBeforeAddingSites)).toBe(false)
+  })
+
+  test('KNOWN WRONG: a Reprocessor carrying overseas sites is misread as exporter', () => {
+    // The mirror-image defect: AC02 forbids showing BES/ORS here.
+    const reprocessorWithSites = {
+      typeId: 're-accreditation',
+      payload: {
+        organisationName: 'Reprocessor Ltd',
+        overseasSites: { sites: [{ siteName: 'X' }] }
+      }
+    }
+    expect(isExporterApplication(reprocessorWithSites)).toBe(true)
+  })
+
   test('is false for absent / malformed payloads rather than throwing', () => {
     expect(isExporterApplication(undefined)).toBe(false)
     expect(isExporterApplication({})).toBe(false)

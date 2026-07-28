@@ -64,12 +64,34 @@ const BUSINESS_PLAN_CATEGORIES = [
  * The only signal that exists is whether the operator actually declared any
  * overseas reprocessing sites. `payload.overseasSites` itself is emitted
  * unconditionally (it degrades to `{ sites: [] }` for reprocessors), so the
- * test has to be on the site list being NON-EMPTY. That hides both sections
- * for every reprocessor, which is the required default.
+ * test has to be on the site list being NON-EMPTY.
+ *
+ * THE PROXY IS WRONG IN BOTH DIRECTIONS. It is not merely imprecise:
+ *
+ *   - False negative — an Exporter who has NOT YET added an overseas site is
+ *     indistinguishable from a Reprocessor, so BES/ORS are hidden from them,
+ *     which is precisely what AC02 items 9-10 require to be shown.
+ *   - False positive — a Reprocessor that DOES carry `overseasSites` gets
+ *     both sections shown, which AC02 forbids.
+ *
+ * Hiding for a reprocessor with no sites is the common case and the required
+ * default, which is why this ships — but do not read that as "correct for
+ * every reprocessor".
  *
  * Replace this with the real discriminator once the payload carries one — see
- * the follow-up to add `isExporter` to `BuildPayload` in the operator backend
- * plus a matching property in management-be.
+ * epr-ow16 (add `isExporter` to `BuildPayload` in the operator backend plus a
+ * matching property in management-be).
+ *
+ * When you do, the regression suite needs THREE fixtures, not one, because
+ * each direction above fails independently:
+ *
+ *   1. Exporter WITH overseas sites      -> true positive
+ *   2. Exporter WITHOUT overseas sites   -> catches the false negative
+ *   3. Reprocessor WITH overseas sites   -> catches the false positive
+ *
+ * Fixture 2 is the one that looks redundant next to fixture 1 and will be
+ * dropped by someone tidying up. Do not drop it: it is the ONLY fixture that
+ * fails if a future reader decides this proxy is good enough to keep.
  *
  * Note: do NOT reach for `siteType` on an overseas site — that distinguishes
  * "ors" from "interim" sites, and is not an operator-type field.
