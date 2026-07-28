@@ -21,8 +21,32 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v8')
+    // RA-324. Bumped in lock-step with the backend snapshot re-stamp
+    // (ReAccreditationType.TemplateVersion => "v9") for the state
+    // DisplayName rename; the matching v9 detail-template entry is asserted
+    // by the "registers a detail template for the current version" test.
+    expect(reAccreditationType.templateVersion).toBe('v9')
     expect(reAccreditationType.initialState.id).toBe('submitted')
+  })
+
+  // RA-324. The state DisplayNames mirror the backend's rename byte-for-byte
+  // (state ids unchanged). These are the labels the Applications tiles and the
+  // detail-page badge render, so guard them explicitly.
+  test('declares the RA-324 Applications state labels (mirrors backend)', () => {
+    const labels = Object.fromEntries(
+      reAccreditationType.states.map((s) => [s.id, s.displayName])
+    )
+    expect(labels).toMatchObject({
+      submitted: 'Not started',
+      'duly-made': 'Duly made',
+      'assessment-in-progress': 'Updated',
+      'awaiting-decision': 'Awaiting decision',
+      queried: 'Queried',
+      updated: 'Updated',
+      approved: 'Granted',
+      rejected: 'Refused',
+      withdrawn: 'Withdrawn'
+    })
   })
 
   test('marks approved / rejected / withdrawn as terminal and others as not', () => {

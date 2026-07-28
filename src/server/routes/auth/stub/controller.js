@@ -84,6 +84,11 @@ export function stubLoginPostController(request, h) {
     scope: roles
   }
 
+  // RA-299 AC10/14: mirror the real OAuth callback's yar.reset() so a stub
+  // (re-)login also drops any session-persisted filters (e.g. the
+  // work-items list's last-applied query, RA-299) — a new session must
+  // never inherit filter state from whoever was previously "logged in".
+  request.yar.reset()
   request.yar.set('user', user)
   return h.redirect('/work-items')
 }

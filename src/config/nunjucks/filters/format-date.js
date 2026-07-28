@@ -38,3 +38,20 @@ export function formatDateTimeGds(value) {
   if (isNaN(date.getTime())) return ''
   return format(date, "d MMMM yyyy 'at' h:mmaaa", { in: tz(UK_TIMEZONE) })
 }
+
+/**
+ * Format an ISO-8601 date(-time) string in the GDS-recommended *date* format:
+ * "D MMMM YYYY" (e.g. "16 July 2026") — date only, no time component.
+ *
+ * Used for the "Submitted on" tile field (RA-324, AC05.6). The guard parses
+ * with the SAME parser used to format (date-fns `parseISO`), so a value the
+ * guard accepts can never throw in `format` — returns an empty string for an
+ * absent or unparseable value, safe to use directly in a template without a
+ * surrounding guard.
+ */
+export function formatDateGds(value) {
+  if (!value) return ''
+  const date = isDate(value) ? value : parseISO(value)
+  if (isNaN(date.getTime())) return ''
+  return format(date, 'd MMMM yyyy', { in: tz(UK_TIMEZONE) })
+}

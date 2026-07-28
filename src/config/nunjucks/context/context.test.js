@@ -63,12 +63,14 @@ describe('context and cache', () => {
             {
               current: false,
               text: 'Work items',
-              href: '/work-items'
+              href: '/work-items',
+              attributes: { 'data-testid': 'nav-work-items' }
             },
             {
               current: false,
               text: 'Backend status',
-              href: '/backend-status'
+              href: '/backend-status',
+              attributes: { 'data-testid': 'nav-backend-status' }
             }
           ],
           serviceName: 'Packaging waste applications',
@@ -153,12 +155,14 @@ describe('context and cache', () => {
             {
               current: false,
               text: 'Work items',
-              href: '/work-items'
+              href: '/work-items',
+              attributes: { 'data-testid': 'nav-work-items' }
             },
             {
               current: false,
               text: 'Backend status',
-              href: '/backend-status'
+              href: '/backend-status',
+              attributes: { 'data-testid': 'nav-backend-status' }
             }
           ],
           serviceName: 'Packaging waste applications',

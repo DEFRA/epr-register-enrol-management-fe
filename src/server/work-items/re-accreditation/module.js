@@ -20,10 +20,16 @@ import { buildCreateWorkItemRoutes } from './create/routes.js'
  * to the workflow diagram attached to RA-85.
  */
 
+// RA-324. State DisplayNames are aligned with the Applications-page label
+// contract and mirror the backend's rename byte-for-byte. The state *ids* are
+// unchanged (they are the shared wire contract); only the human labels move,
+// so no templateVersion bump is required for the rename itself. Note the
+// intentional collision: both `assessment-in-progress` and `updated` display
+// as "Updated" (literal AC06, confirmed with the backend — do not reconcile).
 const STATES = [
-  { id: 'submitted', displayName: 'Submitted' },
+  { id: 'submitted', displayName: 'Not started' },
   { id: 'duly-made', displayName: 'Duly made' },
-  { id: 'assessment-in-progress', displayName: 'Assessment in progress' },
+  { id: 'assessment-in-progress', displayName: 'Updated' },
   { id: 'awaiting-decision', displayName: 'Awaiting decision' },
   // RA-211 / RA-291. Deliberately NOT terminal: a queried application is
   // paused awaiting the operator's resubmission, after which it re-enters
@@ -37,8 +43,8 @@ const STATES = [
   // back to the raw id — see the RA-291 comment above for the class of bug
   // this guards against.
   { id: 'updated', displayName: 'Updated' },
-  { id: 'approved', displayName: 'Approved', isTerminal: true },
-  { id: 'rejected', displayName: 'Rejected', isTerminal: true },
+  { id: 'approved', displayName: 'Granted', isTerminal: true },
+  { id: 'rejected', displayName: 'Refused', isTerminal: true },
   { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
 ]
 
@@ -153,7 +159,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v8',
+  templateVersion: 'v9',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS,
@@ -174,6 +180,8 @@ export const reAccreditationModule = {
     // v7: RA-311/MBE-1 resume-during-* transitions out of queried
     // v8: RA-337 resume-during-* now lands on the new 'updated' state,
     //     plus continue-review-during-* transitions out of it
+    // v9: RA-324 backend snapshot re-stamp for the state DisplayName rename
+    //     (Applications page). No structural change — same detail template.
     //
     // ⚠ THIS MAP MUST GAIN AN ENTRY WHENEVER THE BACKEND BUMPS
     // `ReAccreditationType.TemplateVersion`. The backend stamps its
@@ -194,7 +202,8 @@ export const reAccreditationModule = {
       v5: 're-accreditation/detail-v1',
       v6: 're-accreditation/detail-v1',
       v7: 're-accreditation/detail-v1',
-      v8: 're-accreditation/detail-v1'
+      v8: 're-accreditation/detail-v1',
+      v9: 're-accreditation/detail-v1'
     })
 
     // RA-132. Approve-determination flow: confirmation interstitial + POST

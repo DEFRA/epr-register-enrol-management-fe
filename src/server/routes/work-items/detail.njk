@@ -86,13 +86,19 @@
       {# after approving, with the envelope attributes below it.             #}
       {% block summaryListBefore %}{% endblock %}
 
+      {# RA-324 (AC08). Render the status as a coloured badge — the same       #}
+      {# state-badge colours used on the Applications list — via a Nunjucks    #}
+      {# capture so the govukTag macro auto-escapes the label (never           #}
+      {# concatenate backend strings into `html:` raw, epr-6fi).               #}
+      {% set stateTagHtml %}{{ govukTag({ text: workItem.stateDisplayName, classes: workItem.stateTagClass, attributes: { "data-testid": "work-item-state-tag" } }) }}{% endset %}
+
       {{ govukSummaryList({
         attributes: { "data-testid": "work-item-summary" },
         rows: [
           { key: { text: "Application ref" }, value: { text: workItem.applicationRef or "" } },
           { key: { text: "Registration ID" }, value: { text: workItem.registrationId or "—" } },
           { key: { text: "Type" },         value: { text: workItem.typeDisplayName } },
-          { key: { text: "State" },        value: { text: workItem.stateDisplayName } },
+          { key: { text: "State" },        value: { html: stateTagHtml } },
           { key: { text: "Submitted at" }, value: { text: workItem.submittedAt | formatDateTimeGds } },
           { key: { text: "Submitted by" }, value: { text: workItem.submittedBy or "—" } },
           { key: { text: "Last modified" }, value: { text: workItem.lastModifiedAt | formatDateTimeGds } },
