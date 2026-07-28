@@ -2026,13 +2026,17 @@ describe('RA-295 individual work item page', () => {
     expect(result).not.toContain('View full application details')
   })
 
-  test('AC02: the old two-step page permanently redirects to the detail page', async () => {
+  test('AC02: the old two-step page redirects to the detail page', async () => {
     const { statusCode, headers } = await server.inject({
       method: 'GET',
       url: `/work-items/${ID}/application-details`
     })
 
-    expect(statusCode).toBe(statusCodes.movedPermanently)
+    // Deliberately a 302, never a 301: a permanent redirect would be cached
+    // indefinitely by the browser, stranding anyone who followed the link
+    // once if this route ever has to come back or point elsewhere.
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(statusCode).not.toBe(statusCodes.movedPermanently)
     expect(headers.location).toBe(`/work-items/${ID}`)
     // The redirect must not need the backend at all.
     expect(getWorkItem).not.toHaveBeenCalled()
