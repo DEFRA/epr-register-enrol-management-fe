@@ -17,7 +17,7 @@ describe('#stateTagClass', () => {
     ['assessment-in-progress', 'govuk-tag--blue'],
     ['awaiting-decision', 'govuk-tag--light-blue'],
     ['queried', 'govuk-tag--yellow'],
-    ['updated', 'govuk-tag--blue'],
+    ['updated', 'govuk-tag--turquoise'],
     ['approved', 'govuk-tag--green'],
     ['rejected', 'govuk-tag--red'],
     ['withdrawn', 'govuk-tag--grey']
