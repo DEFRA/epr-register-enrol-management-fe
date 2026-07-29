@@ -494,7 +494,7 @@ describe('#workItemListController', () => {
       { stateId: 'assessment-in-progress', cls: 'govuk-tag--blue' },
       { stateId: 'awaiting-decision', cls: 'govuk-tag--light-blue' },
       { stateId: 'queried', cls: 'govuk-tag--yellow' },
-      { stateId: 'updated', cls: 'govuk-tag--blue' },
+      { stateId: 'updated', cls: 'govuk-tag--turquoise' },
       { stateId: 'approved', cls: 'govuk-tag--green' },
       { stateId: 'rejected', cls: 'govuk-tag--red' },
       { stateId: 'withdrawn', cls: 'govuk-tag--grey' },

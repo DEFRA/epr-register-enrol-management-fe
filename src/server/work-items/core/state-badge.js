@@ -15,16 +15,29 @@
 // RA-324 phase-2. Colours realigned to Tom's prototype feedback. The AC06
 // DisplayNames are UNCHANGED (Not started / Updated / Granted / Refused …) —
 // only the badge colours move. `awaiting-decision` keeps a colour DISTINCT
-// from the solid blue used by the two "Updated" states so a caseworker can
-// tell the decision-pending state apart at a glance (prototype allowed either
-// "blue" or a distinct colour here — we keep it distinct with light-blue).
+// from the solid blue used by `assessment-in-progress`'s "Updated" so a
+// caseworker can tell the decision-pending state apart at a glance (prototype
+// allowed either "blue" or a distinct colour here — we keep it distinct with
+// light-blue).
+//
+// RA-311 (rescoped, superseding the original plan doc — see PR description):
+// the plan assumed CM had a single query-related state and proposed merging
+// it into a turquoise "Updated". By the time this landed, RA-352 had already
+// registered CM's real `updated` state (RA-311/MBE-1, RA-337 on the
+// backend), so CM already has the same two-state split as OJ. `queried`
+// (awaiting operator response) is deliberately left as-is; only `updated`
+// (resubmitted, awaiting re-assessment) is recoloured to turquoise here, for
+// parity with OJ FE's equivalent state (see
+// epr-register-enrol-frontend/src/server/operator-accreditation/controller.js
+// and .../accreditation/task-list/controller.js, both `Updated: { tagClass:
+// 'govuk-tag--turquoise' }`).
 const STATE_TAG_CLASSES = {
   submitted: 'govuk-tag--grey', // Not started
   'duly-made': 'govuk-tag--purple', // Duly made
   'assessment-in-progress': 'govuk-tag--blue', // Updated
   'awaiting-decision': 'govuk-tag--light-blue', // Awaiting decision (distinct)
   queried: 'govuk-tag--yellow', // Queried
-  updated: 'govuk-tag--blue', // Updated
+  updated: 'govuk-tag--turquoise', // Updated (RA-311 turquoise parity with OJ)
   approved: 'govuk-tag--green', // Granted
   rejected: 'govuk-tag--red', // Refused
   withdrawn: 'govuk-tag--grey' // Withdrawn
