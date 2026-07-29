@@ -581,6 +581,13 @@ describe('real operator submission payload contract', () => {
     expect(files).toHaveLength(1)
     expect(files[0].filename).toBe('sampling-plan.pdf')
     expect(files[0].uploadedAt).toBe('5 January 2026 at 10:00am')
+    // The download href is built from `payload.samplingPlan.files[].fileId`.
+    // Asserting the resolved href — not just that the file is listed — is what
+    // makes a rename of `fileId` on the producer fail here rather than ship a
+    // Clean document with no way to open it.
+    expect(files[0].href).toBe(
+      '/work-items/w-1/files/file-sampling-001/download'
+    )
 
     // All six business-plan categories are emitted by the adapter, each with
     // a percentage AND a narrative.
@@ -595,7 +602,11 @@ describe('real operator submission payload contract', () => {
       detail: 'New sorting line'
     })
 
-    // No overseas sites in a reprocessor submission, so BES/ORS stay hidden.
+    // A reprocessor submission carries `overseasSites` present-and-EMPTY, so
+    // BES/ORS stay hidden because the site list is empty — not because the key
+    // is missing from the fixture. Pinned so the distinction cannot rot.
+    expect(workItem.payload.overseasSites).toEqual({ sites: [] })
+    expect(isExporterApplication(workItem.payload)).toBe(false)
     expect(rows.map((r) => r.key)).not.toContain('bes')
     expect(rows.map((r) => r.key)).not.toContain('ors')
   })
@@ -604,7 +615,12 @@ describe('real operator submission payload contract', () => {
     const { rows } = buildApplicationSummary({ workItem })
     for (const r of rows) {
       if (r.kind === 'text') expect(r.value).not.toBe(EM_DASH)
-      if (r.kind === 'lines') expect(r.values.length).toBeGreaterThan(0)
+      if (r.kind === 'lines') {
+        // Length alone is not enough: `authoriserName` returns the em dash
+        // PER ENTRY, so a producer rename yields `['—']` — length 1, green.
+        expect(r.values.length).toBeGreaterThan(0)
+        expect(r.values).not.toContain(EM_DASH)
+      }
     }
   })
 

@@ -21,6 +21,12 @@ export function realOperatorSubmissionPayload() {
   return {
     organisationName: 'Acme Recycling Ltd',
     registrationNumber: 'EPR-100023',
+    // The adapter emits `materialsHandled` (an array) alongside the singular
+    // `material`. Nothing reads it today, but it is on the wire — and the
+    // `material` / `materialsHandled` confusion is the exact drift that
+    // shipped a blank field to CDP and prompted this fixture.
+    materialsHandled: ['plastic'],
+    glassRecyclingProcess: null,
     material: 'plastic',
     accreditationYear: 2026,
     previousAccreditationYear: 2025,
@@ -57,11 +63,27 @@ export function realOperatorSubmissionPayload() {
     samplingPlan: {
       files: [
         {
+          // `fileId` is `required` on AccreditationApplicationFile, so it is
+          // always on the wire — and it is what `fileViewModel` builds the
+          // download href from. Omitting it made every Clean file in this
+          // fixture resolve `href: null`, so a rename of `fileId` on the
+          // producer could not fail this test: exactly the drift class the
+          // fixture exists to catch.
+          fileId: 'file-sampling-001',
           filename: 'sampling-plan.pdf',
+          contentType: 'application/pdf',
           uploadedAt: '2026-01-05T10:00:00Z',
-          scanStatus: 'Clean'
+          scanStatus: 'Clean',
+          s3Key: 'sampling-plans/full-payload/sampling-plan.pdf',
+          s3Bucket: 'epr-register-enrol-sampling-plans'
         }
       ]
-    }
+    },
+    // Emitted unconditionally by BuildPayload, degrading to `{ sites: [] }`
+    // for a reprocessor. Present-and-empty is the case that matters: it is
+    // what `isExporterApplication()` gates BES/ORS on, so a fixture that
+    // omitted the key entirely made the "no BES row" assertion pass on an
+    // absent key rather than on an empty site list.
+    overseasSites: { sites: [] }
   }
 }

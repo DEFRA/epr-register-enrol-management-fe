@@ -13,7 +13,13 @@
 {# otherwise its name plus the scan-status tag. The `app-detail-document`   #}
 {# testid is repeated (not indexed) so the e2e suite can count them and     #}
 {# prove EVERY document renders, not just files[0] (AC02 item 7).           #}
-{% macro documentItem(file) %}
+{# `showUpdated` is opt-in: the upload hint carries the                     #}
+{# `app-detail-sampling-updated-by` testid, which is the "S&I updated by"   #}
+{# hook the e2e suite reads with a single-element lookup. BES-evidence      #}
+{# files also carry `uploadedAt`, so rendering it for them too would        #}
+{# duplicate that testid and let a BES occurrence satisfy an assertion      #}
+{# about the sampling row. Only the sampling row opts in.                   #}
+{% macro documentItem(file, showUpdated=false) %}
   <li>
     {% if file.href %}
       <a class="govuk-link"
@@ -23,7 +29,7 @@
       <span data-testid="app-detail-document">{{ file.filename }}</span>
       {{ govukTag({ text: file.scanStatus, classes: file.scanTagClass }) }}
     {% endif %}
-    {% if file.uploadedAt or file.uploadedBy %}
+    {% if showUpdated and (file.uploadedAt or file.uploadedBy) %}
       {# "S&I updated by" — retained per RA-295's Jira notes. #}
       <span class="govuk-hint govuk-!-margin-bottom-0"
             data-testid="app-detail-sampling-updated-by">Updated{% if file.uploadedAt %} {{ file.uploadedAt }}{% endif %}{% if file.uploadedBy %} by {{ file.uploadedBy }}{% endif %}</span>
@@ -31,9 +37,13 @@
   </li>
 {% endmacro %}
 
-{# One business-plan category: bold label, PRN-income share, narrative. #}
-{% macro businessPlanPair(pair) %}
-  <p class="govuk-body govuk-!-margin-bottom-1" data-testid="app-detail-pair">
+{# One business-plan category: bold label, PRN-income share, narrative.     #}
+{# `testId` is a parameter because the AC02 business-plan row and the       #}
+{# previous-year section render the same shape but are counted separately — #}
+{# stamping `app-detail-pair` on both would make an AC02 pair count also    #}
+{# pick up prior-year pairs.                                                #}
+{% macro businessPlanPair(pair, testId='app-detail-pair') %}
+  <p class="govuk-body govuk-!-margin-bottom-1" data-testid="{{ testId }}">
     <strong>{{ pair.label }}</strong>{% if pair.percent %} — {{ pair.percent }}{% endif %}{% if pair.detail %}<br>{{ pair.detail }}{% endif %}
   </p>
 {% endmacro %}
@@ -152,7 +162,9 @@
               {% elif row.kind == 'files' %}
                 {% if row.files.length %}
                   <ul class="govuk-list">
-                    {% for file in row.files %}{{ documentItem(file) }}{% endfor %}
+                    {# Only the sampling & inspection plan shows the upload   #}
+                    {# hint — see the macro's `showUpdated` note.            #}
+                    {% for file in row.files %}{{ documentItem(file, row.key == 'sampling-inspection-plan') }}{% endfor %}
                   </ul>
                 {% else %}
                   <span data-testid="app-detail-documents-none">No documents uploaded.</span>
@@ -217,7 +229,7 @@
           <div class="govuk-summary-list__row">
             <dt class="govuk-summary-list__key">Business plan</dt>
             <dd class="govuk-summary-list__value" data-testid="prior-year-business-plan">
-              {% for pair in priorYear.businessPlanPairs %}{{ businessPlanPair(pair) }}
+              {% for pair in priorYear.businessPlanPairs %}{{ businessPlanPair(pair, 'prior-year-pair') }}
               {% else %}
                 —
               {% endfor %}
