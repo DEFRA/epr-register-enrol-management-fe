@@ -1,24 +1,29 @@
 {# ------------------------------------------------------------------- #}
-{# Re-accreditation detail template (v1) — RA-98 + RA-132.              #}
+{# Re-accreditation detail template (v1) — RA-98 + RA-132 + RA-295.     #}
 {#                                                                      #}
 {# Type-specific view selected by the framework's detail controller     #}
 {# whenever a work item's `(typeId, templateVersion)` is                 #}
-{# `(re-accreditation, v1)`. Extends the generic detail template to     #}
-{# inherit envelope summary, assignment, tasks and audit log rendering, #}
-{# and overrides the narrow blocks the generic template exposes to add  #}
-{# re-accreditation-specific behaviour:                                  #}
+{# `(re-accreditation, v1..v9)`. Extends the generic detail template to #}
+{# inherit the case header, tabs, application details, assignment,      #}
+{# actions and tasks panels, and overrides the narrow blocks the        #}
+{# generic template exposes to add re-accreditation-specific behaviour: #}
 {#                                                                      #}
-{#  - RA-132 "Approve" CTA in `primaryActions`, gated by the controller #}
+{#  - RA-132 "Approve" CTA in `approveAction`, gated by the controller  #}
 {#    via `workItem.canApproveDirectly`.                                #}
 {#  - Terminal-state read-only mode: when the work item is approved,    #}
 {#    rejected or withdrawn, suppress the decision action panel and     #}
-{#    render a status tag + (for approvals) the issued accreditation    #}
-{#    metadata in `summaryListExtra`.                                   #}
+{#    render a status tag.                                             #}
+{#  - RA-177 issued-accreditation confirmation panel above the          #}
+{#    application details.                                             #}
+{#                                                                      #}
+{# RA-295 removed the RA-98 reference-implementation notification       #}
+{# banner and the "View full application details" link: the application #}
+{# data now renders in full on this page, so there is nothing to link   #}
+{# out to and no banner to explain.                                     #}
 {# ------------------------------------------------------------------- #}
 
 {% extends 'work-items/detail.njk' %}
 
-{% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 {% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
@@ -26,15 +31,11 @@
 
 {% block content %}
   <div data-testid="re-accreditation-detail">
-    {{ govukNotificationBanner({
-      titleText: "Re-accreditation work item",
-      text: "Reference implementation showing how a module supplies its own detail template (RA-98)."
-    }) }}
     {{ super() }}
   </div>
 {% endblock %}
 
-{# RA-156. Approve CTA moved into the actionsPanel button group so it    #}
+{# RA-156. Approve CTA lives in the actionsPanel button group so it      #}
 {# renders alongside Reject and Withdraw.                                #}
 {% block primaryActions %}{% endblock %}
 
@@ -44,6 +45,7 @@
       {{ govukButton({
         text: "Approve",
         href: workItem.approveHref,
+        classes: "app-case-panel__primary-action",
         attributes: { "data-testid": "action-approve" }
       }) }}
     </div>
@@ -60,7 +62,7 @@
     <p class="govuk-body" data-testid="re-accreditation-readonly-actions">
       This work item is in a final state. No further decision actions are available.
     </p>
-    <p class="govuk-body">
+    <p class="govuk-body govuk-!-margin-bottom-0">
       {{ govukTag({
         text: workItem.stateDisplayName,
         classes: workItem.stateTagClasses,
@@ -75,46 +77,9 @@
 {# RA-132 / RA-133 / RA-177. When the work item has been approved,      #}
 {# surface the issued accreditation metadata from the backend           #}
 {# (`payload.accreditationId`, `payload.accreditationStartDate`,        #}
-{# `payload.accreditationYear`) ABOVE the envelope summary as a         #}
-{# confirmation panel + a summary list so it is the first thing the     #}
-{# user sees after approving. RA-177 moved this from `summaryListExtra` #}
-{# (which renders below the envelope attributes) to `summaryListBefore` #}
-{# so the success message sits above the attributes.                    #}
-{% block summaryListExtra %}
-  <p class="govuk-body">
-    <a class="govuk-link" href="/work-items/{{ workItem.id }}/application-details" data-testid="view-application-details-link">
-      View full application details
-    </a>
-  </p>
-
-  {% set p = workItem.payload %}
-  {% if p %}
-    <h2 class="govuk-heading-m">Application details</h2>
-    {% set payloadRows = [] %}
-    {% if p.organisationName %}
-      {% set payloadRows = (payloadRows.push({ key: { text: "Organisation name" }, value: { html: '<span data-testid="payload-organisation-name">' + (p.organisationName | escape) + '</span>' } }), payloadRows) %}
-    {% endif %}
-    {% if p.material %}
-      {% set payloadRows = (payloadRows.push({ key: { text: "Material" }, value: { html: '<span data-testid="payload-material">' + (p.material | escape) + '</span>' } }), payloadRows) %}
-    {% endif %}
-    {% if p.accreditationYear %}
-      {% set payloadRows = (payloadRows.push({ key: { text: "Accreditation year" }, value: { html: '<span data-testid="payload-accreditation-year">' + (p.accreditationYear | string | escape) + '</span>' } }), payloadRows) %}
-    {% endif %}
-    {% if workItem.siteAddressFormatted %}
-      {% set payloadRows = (payloadRows.push({ key: { text: "Site address" }, value: { html: '<span data-testid="payload-site-address">' + (workItem.siteAddressFormatted | escape) + '</span>' } }), payloadRows) %}
-    {% endif %}
-    {% if workItem.sitePostcode %}
-      {% set payloadRows = (payloadRows.push({ key: { text: "Site postcode" }, value: { html: '<span data-testid="payload-site-postcode">' + (workItem.sitePostcode | escape) + '</span>' } }), payloadRows) %}
-    {% endif %}
-    {% if p.operatorEmail %}
-      {% set payloadRows = (payloadRows.push({ key: { text: "Operator email" }, value: { html: '<span data-testid="payload-operator-email">' + (p.operatorEmail | escape) + '</span>' } }), payloadRows) %}
-    {% endif %}
-    {% if payloadRows.length %}
-      {{ govukSummaryList({ attributes: { "data-testid": "re-accreditation-payload" }, rows: payloadRows }) }}
-    {% endif %}
-  {% endif %}
-{% endblock %}
-
+{# `payload.accreditationYear`) ABOVE the application details as a      #}
+{# confirmation panel + a summary list, so the success message is the   #}
+{# first thing the user sees after approving.                           #}
 {% block summaryListBefore %}
   {% if workItem.decisionMetadata %}
     {{ govukPanel({

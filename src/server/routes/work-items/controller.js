@@ -11,6 +11,7 @@ import {
 } from '#/server/work-items/core/materials.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
+import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { config } from '#/config/config.js'
 
 const DEFAULT_PAGE_SIZE = 20
@@ -548,6 +549,11 @@ function decorate(item) {
     applicationRef: item.payload?.applicationReference ?? null,
     orgName: item.payload?.organisationName ?? null,
     orgId: item.payload?.operatorOrganisationId ?? null,
+    // RA-295 AC06. The operator's registration number on each card. NOTE:
+    // this is `registrationNumber` (e.g. "EPR-100999") — deliberately NOT
+    // `operatorRegistrationId` (e.g. "reg-008", RA-223's "Registration ID"),
+    // which is a different field with a confusingly similar name.
+    registrationNumber: item.payload?.registrationNumber ?? null,
     // RA-324. Present the material DISPLAY LABEL on the card (e.g. "Plastic",
     // "Fibre-based composite material"), matching the filter checkboxes,
     // active-filter chips and summary — never the raw lowercase token.
@@ -561,21 +567,6 @@ function decorate(item) {
     // then / when unavailable, so the template renders an em dash.
     dueOn: resolveDueOn(item)
   }
-}
-
-/**
- * Extract a plain ISO-8601 string from a value that is either a string or the
- * Mongo relaxed extended-JSON `{ "$date": "ISO-8601" }` shape the backend
- * serialises BsonDateTime values as. Returns null for anything else (absent,
- * or an unexpected object).
- */
-function unwrapMongoDate(value) {
-  if (!value) return null
-  if (typeof value === 'string') return value
-  if (typeof value === 'object' && typeof value.$date === 'string') {
-    return value.$date
-  }
-  return null
 }
 
 /**

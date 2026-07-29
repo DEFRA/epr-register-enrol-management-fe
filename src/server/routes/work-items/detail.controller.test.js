@@ -12,8 +12,11 @@ import {
   registerDetailTemplate
 } from '#/server/work-items/core/templates.js'
 import { makeSelfAssignController } from './detail.controller.js'
+import { TEST_STANDARD_USER } from '#/server/common/helpers/auth/stub-auth-plugin.js'
+import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
+  getReAccreditationPriorYear: vi.fn(),
   assignWorkItem: vi.fn(),
   unassignWorkItem: vi.fn(),
   getBackendHealth: vi.fn(),
@@ -28,6 +31,7 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
 
 const {
   getWorkItem,
+  getReAccreditationPriorYear,
   getWorkItems,
   completeWorkItemTask,
   setWorkItemTaskStatus,
@@ -37,6 +41,32 @@ const {
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '11111111-1111-1111-1111-111111111111'
+
+/**
+ * Extract the rendered HTML of a single AC02 application-details row, so an
+ * assertion about (say) the site address cannot accidentally pass against
+ * text that happens to appear elsewhere on the page.
+ */
+function detailRow(html, key) {
+  const start = html.indexOf(`data-testid="app-detail-row-${key}"`)
+  // THROW rather than returning '' for a missing row. An empty string
+  // silently satisfies every `.not.toContain(...)` assertion, so a row that
+  // vanished entirely would read as a pass — the same vacuous-green failure
+  // mode as the SLA badge test that supplies a live `slaState` before
+  // asserting absence. A negative assertion is only meaningful once the
+  // thing it is scoped to is known to exist.
+  if (start === -1) {
+    throw new Error(
+      `No application-details row "${key}" in the rendered page — a scoped assertion against it would pass vacuously.`
+    )
+  }
+  const end = html.indexOf('</div>', start)
+  return html.slice(start, end === -1 ? undefined : end)
+}
+
+function siteAddressRow(html) {
+  return detailRow(html, 'site-address')
+}
 
 function aWorkItem(overrides = {}) {
   return {
@@ -150,7 +180,8 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // The envelope State row carries the badge with the shared testid...
+    // RA-295: the status badge moved into the case header's meta line, but
+    // keeps the shared testid and the shared colour contract.
     const badgeIdx = result.indexOf('data-testid="work-item-state-tag"')
     expect(badgeIdx).toBeGreaterThan(-1)
     // ...and approved renders green (the contract colour), never a plain
@@ -210,14 +241,17 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // Scope the assertion to the Registration ID row's value cell so it
-    // cannot pass against the value of an unrelated summary-list row.
+    // RA-295 moved this row into the reference block at the bottom of the
+    // page and relabelled it "Operator registration ID", to disambiguate it
+    // from the "Registration number" the case header now shows. Scope the
+    // assertion to that row's value cell so it cannot pass against the value
+    // of an unrelated row.
     expect(result).toMatch(
-      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-100023\s*<\/dd>/
+      /Operator registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-100023\s*<\/dd>/
     )
   })
 
-  test('RA-223: Falls back to an em-dash when payload.operatorRegistrationId is missing, ignoring registrationNumber', async () => {
+  test('RA-223: Omits the Operator registration ID row when absent, never falling back to registrationNumber', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -238,12 +272,18 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // The em-dash recurs in other rows, so scope the fallback assertion to
-    // the Registration ID row's value cell specifically.
-    expect(result).toMatch(/Registration ID\s*<\/dt>\s*<dd[^>]*>\s*—\s*<\/dd>/)
-    // Guard against a regression that re-adds a registrationNumber fallback.
+    // RA-295: the reference block omits rows with no value rather than
+    // rendering an em dash, so the row must not appear at all...
+    expect(result).not.toMatch(/Operator registration ID\s*<\/dt>/)
+    // ...and in particular the Companies House registration number must
+    // never leak into it (guards the RA-223 regression).
     expect(result).not.toMatch(
-      /Registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-987654321\s*<\/dd>/
+      /Operator registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-987654321\s*<\/dd>/
+    )
+    // The registration number itself still renders — in the case header,
+    // where it belongs (AC01).
+    expect(result).toMatch(
+      /data-testid="case-header-registration-number">\s*REG-987654321\s*</
     )
   })
 
@@ -282,10 +322,11 @@ describe('#workItemDetailController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).not.toEqual(expect.stringContaining('[object Object]'))
-    expect(result).toMatch(
-      /data-testid="payload-site-address">1 Details Lane, Leeds</
-    )
-    expect(result).toMatch(/data-testid="payload-site-postcode">LS1 1AB</)
+    // RA-295: the site address is the first AC02 row; the nested shape keeps
+    // the postcode out of the formatted line, so it renders as a second line.
+    const row = siteAddressRow(result)
+    expect(row).toContain('1 Details Lane, Leeds')
+    expect(row).toContain('LS1 1AB')
   })
 
   test('RA-245: renders a legacy flat-string site address and flat postcode', async () => {
@@ -313,10 +354,11 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toMatch(
-      /data-testid="payload-site-address">1 Main St, Leeds, LS1 1AB</
-    )
-    expect(result).toMatch(/data-testid="payload-site-postcode">LS1 1AB</)
+    // The legacy flat string already contains the postcode, so it must not
+    // be repeated as a second line.
+    const row = siteAddressRow(result)
+    expect(row).toContain('1 Main St, Leeds, LS1 1AB')
+    expect(row.match(/LS1 1AB/g)).toHaveLength(1)
   })
 
   test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
@@ -729,6 +771,33 @@ describe('#workItemDetailController', () => {
     )
   })
 
+  test('POST unassign re-renders the detail page inline when the backend refuses', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+    unassignWorkItem.mockResolvedValue({
+      ok: false,
+      status: statusCodes.conflict,
+      problem: {
+        detail: 'This work item cannot be unassigned in its current state.'
+      }
+    })
+
+    const { statusCode, result } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/unassign`
+    })
+
+    expect(statusCode).toBe(statusCodes.conflict)
+    expect(result).toEqual(
+      expect.stringContaining('Could not unassign work item')
+    )
+    expect(result).toEqual(
+      expect.stringContaining(
+        'This work item cannot be unassigned in its current state.'
+      )
+    )
+  })
+
   test('Summary page shows the read-only progress count and link to the tasks page (RA-129)', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
@@ -753,7 +822,7 @@ describe('#workItemDetailController', () => {
     )
   })
 
-  test('Links to the standalone audit log page rather than rendering entries inline', async () => {
+  test('Links to the Application history tab rather than rendering audit entries inline', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -781,7 +850,11 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('View audit log'))
+    // RA-295: the audit log is reached via the "Application history" tab.
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="tab-application-history"')
+    )
+    expect(result).toEqual(expect.stringContaining('Application history'))
     expect(result).toEqual(
       expect.stringContaining(`/work-items/${ID}/audit-log`)
     )
@@ -790,27 +863,140 @@ describe('#workItemDetailController', () => {
     expect(result).not.toEqual(expect.stringContaining('Task completed'))
   })
 
-  // RA-323: every caseworker has the same permissions, so the assign-to-
-  // anyone picker is always shown; the self-assign shortcut is offered
-  // alongside it whenever the item is unassigned.
-  test('Shows the assign picker for any caseworker', async () => {
+  // RA-295 AC03 / RA-323: every caseworker has the same permissions, so the
+  // reassign / unassign / due-date affordances are offered in the assignment
+  // panel in EVERY state — the picker itself now lives on the reassign
+  // interstitial the panel links to.
+  test('AC03: the assignment panel offers reassign, unassign and due-date links in every state', async () => {
+    registerReaccreditation()
+    for (const stateId of ['submitted', 'awaiting-decision', 'approved']) {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId,
+          assignedToId: null,
+          assignedToName: null
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const panelIdx = result.indexOf('data-testid="case-assignment-panel"')
+      expect(panelIdx).toBeGreaterThan(-1)
+      const panel = result.slice(
+        panelIdx,
+        result.indexOf('data-testid="actions-panel"')
+      )
+      expect(panel).toEqual(
+        expect.stringContaining('data-testid="reassign-link"')
+      )
+      expect(panel).toEqual(
+        expect.stringContaining('data-testid="unassign-link"')
+      )
+      expect(panel).toEqual(
+        expect.stringContaining(`href="/work-items/${ID}/assign"`)
+      )
+      expect(panel).toEqual(
+        expect.stringContaining(`href="/work-items/${ID}/unassign"`)
+      )
+    }
+  })
+
+  // The due-date links are NOT part of AC03's "available throughout" — that
+  // is about assignment. They follow the engine's `sla-extend` projection,
+  // because SlaService.ExtendAsync has no terminal-state check of its own:
+  // an ungated link would let a caseworker move the due date on a closed
+  // case and the backend would accept it.
+  test('due-date links follow the engine projection, not the assignment panel', async () => {
+    registerReaccreditation()
+
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        availableActions: [
+          { actionId: 'sla-extend', displayName: 'Extend SLA' }
+        ]
+      })
+    })
+    const live = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+    expect(live.result).toEqual(
+      expect.stringContaining('data-testid="action-sla-extend"')
+    )
+    expect(live.result).toEqual(
+      expect.stringContaining('data-testid="action-sla-override"')
+    )
+
+    // Terminal / no SLA action projected: both links must disappear.
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ stateId: 'approved', availableActions: [] })
+    })
+    const closed = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+    expect(closed.result).not.toEqual(
+      expect.stringContaining('data-testid="action-sla-extend"')
+    )
+    expect(closed.result).not.toEqual(
+      expect.stringContaining('data-testid="action-sla-override"')
+    )
+    expect(closed.result).not.toEqual(
+      expect.stringContaining(`/work-items/${ID}/sla/extend`)
+    )
+    expect(closed.result).not.toEqual(
+      expect.stringContaining(`/work-items/${ID}/sla/override`)
+    )
+    // ...while assignment stays available, per AC03.
+    expect(closed.result).toEqual(
+      expect.stringContaining('data-testid="reassign-link"')
+    )
+    expect(closed.result).toEqual(
+      expect.stringContaining('data-testid="unassign-link"')
+    )
+  })
+
+  // `sla-extend` is filtered out of availableActions rather than skipped in
+  // the template, so the length check stays honest: an item whose ONLY
+  // action is sla-extend must report "no actions", not render an empty
+  // Actions panel.
+  test('an item whose only action is sla-extend reports no actions', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: aWorkItem({ assignedToId: null, assignedToName: null })
+      workItem: aWorkItem({
+        availableActions: [
+          { actionId: 'sla-extend', displayName: 'Extend SLA' }
+        ]
+      })
     })
 
-    const { statusCode, result } = await server.inject({
+    const { result } = await server.inject({
       method: 'GET',
       url: `/work-items/${ID}`
     })
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('assign-select'))
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-no-actions"')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="work-item-actions"')
+    )
+    // The affordance itself still renders, in the assignment panel.
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="action-sla-extend"')
+    )
   })
 
   describe('POST /work-items/{id}/self-assign (RA-153)', () => {
-    test('Shows the self-assign shortcut alongside the picker on an unassigned work item', async () => {
+    test('RA-295: shows "Assign to yourself and start" on an unassigned work item', async () => {
       registerReaccreditation()
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -825,11 +1011,55 @@ describe('#workItemDetailController', () => {
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).toEqual(expect.stringContaining('self-assign-submit'))
       expect(result).toEqual(
-        expect.stringContaining(`action="/work-items/${ID}/self-assign"`)
+        expect.stringContaining('Assign to yourself and start')
       )
       expect(result).toEqual(
-        expect.stringContaining(`action="/work-items/${ID}/assign"`)
+        expect.stringContaining(`action="/work-items/${ID}/self-assign"`)
       )
+    })
+
+    // RA-295 AC03: assignment must stay available all the way through, so
+    // the button is still offered when the item belongs to a COLLEAGUE
+    // (taking it over) — it is suppressed only when the caller already holds
+    // it, where it would be a no-op.
+    test('RA-295: offers self-assign when the item is assigned to someone else, and not when it is already yours', async () => {
+      registerReaccreditation()
+
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          assignedToId: 'someone-else',
+          assignedToName: 'Someone Else'
+        })
+      })
+      const other = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+      expect(other.statusCode).toBe(statusCodes.ok)
+      expect(other.result).toEqual(
+        expect.stringContaining('self-assign-submit')
+      )
+      expect(other.result).toEqual(
+        expect.stringContaining('Assigned to Someone Else')
+      )
+
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          assignedToId: TEST_STANDARD_USER.id,
+          assignedToName: 'Test Caseworker'
+        })
+      })
+      const mine = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+      expect(mine.statusCode).toBe(statusCodes.ok)
+      expect(mine.result).not.toEqual(
+        expect.stringContaining('self-assign-submit')
+      )
+      expect(mine.result).toEqual(expect.stringContaining('Assigned to you'))
     })
 
     test('Caseworker self-assigns and is redirected to the detail page', async () => {
@@ -1166,7 +1396,7 @@ describe('#workItemDetailController', () => {
       expect(result).toEqual(expect.stringContaining('>2027<'))
     })
 
-    test('RA-177: renders the issued confirmation panel and metadata above the envelope attributes', async () => {
+    test('RA-177: renders the issued confirmation panel and metadata above the application details', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -1192,11 +1422,11 @@ describe('#workItemDetailController', () => {
       const metadataIndex = result.indexOf(
         'data-testid="re-accreditation-decision-metadata"'
       )
-      const summaryIndex = result.indexOf('data-testid="work-item-summary"')
+      const summaryIndex = result.indexOf('data-testid="application-details"')
       expect(panelIndex).toBeGreaterThan(-1)
       expect(metadataIndex).toBeGreaterThan(-1)
       expect(summaryIndex).toBeGreaterThan(-1)
-      // Success message first, then its metadata, then the envelope attributes.
+      // Success message first, then its metadata, then the application data.
       expect(panelIndex).toBeLessThan(metadataIndex)
       expect(metadataIndex).toBeLessThan(summaryIndex)
     })
@@ -1416,20 +1646,20 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // Page title / caption fall back to the ID as a navigational identifier.
+    // Page title falls back to the ID as a navigational identifier.
     expect(result).toEqual(expect.stringContaining(`Work item ${ID}`))
-    // Breadcrumb leaf should also use the ID.
-    expect(result).toEqual(
-      expect.stringContaining(
-        `<li class="govuk-breadcrumbs__list-item" aria-current="page">${ID}</li>`
-      )
+    // RA-295: so does the case header's breadcrumb leaf, which replaced the
+    // GOV.UK breadcrumbs on this page.
+    expect(result).toMatch(
+      new RegExp(`data-testid="case-header-accreditation-ref">${ID}<`)
     )
   })
 
-  // RA-249: a field LABELLED "Application ref" must show the human RA-*
-  // reference or NOTHING — never the work-item Guid. When applicationReference
-  // is absent the "Application ref" summary row must be empty, NOT the id.
-  test('RA-249: "Application ref" summary row is empty (never the id) when applicationReference is missing', async () => {
+  // RA-249: a field LABELLED "Application reference" must show the human RA-*
+  // reference or NOTHING — never the work-item Guid. RA-295 moved that row
+  // into the reference block at the bottom of the page, which omits absent
+  // values rather than rendering them, so the row must not appear at all.
+  test('RA-249: the Application reference row is absent (never the id) when applicationReference is missing', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -1444,20 +1674,16 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    // Locate the "Application ref" summary row value cell.
-    const match = result.match(
-      /Application ref\s*<\/dt>\s*<dd class="govuk-summary-list__value">([\s\S]*?)<\/dd>/
+    expect(result).not.toMatch(
+      /data-testid="work-item-reference-row-application-reference"/
     )
-    expect(match).not.toBeNull()
-    const appRefValue = match[1].trim()
-    // The value cell must be empty and must NOT contain the work-item Guid.
-    expect(appRefValue).toBe('')
-    expect(appRefValue).not.toContain(ID)
+    // The id is still available for debugging, under its own honest label.
+    expect(result).toMatch(/data-testid="work-item-reference-row-work-item-id"/)
   })
 
-  // RA-249: when applicationReference IS present, the "Application ref"
-  // summary row shows it (and not the id).
-  test('RA-249: "Application ref" summary row shows the reference when present', async () => {
+  // RA-249: when applicationReference IS present, the reference row shows it
+  // (and not the id).
+  test('RA-249: the Application reference row shows the reference when present', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -1476,11 +1702,613 @@ describe('#workItemDetailController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     const match = result.match(
-      /Application ref\s*<\/dt>\s*<dd class="govuk-summary-list__value">([\s\S]*?)<\/dd>/
+      /data-testid="work-item-reference-row-application-reference">[\s\S]*?<dd class="govuk-summary-list__value">([\s\S]*?)<\/dd>/
     )
     expect(match).not.toBeNull()
-    const appRefValue = match[1].trim()
-    expect(appRefValue).toBe('RA-987654321')
-    expect(appRefValue).not.toContain(ID)
+    expect(match[1].trim()).toBe('RA-987654321')
+  })
+
+  // RA-295: the retained reference block is at the BOTTOM — after the
+  // application details — per the Jira note.
+  test('RA-295: the retained application reference renders after the application details', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicantName: 'Acme',
+          applicationReference: 'RA-987654321'
+        }
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    const detailsIdx = result.indexOf('data-testid="application-details"')
+    const footerIdx = result.indexOf(
+      'data-testid="work-item-application-ref-footer"'
+    )
+    expect(detailsIdx).toBeGreaterThan(-1)
+    expect(footerIdx).toBeGreaterThan(detailsIdx)
+  })
+})
+
+// ---------------------------------------------------------------------
+// RA-295. The individual work item page realigned to the case-management
+// prototype: case header (AC01), all submitted application data on one
+// page in the AC02 order, assignment panel (AC03), responsive two-column
+// body (AC05), and the retained-but-demoted reference block.
+// ---------------------------------------------------------------------
+describe('RA-295 individual work item page', () => {
+  let server
+
+  beforeAll(async () => {
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  beforeEach(() => {
+    getWorkItem.mockReset()
+    getReAccreditationPriorYear.mockReset()
+    getReAccreditationPriorYear.mockResolvedValue({ ok: false })
+    clearWorkItemRegistry()
+    clearDetailTemplateRegistry()
+    // Register the REAL module type so the case header's Status resolves
+    // through the same state display names the Applications list uses,
+    // rather than a hand-rolled fixture that could drift from it.
+    registerWorkItemType(reAccreditationType)
+  })
+
+  // `payload` is destructured OUT of the rest so the trailing `...overrides`
+  // cannot clobber the merged payload — it previously did, which silently
+  // reduced every `fullPayloadWorkItem({ payload: … })` call to a work item
+  // carrying ONLY the override's keys. That mattered most for the exporter
+  // BES/ORS test, which was proving those rows render in isolation rather
+  // than alongside the rest of a real submission. Payload merging is now
+  // structurally guaranteed by ordering, not by convention.
+  function fullPayloadWorkItem({
+    payload: payloadOverrides,
+    ...overrides
+  } = {}) {
+    return aWorkItem({
+      stateId: 'duly-made',
+      slaDueDate: '2026-08-24T09:00:00Z',
+      assignedToId: null,
+      assignedToName: null,
+      availableActions: [],
+      ...overrides,
+      payload: {
+        applicationReference: 'RA-2026-00001',
+        organisationName: 'GreenLoop Recovery',
+        operatorOrganisationId: 'ORG-123-001',
+        registrationNumber: 'EPR-100999',
+        material: 'plastic',
+        siteAddress: '2 Wyld Court, Addingrove, AA3 1AA',
+        prns: {
+          plannedTonnageBand: 'UpTo1000',
+          authorisers: [{ fullName: 'Harry Edge', email: 'harry@example.com' }]
+        },
+        samplingPlan: {
+          files: [
+            {
+              fileId: 'f-1',
+              filename: 'sampling-plan.pdf',
+              scanStatus: 'Clean',
+              uploadedAt: '2026-06-01T10:00:00Z'
+            },
+            {
+              fileId: 'f-2',
+              filename: 'inspection-addendum.pdf',
+              scanStatus: 'Clean',
+              uploadedAt: '2026-06-02T10:00:00Z'
+            }
+          ]
+        },
+        businessPlan: {
+          newInfrastructurePercent: 80,
+          newInfrastructureDetail: 'Sorting line investment'
+        },
+        ...(payloadOverrides ?? {})
+      }
+    })
+  }
+
+  // AC01 -------------------------------------------------------------
+  test('AC01: renders the case header with all eight pieces of information', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    const headerIdx = result.indexOf('data-testid="case-header"')
+    expect(headerIdx).toBeGreaterThan(-1)
+    // Scope every field assertion to the header, so a value that also
+    // appears in the body below (e.g. "Plastic") cannot make it pass.
+    const header = result.slice(headerIdx, result.indexOf('</dl>', headerIdx))
+
+    expect(header).toContain('data-testid="case-header-applications-link"')
+    expect(header).toContain('href="/work-items"')
+    expect(header).toContain('Applications')
+    expect(header).toMatch(/case-header-accreditation-ref">RA-2026-00001</)
+    expect(header).toMatch(/case-header-org-name">GreenLoop Recovery</)
+    expect(header).toMatch(/case-header-org-id">ORG-123-001</)
+    expect(header).toContain('data-testid="case-header-material"')
+    expect(header).toContain('Plastic')
+    expect(header).toContain('data-testid="case-header-status"')
+    expect(header).toContain('Duly made')
+    expect(header).toContain('data-testid="case-header-assigned-to"')
+    expect(header).toContain('Unassigned')
+    expect(header).toContain('data-testid="case-header-due-on"')
+    expect(header).toContain('24 August 2026')
+    expect(header).toContain('data-testid="case-header-registration-number"')
+    expect(header).toContain('EPR-100999')
+  })
+
+  test('AC01: the case header due date is an em dash when no SLA clock has started', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({ slaDueDate: null })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toMatch(/data-testid="case-header-due-on">\s*—\s*</)
+  })
+
+  test('AC01: the RA-98 reference-implementation notification banner is gone', async () => {
+    registerDetailTemplate(
+      're-accreditation',
+      'v1',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="re-accreditation-detail"')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining(
+        'Reference implementation showing how a module supplies its own detail template'
+      )
+    )
+  })
+
+  // AC02 -------------------------------------------------------------
+  test('AC02: renders every application field on ONE page, in the AC02 order', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="application-details"')
+    )
+
+    const order = [
+      'site-address',
+      'type',
+      'material',
+      'prn-tonnage',
+      'prn-authorisers',
+      'authority-to-issue',
+      'sampling-inspection-plan',
+      'business-plan'
+    ].map((key) => result.indexOf(`data-testid="app-detail-row-${key}"`))
+
+    expect(order.every((idx) => idx > -1)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+
+    // The actual submitted values render, not just the labels.
+    expect(result).toContain('2 Wyld Court, Addingrove, AA3 1AA')
+    expect(result).toContain('Up to 1,000 tonnes')
+    expect(result).toContain('Harry Edge')
+    expect(result).toContain('harry@example.com')
+    expect(result).toContain('Sorting line investment')
+    expect(result).toContain('80% of PRN income')
+  })
+
+  test('AC02: lists EVERY supporting document, with the S&I updated-by metadata', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    const row = detailRow(result, 'sampling-inspection-plan')
+    expect(result.match(/data-testid="app-detail-document"/g)).toHaveLength(2)
+    expect(result).toContain('sampling-plan.pdf')
+    expect(result).toContain('inspection-addendum.pdf')
+    expect(result).toContain(`/work-items/${ID}/files/f-1/download`)
+    expect(result).toContain(`/work-items/${ID}/files/f-2/download`)
+    expect(row).toContain('data-testid="app-detail-sampling-updated-by"')
+    expect(result).toContain('Updated 1 June 2026 at 11:00am')
+  })
+
+  test('AC02: a file that has not passed the virus scan is listed but not linked', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        payload: {
+          samplingPlan: {
+            files: [
+              {
+                fileId: 'f-9',
+                filename: 'quarantined.pdf',
+                scanStatus: 'Infected'
+              }
+            ]
+          }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toContain('quarantined.pdf')
+    expect(result).not.toContain('/files/f-9/download')
+    expect(result).toContain('govuk-tag--red')
+  })
+
+  test('AC02: says so when no supporting documents were uploaded', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({ payload: { samplingPlan: null } })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toContain('data-testid="app-detail-documents-none"')
+  })
+
+  test('AC02: renders an em dash for empty multi-value and business-plan rows', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        payload: {
+          siteAddress: null,
+          prns: null,
+          businessPlan: null,
+          samplingPlan: null
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(detailRow(result, 'site-address')).toContain('—')
+    expect(detailRow(result, 'prn-authorisers')).toContain('—')
+    expect(detailRow(result, 'business-plan')).toContain('—')
+  })
+
+  test('AC02: hides BES and ORS entirely for a reprocessor', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).not.toContain('data-testid="app-detail-row-bes"')
+    expect(result).not.toContain('data-testid="app-detail-row-ors"')
+    expect(result).not.toContain('Broadly Equivalent Standards')
+    expect(result).not.toContain('Overseas Reprocessing Site')
+    // ...and the Type row names the applicant kind.
+    // ...and the Type row states only the registry display name — it must
+    // NOT claim an applicant kind the backend never sends.
+    expect(detailRow(result, 'type')).toContain('Re-accreditation')
+    expect(detailRow(result, 'type')).not.toContain('Reprocessor')
+  })
+
+  test('AC02: shows BES then ORS, last and in that order, for an exporter', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        payload: {
+          overseasSites: {
+            sites: [
+              {
+                siteName: 'Rotterdam Reprocessing',
+                country: 'Netherlands',
+                siteAddress: '1 Overseas Lane, Rotterdam',
+                besEvidence: {
+                  files: [
+                    {
+                      fileId: 'b-1',
+                      filename: 'bes-evidence.pdf',
+                      scanStatus: 'Clean'
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    const besIdx = result.indexOf('data-testid="app-detail-row-bes"')
+    const orsIdx = result.indexOf('data-testid="app-detail-row-ors"')
+    const planIdx = result.indexOf('data-testid="app-detail-row-business-plan"')
+    expect(planIdx).toBeLessThan(besIdx)
+    expect(besIdx).toBeLessThan(orsIdx)
+
+    expect(result).toContain('Broadly Equivalent Standards (BES)')
+    expect(result).toContain('Overseas Reprocessing Site (ORS)')
+    expect(result).toContain('bes-evidence.pdf')
+    expect(result).toContain(`/work-items/${ID}/files/b-1/download`)
+    expect(detailRow(result, 'ors')).toContain(
+      'data-testid="overseas-site-address"'
+    )
+    expect(result).toContain('1 Overseas Lane, Rotterdam')
+    // Even on an exporter the Type row must not claim "Exporter": the
+    // overseasSites signal gates the BES/ORS SECTIONS, it is not evidence of
+    // an applicant type. Positive assertion first, so the negative below is
+    // scoped to a row that demonstrably exists.
+    expect(detailRow(result, 'type')).toContain('Re-accreditation')
+    expect(detailRow(result, 'type')).not.toContain('Exporter')
+  })
+
+  test('AC02: an unscanned BES evidence file is named but not linked', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        payload: {
+          overseasSites: {
+            sites: [
+              {
+                siteName: 'Rotterdam Reprocessing',
+                besEvidence: {
+                  files: [
+                    {
+                      fileId: 'b-9',
+                      filename: 'bes.pdf',
+                      scanStatus: 'Pending'
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toContain('bes.pdf')
+    expect(result).not.toContain('/files/b-9/download')
+  })
+
+  test('AC02: the "View full application details" link is gone', async () => {
+    registerDetailTemplate(
+      're-accreditation',
+      'v1',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).not.toContain('data-testid="view-application-details-link"')
+    expect(result).not.toContain('View full application details')
+  })
+
+  test('AC02: the old two-step page redirects to the detail page', async () => {
+    const { statusCode, headers } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/application-details`
+    })
+
+    // Deliberately a 302, never a 301: a permanent redirect would be cached
+    // indefinitely by the browser, stranding anyone who followed the link
+    // once if this route ever has to come back or point elsewhere.
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    // The redirect must not need the backend at all.
+    expect(getWorkItem).not.toHaveBeenCalled()
+  })
+
+  test('RA-254: folds the previous-year reference data into the same page', async () => {
+    getReAccreditationPriorYear.mockResolvedValue({
+      ok: true,
+      priorYear: {
+        year: 2025,
+        tonnageBand: 'UpTo500',
+        authorisers: [
+          { fullName: 'Prior Person' },
+          { email: 'p@example.com' },
+          {}
+        ],
+        businessPlan: { priceSupportPercent: 40 }
+      }
+    })
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toContain('data-testid="prior-year-heading"')
+    expect(result).toContain('Previous year (2025)')
+    expect(result).toContain('Up to 500 tonnes')
+    expect(result).toContain('Prior Person')
+    expect(result).toContain('p@example.com')
+    expect(result).toContain('40% of PRN income')
+  })
+
+  test('RA-254: an empty previous year still renders, with em dashes', async () => {
+    getReAccreditationPriorYear.mockResolvedValue({
+      ok: true,
+      priorYear: { year: 2025 }
+    })
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toContain('data-testid="prior-year-authorisers"')
+    expect(result).toContain('data-testid="prior-year-business-plan"')
+    // ...and each empty cell actually shows the em dash, rather than the
+    // assertion merely proving the containers exist.
+    const cell = (testid) => {
+      const start = result.indexOf(`data-testid="${testid}"`)
+      return result.slice(start, result.indexOf('</dd>', start))
+    }
+    expect(cell('prior-year-tonnage')).toContain('—')
+    expect(cell('prior-year-authorisers')).toContain('—')
+    expect(cell('prior-year-business-plan')).toContain('—')
+  })
+
+  // The section is supplementary, so it must never break the page around it.
+  // `ok: true` only means the CALL succeeded — a 200 carrying a null or
+  // non-object body still satisfies it, and dereferencing that would throw
+  // out of the handler and 500 the entire detail page.
+  test.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a string', 'nope'],
+    ['a number', 42]
+  ])(
+    'RA-254: a previous-year 200 carrying %s does not break the page',
+    async (_label, priorYear) => {
+      getReAccreditationPriorYear.mockResolvedValue({ ok: true, priorYear })
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: fullPayloadWorkItem()
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toContain('data-testid="prior-year-heading"')
+      // The rest of the page still renders.
+      expect(result).toContain('data-testid="application-details"')
+    }
+  )
+
+  test('RA-254: a failed previous-year lookup omits the section rather than the page', async () => {
+    getReAccreditationPriorYear.mockResolvedValue({ ok: false, status: 502 })
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toContain('data-testid="prior-year-heading"')
+  })
+
+  test('RA-254: the previous-year lookup is skipped for other work item types', async () => {
+    registerWorkItemType({
+      id: 'other-type',
+      displayName: 'Other',
+      initialState: { id: 'submitted', displayName: 'Submitted' },
+      states: [{ id: 'submitted', displayName: 'Submitted' }],
+      getTasksForState: () => []
+    })
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        typeId: 'other-type',
+        stateId: 'submitted'
+      })
+    })
+
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(getReAccreditationPriorYear).not.toHaveBeenCalled()
+  })
+
+  // Jira notes -------------------------------------------------------
+  test('removes the SLA tracker badge while keeping the due date in the header', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        slaState: 'AtRisk',
+        slaRemaining: '2.00:00:00'
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).not.toContain('data-testid="sla-clock-info"')
+    expect(result).not.toContain('At risk')
+    expect(result).not.toContain('On track')
+    expect(result).toContain('data-testid="case-header-due-on"')
+  })
+
+  // AC05 -------------------------------------------------------------
+  test('AC05: the body uses the responsive two-thirds / one-third grid', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    // GOV.UK grid columns stack full-width below desktop, so the assignment
+    // panel reflows rather than clipping.
+    expect(result).toContain('govuk-grid-column-two-thirds')
+    expect(result).toContain('govuk-grid-column-one-third')
+    const panelIdx = result.indexOf('data-testid="case-assignment-panel"')
+    const thirdIdx = result.lastIndexOf('govuk-grid-column-one-third', panelIdx)
+    expect(thirdIdx).toBeGreaterThan(-1)
   })
 })

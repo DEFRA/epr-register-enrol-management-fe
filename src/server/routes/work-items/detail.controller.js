@@ -1,22 +1,27 @@
-import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
+import {
+  getReAccreditationPriorYear,
+  getWorkItem
+} from '#/server/common/helpers/backend-api/backend-api.js'
 import { notificationFailureDetected } from '#/server/work-items/core/audit-log.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
-import {
-  findAssignableUser,
-  getAssignableUsers
-} from '#/server/work-items/core/assignees.js'
+import { findAssignableUser } from '#/server/work-items/core/assignees.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
-import {
-  formatSiteAddress,
-  getSitePostcode
-} from '#/server/common/helpers/format/site-address.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { config } from '#/config/config.js'
+import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
+import { buildCaseHeader, buildCaseTabs } from './case-header.js'
+import {
+  authoriserName,
+  buildApplicationSummary,
+  buildBusinessPlanPairs,
+  buildCaseFooterRows,
+  tonnageBandLabel
+} from './application-summary.js'
 
 const logger = createLogger()
 
@@ -352,14 +357,28 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
     enriched.auditLog
   )
 
+  // RA-295 AC02. The former two-step application-details page is folded in
+  // here, so the previous-year accreditation reference data it used to show
+  // is fetched alongside the work item. Additive and failure-tolerant: a
+  // failed lookup simply omits the section rather than failing the page.
+  const priorYear = await loadPriorYear({ workItem: enriched, id, user })
+
+  const { rows: applicationDetails } = buildApplicationSummary({
+    workItem: enriched
+  })
+
   return h
     .view(templatePath, {
       pageTitle: `Work item ${enriched.workItemLabel}`,
-      heading: enriched.typeDisplayName,
-      breadcrumbs: [
-        { text: 'Work items', href: '/work-items' },
-        { text: enriched.workItemLabel }
-      ],
+      // RA-295 AC01. The case header replaces both the page heading and the
+      // GOV.UK breadcrumbs on this page — it carries its own "Applications"
+      // back link — so no `breadcrumbs` are passed (the layout only renders
+      // them when there is more than one).
+      caseHeader: buildCaseHeader({ workItem: enriched, assignment }),
+      caseTabs: buildCaseTabs({ workItemId: enriched.id, active: 'summary' }),
+      applicationDetails,
+      caseFooterRows: buildCaseFooterRows({ workItem: enriched }),
+      priorYear,
       workItem: enriched,
       assignment,
       notice,
@@ -373,37 +392,70 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
 }
 
 /**
+ * Fetch and project the previous year's accreditation reference data for a
+ * re-accreditation work item (RA-254, folded into the detail page by
+ * RA-295). Returns null for any other type, and for a failed lookup — the
+ * section is supplementary, so it must never break the page.
+ */
+async function loadPriorYear({ workItem, id, user }) {
+  if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
+    return null
+  }
+  const result = await getReAccreditationPriorYear({ workItemId: id, user })
+  if (result?.ok !== true) {
+    return null
+  }
+  const priorYear = result.priorYear
+  // `ok: true` only means the call succeeded — a 200 carrying a null or
+  // non-object body still satisfies it, and dereferencing that would throw
+  // out of the handler and 500 the whole detail page. The section is
+  // supplementary, so an unusable body is treated exactly like a failed
+  // lookup: omit it, never break the page around it.
+  if (priorYear == null || typeof priorYear !== 'object') {
+    return null
+  }
+  const authorisers = Array.isArray(priorYear.authorisers)
+    ? priorYear.authorisers
+    : []
+  return {
+    year: priorYear.year,
+    tonnageBand: tonnageBandLabel(priorYear.tonnageBand),
+    authoriserLines: authorisers.map(authoriserName),
+    businessPlanPairs: buildBusinessPlanPairs(priorYear.businessPlan)
+  }
+}
+
+/**
  * Compute everything the detail template needs to render the assignment
  * panel:
  * - The current assignee (or null).
  * - The list of users available in the assign-to-anyone picker.
  * - Whether the caller can self-assign right now — RA-153's one-click
- *   "Take this work item" shortcut, offered alongside the picker whenever
- *   the item is currently unassigned.
+ *   shortcut, relabelled by RA-295 to the prototype's "Assign to yourself
+ *   and start".
  *
- * RA-323: every caseworker has the same permissions, so the picker and
- * unassign button are always available; there is no separate "standard
- * user" read-only view any more.
+ * RA-295 AC03: assignment must be available all the way through, so the
+ * self-assign button is offered whenever the caller is not ALREADY the
+ * assignee (claiming an unassigned item, or taking one over from a
+ * colleague) rather than only while the item is unassigned. RA-323: every
+ * caseworker has the same permissions, so the reassign / unassign links are
+ * always available; the backend remains the source of truth and rejects
+ * anything the caller may not do.
  */
 function buildAssignmentViewModel({ workItem, user }) {
-  const isUnassigned = !workItem.assignedToId
   const callerIsAssignee = user?.id != null && workItem.assignedToId === user.id
-  const canSelfAssign = isUnassigned && user?.id != null
 
   return {
     assignedToId: workItem.assignedToId ?? null,
     assignedToName: workItem.assignedToName ?? workItem.assignedToId ?? null,
     assignedAt: workItem.assignedAt ?? null,
     assignedBy: workItem.assignedBy ?? null,
-    isUnassigned,
     callerIsAssignee,
-    canSelfAssign,
-    canUnassign: !isUnassigned,
-    assignableUsers: getAssignableUsers().map((u) => ({
-      value: u.id,
-      text: u.name ?? u.id,
-      selected: u.id === workItem.assignedToId
-    }))
+    canSelfAssign: user?.id != null && !callerIsAssignee
+    // RA-295 removed `isUnassigned`, `canUnassign` and `assignableUsers`
+    // from this model: the reassign / unassign links are now unconditional
+    // (AC03) and the assignee picker moved to the reassign interstitial,
+    // which builds its own list from the directory.
   }
 }
 
@@ -459,24 +511,6 @@ function applyReAccreditationViewModel({ workItem }) {
   }
 }
 
-/**
- * RA-176: coerce the issued accreditation start date into a string the date
- * formatter can parse. The backend now stamps it as a plain ISO date string,
- * but older work items (and any value that slips through as MongoDB extended
- * JSON) arrive as a `{ $date: '...' }` object. Left unhandled that object
- * string-coerces to the literal "[object Object]" in the rendered panel, so
- * unwrap the `$date` here and ignore any other non-string shape.
- */
-function normaliseAccreditationStartDate(value) {
-  if (value == null || typeof value === 'string') {
-    return value ?? null
-  }
-  if (typeof value === 'object' && typeof value.$date === 'string') {
-    return value.$date
-  }
-  return null
-}
-
 function buildDecisionMetadata(workItem) {
   if (workItem.stateId !== 'approved') {
     return null
@@ -484,9 +518,10 @@ function buildDecisionMetadata(workItem) {
 
   const payload = workItem.payload ?? {}
   const accreditationId = payload.accreditationId ?? null
-  const accreditationStartDate = normaliseAccreditationStartDate(
-    payload.accreditationStartDate
-  )
+  // RA-176: the backend stamps this as a plain ISO date string, but older
+  // work items arrive as MongoDB extended JSON (`{ $date: '...' }`), which
+  // would string-coerce to "[object Object]" in the panel if left unhandled.
+  const accreditationStartDate = unwrapMongoDate(payload.accreditationStartDate)
   // RA-133: backend now stamps the accreditation year alongside the id
   // and start date so the UI can display the year independently of the
   // (locally-formatted) start date.
@@ -552,15 +587,44 @@ function renderDetailFromResult({ request, h, id, result, actionLabel }) {
   return renderDetail({ request, h, notice, statusCode })
 }
 
+// RA-131 / RA-295. The engine projects `sla-extend` as a normal action, but
+// the UI renders it as "Change the due date" in the assignment panel rather
+// than as a button in the actions list. It is therefore filtered OUT of
+// `availableActions` here, and surfaced as its own `canChangeDueDate` flag.
+//
+// Filtering in the controller rather than skipping it in the template keeps
+// `availableActions.length` honest: a work item whose ONLY action is
+// sla-extend would otherwise render an "Actions" heading over an empty div
+// and suppress the "No actions are currently available" message.
+const SLA_EXTEND_ACTION_ID = 'sla-extend'
+
 function decorate(workItem) {
   const type = getWorkItemType(workItem.typeId)
   const stateDisplayName =
     type?.states?.find((state) => state.id === workItem.stateId)?.displayName ??
     workItem.stateId
+  const projectedActions = Array.isArray(workItem.availableActions)
+    ? workItem.availableActions
+    : []
   return {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
+    availableActions: projectedActions.filter(
+      (action) => action?.actionId !== SLA_EXTEND_ACTION_ID
+    ),
+    // RA-295. Gates BOTH due-date links in the assignment panel. The backend
+    // is NOT a backstop here: SlaService.ExtendAsync validates the actor,
+    // reason, duration bounds and the existence of the item and its clock,
+    // but has no terminal-state check — so leaving these links ungated would
+    // let a caseworker change the due date on an approved, rejected or
+    // withdrawn case. AC03's "available throughout" is about ASSIGNMENT;
+    // nothing asked for SLA controls on a closed case. Override is BFF-only
+    // (never projected), so it rides on the same flag, exactly as it did
+    // when both lived inside the actions list.
+    canChangeDueDate: projectedActions.some(
+      (action) => action?.actionId === SLA_EXTEND_ACTION_ID
+    ),
     // RA-324 (AC08). The State badge colour is resolved from the shared
     // state-badge map so the detail page and the Applications list colour a
     // given status identically.
@@ -574,16 +638,13 @@ function decorate(workItem) {
     // useful — so those may still fall back to the work-item id.
     workItemLabel:
       workItem.payload?.applicationReference ?? workItem.id ?? null,
-    registrationId: workItem.payload?.operatorRegistrationId ?? null,
     assigneeDisplayName:
       workItem.assignedToName ?? workItem.assignedToId ?? null,
-    // RA-245. Normalise the site address for display. The payload's
-    // siteAddress arrives either as a nested { line1, line2, town, postcode }
-    // object (form-created) or a flat string (legacy/seeded); compute the
-    // display strings here so the template renders text, never "[object
-    // Object]".
-    siteAddressFormatted: formatSiteAddress(workItem.payload),
-    sitePostcode: getSitePostcode(workItem.payload),
+    // RA-295 removed `registrationId`, `siteAddressFormatted` and
+    // `sitePostcode` from here. Their only consumers were the envelope
+    // summary and the re-accreditation payload block, both of which are
+    // gone; the operator registration id is now a reference-block row and
+    // RA-245's address normalisation lives in `buildSiteAddressLines`.
     tasks: Array.isArray(workItem.tasks)
       ? workItem.tasks.map(decorateTask)
       : [],

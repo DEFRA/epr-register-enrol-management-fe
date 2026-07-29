@@ -8,6 +8,7 @@ import {
 } from '#/server/work-items/core/registry.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
+  getReAccreditationPriorYear: vi.fn(),
   assignWorkItem: vi.fn(),
   unassignWorkItem: vi.fn(),
   getBackendHealth: vi.fn(),

@@ -84,6 +84,12 @@ function renderForm(
   {
     id,
     applicationRef,
+    // RA-295 AC04. Drives the "…will also be assigned to you" notice, which
+    // must appear if and only if the application is currently unassigned.
+    // Defaults to false so a work item we could not re-read (a backend
+    // failure on the validation-error path) hides the notice rather than
+    // asserting something that may not be true.
+    isUnassigned = false,
     values = { sections: [], reason: '' },
     fieldErrors = {},
     errorSummary = null,
@@ -96,6 +102,7 @@ function renderForm(
       heading: PAGE_TITLE,
       breadcrumbs: breadcrumbs(id, applicationRef),
       workItem: { id, applicationRef },
+      isUnassigned,
       formAction: queryHref(id),
       cancelHref: detailHref(id),
       maxWords: QUERY_REASON_MAX_WORDS,
@@ -165,7 +172,8 @@ export function makeShowQueryController() {
 
       return renderForm(h, {
         id,
-        applicationRef: workItem.payload?.applicationReference ?? null
+        applicationRef: workItem.payload?.applicationReference ?? null,
+        isUnassigned: !workItem.assignedToId
       })
     }
   }
@@ -189,6 +197,7 @@ export function makeSubmitQueryController({
           applicationRef: item.ok
             ? (item.workItem.payload?.applicationReference ?? null)
             : null,
+          isUnassigned: item.ok ? !item.workItem.assignedToId : false,
           values: validation.values,
           fieldErrors: validation.fieldErrors,
           errorSummary: buildErrorSummary(validation.fieldErrors),

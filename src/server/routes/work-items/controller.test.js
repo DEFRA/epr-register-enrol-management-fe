@@ -9,6 +9,7 @@ import {
 } from '#/server/work-items/core/registry.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
+  getReAccreditationPriorYear: vi.fn(),
   getBackendHealth: vi.fn(),
   raiseWorkItemQuery: vi.fn(),
   getWorkItem: vi.fn(),
@@ -320,6 +321,71 @@ describe('#workItemListController', () => {
     expect(result).not.toContain(
       'govuk-!-font-weight-bold app-application-card__title'
     )
+  })
+
+  // RA-295 AC06. The registration number is part of the data displayed on
+  // the Applications list. Note this is `registrationNumber` (EPR-xxxxxx) —
+  // NOT the confusingly-similar `operatorRegistrationId` (reg-xxx).
+  test('RA-295 AC06: renders the registration number on each card', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {
+              registrationNumber: 'EPR-100999',
+              operatorRegistrationId: 'reg-008'
+            }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="application-registration"')
+    expect(result).toContain(
+      'data-testid="registration-number">EPR-100999</span>'
+    )
+    // The similarly-named operator registration id must not leak in.
+    expect(result).not.toContain(
+      'data-testid="registration-number">reg-008</span>'
+    )
+  })
+
+  test('RA-295 AC06: falls back to an em dash when the card has no registration number', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="registration-number">—</span>')
   })
 
   // RA-324 phase-2 (footer). Once the SLA clock has started the card shows an

@@ -1,0 +1,52 @@
+{# ------------------------------------------------------------------ #}
+{# Case header (RA-295 AC01).                                          #}
+{#                                                                     #}
+{# Full-bleed, light-green panel that sits directly beneath the service #}
+{# navigation on every individual work item page. Carries the back link #}
+{# to the Applications list, the accreditation reference, the           #}
+{# organisation name + ID and a bold-label meta line (material, status, #}
+{# assigned to, due on, registration number).                           #}
+{#                                                                     #}
+{# All values arrive pre-formatted from `buildCaseHeader()`; this       #}
+{# template does no data access and no formatting, so it stays safe to  #}
+{# reuse from any controller. GDS/Nunjucks auto-escaping applies to     #}
+{# every interpolation — nothing is emitted as raw HTML (AC05 keeps the #}
+{# whole thing JavaScript-free).                                        #}
+{# ------------------------------------------------------------------ #}
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+<div class="app-case-header" data-testid="case-header">
+  <div class="govuk-width-container">
+    <nav class="app-case-header__breadcrumbs" aria-label="Breadcrumb">
+      <ol class="app-case-header__breadcrumbs-list">
+        <li class="app-case-header__breadcrumbs-item">
+          <a class="govuk-link app-case-header__back-link"
+             href="{{ params.backHref }}"
+             data-testid="case-header-applications-link">{{ params.backText }}</a>
+        </li>
+        <li class="app-case-header__breadcrumbs-item"
+            aria-current="page"
+            data-testid="case-header-accreditation-ref">{{ params.applicationRef }}</li>
+      </ol>
+    </nav>
+
+    <h1 class="govuk-heading-l app-case-header__title">
+      <span data-testid="case-header-org-name">{{ params.organisationName }}</span>{% if params.organisationId %} <span class="app-case-header__org-id">(<span data-testid="case-header-org-id">{{ params.organisationId }}</span>)</span>{% endif %}
+    </h1>
+
+    <dl class="app-case-header__meta" data-testid="case-header-meta">
+      {% for entry in params.meta %}
+        <div class="app-case-header__meta-item">
+          <dt class="app-case-header__meta-label">{{ entry.label }}:</dt>
+          <dd class="app-case-header__meta-value"
+              data-testid="case-header-{{ entry.key }}">
+            {%- if entry.tagClass -%}
+              {{ govukTag({ text: entry.value, classes: entry.tagClass, attributes: { "data-testid": "work-item-state-tag" } }) }}
+            {%- else -%}
+              {{ entry.value }}
+            {%- endif -%}
+          </dd>
+        </div>
+      {% endfor %}
+    </dl>
+  </div>
+</div>

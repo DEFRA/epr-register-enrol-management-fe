@@ -12,10 +12,10 @@
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 
 {% block content %}
-  {{ appHeading({
-    text: heading,
-    caption: "Work item " + workItem.applicationRef
-  }) }}
+  {# RA-295. Rendered as the "Application history" tab of the individual  #}
+  {# work item page — the case header above supplies the page identity,   #}
+  {# so there is no separate page heading here.                            #}
+  {{ appCaseTabs({ tabs: caseTabs }) }}
 
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">

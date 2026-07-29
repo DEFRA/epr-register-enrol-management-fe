@@ -6,6 +6,8 @@
 
 {# Import custom components globally #}
 {% from "heading/macro.njk" import appHeading %}
+{% from "case-header/macro.njk" import appCaseHeader %}
+{% from "case-tabs/macro.njk" import appCaseTabs %}
 
 {% set mainClasses = "app-main-wrapper" %}
 
@@ -56,6 +58,15 @@
 {% endblock %}
 
 {% block container %}
+  {# RA-295. The case header is full-bleed: it has to render OUTSIDE the       #}
+  {# govuk-width-container that `super()` opens, so it gets its own block here #}
+  {# rather than living in `beforeContent`. Pages that set `caseHeader` (the   #}
+  {# individual work item pages) render it; everything else is unaffected.     #}
+  {% block caseHeader %}
+    {% if caseHeader %}
+      {{ appCaseHeader(caseHeader) }}
+    {% endif %}
+  {% endblock %}
   <div class="app-main-background">
     {{ super() }}
   </div>

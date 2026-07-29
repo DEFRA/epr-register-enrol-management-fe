@@ -195,9 +195,33 @@ generic `'work-items/detail'`. Template paths are relative to
 `src/server/routes/`, matching the Nunjucks `relativeTo` config.
 
 When a module ships v2 of its template, it leaves the v1 entry in place so
-historical work items continue to render exactly as they did at the time
-of assessment. The audit history therefore stays accurate even as the
+historical work items continue to be rendered by the template they were
+registered against. The audit history therefore stays accurate even as the
 module's templates evolve.
+
+**What that guarantee does and does not cover (RA-295).** Version pinning
+binds a work item to a template _path_, not to a frozen snapshot of that
+file's contents. Editing `detail-v1.njk` in place changes how every item
+registered against v1 renders, including historical ones.
+
+That distinction is deliberate, and the rule is:
+
+- **Changing what the page ASSERTS about a work item — states, transitions,
+  per-state tasks, or the meaning of a field — requires a `templateVersion`
+  bump and a new template file.** Historical items must keep rendering the
+  rules they were actually assessed under; silently restating an old
+  decision under new rules would make the audit trail lie.
+- **Changing only how the same facts are PRESENTED — layout, wording,
+  ordering, styling — is edited in place and applies to every version.**
+  RA-295 is this case: it rebuilt the page around the case header, tabs and
+  a single-page application summary without altering a single state,
+  transition or task. Forking nine identical templates to hold nine
+  identical presentations would guarantee they drift apart.
+
+So "renders exactly as it was assessed" is a guarantee about the assessment
+rules, not a pixel-level guarantee about the markup. If you find yourself
+unsure which side of the line a change falls on, it is almost certainly the
+first: bump the version.
 
 ### Wiring into a module
 

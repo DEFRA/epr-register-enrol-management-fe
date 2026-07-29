@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
+  getReAccreditationPriorYear: vi.fn(),
   approveReAccreditation: vi.fn(),
   addWorkItemNote: vi.fn()
 }))

@@ -1,6 +1,9 @@
 import { workItemListController } from './controller.js'
-import { workItemApplicationDetailsController } from './application-details.controller.js'
 import { workItemDownloadFileController } from './download-file.controller.js'
+import {
+  makeShowAssignController,
+  makeShowUnassignController
+} from './assign.controller.js'
 import {
   makeApplyActionController,
   makeAssignController,
@@ -54,9 +57,25 @@ export const workItems = {
           ...workItemDetailController
         },
         {
+          // RA-295 AC02. The two-step application-details page is gone: all
+          // submitted application data now renders on the detail page. The
+          // route is kept as a redirect rather than deleted so bookmarks,
+          // emailed links and any external reference resolve to the page
+          // that now holds the data, instead of 404ing.
+          //
+          // Deliberately a 302, NOT a 301: browsers cache permanent
+          // redirects aggressively and indefinitely, so a 301 would strand
+          // every caseworker who followed the link once if this route ever
+          // needs to come back or point elsewhere — with no server-side
+          // remedy. A 302 resolves bookmarks just as well at a fraction of
+          // the cost of being wrong.
           method: 'GET',
           path: '/work-items/{id}/application-details',
-          ...workItemApplicationDetailsController
+          handler(request, h) {
+            return h.redirect(
+              `/work-items/${encodeURIComponent(request.params.id)}`
+            )
+          }
         },
         {
           // Sampling-plan file download — direct S3 stream-through, gated
@@ -132,6 +151,22 @@ export const workItems = {
             }
           },
           ...makeSubmitQueryController()
+        },
+        {
+          // RA-295 AC03. Reassign / unassign are offered as LINKS in the
+          // detail page's assignment panel, so each has a GET interstitial
+          // that posts to the handlers below. Same pattern as withdraw
+          // (RA-188) and query (RA-291).
+          method: 'GET',
+          path: '/work-items/{id}/assign',
+          options: requireStandard,
+          ...makeShowAssignController()
+        },
+        {
+          method: 'GET',
+          path: '/work-items/{id}/unassign',
+          options: requireStandard,
+          ...makeShowUnassignController()
         },
         {
           // RA-323: assign / re-assign / self-assign are available to any

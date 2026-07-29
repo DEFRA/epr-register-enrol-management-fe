@@ -1,0 +1,52 @@
+{% extends 'layouts/page.njk' %}
+
+{# ---------------------------------------------------------------- #}
+{# Reassign interstitial (RA-295 AC03).                              #}
+{#                                                                   #}
+{# Reached from the "Reassign the application" link in the detail    #}
+{# page's assignment panel. Posts to the existing assignment handler #}
+{# so nothing about the write path changes. GDS macros only — no     #}
+{# JavaScript (RA-94).                                               #}
+{# ---------------------------------------------------------------- #}
+
+{% from "govuk/components/select/macro.njk" import govukSelect %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: applicationRef or "Application"
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <p class="govuk-body" data-testid="assign-current">
+        {% if assignedToName %}
+          Currently assigned to {{ assignedToName }}.
+        {% else %}
+          This application is not currently assigned to anyone.
+        {% endif %}
+      </p>
+
+      <form method="post" action="{{ formAction }}" novalidate data-testid="assign-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {{ govukSelect({
+          id: "assign-assignee-id",
+          name: "assigneeId",
+          label: { text: "Assign to", classes: "govuk-label--s" },
+          items: assignableUsers,
+          attributes: { "data-testid": "assign-select" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Save assignment",
+            attributes: { "data-testid": "assign-submit" }
+          }) }}
+          <a class="govuk-link" data-testid="assign-cancel" href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
