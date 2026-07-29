@@ -116,11 +116,18 @@
 
   {# RA-211: surfaces when the audit log has an unresolved                #}
   {# notification-failed entry (no later notification-sent).              #}
+  {# govukNotificationBanner only honours type: 'success' — any other     #}
+  {# type renders the default brand-coloured banner, and core/_header.scss #}
+  {# sets --govuk-brand-colour to Defra green service-wide, so an "error"  #}
+  {# banner came out green and read as a success message. Use the same    #}
+  {# red error summary as the notice.kind == 'error' branch above.         #}
+  {# disableAutoFocus because this banner persists across every visit to   #}
+  {# the page, so it must not steal focus on each load.                    #}
   {% if notificationFailedBanner %}
-    {{ govukNotificationBanner({
-      type: 'error',
+    {{ govukErrorSummary({
       titleText: 'There is a problem',
-      text: 'A notification email for this application could not be sent. Check the application history for details.',
+      errorList: [{ text: 'A notification email for this application could not be sent. Check the application history for details.' }],
+      disableAutoFocus: true,
       attributes: { "data-testid": "work-item-notification-failed-banner" }
     }) }}
   {% endif %}
