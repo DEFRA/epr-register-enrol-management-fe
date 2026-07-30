@@ -268,11 +268,11 @@ the module's `register(server)` callback; paths are relative to
 - **RA-335**: the backend does not implement RBAC at all — every
   mutation-enforcement decision (which routes require `requireStandard`,
   which UI controls disable for `user.isReadOnly`) lives entirely in
-  this BFF. A forged form must still be rejected, but by *this app's*
+  this BFF. A forged form must still be rejected, but by _this app's_
   route-level scope check, not by the backend. See
   `route-scope-coverage.test.js` and the "Every new mutating route
   requires `requireStandard`" rule above.
-- The backend remains authoritative for *state* — never recompute a
+- The backend remains authoritative for _state_ — never recompute a
   work item's transition/assignment logic client-side and skip the
   backend call.
 - Every backend call uses an `AbortController` with
