@@ -183,11 +183,22 @@
     cursor: not-allowed;
   }
 
-  // The plain-link variant keeps the ordinary govuk-link colour and
-  // underline (it inherits `.govuk-link`'s own styles) — the disabled
-  // cursor above is the only visual signal, so it stays visually
-  // consistent with every other link on the page rather than reading as
-  // "broken" or "missing content".
+  // The plain-link variant is meant to keep the ordinary govuk-link
+  // colour and underline — but `.govuk-link`'s colour comes entirely from
+  // `&:link` / `&:visited` / `&:hover` (see govuk-frontend's
+  // govuk-link-style-default mixin), and those pseudo-classes only ever
+  // match a real `<a href>`, never a `<span>`. Without this, the span
+  // inherits the underline but falls back to plain body text colour, so
+  // it visibly does NOT look like a link. Set the colour explicitly to
+  // match what `<a class="govuk-link">` would render.
+  &.govuk-link {
+    color: $govuk-link-colour;
+
+    &:hover {
+      color: $govuk-link-hover-colour;
+    }
+  }
+
   &.govuk-button {
     opacity: 0.5;
     box-shadow: none;
