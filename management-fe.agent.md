@@ -260,15 +260,21 @@ the module's `register(server)` callback; paths are relative to
   `setup-proxy.js` (CDP `HTTP_PROXY` / `HTTPS_PROXY`).
 - **`buildHeaders(extra, user)`** is the single place outbound headers
   are assembled. It always sets `x-cdp-cognito-client-id` (when
-  configured) and forwards the acting user via `x-cdp-user-id`,
-  `x-cdp-user-name` and `x-cdp-user-roles`. The `case-worker` backend
-  role is auto-added because, by definition, anyone authenticated into
-  this BFF is a case worker. Don't bypass `buildHeaders` to call
-  `fetch` directly.
-- The backend is authoritative for role enforcement on mutations
-  (assignment, etc.). The BFF mirrors the role rules in the UI for a
-  better experience but **must not** loosen them — a forged form must
-  still be rejected by the backend.
+  configured) and forwards the acting user's identity via
+  `x-cdp-user-id` and `x-cdp-user-name` — audit trail only. It does
+  **not** send any role/scope header; the backend has no notion of the
+  BFF's `standard` / `support-readonly` distinction. Don't bypass
+  `buildHeaders` to call `fetch` directly.
+- **RA-335**: the backend does not implement RBAC at all — every
+  mutation-enforcement decision (which routes require `requireStandard`,
+  which UI controls disable for `user.isReadOnly`) lives entirely in
+  this BFF. A forged form must still be rejected, but by *this app's*
+  route-level scope check, not by the backend. See
+  `route-scope-coverage.test.js` and the "Every new mutating route
+  requires `requireStandard`" rule above.
+- The backend remains authoritative for *state* — never recompute a
+  work item's transition/assignment logic client-side and skip the
+  backend call.
 - Every backend call uses an `AbortController` with
   `backendApi.timeoutMs` and returns a typed result
   (`{ ok: true, ... }` / `{ ok: false, status?, error }`). Controllers
