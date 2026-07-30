@@ -36,8 +36,11 @@ everything a caseworker can, but:
   is bypassed by a crafted request;
 - Nunjucks templates read `user.isReadOnly` (set in
   `src/config/nunjucks/context/context.js`) to render every modifying
-  action as a disabled button instead of hiding it, so a support user sees
-  exactly what a caseworker sees;
+  action disabled instead of hiding it, so a support user sees exactly
+  what a caseworker sees: a submit button gets `disabled: true`, and a
+  navigational link (which has no native disabled state) is rendered as
+  an inert `<span>` with no `href` via the `appActionLink` macro
+  (`src/server/common/components/action-link/macro.njk`);
 - the `/backend-status` diagnostic page is visible (nav link) and
   accessible only to a signed-in support user — not caseworkers, not
   signed-out visitors.

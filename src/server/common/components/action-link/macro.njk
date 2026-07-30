@@ -1,0 +1,23 @@
+{# RA-335. Case-panel affordances (reassign, unassign, change/override due
+   date, query, withdraw, approve, create work item) navigate to another
+   page rather than submitting a form — some rendered as plain text links,
+   others (approve, create work item) as button-styled links via
+   govukButton's `href` param. Neither has a native disabled state: an
+   anchor has none at all, and govukButton silently ignores `disabled` the
+   moment `href` is set (it only ever applies to a real `<button>`). This
+   site also renders no JavaScript to intercept a click (RA-94), so for a
+   read-only support user the affordance is rendered as an inert `<span>`
+   instead — no `href` at all, so there is nothing to navigate to and
+   nothing for a keyboard or screen-reader user to activate.
+
+   `classes` is required and should be the exact class string the enabled
+   `<a>` would have carried (e.g. "govuk-link" or
+   "govuk-button app-case-panel__primary-action"), so the disabled state
+   keeps the same visual shape. #}
+{% macro appActionLink(params) %}
+  {% if params.disabled %}
+    <span class="{{ params.classes }} app-action-link--disabled" aria-disabled="true"{% if params.testId %} data-testid="{{ params.testId }}"{% endif %}>{{ params.text }}</span>
+  {% else %}
+    <a class="{{ params.classes }}" href="{{ params.href }}"{% if params.testId %} data-testid="{{ params.testId }}"{% endif %}>{{ params.text }}</a>
+  {% endif %}
+{% endmacro %}

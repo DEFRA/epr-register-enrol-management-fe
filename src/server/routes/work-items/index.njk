@@ -10,7 +10,7 @@
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/pagination/macro.njk" import govukPagination %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
-{% from "nav-button/macro.njk" import appNavButton %}
+{% from "action-link/macro.njk" import appActionLink %}
 
 {# RA-324 phase-2. Collapsible filter section built on the native <details>    #}
 {# element — collapses WITHOUT JavaScript (RA-94). The `open` attribute is set #}
@@ -36,12 +36,12 @@
         caption: "All work items currently in the case management system"
       }) }}
       {% if showCreateWorkItem %}
-        {{ appNavButton({
+        {{ appActionLink({
           text: "Create work item",
           href: "/work-items/re-accreditation/new",
-          classes: "govuk-button--start govuk-!-font-size-19",
+          classes: "govuk-button govuk-button--start govuk-!-font-size-19",
           disabled: user.isReadOnly,
-          attributes: { "data-testid": "work-items-create-link" }
+          testId: "work-items-create-link"
         }) }}
       {% endif %}
     </div>

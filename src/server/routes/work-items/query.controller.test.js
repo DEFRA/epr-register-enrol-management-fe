@@ -143,21 +143,37 @@ describe('RA-291 Query link on the work item detail page', () => {
     expect(result).toEqual(
       expect.stringContaining('data-testid="action-query"')
     )
-    expect(result).toEqual(
-      expect.stringContaining(`action="${QUERY_HREF}"`)
-    )
+    expect(result).toEqual(expect.stringContaining(`href="${QUERY_HREF}"`))
   })
 
-  // RA-335: rendered as a real <button> (wrapped in a GET form), not an
-  // <a> link, so it can be disabled for a read-only support user — see
-  // nav-button/macro.njk.
-  test('renders the link as a button-styled GET form, not a plain link', async () => {
+  test('renders the link as a link, not a button', async () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
     const { result } = await server.inject({ method: 'GET', url: DETAIL_HREF })
 
+    expect(result).toMatch(/<a class="govuk-link"\s+href="[^"]*"\s+data-testid="action-query"/)
+  })
+
+  // RA-335: a read-only support user gets an inert <span> in place of the
+  // <a> — see action-link/macro.njk. The route itself is unauthenticated
+  // in this test file (default test user), so this only exercises the
+  // markup shape via a directly-rendered read-only user; the auth-level
+  // behaviour is covered in controller.test.js / auth-scopes tests.
+  test('renders as a disabled span, not a link, for a read-only support user', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: DETAIL_HREF,
+      headers: { 'x-test-user-role': 'support-readonly' }
+    })
+
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="action-query"')
+    )
+    expect(result).not.toEqual(expect.stringContaining(`href="${QUERY_HREF}"`))
     expect(result).toMatch(
-      /<form method="get" action="[^"]*"[^>]*>\s*<button[^>]*data-testid="action-query"/
+      /<span class="govuk-link app-action-link--disabled" aria-disabled="true" data-testid="action-query"/
     )
   })
 

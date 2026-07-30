@@ -897,15 +897,48 @@ describe('#workItemDetailController', () => {
       expect(panel).toEqual(
         expect.stringContaining('data-testid="unassign-link"')
       )
-      // RA-335: rendered as button-styled GET forms, not <a href> links, so
-      // a read-only support user's session can disable them.
       expect(panel).toEqual(
-        expect.stringContaining(`action="/work-items/${ID}/assign"`)
+        expect.stringContaining(`href="/work-items/${ID}/assign"`)
       )
       expect(panel).toEqual(
-        expect.stringContaining(`action="/work-items/${ID}/unassign"`)
+        expect.stringContaining(`href="/work-items/${ID}/unassign"`)
       )
     }
+  })
+
+  // RA-335: a read-only support user still sees the reassign/unassign
+  // affordances (never hidden), but as inert spans with no href — see
+  // action-link/macro.njk. Route-level enforcement (403 on the underlying
+  // POST) is covered separately in auth.test.js.
+  test('shows reassign/unassign as disabled, hrefless spans for a support user', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ assignedToId: null, assignedToName: null })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`,
+      headers: { 'x-test-user-role': 'support-readonly' }
+    })
+
+    const panelIdx = result.indexOf('data-testid="case-assignment-panel"')
+    const panel = result.slice(
+      panelIdx,
+      result.indexOf('data-testid="actions-panel"')
+    )
+    expect(panel).not.toEqual(
+      expect.stringContaining(`href="/work-items/${ID}/assign"`)
+    )
+    expect(panel).not.toEqual(
+      expect.stringContaining(`href="/work-items/${ID}/unassign"`)
+    )
+    expect(panel).toMatch(
+      /<span class="govuk-link app-action-link--disabled" aria-disabled="true" data-testid="reassign-link"/
+    )
+    expect(panel).toMatch(
+      /<span class="govuk-link app-action-link--disabled" aria-disabled="true" data-testid="unassign-link"/
+    )
   })
 
   // The due-date links are NOT part of AC03's "available throughout" — that

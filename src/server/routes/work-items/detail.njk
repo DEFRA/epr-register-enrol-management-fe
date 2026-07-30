@@ -4,7 +4,7 @@
 {% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
-{% from "nav-button/macro.njk" import appNavButton %}
+{% from "action-link/macro.njk" import appActionLink %}
 
 {# Shared row fragments — defined once and reused by both the AC02          #}
 {# application-details rows and the previous-year section, which render the #}
@@ -297,27 +297,26 @@
 
         <hr class="app-case-panel__divider">
 
-        {# RA-335. These navigate to a GET page rather than mutating         #}
-        {# directly, but a read-only support user must not reach that page   #}
-        {# either, so they're rendered via appNavButton (real <button>s,     #}
-        {# which support `disabled`) instead of `<a href>` links.            #}
+        {# RA-335: rendered via appActionLink so a read-only support user's   #}
+        {# session gets an inert (unclickable, non-navigating) span instead   #}
+        {# of a live link — see action-link/macro.njk.                       #}
         <ul class="app-case-panel__links">
           <li>
-            {{ appNavButton({
+            {{ appActionLink({
               text: "Reassign the application",
               href: "/work-items/" + workItem.id + "/assign",
-              classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+              classes: "govuk-link",
               disabled: user.isReadOnly,
-              attributes: { "data-testid": "reassign-link" }
+              testId: "reassign-link"
             }) }}
           </li>
           <li>
-            {{ appNavButton({
+            {{ appActionLink({
               text: "Unassign the application",
               href: "/work-items/" + workItem.id + "/unassign",
-              classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+              classes: "govuk-link",
               disabled: user.isReadOnly,
-              attributes: { "data-testid": "unassign-link" }
+              testId: "unassign-link"
             }) }}
           </li>
           {# RA-131's Extend / Override SLA affordances, relabelled to the   #}
@@ -328,21 +327,21 @@
           {# caseworker move the due date on a closed case.                   #}
           {% if workItem.canChangeDueDate %}
             <li>
-              {{ appNavButton({
+              {{ appActionLink({
                 text: "Change the due date",
                 href: "/work-items/" + workItem.id + "/sla/extend",
-                classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+                classes: "govuk-link",
                 disabled: user.isReadOnly,
-                attributes: { "data-testid": "action-sla-extend" }
+                testId: "action-sla-extend"
               }) }}
             </li>
             <li>
-              {{ appNavButton({
+              {{ appActionLink({
                 text: "Override the due date",
                 href: "/work-items/" + workItem.id + "/sla/override",
-                classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+                classes: "govuk-link",
                 disabled: user.isReadOnly,
-                attributes: { "data-testid": "action-sla-override" }
+                testId: "action-sla-override"
               }) }}
             </li>
           {% endif %}
@@ -387,29 +386,29 @@
               {% endif %}
             {% endfor %}
 
-            {# Secondary link row. RA-335: these navigate to a GET page, so #}
-            {# use appNavButton (see the assignment panel above) rather     #}
-            {# than a plain link, so they can be disabled too.              #}
+            {# Secondary link row. RA-335: rendered via appActionLink so a  #}
+            {# read-only support user's session gets an inert span rather   #}
+            {# than a live link — see action-link/macro.njk.                #}
             <div class="app-case-panel__action-links">
               {% for action in workItem.availableActions %}
                 {% if action.actionId == 'query' or action.actionId.startsWith('query-') %}
-                  {{ appNavButton({
+                  {{ appActionLink({
                     text: "Query",
                     href: "/work-items/" + workItem.id + "/query",
-                    classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+                    classes: "govuk-link",
                     disabled: user.isReadOnly,
-                    attributes: { "data-testid": "action-query" }
+                    testId: "action-query"
                   }) }}
                 {% endif %}
               {% endfor %}
               {% for action in workItem.availableActions %}
                 {% if action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
-                  {{ appNavButton({
+                  {{ appActionLink({
                     text: action.displayName,
                     href: "/work-items/" + workItem.id + "/actions/" + action.actionId + "/confirm",
-                    classes: "govuk-button--warning govuk-!-margin-bottom-0",
+                    classes: "govuk-link app-case-panel__link--destructive",
                     disabled: user.isReadOnly,
-                    attributes: { "data-testid": "action-" + action.actionId }
+                    testId: "action-" + action.actionId
                   }) }}
                 {% endif %}
               {% endfor %}

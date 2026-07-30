@@ -143,10 +143,48 @@
   justify-content: space-between;
 }
 
+// Withdraw reads as destructive without being a button — it only opens the
+// RA-188 confirmation interstitial, so it must not look like the commit.
+.app-case-panel__link--destructive {
+  &:link,
+  &:visited {
+    color: $govuk-error-colour;
+  }
+
+  &:hover {
+    color: govuk-shade($govuk-error-colour, 20%);
+  }
+
+  &:focus {
+    color: $govuk-focus-text-colour;
+  }
+}
+
 .app-case-panel__divider {
   margin: govuk-spacing(3) 0;
   border: 0;
   border-top: 1px solid $govuk-border-colour;
+}
+
+// RA-335. A case-panel affordance rendered inert for a read-only support
+// user — appActionLink swaps the <a> for a <span> with this class rather
+// than a fake-disabled link, since there is no href to disable in the
+// first place. Covers both visual shapes the macro is used for: a plain
+// govuk-link text link, and a govuk-button-styled link (e.g. Approve,
+// Create work item) — mirrors govuk-frontend's own `.govuk-button[disabled]`
+// treatment (opacity, no shadow) since that selector cannot match a <span>.
+.app-action-link--disabled {
+  cursor: default;
+
+  &.govuk-link {
+    color: $govuk-secondary-text-colour;
+    text-decoration: none;
+  }
+
+  &.govuk-button {
+    opacity: 0.5;
+    box-shadow: none;
+  }
 }
 
 // Stacked link list inside the panel — one affordance per line.
