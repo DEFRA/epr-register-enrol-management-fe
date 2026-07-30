@@ -23,6 +23,18 @@
 export const ROLE_STANDARD = 'standard'
 
 /**
+ * RA-335: support users get a read-only view of the same case data as a
+ * caseworker, identified by a separate Entra ID app role
+ * (`Waste.SupportUser.ReadOnly`, see config `auth.azureEntraId.supportUserRoleValue`).
+ * They are NOT a permission tier on top of `ROLE_STANDARD` — a session has
+ * exactly one of the two roles, never both — so routes that mutate data
+ * must keep requiring `ROLE_STANDARD` specifically (via `requireStandard`)
+ * rather than "any authenticated user", or a support user's session would
+ * pass the scope check.
+ */
+export const ROLE_SUPPORT_READONLY = 'support-readonly'
+
+/**
  * Nation-scoped roles. A user with exactly one of these roles is
  * automatically defaulted to that nation's filter on the worklist (RA-125).
  */
@@ -40,3 +52,6 @@ export const NATION_ROLE_MAP = {
 }
 
 export const requireStandard = { auth: { scope: [ROLE_STANDARD] } }
+export const requireSupportReadonly = {
+  auth: { scope: [ROLE_SUPPORT_READONLY] }
+}

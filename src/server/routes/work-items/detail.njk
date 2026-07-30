@@ -4,6 +4,7 @@
 {% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
+{% from "nav-button/macro.njk" import appNavButton %}
 
 {# Shared row fragments — defined once and reused by both the AC02          #}
 {# application-details rows and the previous-year section, which render the #}
@@ -288,6 +289,7 @@
             {{ govukButton({
               text: "Assign to yourself and start",
               classes: "app-case-panel__primary-action govuk-!-margin-bottom-0",
+              disabled: user.isReadOnly,
               attributes: { "data-testid": "self-assign-submit" }
             }) }}
           </form>
@@ -295,16 +297,28 @@
 
         <hr class="app-case-panel__divider">
 
+        {# RA-335. These navigate to a GET page rather than mutating         #}
+        {# directly, but a read-only support user must not reach that page   #}
+        {# either, so they're rendered via appNavButton (real <button>s,     #}
+        {# which support `disabled`) instead of `<a href>` links.            #}
         <ul class="app-case-panel__links">
           <li>
-            <a class="govuk-link"
-               data-testid="reassign-link"
-               href="/work-items/{{ workItem.id }}/assign">Reassign the application</a>
+            {{ appNavButton({
+              text: "Reassign the application",
+              href: "/work-items/" + workItem.id + "/assign",
+              classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+              disabled: user.isReadOnly,
+              attributes: { "data-testid": "reassign-link" }
+            }) }}
           </li>
           <li>
-            <a class="govuk-link"
-               data-testid="unassign-link"
-               href="/work-items/{{ workItem.id }}/unassign">Unassign the application</a>
+            {{ appNavButton({
+              text: "Unassign the application",
+              href: "/work-items/" + workItem.id + "/unassign",
+              classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+              disabled: user.isReadOnly,
+              attributes: { "data-testid": "unassign-link" }
+            }) }}
           </li>
           {# RA-131's Extend / Override SLA affordances, relabelled to the   #}
           {# prototype's wording. Testids unchanged so existing journeys     #}
@@ -314,14 +328,22 @@
           {# caseworker move the due date on a closed case.                   #}
           {% if workItem.canChangeDueDate %}
             <li>
-              <a class="govuk-link"
-                 data-testid="action-sla-extend"
-                 href="/work-items/{{ workItem.id }}/sla/extend">Change the due date</a>
+              {{ appNavButton({
+                text: "Change the due date",
+                href: "/work-items/" + workItem.id + "/sla/extend",
+                classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+                disabled: user.isReadOnly,
+                attributes: { "data-testid": "action-sla-extend" }
+              }) }}
             </li>
             <li>
-              <a class="govuk-link"
-                 data-testid="action-sla-override"
-                 href="/work-items/{{ workItem.id }}/sla/override">Override the due date</a>
+              {{ appNavButton({
+                text: "Override the due date",
+                href: "/work-items/" + workItem.id + "/sla/override",
+                classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+                disabled: user.isReadOnly,
+                attributes: { "data-testid": "action-sla-override" }
+              }) }}
             </li>
           {% endif %}
         </ul>
@@ -358,26 +380,37 @@
                   {{ govukButton({
                     text: action.displayName,
                     classes: "app-case-panel__primary-action" + (action.actionId == 'reject' and ' govuk-button--warning' or ''),
+                    disabled: user.isReadOnly,
                     attributes: { "data-testid": "action-" + action.actionId }
                   }) }}
                 </form>
               {% endif %}
             {% endfor %}
 
-            {# Secondary link row. #}
+            {# Secondary link row. RA-335: these navigate to a GET page, so #}
+            {# use appNavButton (see the assignment panel above) rather     #}
+            {# than a plain link, so they can be disabled too.              #}
             <div class="app-case-panel__action-links">
               {% for action in workItem.availableActions %}
                 {% if action.actionId == 'query' or action.actionId.startsWith('query-') %}
-                  <a class="govuk-link"
-                     data-testid="action-query"
-                     href="/work-items/{{ workItem.id }}/query">Query</a>
+                  {{ appNavButton({
+                    text: "Query",
+                    href: "/work-items/" + workItem.id + "/query",
+                    classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+                    disabled: user.isReadOnly,
+                    attributes: { "data-testid": "action-query" }
+                  }) }}
                 {% endif %}
               {% endfor %}
               {% for action in workItem.availableActions %}
                 {% if action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
-                  <a class="govuk-link app-case-panel__link--destructive"
-                     data-testid="action-{{ action.actionId }}"
-                     href="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}/confirm">{{ action.displayName }}</a>
+                  {{ appNavButton({
+                    text: action.displayName,
+                    href: "/work-items/" + workItem.id + "/actions/" + action.actionId + "/confirm",
+                    classes: "govuk-button--warning govuk-!-margin-bottom-0",
+                    disabled: user.isReadOnly,
+                    attributes: { "data-testid": "action-" + action.actionId }
+                  }) }}
                 {% endif %}
               {% endfor %}
             </div>

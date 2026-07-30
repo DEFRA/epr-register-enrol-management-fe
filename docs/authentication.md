@@ -24,16 +24,38 @@ A caseworker's real identity still carries a nation role
 (`role:nation-england` etc.) used only to default the worklist filter
 (RA-125) — this is unrelated to permissions.
 
+RA-335: a **support user** holds a separate role — `support-readonly` —
+identified by a different Entra ID app role
+(`ENTRA_SUPPORT_USER_ROLE_VALUE`). A session has exactly one of `standard`
+or `support-readonly`, never both. Support users can sign in and view
+everything a caseworker can, but:
+
+- every route that mutates a work item requires `requireStandard`
+  specifically (not just "any authenticated session") — a support user's
+  session is rejected server-side with a 403 even if a disabled UI control
+  is bypassed by a crafted request;
+- Nunjucks templates read `user.isReadOnly` (set in
+  `src/config/nunjucks/context/context.js`) to render every modifying
+  action as a disabled button instead of hiding it, so a support user sees
+  exactly what a caseworker sees;
+- the `/backend-status` diagnostic page is visible (nav link) and
+  accessible only to a signed-in support user — not caseworkers, not
+  signed-out visitors.
+
 Real Entra ID login requires the caller's id_token `roles` claim to include
-the value configured by `ENTRA_REGULATOR_ROLE_VALUE` (see below); a signed-in
-user without it is bounced back to the login page rather than granted a
+either the value configured by `ENTRA_REGULATOR_ROLE_VALUE` (caseworker) or
+`ENTRA_SUPPORT_USER_ROLE_VALUE` (support user) — see below; a signed-in user
+with neither is bounced back to the login page rather than granted a
 session.
 
-Use the helper from `src/server/common/helpers/auth/auth-scopes.js` to
-require an authenticated caseworker at the framework level:
+Use the helpers from `src/server/common/helpers/auth/auth-scopes.js` to
+require a role at the framework level:
 
 ```javascript
-import { requireStandard } from '../common/helpers/auth/auth-scopes.js'
+import {
+  requireStandard,
+  requireSupportReadonly
+} from '../common/helpers/auth/auth-scopes.js'
 
 server.route({
   method: 'POST',
@@ -54,6 +76,7 @@ server.route({
 | `ENTRA_CLIENT_SECRET`        | Azure Entra ID client secret                                                                             | _(empty)_                  |
 | `ENTRA_TENANT_ID`            | Azure Entra ID tenant ID                                                                                 | _(empty)_                  |
 | `ENTRA_REGULATOR_ROLE_VALUE` | RA-323. App role a signed-in user must hold to be treated as a caseworker. Unconfirmed pending sign-off. | `Waste.Regulator.Standard` |
+| `ENTRA_SUPPORT_USER_ROLE_VALUE` | RA-335. App role a signed-in user must hold to be treated as a read-only support user. | `Waste.SupportUser.ReadOnly` |
 
 ## Routes
 
@@ -62,8 +85,9 @@ server.route({
 | GET    | `/auth/regulator/login`    | Initiates OAuth (or redirects to stub chooser) |
 | GET    | `/auth/regulator/callback` | OAuth callback — exchanges code for session    |
 | GET    | `/auth/logout`             | Clears the session                             |
-| GET    | `/auth/stub/login`         | Stub chooser (stub mode only)                  |
+| GET    | `/auth/stub/login`         | Stub chooser (stub mode only) — caseworker or support user (RA-335) |
 | POST   | `/auth/stub/login`         | Submits stub user selection                    |
+| GET    | `/backend-status`          | RA-335: support-user-only diagnostic page (`requireSupportReadonly`) |
 
 ## Tests
 

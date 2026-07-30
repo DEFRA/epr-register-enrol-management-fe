@@ -4,6 +4,7 @@ import { createAuthControllers } from './controller.js'
 import { config } from '#/config/config.js'
 
 const REQUIRED_ROLE = config.get('auth.azureEntraId.regulatorRoleValue')
+const SUPPORT_ROLE = config.get('auth.azureEntraId.supportUserRoleValue')
 
 function makeRequest({ query = {}, session = {} } = {}) {
   const order = []
@@ -334,8 +335,51 @@ describe('regulatorCallbackController', () => {
     expect(result.redirected).toBe('/auth/regulator/login')
     expect(yar.set).not.toHaveBeenCalledWith('user', expect.anything())
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ requiredRole: REQUIRED_ROLE }),
-      expect.stringContaining('missing required regulator role')
+      expect.objectContaining({
+        regulatorRole: REQUIRED_ROLE,
+        supportUserRole: SUPPORT_ROLE
+      }),
+      expect.stringContaining(
+        'missing required regulator or support user role'
+      )
+    )
+  })
+
+  test('grants a support-readonly session when the id_token roles claim has the support user role', async () => {
+    const { request, yar } = makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { id_token: 't' }
+      },
+      async text() {
+        return ''
+      }
+    }))
+    const verifyIdToken = vi.fn(async () => ({
+      oid: 'oid-support',
+      preferred_username: 's@d',
+      name: 'Support',
+      roles: [SUPPORT_ROLE]
+    }))
+    const { regulatorCallbackController } = buildOk({
+      fetchImpl,
+      verifyIdToken
+    })
+
+    const result = await regulatorCallbackController(request, h)
+
+    expect(result.redirected).toBe('/work-items')
+    expect(yar.set).toHaveBeenCalledWith(
+      'user',
+      expect.objectContaining({
+        id: 'oid-support',
+        roles: ['support-readonly']
+      })
     )
   })
 

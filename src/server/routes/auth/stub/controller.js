@@ -4,7 +4,8 @@ import {
   ROLE_NATION_NORTHERN_IRELAND,
   ROLE_NATION_SCOTLAND,
   ROLE_NATION_WALES,
-  ROLE_STANDARD
+  ROLE_STANDARD,
+  ROLE_SUPPORT_READONLY
 } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
@@ -61,8 +62,33 @@ export function stubLoginGetController(_request, h) {
   return h.view('auth/stub/login', viewData({ entraIdConfigured }))
 }
 
+// RA-335. Fixed stub identity for the read-only support user path — there's
+// no nation/assignee concept for support users, so unlike the caseworker
+// login this isn't derived from STUB_USERS.
+const STUB_SUPPORT_USER = {
+  id: 'stub-support-user',
+  name: 'Stub Support User',
+  email: 'support@stub.example'
+}
+
 export function stubLoginPostController(request, h) {
-  const { nation } = request.payload ?? {}
+  const { nation, loginAs } = request.payload ?? {}
+
+  // RA-299 AC10/14: mirror the real OAuth callback's yar.reset() so a stub
+  // (re-)login also drops any session-persisted filters (e.g. the
+  // work-items list's last-applied query, RA-299) — a new session must
+  // never inherit filter state from whoever was previously "logged in".
+  request.yar.reset()
+
+  if (loginAs === 'support') {
+    const user = {
+      ...STUB_SUPPORT_USER,
+      roles: [ROLE_SUPPORT_READONLY],
+      scope: [ROLE_SUPPORT_READONLY]
+    }
+    request.yar.set('user', user)
+    return h.redirect('/work-items')
+  }
 
   const nationOption = NATION_OPTIONS.find((n) => n.value === (nation ?? ''))
   const nationRole = nationOption?.role ?? null
@@ -84,11 +110,6 @@ export function stubLoginPostController(request, h) {
     scope: roles
   }
 
-  // RA-299 AC10/14: mirror the real OAuth callback's yar.reset() so a stub
-  // (re-)login also drops any session-persisted filters (e.g. the
-  // work-items list's last-applied query, RA-299) — a new session must
-  // never inherit filter state from whoever was previously "logged in".
-  request.yar.reset()
   request.yar.set('user', user)
   return h.redirect('/work-items')
 }

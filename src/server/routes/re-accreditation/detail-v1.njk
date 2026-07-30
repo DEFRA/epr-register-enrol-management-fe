@@ -24,10 +24,10 @@
 
 {% extends 'work-items/detail.njk' %}
 
-{% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 {% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
 {% from "govuk/components/panel/macro.njk" import govukPanel %}
+{% from "nav-button/macro.njk" import appNavButton %}
 
 {% block content %}
   <div data-testid="re-accreditation-detail">
@@ -42,10 +42,11 @@
 {% block approveAction %}
   {% if workItem.canApproveDirectly %}
     <div data-testid="re-accreditation-approve-cta">
-      {{ govukButton({
+      {{ appNavButton({
         text: "Approve",
         href: workItem.approveHref,
         classes: "app-case-panel__primary-action",
+        disabled: user.isReadOnly,
         attributes: { "data-testid": "action-approve" }
       }) }}
     </div>

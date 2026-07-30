@@ -38,8 +38,12 @@ import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
  * the browser. The action POSTs use a redirect-after-post pattern so
  * refresh is harmless.
  *
- * Authorization: RA-323 — every caseworker holds the same role, so these
- * routes only require an authenticated session (`requireStandard`).
+ * Authorization: RA-323 — every caseworker holds the same role, so GET
+ * routes only require an authenticated session. RA-335 — every mutating
+ * POST route requires `requireStandard` specifically, not just any
+ * authenticated session, so a signed-in read-only support user's session
+ * (which never holds `ROLE_STANDARD`) is rejected server-side even if a
+ * disabled UI button is bypassed by a crafted request.
  */
 export const workItems = {
   plugin: {
@@ -101,6 +105,7 @@ export const workItems = {
         {
           method: 'POST',
           path: '/work-items/{id}/tasks/{taskId}/complete',
+          options: requireStandard,
           ...makeCompleteTaskController()
         },
         {
@@ -111,11 +116,13 @@ export const workItems = {
           // service object.
           method: 'POST',
           path: '/work-items/{id}/tasks/{taskId}/status',
+          options: requireStandard,
           ...makeSetTaskStatusController()
         },
         {
           method: 'POST',
           path: '/work-items/{id}/actions/{actionId}',
+          options: requireStandard,
           ...makeApplyActionController()
         },
         {
@@ -130,6 +137,7 @@ export const workItems = {
         {
           method: 'POST',
           path: '/work-items/{id}/actions/{actionId}/confirm',
+          options: requireStandard,
           ...makeSubmitWithdrawController()
         },
         {
@@ -144,6 +152,7 @@ export const workItems = {
           method: 'POST',
           path: '/work-items/{id}/query',
           options: {
+            ...requireStandard,
             payload: {
               parse: true,
               allow: 'application/x-www-form-urlencoded',

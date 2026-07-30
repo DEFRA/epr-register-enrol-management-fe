@@ -65,12 +65,6 @@ describe('context and cache', () => {
               text: 'Work items',
               href: '/work-items',
               attributes: { 'data-testid': 'nav-work-items' }
-            },
-            {
-              current: false,
-              text: 'Backend status',
-              href: '/backend-status',
-              attributes: { 'data-testid': 'nav-backend-status' }
             }
           ],
           serviceName: 'Packaging waste applications',
@@ -91,6 +85,31 @@ describe('context and cache', () => {
         test('Should provide expected asset', () => {
           expect(contextResult.getAssetPath('an-image.png')).toBe(
             '/public/an-image.png'
+          )
+        })
+      })
+
+      // RA-335.
+      describe('user.isReadOnly', () => {
+        test('is true for a support-readonly session', async () => {
+          const result = contextImport.context({
+            path: '/work-items',
+            auth: {
+              credentials: { id: 'u1', roles: ['support-readonly'] }
+            }
+          })
+          expect(result.user).toEqual(
+            expect.objectContaining({ id: 'u1', isReadOnly: true })
+          )
+        })
+
+        test('is false for a standard session', async () => {
+          const result = contextImport.context({
+            path: '/work-items',
+            auth: { credentials: { id: 'u1', roles: ['standard'] } }
+          })
+          expect(result.user).toEqual(
+            expect.objectContaining({ id: 'u1', isReadOnly: false })
           )
         })
       })
@@ -157,12 +176,6 @@ describe('context and cache', () => {
               text: 'Work items',
               href: '/work-items',
               attributes: { 'data-testid': 'nav-work-items' }
-            },
-            {
-              current: false,
-              text: 'Backend status',
-              href: '/backend-status',
-              attributes: { 'data-testid': 'nav-backend-status' }
             }
           ],
           serviceName: 'Packaging waste applications',

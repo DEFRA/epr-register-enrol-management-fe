@@ -86,6 +86,7 @@
                   {{ govukButton({
                     text: "Update status",
                     classes: "govuk-button--secondary govuk-!-margin-bottom-0",
+                    disabled: user.isReadOnly,
                     attributes: { "data-testid": "set-task-status-" + task.taskId }
                   }) }}
                 </form>
@@ -98,6 +99,7 @@
                   <input type="hidden" name="returnTo" value="/work-items/{{ workItem.id }}/tasks" />
                   {{ govukButton({
                     text: "Mark complete",
+                    disabled: user.isReadOnly,
                     attributes: { "data-testid": "complete-task-" + task.taskId }
                   }) }}
                 </form>

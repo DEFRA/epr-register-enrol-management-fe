@@ -143,15 +143,22 @@ describe('RA-291 Query link on the work item detail page', () => {
     expect(result).toEqual(
       expect.stringContaining('data-testid="action-query"')
     )
-    expect(result).toEqual(expect.stringContaining(`href="${QUERY_HREF}"`))
+    expect(result).toEqual(
+      expect.stringContaining(`action="${QUERY_HREF}"`)
+    )
   })
 
-  test('renders the link as a link, not a button', async () => {
+  // RA-335: rendered as a real <button> (wrapped in a GET form), not an
+  // <a> link, so it can be disabled for a read-only support user — see
+  // nav-button/macro.njk.
+  test('renders the link as a button-styled GET form, not a plain link', async () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
     const { result } = await server.inject({ method: 'GET', url: DETAIL_HREF })
 
-    expect(result).toMatch(/<a class="govuk-link"\s+data-testid="action-query"/)
+    expect(result).toMatch(
+      /<form method="get" action="[^"]*"[^>]*>\s*<button[^>]*data-testid="action-query"/
+    )
   })
 
   test('hides the Query link when no query action is available', async () => {

@@ -122,6 +122,7 @@
         <div class="govuk-button-group">
           {{ govukButton({
             text: "Create work item",
+            disabled: user.isReadOnly,
             attributes: { "data-testid": "create-work-item-submit" }
           }) }}
           <a class="govuk-link" href="/work-items">Cancel</a>

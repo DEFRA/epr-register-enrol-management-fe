@@ -1,0 +1,19 @@
+{% from "govuk/components/button/macro.njk" import govukButton %}
+
+{# RA-335. Some case-panel affordances (reassign, unassign, change due
+   date, query, withdraw, approve) navigate to another GET page rather
+   than submitting a form directly, so they were plain `<a href>` links.
+   `govukButton`'s native `disabled` state only applies to `<button>`
+   elements, not `href`-based link buttons — so to let a read-only support
+   user's session disable these, they're rendered as a one-field GET form
+   wrapping a real button instead of a link. #}
+{% macro appNavButton(params) %}
+  <form method="get" action="{{ params.href }}" class="app-nav-button-form" novalidate>
+    {{ govukButton({
+      text: params.text,
+      classes: params.classes,
+      disabled: params.disabled,
+      attributes: params.attributes
+    }) }}
+  </form>
+{% endmacro %}

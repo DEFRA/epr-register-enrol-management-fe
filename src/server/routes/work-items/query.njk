@@ -87,6 +87,7 @@
         <div class="govuk-button-group">
           {{ govukButton({
             text: "Send query",
+            disabled: user.isReadOnly,
             attributes: { "data-testid": "query-submit" }
           }) }}
           <a class="govuk-link"

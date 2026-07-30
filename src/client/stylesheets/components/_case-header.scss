@@ -143,23 +143,6 @@
   justify-content: space-between;
 }
 
-// Withdraw reads as destructive without being a button — it only opens the
-// RA-188 confirmation interstitial, so it must not look like the commit.
-.app-case-panel__link--destructive {
-  &:link,
-  &:visited {
-    color: $govuk-error-colour;
-  }
-
-  &:hover {
-    color: govuk-shade($govuk-error-colour, 20%);
-  }
-
-  &:focus {
-    color: $govuk-focus-text-colour;
-  }
-}
-
 .app-case-panel__divider {
   margin: govuk-spacing(3) 0;
   border: 0;

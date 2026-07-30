@@ -897,11 +897,13 @@ describe('#workItemDetailController', () => {
       expect(panel).toEqual(
         expect.stringContaining('data-testid="unassign-link"')
       )
+      // RA-335: rendered as button-styled GET forms, not <a href> links, so
+      // a read-only support user's session can disable them.
       expect(panel).toEqual(
-        expect.stringContaining(`href="/work-items/${ID}/assign"`)
+        expect.stringContaining(`action="/work-items/${ID}/assign"`)
       )
       expect(panel).toEqual(
-        expect.stringContaining(`href="/work-items/${ID}/unassign"`)
+        expect.stringContaining(`action="/work-items/${ID}/unassign"`)
       )
     }
   })

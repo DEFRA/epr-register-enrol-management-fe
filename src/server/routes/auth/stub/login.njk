@@ -40,6 +40,20 @@
         <button class="govuk-button" type="submit">Log in</button>
       </form>
 
+      <hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+      <h2 class="govuk-heading-m">Or sign in as a support user (RA-335)</h2>
+      <p class="govuk-body">
+        Support users get a read-only view — the same information as a caseworker,
+        but every action that changes data is disabled.
+      </p>
+      <form method="POST" action="/auth/stub/login">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+        <input type="hidden" name="loginAs" value="support" />
+        <button class="govuk-button govuk-button--secondary" type="submit" data-testid="stub-support-login">
+          Sign in as support user
+        </button>
+      </form>
+
       {% if entraIdConfigured %}
         <hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
         <h2 class="govuk-heading-m">Or sign in with a real account</h2>

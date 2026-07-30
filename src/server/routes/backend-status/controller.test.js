@@ -20,6 +20,11 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
 const { getBackendHealth } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
+// RA-335: /backend-status is restricted to a signed-in support user
+// (`requireSupportReadonly`) — the test-bypass scheme auto-authenticates as
+// the standard caseworker unless `x-test-user-role` says otherwise.
+const SUPPORT_USER_HEADERS = { 'x-test-user-role': 'support-readonly' }
+
 describe('#backendStatusController', () => {
   let server
 
@@ -45,7 +50,8 @@ describe('#backendStatusController', () => {
 
     const { result, statusCode } = await server.inject({
       method: 'GET',
-      url: '/backend-status'
+      url: '/backend-status',
+      headers: SUPPORT_USER_HEADERS
     })
 
     expect(statusCode).toBe(statusCodes.ok)
@@ -62,7 +68,8 @@ describe('#backendStatusController', () => {
 
     const { result, statusCode } = await server.inject({
       method: 'GET',
-      url: '/backend-status'
+      url: '/backend-status',
+      headers: SUPPORT_USER_HEADERS
     })
 
     expect(statusCode).toBe(statusCodes.ok)
@@ -70,22 +77,12 @@ describe('#backendStatusController', () => {
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
   })
 
-  test('is reachable without authentication (epr-zld, auth: false)', async () => {
-    getBackendHealth.mockResolvedValue({
-      ok: true,
-      status: 200,
-      body: 'Healthy'
-    })
-
-    const { request, statusCode } = await server.inject({
+  test('rejects a caseworker (standard role) with 403', async () => {
+    const { statusCode } = await server.inject({
       method: 'GET',
       url: '/backend-status'
     })
 
-    expect(statusCode).toBe(statusCodes.ok)
-    // The route opts out of auth entirely (parallel to /health) so Hapi
-    // does not populate credentials, even with the test stub auth scheme
-    // installed.
-    expect(request.auth.isAuthenticated).toBe(false)
+    expect(statusCode).toBe(statusCodes.forbidden)
   })
 })

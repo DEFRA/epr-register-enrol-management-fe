@@ -63,6 +63,7 @@
         <div class="govuk-button-group">
           {{ govukButton({
             text: "Approve determination",
+            disabled: user.isReadOnly,
             attributes: { "data-testid": "approval-submit" }
           }) }}
           <a class="govuk-link"

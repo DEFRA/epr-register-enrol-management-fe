@@ -4,7 +4,10 @@ import { fetch as undiciFetch } from 'undici'
 import { config } from '#/config/config.js'
 import { getAzureEntraIdConfig } from '#/server/common/helpers/auth/providers/azure-entra-id.js'
 import { verifyAzureIdToken } from '#/server/common/helpers/auth/providers/azure-id-token.js'
-import { ROLE_STANDARD } from '#/server/common/helpers/auth/auth-scopes.js'
+import {
+  ROLE_STANDARD,
+  ROLE_SUPPORT_READONLY
+} from '#/server/common/helpers/auth/auth-scopes.js'
 
 const LOGIN_PATH = '/auth/regulator/login'
 
@@ -161,20 +164,30 @@ export function createAuthControllers({
       return h.redirect(LOGIN_PATH)
     }
 
-    // RA-323: every caseworker holds the same Entra ID app role — there is
-    // no per-user permission tiering. App roles surface on the id_token as
-    // a `roles` claim (an array) once assigned to the user in the
-    // Enterprise Application; a caller without the configured role is not
-    // a caseworker and is bounced back to login rather than granted a
-    // degraded session.
-    const requiredRole = config.get('auth.azureEntraId.regulatorRoleValue')
+    // RA-323 / RA-335: a caseworker holds the regulator Entra ID app role;
+    // a support user holds a separate read-only app role instead. There is
+    // no per-user tiering within either group. App roles surface on the
+    // id_token as a `roles` claim (an array) once assigned to the user in
+    // the Enterprise Application; a caller with neither role is bounced
+    // back to login rather than granted a degraded session.
+    const regulatorRole = config.get('auth.azureEntraId.regulatorRoleValue')
+    const supportUserRole = config.get(
+      'auth.azureEntraId.supportUserRoleValue'
+    )
     const claimRoles = Array.isArray(claims.roles) ? claims.roles : []
-    if (!claimRoles.includes(requiredRole)) {
+
+    let internalRole
+    if (claimRoles.includes(regulatorRole)) {
+      internalRole = ROLE_STANDARD
+    } else if (claimRoles.includes(supportUserRole)) {
+      internalRole = ROLE_SUPPORT_READONLY
+    } else {
       logWarn(
         request,
-        'oauth callback: caller missing required regulator role',
+        'oauth callback: caller missing required regulator or support user role',
         {
-          requiredRole
+          regulatorRole,
+          supportUserRole
         }
       )
       return h.redirect(LOGIN_PATH)
@@ -184,7 +197,7 @@ export function createAuthControllers({
       id: claims.oid ?? claims.sub,
       email: claims.preferred_username ?? claims.email ?? null,
       name: claims.name ?? null,
-      roles: [ROLE_STANDARD]
+      roles: [internalRole]
     }
 
     // Reset the session before storing the authenticated user to defeat

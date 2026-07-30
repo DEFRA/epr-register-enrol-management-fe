@@ -7,7 +7,8 @@ import {
   ROLE_NATION_SCOTLAND,
   ROLE_NATION_WALES,
   ROLE_NATION_NORTHERN_IRELAND,
-  ROLE_STANDARD
+  ROLE_STANDARD,
+  ROLE_SUPPORT_READONLY
 } from './auth-scopes.js'
 
 export const TEST_STANDARD_USER = {
@@ -16,6 +17,15 @@ export const TEST_STANDARD_USER = {
   name: 'Test Standard User',
   roles: [ROLE_STANDARD],
   scope: [ROLE_STANDARD]
+}
+
+// RA-335.
+export const TEST_SUPPORT_READONLY_USER = {
+  id: 'test-support-readonly-id',
+  email: 'support-readonly@test.example',
+  name: 'Test Support User',
+  roles: [ROLE_SUPPORT_READONLY],
+  scope: [ROLE_SUPPORT_READONLY]
 }
 
 export const TEST_NATION_ENGLAND_USER = {
@@ -55,7 +65,8 @@ const TEST_USERS = {
   'nation-england': TEST_NATION_ENGLAND_USER,
   'nation-scotland': TEST_NATION_SCOTLAND_USER,
   'nation-wales': TEST_NATION_WALES_USER,
-  'nation-northern-ireland': TEST_NATION_NORTHERN_IRELAND_USER
+  'nation-northern-ireland': TEST_NATION_NORTHERN_IRELAND_USER,
+  'support-readonly': TEST_SUPPORT_READONLY_USER
 }
 
 /**

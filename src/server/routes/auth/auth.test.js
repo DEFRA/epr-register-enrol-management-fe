@@ -85,6 +85,50 @@ describe('auth', () => {
     expect(headers.location).toBe('/work-items')
   })
 
+  // RA-335.
+  test('stub login GET offers a support user option', async () => {
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/auth/stub/login'
+    })
+
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="stub-support-login"')
+    )
+  })
+
+  test('stub login POST with loginAs=support redirects to /work-items', async () => {
+    const { statusCode, headers } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: '/auth/stub/login',
+      payload: { loginAs: 'support' }
+    })
+
+    expect(statusCode).toBe(302)
+    expect(headers.location).toBe('/work-items')
+  })
+
+  test('x-test-user-role=support-readonly header switches credentials', async () => {
+    const { request } = await server.inject({
+      method: 'GET',
+      url: '/work-items',
+      headers: { 'x-test-user-role': 'support-readonly' }
+    })
+
+    expect(request.auth.credentials.roles).toEqual(['support-readonly'])
+  })
+
+  test('a support user is rejected (403) from a mutating route', async () => {
+    const { statusCode } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: '/work-items/some-id/self-assign',
+      headers: { 'x-test-user-role': 'support-readonly' },
+      payload: {}
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
+  })
+
   test('regulator login (stub mode) redirects to stub chooser', async () => {
     const { statusCode, headers } = await server.inject({
       method: 'GET',

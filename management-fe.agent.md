@@ -223,6 +223,14 @@ the module's `register(server)` callback; paths are relative to
   caller is bounced back to login.
   - Use `requireStandard` as route `options` so Hapi rejects an
     unauthenticated caller with 403 **before** the handler runs.
+  - RA-335: a separate `support-readonly` role (Entra app role
+    `ENTRA_SUPPORT_USER_ROLE_VALUE`) lets support users sign in and view
+    everything a caseworker can. Every mutating route requires
+    `requireStandard` specifically, not just an authenticated session, so
+    a support user's session is rejected. Templates read
+    `user.isReadOnly` to render (not hide) every modifying control in a
+    disabled state. `/backend-status` uses `requireSupportReadonly` and
+    is the one page/nav-link restricted to support users only.
 - Public routes (health, static assets, login pages, errors) opt out of
   auth with `auth: false`.
 - See [`docs/authentication.md`](../../lib/epr-register-enrol-management-fe/docs/authentication.md)
