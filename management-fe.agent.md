@@ -183,6 +183,23 @@ yourself fighting them, stop and ask the user.
   test/plugin-only.** They run at the start of every plugin registration
   so repeated `createServer()` calls in tests don't accumulate stale
   state. Don't call them from production code.
+- **Every new mutating route requires `requireStandard`** (RA-335) —
+  `import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'`,
+  set as route `options`. This exists because five routes were once
+  registered with no scope check at all, silently open to any
+  authenticated session. It's enforced by a test
+  (`src/server/common/helpers/auth/route-scope-coverage.test.js`) that
+  walks the live route table and fails on any POST/PUT/PATCH/DELETE route
+  missing it — not just documented here, so don't rely on remembering to
+  read this.
+- **Every new control that triggers a mutating route must also be
+  disabled for a read-only support user** (RA-335), or it's a UX bug (the
+  route itself will still correctly 403, but the button won't say why).
+  Read `user.isReadOnly` in the template: pass `disabled: user.isReadOnly`
+  to a real `govukButton`; for a navigational link (no native disabled
+  state), use the `appActionLink` macro
+  (`src/server/common/components/action-link/macro.njk`) instead of a
+  plain `<a href>`.
 
 ## Detail view & generic routes
 
