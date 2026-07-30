@@ -176,11 +176,18 @@
 .app-action-link--disabled {
   cursor: default;
 
-  &.govuk-link {
-    color: $govuk-secondary-text-colour;
-    text-decoration: none;
+  // Matches govuk-frontend's own `.govuk-button[disabled]:hover` cursor —
+  // a <span> has nothing to click through to, so the hover state should
+  // read as disabled the same way a real disabled button does.
+  &:hover {
+    cursor: not-allowed;
   }
 
+  // The plain-link variant keeps the ordinary govuk-link colour and
+  // underline (it inherits `.govuk-link`'s own styles) — the disabled
+  // cursor above is the only visual signal, so it stays visually
+  // consistent with every other link on the page rather than reading as
+  // "broken" or "missing content".
   &.govuk-button {
     opacity: 0.5;
     box-shadow: none;
