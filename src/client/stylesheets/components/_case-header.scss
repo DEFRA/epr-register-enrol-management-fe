@@ -199,6 +199,22 @@
     }
   }
 
+  // Withdraw is destructive-styled even for a regulator (see
+  // `.app-case-panel__link--destructive` above), and that rule has the
+  // exact same "only applies to a real <a>" problem the plain-link fix
+  // above solves — so the disabled withdraw span needs its own override.
+  // Chaining all three classes gives this higher specificity than the
+  // plain `&.govuk-link` rule above, so it wins regardless of source
+  // order — every disabled link keeps the colour it would show for a
+  // regulator, not a single generic "disabled" colour.
+  &.govuk-link.app-case-panel__link--destructive {
+    color: $govuk-error-colour;
+
+    &:hover {
+      color: govuk-shade($govuk-error-colour, 20%);
+    }
+  }
+
   &.govuk-button {
     opacity: 0.5;
     box-shadow: none;
