@@ -70,26 +70,26 @@ server.route({
 
 ## Environment variables
 
-| Variable                     | Description                                                                                              | Default                    |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `ENVIRONMENT`                | Deployment environment name                                                                              | `local`                    |
-| `AUTH_STUB_ENABLED`          | Enable stub auth. Defaults `true` when `ENVIRONMENT != prod`                                             | `true`                     |
-| `AUTH_CALLBACK_BASE_URL`     | Base URL used to build OAuth callback redirect URI                                                       | `http://localhost:3000`    |
-| `ENTRA_CLIENT_ID`            | Azure Entra ID client ID                                                                                 | _(empty)_                  |
-| `ENTRA_CLIENT_SECRET`        | Azure Entra ID client secret                                                                             | _(empty)_                  |
-| `ENTRA_TENANT_ID`            | Azure Entra ID tenant ID                                                                                 | _(empty)_                  |
-| `ENTRA_REGULATOR_ROLE_VALUE` | RA-323. App role a signed-in user must hold to be treated as a caseworker. Unconfirmed pending sign-off. | `Waste.Regulator.Standard` |
-| `ENTRA_SUPPORT_USER_ROLE_VALUE` | RA-335. App role a signed-in user must hold to be treated as a read-only support user. | `Waste.SupportUser.ReadOnly` |
+| Variable                        | Description                                                                                              | Default                      |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `ENVIRONMENT`                   | Deployment environment name                                                                              | `local`                      |
+| `AUTH_STUB_ENABLED`             | Enable stub auth. Defaults `true` when `ENVIRONMENT != prod`                                             | `true`                       |
+| `AUTH_CALLBACK_BASE_URL`        | Base URL used to build OAuth callback redirect URI                                                       | `http://localhost:3000`      |
+| `ENTRA_CLIENT_ID`               | Azure Entra ID client ID                                                                                 | _(empty)_                    |
+| `ENTRA_CLIENT_SECRET`           | Azure Entra ID client secret                                                                             | _(empty)_                    |
+| `ENTRA_TENANT_ID`               | Azure Entra ID tenant ID                                                                                 | _(empty)_                    |
+| `ENTRA_REGULATOR_ROLE_VALUE`    | RA-323. App role a signed-in user must hold to be treated as a caseworker. Unconfirmed pending sign-off. | `Waste.Regulator.Standard`   |
+| `ENTRA_SUPPORT_USER_ROLE_VALUE` | RA-335. App role a signed-in user must hold to be treated as a read-only support user.                   | `Waste.SupportUser.ReadOnly` |
 
 ## Routes
 
-| Method | Path                       | Notes                                          |
-| ------ | -------------------------- | ---------------------------------------------- |
-| GET    | `/auth/regulator/login`    | Initiates OAuth (or redirects to stub chooser) |
-| GET    | `/auth/regulator/callback` | OAuth callback — exchanges code for session    |
-| GET    | `/auth/logout`             | Clears the session                             |
-| GET    | `/auth/stub/login`         | Stub chooser (stub mode only) — caseworker or support user (RA-335) |
-| POST   | `/auth/stub/login`         | Submits stub user selection                    |
+| Method | Path                       | Notes                                                                |
+| ------ | -------------------------- | -------------------------------------------------------------------- |
+| GET    | `/auth/regulator/login`    | Initiates OAuth (or redirects to stub chooser)                       |
+| GET    | `/auth/regulator/callback` | OAuth callback — exchanges code for session                          |
+| GET    | `/auth/logout`             | Clears the session                                                   |
+| GET    | `/auth/stub/login`         | Stub chooser (stub mode only) — caseworker or support user (RA-335)  |
+| POST   | `/auth/stub/login`         | Submits stub user selection                                          |
 | GET    | `/backend-status`          | RA-335: support-user-only diagnostic page (`requireSupportReadonly`) |
 
 ## Tests

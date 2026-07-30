@@ -151,7 +151,9 @@ describe('RA-291 Query link on the work item detail page', () => {
 
     const { result } = await server.inject({ method: 'GET', url: DETAIL_HREF })
 
-    expect(result).toMatch(/<a class="govuk-link"\s+href="[^"]*"\s+data-testid="action-query"/)
+    expect(result).toMatch(
+      /<a class="govuk-link"\s+href="[^"]*"\s+data-testid="action-query"/
+    )
   })
 
   // RA-335: a read-only support user gets an inert <span> in place of the

@@ -171,9 +171,7 @@ export function createAuthControllers({
     // the Enterprise Application; a caller with neither role is bounced
     // back to login rather than granted a degraded session.
     const regulatorRole = config.get('auth.azureEntraId.regulatorRoleValue')
-    const supportUserRole = config.get(
-      'auth.azureEntraId.supportUserRoleValue'
-    )
+    const supportUserRole = config.get('auth.azureEntraId.supportUserRoleValue')
     const claimRoles = Array.isArray(claims.roles) ? claims.roles : []
 
     let internalRole

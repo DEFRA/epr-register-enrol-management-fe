@@ -339,9 +339,7 @@ describe('regulatorCallbackController', () => {
         regulatorRole: REQUIRED_ROLE,
         supportUserRole: SUPPORT_ROLE
       }),
-      expect.stringContaining(
-        'missing required regulator or support user role'
-      )
+      expect.stringContaining('missing required regulator or support user role')
     )
   })
 
