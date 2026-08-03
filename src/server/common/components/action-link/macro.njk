@@ -1,3 +1,5 @@
+{% from "govuk/components/button/macro.njk" import govukButton %}
+
 {# RA-335. Case-panel affordances (reassign, unassign, change/override due
    date, query, withdraw, approve, create work item) navigate to another
    page rather than submitting a form — some rendered as plain text links,
@@ -10,13 +12,32 @@
    instead — no `href` at all, so there is nothing to navigate to and
    nothing for a keyboard or screen-reader user to activate.
 
-   `classes` is required and should be the exact class string the enabled
-   `<a>` would have carried (e.g. "govuk-link" or
-   "govuk-button app-case-panel__primary-action"), so the disabled state
-   keeps the same visual shape. #}
+   `variant` picks the enabled-state markup:
+   - 'link' (default): a plain `<a class="{{ classes }}" href="...">`.
+     `classes` here is the FULL class string (e.g. "govuk-link").
+   - 'button': delegates the enabled state to the real `govukButton`
+     macro, so it keeps govuk-frontend's own `role="button"`,
+     `data-module="govuk-button"` and `draggable="false"` on the anchor
+     — a hand-rolled `<a>` regresses keyboard (space-bar activation)
+     and screen-reader support, since those only apply via
+     govuk-frontend's own template. `classes` here is the EXTRA class
+     string only (govukButton always prepends its own "govuk-button"
+     class).
+
+   Either way, when disabled, the class string used for the span is
+   built the same way govuk-frontend would have built it, so the
+   disabled state keeps the same visual shape as the enabled one. #}
 {% macro appActionLink(params) %}
   {% if params.disabled %}
-    <span class="{{ params.classes }} app-action-link--disabled" aria-disabled="true"{% if params.testId %} data-testid="{{ params.testId }}"{% endif %}>{{ params.text }}</span>
+    {% set disabledClasses = ('govuk-button ' if params.variant == 'button') + params.classes + ' app-action-link--disabled' %}
+    <span class="{{ disabledClasses }}" aria-disabled="true"{% if params.testId %} data-testid="{{ params.testId }}"{% endif %}>{{ params.text }}</span>
+  {% elif params.variant == 'button' %}
+    {{ govukButton({
+      text: params.text,
+      href: params.href,
+      classes: params.classes,
+      attributes: { "data-testid": params.testId } if params.testId else {}
+    }) }}
   {% else %}
     <a class="{{ params.classes }}" href="{{ params.href }}"{% if params.testId %} data-testid="{{ params.testId }}"{% endif %}>{{ params.text }}</a>
   {% endif %}

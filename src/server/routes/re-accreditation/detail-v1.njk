@@ -45,7 +45,8 @@
       {{ appActionLink({
         text: "Approve",
         href: workItem.approveHref,
-        classes: "govuk-button app-case-panel__primary-action",
+        variant: "button",
+        classes: "app-case-panel__primary-action",
         disabled: user.isReadOnly,
         testId: "action-approve"
       }) }}

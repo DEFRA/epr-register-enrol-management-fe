@@ -39,7 +39,8 @@
         {{ appActionLink({
           text: "Create work item",
           href: "/work-items/re-accreditation/new",
-          classes: "govuk-button govuk-button--start govuk-!-font-size-19",
+          variant: "button",
+          classes: "govuk-button--start govuk-!-font-size-19",
           disabled: user.isReadOnly,
           testId: "work-items-create-link"
         }) }}

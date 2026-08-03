@@ -129,6 +129,49 @@ describe('auth', () => {
     expect(statusCode).toBe(statusCodes.forbidden)
   })
 
+  // RA-335: these 5 routes had NO scope check at all before RA-335 — any
+  // authenticated session, including a future read-only support user,
+  // could reach them. route-scope-coverage.test.js proves the route
+  // table is configured correctly (static); these prove Hapi actually
+  // enforces it at request time (runtime) — the two are not the same
+  // guarantee, and this is the regression the fix exists to prevent.
+  test.each([
+    ['complete task', '/work-items/some-id/tasks/some-task/complete'],
+    ['set task status', '/work-items/some-id/tasks/some-task/status'],
+    ['apply action', '/work-items/some-id/actions/some-action'],
+    ['withdraw confirm', '/work-items/some-id/actions/withdraw/confirm']
+  ])(
+    'a support user is rejected (403) from the previously-ungated %s route',
+    async (_name, url) => {
+      const { statusCode } = await injectWithCrumb(server, {
+        method: 'POST',
+        url,
+        headers: { 'x-test-user-role': 'support-readonly' },
+        payload: {}
+      })
+
+      expect(statusCode).toBe(statusCodes.forbidden)
+    }
+  )
+
+  test('a support user is rejected (403) from the previously-ungated submit query route', async () => {
+    // /work-items/{id}/query only accepts
+    // application/x-www-form-urlencoded (unlike the other 4 previously-
+    // ungated routes) — a JSON payload 415s before auth even runs, which
+    // would make this pass for the wrong reason.
+    const { statusCode } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: '/work-items/some-id/query',
+      headers: {
+        'x-test-user-role': 'support-readonly',
+        'content-type': 'application/x-www-form-urlencoded'
+      },
+      payload: ''
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
+  })
+
   test('regulator login (stub mode) redirects to stub chooser', async () => {
     const { statusCode, headers } = await server.inject({
       method: 'GET',

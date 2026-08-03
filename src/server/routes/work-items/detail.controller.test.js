@@ -1642,6 +1642,50 @@ describe('#workItemDetailController', () => {
       expect(result).toEqual(
         expect.stringContaining('data-testid="re-accreditation-approve-cta"')
       )
+      // The Approve CTA is a govukButton styled as a link (href-based),
+      // not a plain <a> — it must carry the same role/data-module/
+      // draggable attributes govuk-frontend's own button template adds
+      // for an href-based button, or keyboard (space-bar activation) and
+      // screen-reader support regress for every caseworker, not just a
+      // read-only support user. See action-link/macro.njk's `variant:
+      // 'button'` path.
+      expect(result).toMatch(
+        /<a(?=[^>]*data-testid="action-approve")(?=[^>]*role="button")(?=[^>]*draggable="false")(?=[^>]*data-module="govuk-button")[^>]*>/
+      )
+    })
+
+    // RA-335: a read-only support user still gets a govuk-button-shaped
+    // inert span (the "govuk-button" class must survive into the
+    // disabled state too — see action-link/macro.njk's disabled branch
+    // for variant: 'button'), not a plain link-shaped one.
+    test('renders the Approve CTA as a disabled govuk-button-shaped span for a support user', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          assignedToId: 'someone-else',
+          availableActions: [
+            {
+              actionId: 'withdraw-during-decision',
+              displayName: 'Withdraw',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'withdrawn',
+              requiresAllTasksComplete: false
+            }
+          ]
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'support-readonly' }
+      })
+
+      expect(result).toMatch(
+        /<span(?=[^>]*data-testid="action-approve")(?=[^>]*class="govuk-button[^"]*app-action-link--disabled)/
+      )
     })
 
     test('does not render the Approve CTA when item is NOT in awaiting-decision state', async () => {

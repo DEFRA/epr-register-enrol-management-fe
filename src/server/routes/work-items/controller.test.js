@@ -976,6 +976,27 @@ describe('#workItemListController', () => {
       expect(result).toEqual(
         expect.stringContaining('data-testid="work-items-create-link"')
       )
+      // It's a govukButton styled as a link (href-based), not a plain
+      // <a> — must carry govuk-frontend's own role/data-module/
+      // draggable attributes or keyboard/screen-reader support regress.
+      // See action-link/macro.njk's `variant: 'button'` path.
+      expect(result).toMatch(
+        /<a(?=[^>]*data-testid="work-items-create-link")(?=[^>]*role="button")(?=[^>]*draggable="false")(?=[^>]*data-module="govuk-button")[^>]*>/
+      )
+    })
+
+    // RA-335: a read-only support user still gets a govuk-button-shaped
+    // inert span, not a plain link-shaped one.
+    test('renders the button as a disabled govuk-button-shaped span for a support user', async () => {
+      config.set(flagKey, true)
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { 'x-test-user-role': 'support-readonly' }
+      })
+      expect(result).toMatch(
+        /<span(?=[^>]*data-testid="work-items-create-link")(?=[^>]*class="govuk-button[^"]*app-action-link--disabled)/
+      )
     })
 
     test('hides the button when the flag is off', async () => {
