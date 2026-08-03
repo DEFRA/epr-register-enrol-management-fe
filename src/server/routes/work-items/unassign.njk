@@ -38,6 +38,7 @@
             {{ govukButton({
               text: "Unassign the application",
               classes: "govuk-button--warning",
+              disabled: user.isReadOnly,
               attributes: { "data-testid": "unassign-submit" }
             }) }}
             <a class="govuk-link" data-testid="unassign-cancel" href="{{ cancelHref }}">Cancel</a>

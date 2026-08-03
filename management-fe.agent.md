@@ -183,6 +183,23 @@ yourself fighting them, stop and ask the user.
   test/plugin-only.** They run at the start of every plugin registration
   so repeated `createServer()` calls in tests don't accumulate stale
   state. Don't call them from production code.
+- **Every new mutating route requires `requireStandard`** (RA-335) —
+  `import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'`,
+  set as route `options`. This exists because five routes were once
+  registered with no scope check at all, silently open to any
+  authenticated session. It's enforced by a test
+  (`src/server/common/helpers/auth/route-scope-coverage.test.js`) that
+  walks the live route table and fails on any POST/PUT/PATCH/DELETE route
+  missing it — not just documented here, so don't rely on remembering to
+  read this.
+- **Every new control that triggers a mutating route must also be
+  disabled for a read-only support user** (RA-335), or it's a UX bug (the
+  route itself will still correctly 403, but the button won't say why).
+  Read `user.isReadOnly` in the template: pass `disabled: user.isReadOnly`
+  to a real `govukButton`; for a navigational link (no native disabled
+  state), use the `appActionLink` macro
+  (`src/server/common/components/action-link/macro.njk`) instead of a
+  plain `<a href>`.
 
 ## Detail view & generic routes
 
@@ -223,6 +240,14 @@ the module's `register(server)` callback; paths are relative to
   caller is bounced back to login.
   - Use `requireStandard` as route `options` so Hapi rejects an
     unauthenticated caller with 403 **before** the handler runs.
+  - RA-335: a separate `support-readonly` role (Entra app role
+    `ENTRA_SUPPORT_USER_ROLE_VALUE`) lets support users sign in and view
+    everything a caseworker can. Every mutating route requires
+    `requireStandard` specifically, not just an authenticated session, so
+    a support user's session is rejected. Templates read
+    `user.isReadOnly` to render (not hide) every modifying control in a
+    disabled state. `/backend-status` uses `requireSupportReadonly` and
+    is the one page/nav-link restricted to support users only.
 - Public routes (health, static assets, login pages, errors) opt out of
   auth with `auth: false`.
 - See [`docs/authentication.md`](../../lib/epr-register-enrol-management-fe/docs/authentication.md)
@@ -235,15 +260,21 @@ the module's `register(server)` callback; paths are relative to
   `setup-proxy.js` (CDP `HTTP_PROXY` / `HTTPS_PROXY`).
 - **`buildHeaders(extra, user)`** is the single place outbound headers
   are assembled. It always sets `x-cdp-cognito-client-id` (when
-  configured) and forwards the acting user via `x-cdp-user-id`,
-  `x-cdp-user-name` and `x-cdp-user-roles`. The `case-worker` backend
-  role is auto-added because, by definition, anyone authenticated into
-  this BFF is a case worker. Don't bypass `buildHeaders` to call
-  `fetch` directly.
-- The backend is authoritative for role enforcement on mutations
-  (assignment, etc.). The BFF mirrors the role rules in the UI for a
-  better experience but **must not** loosen them — a forged form must
-  still be rejected by the backend.
+  configured) and forwards the acting user's identity via
+  `x-cdp-user-id` and `x-cdp-user-name` — audit trail only. It does
+  **not** send any role/scope header; the backend has no notion of the
+  BFF's `standard` / `support-readonly` distinction. Don't bypass
+  `buildHeaders` to call `fetch` directly.
+- **RA-335**: the backend does not implement RBAC at all — every
+  mutation-enforcement decision (which routes require `requireStandard`,
+  which UI controls disable for `user.isReadOnly`) lives entirely in
+  this BFF. A forged form must still be rejected, but by _this app's_
+  route-level scope check, not by the backend. See
+  `route-scope-coverage.test.js` and the "Every new mutating route
+  requires `requireStandard`" rule above.
+- The backend remains authoritative for _state_ — never recompute a
+  work item's transition/assignment logic client-side and skip the
+  backend call.
 - Every backend call uses an `AbortController` with
   `backendApi.timeoutMs` and returns a typed result
   (`{ ok: true, ... }` / `{ ok: false, status?, error }`). Controllers

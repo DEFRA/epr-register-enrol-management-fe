@@ -1,4 +1,5 @@
 import { backendStatusController } from './controller.js'
+import { requireSupportReadonly } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
  * Sets up the routes used in the /backend-status page.
@@ -14,11 +15,9 @@ export const backendStatus = {
           path: '/backend-status',
           // Diagnostic / monitoring endpoint, parallel to /health: it
           // reports whether this BFF can reach the backend's /health
-          // endpoint and exposes no per-user data. We deliberately leave
-          // it open (auth: false) so platform operators can hit it
-          // without provisioning a session, the same way they hit
-          // /health. (epr-zld)
-          options: { auth: false },
+          // endpoint. RA-335: restricted to signed-in support users — a
+          // regulator or a signed-out visitor is not this page's audience.
+          options: requireSupportReadonly,
           ...backendStatusController
         }
       ])

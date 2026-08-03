@@ -81,6 +81,7 @@
         <div class="govuk-button-group">
           {{ govukButton({
             text: "Override SLA",
+            disabled: user.isReadOnly,
             attributes: { "data-testid": "sla-override-submit" }
           }) }}
           <a class="govuk-link"

@@ -66,6 +66,7 @@
         <div class="govuk-button-group">
           {{ govukButton({
             text: "Extend SLA",
+            disabled: user.isReadOnly,
             attributes: { "data-testid": "sla-extend-submit" }
           }) }}
           <a class="govuk-link"

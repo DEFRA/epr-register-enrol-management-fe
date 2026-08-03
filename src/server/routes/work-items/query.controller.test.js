@@ -151,7 +151,32 @@ describe('RA-291 Query link on the work item detail page', () => {
 
     const { result } = await server.inject({ method: 'GET', url: DETAIL_HREF })
 
-    expect(result).toMatch(/<a class="govuk-link"\s+data-testid="action-query"/)
+    expect(result).toMatch(
+      /<a class="govuk-link"\s+href="[^"]*"\s+data-testid="action-query"/
+    )
+  })
+
+  // RA-335: a read-only support user gets an inert <span> in place of the
+  // <a> — see action-link/macro.njk. The route itself is unauthenticated
+  // in this test file (default test user), so this only exercises the
+  // markup shape via a directly-rendered read-only user; the auth-level
+  // behaviour is covered in controller.test.js / auth-scopes tests.
+  test('renders as a disabled span, not a link, for a read-only support user', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: DETAIL_HREF,
+      headers: { 'x-test-user-role': 'support-readonly' }
+    })
+
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="action-query"')
+    )
+    expect(result).not.toEqual(expect.stringContaining(`href="${QUERY_HREF}"`))
+    expect(result).toMatch(
+      /<span class="govuk-link app-action-link--disabled" aria-disabled="true" data-testid="action-query"/
+    )
   })
 
   test('hides the Query link when no query action is available', async () => {

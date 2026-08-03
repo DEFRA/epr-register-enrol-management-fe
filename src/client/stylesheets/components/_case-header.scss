@@ -166,6 +166,61 @@
   border-top: 1px solid $govuk-border-colour;
 }
 
+// RA-335. A case-panel affordance rendered inert for a read-only support
+// user — appActionLink swaps the <a> for a <span> with this class rather
+// than a fake-disabled link, since there is no href to disable in the
+// first place. Covers both visual shapes the macro is used for: a plain
+// govuk-link text link, and a govuk-button-styled link (e.g. Approve,
+// Create work item) — mirrors govuk-frontend's own `.govuk-button[disabled]`
+// treatment (opacity, no shadow) since that selector cannot match a <span>.
+.app-action-link--disabled {
+  cursor: default;
+
+  // Matches govuk-frontend's own `.govuk-button[disabled]:hover` cursor —
+  // a <span> has nothing to click through to, so the hover state should
+  // read as disabled the same way a real disabled button does.
+  &:hover {
+    cursor: not-allowed;
+  }
+
+  // The plain-link variant is meant to keep the ordinary govuk-link
+  // colour and underline — but `.govuk-link`'s colour comes entirely from
+  // `&:link` / `&:visited` / `&:hover` (see govuk-frontend's
+  // govuk-link-style-default mixin), and those pseudo-classes only ever
+  // match a real `<a href>`, never a `<span>`. Without this, the span
+  // inherits the underline but falls back to plain body text colour, so
+  // it visibly does NOT look like a link. Set the colour explicitly to
+  // match what `<a class="govuk-link">` would render.
+  &.govuk-link {
+    color: $govuk-link-colour;
+
+    &:hover {
+      color: $govuk-link-hover-colour;
+    }
+  }
+
+  // Withdraw is destructive-styled even for a regulator (see
+  // `.app-case-panel__link--destructive` above), and that rule has the
+  // exact same "only applies to a real <a>" problem the plain-link fix
+  // above solves — so the disabled withdraw span needs its own override.
+  // Chaining all three classes gives this higher specificity than the
+  // plain `&.govuk-link` rule above, so it wins regardless of source
+  // order — every disabled link keeps the colour it would show for a
+  // regulator, not a single generic "disabled" colour.
+  &.govuk-link.app-case-panel__link--destructive {
+    color: $govuk-error-colour;
+
+    &:hover {
+      color: govuk-shade($govuk-error-colour, 20%);
+    }
+  }
+
+  &.govuk-button {
+    opacity: 0.5;
+    box-shadow: none;
+  }
+}
+
 // Stacked link list inside the panel — one affordance per line.
 .app-case-panel__links {
   margin: 0;

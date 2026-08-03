@@ -42,6 +42,7 @@
         <div class="govuk-button-group">
           {{ govukButton({
             text: "Save assignment",
+            disabled: user.isReadOnly,
             attributes: { "data-testid": "assign-submit" }
           }) }}
           <a class="govuk-link" data-testid="assign-cancel" href="{{ cancelHref }}">Cancel</a>
