@@ -277,9 +277,9 @@ describe('#workItemListController', () => {
     expect(result).not.toContain('app-work-items__table-wrapper')
   })
 
-  // RA-324 phase-2. The card body: bold "Reprocessor reaccreditation:
-  // {Material}" title (applicant type is always "Reprocessor"), then an
-  // "{Org} ({Org ID})" line. Submitted-on is gone from the card entirely.
+  // RA-324 phase-2, re-ordered by RA-370: the "{Org} ({Org ID})" line now
+  // precedes the "{Material} reaccreditation (Reprocessor)" title line, so
+  // material leads the title and applicant type follows it.
   test('Renders the card title, applicant type, material and org line', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
@@ -315,8 +315,14 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="application-org"')
     expect(result).toContain('data-testid="org-name">Acme Recycling</span>')
     expect(result).toContain('data-testid="org-id">ORG-4242</span>')
-    // Submitted-on no longer appears on the card (prototype).
-    expect(result).not.toContain('data-testid="submitted-on"')
+    // RA-370. The org line comes BEFORE the material/applicant-type title,
+    // and within the title material comes before applicant type.
+    expect(result.indexOf('data-testid="application-org"')).toBeLessThan(
+      result.indexOf('data-testid="application-card-title"')
+    )
+    expect(result.indexOf('data-testid="material"')).toBeLessThan(
+      result.indexOf('data-testid="applicant-type"')
+    )
     // RA-324 prototype fix: the title is normal weight, not bold.
     expect(result).not.toContain(
       'govuk-!-font-weight-bold app-application-card__title'
@@ -422,7 +428,8 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="assigned-to">Olga Officer</span>')
     expect(result).toContain('data-testid="due-on"')
     expect(result).toContain('10 February 2026')
-    // Submitted-on is not on the card in any state.
+    // RA-370 AC02. Once the assessment has started (SLA clock running),
+    // "Submitted on" is hidden — Due on takes its place.
     expect(result).not.toContain('data-testid="submitted-on"')
     // RA-324 prototype fix: "Assigned to:" / "Due on:" labels are bold (their
     // own span), the values are not individually bolded.
@@ -434,9 +441,11 @@ describe('#workItemListController', () => {
     )
   })
 
-  // RA-324 phase-2. A "Not started" card (no SLA clock) shows NO footer, so no
-  // assigned-to / due-on.
-  test('Omits the footer for a card whose SLA clock has not started', async () => {
+  // RA-370 AC02/AC04/AC05. A "Not started" card (no SLA clock) still gets a
+  // footer: "Submitted on" (because the assessment has not started) and
+  // "Assigned to" — but NOT "Due on", which stays gated on the clock. This
+  // replaces the RA-324 behaviour where the whole footer was hidden pre-clock.
+  test('Renders Submitted on and Assigned to, but no Due on, before the SLA clock starts', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
@@ -459,9 +468,228 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    expect(result).not.toContain('data-testid="application-card-footer"')
+    expect(result).toContain('data-testid="application-card-footer"')
+    // AC03. GDS date format — "15 January 2026", no time component.
+    expect(result).toContain(
+      'data-testid="submitted-on">15 January 2026</span>'
+    )
+    expect(result).toContain(
+      '<span class="app-application-card__meta-label">Submitted on:</span>'
+    )
+    // AC04. Assigned to renders even though the clock has not started.
+    expect(result).toContain('data-testid="assigned-to">Unassigned</span>')
+    // AC05. Due on stays gated on the SLA clock.
     expect(result).not.toContain('data-testid="due-on"')
-    expect(result).not.toContain('data-testid="assigned-to"')
+    // AC01. Field order within the footer: Submitted on, then Assigned to.
+    expect(result.indexOf('data-testid="submitted-on"')).toBeLessThan(
+      result.indexOf('data-testid="assigned-to"')
+    )
+  })
+
+  // RA-370 AC04. The assignee's display name shows when the case is held by an
+  // officer, on a card whose SLA clock has NOT started — the case that used to
+  // render nothing at all.
+  test('Shows the officer name for an assigned card before the SLA clock starts', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-0000-0000-0000-000000000001',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            assignedToName: 'Olga Officer',
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="assigned-to">Olga Officer</span>')
+    expect(result).toContain('data-testid="submitted-on"')
+  })
+
+  // RA-370 AC04. "Unassigned" also shows once the clock HAS started, i.e. the
+  // assignment fallback is independent of the SLA gate.
+  test('Shows Unassigned once the SLA clock has started and nobody holds the case', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-0000-0000-0000-000000000002',
+            typeId: 'unknown-type',
+            stateId: 'assessment-in-progress',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            slaState: 'OnTrack',
+            slaDueDate: '2026-02-10T00:00:00Z',
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="assigned-to">Unassigned</span>')
+    expect(result).toContain('data-testid="due-on">10 February 2026</span>')
+    expect(result).not.toContain('data-testid="submitted-on"')
+  })
+
+  // RA-370 AC03. The submission date arrives either as a plain ISO string or
+  // as the Mongo `{ $date }` wrapper; both must render the same GDS date.
+  test('Unwraps a Mongo $date submittedAt for Submitted on', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-0000-0000-0000-000000000003',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: { $date: '2026-01-15T10:00:00Z' },
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain(
+      'data-testid="submitted-on">15 January 2026</span>'
+    )
+  })
+
+  // RA-370 AC03 (defensive). A missing submittedAt renders an em dash rather
+  // than a blank cell or "Invalid Date".
+  test('Renders an em dash for Submitted on when submittedAt is missing', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-0000-0000-0000-000000000004',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: null,
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="submitted-on">—</span>')
+    expect(result).not.toContain('Invalid Date')
+  })
+
+  // RA-370 AC03 (defensive). A present-but-unparseable submittedAt must not
+  // leak "Invalid Date" — `formatDateGds` yields '' and the template falls
+  // through to the em dash.
+  test('Renders an em dash for Submitted on when submittedAt is unparseable', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-0000-0000-0000-000000000005',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: 'not-a-date',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="submitted-on">—</span>')
+    expect(result).not.toContain('Invalid Date')
+  })
+
+  // RA-370 AC01. The whole ordered field list on a single card, asserted as
+  // one sequence: ref link, org name, org id, registration number, material,
+  // applicant type, submitted on, assigned to. (Due on is excluded here — it
+  // is mutually exclusive with submitted on; the started-clock ordering is
+  // covered by the footer test above.)
+  test('RA-370 AC01: renders every card field in the specified order', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'aaaaaaaa-0000-0000-0000-000000000006',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {
+              applicationReference: 'RA-100',
+              organisationName: 'Acme Recycling',
+              operatorOrganisationId: 'ORG-4242',
+              registrationNumber: 'EPR-100999',
+              material: 'plastic'
+            }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    const order = [
+      'data-testid="work-item-link-aaaaaaaa-0000-0000-0000-000000000006"',
+      'data-testid="org-name"',
+      'data-testid="org-id"',
+      'data-testid="registration-number"',
+      'data-testid="material"',
+      'data-testid="applicant-type"',
+      'data-testid="submitted-on"',
+      'data-testid="assigned-to"'
+    ].map((hook) => {
+      const at = result.indexOf(hook)
+      expect(at, `missing card field ${hook}`).toBeGreaterThan(-1)
+      return at
+    })
+
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i]).toBeGreaterThan(order[i - 1])
+    }
   })
 
   // RA-324 phase-2. When the SLA clock has started but slaDueDate is absent

@@ -532,9 +532,11 @@ function decorate(item) {
   const archivedAtRaw = item.payload?.archivedAt
   const archivedAt = formatArchivedAt(archivedAtRaw)
 
-  // RA-324 phase-2. The SLA clock starts when assessment starts, so `slaState`
-  // is the single signal that gates the card footer ("Assigned to / Due on"):
-  // it renders only once the clock has started.
+  // RA-324 phase-2 / RA-370. The SLA clock starts when the assessment starts,
+  // so `slaState` is the single signal for "assessment has started". It gates
+  // the two mutually-exclusive card dates: "Due on" renders only once the
+  // clock has started, "Submitted on" only before it does. "Assigned to" is
+  // NOT gated on it (RA-370) — it renders on every card.
   const slaStarted = Boolean(item.slaState)
 
   return {
@@ -558,14 +560,24 @@ function decorate(item) {
     // "Fibre-based composite material"), matching the filter checkboxes,
     // active-filter chips and summary — never the raw lowercase token.
     material: materialLabel(item.payload?.material),
-    // RA-324 phase-2. The card footer renders only once the SLA clock has
+    // RA-324 phase-2. The card's "Due on" renders only once the SLA clock has
     // started.
     showDueDate: slaStarted,
+    // RA-370. The card's "Submitted on" renders only while the application
+    // assessment has NOT started — the exact inverse of the SLA-clock signal.
+    showSubmittedOn: !slaStarted,
     // RA-324 phase-2. Absolute SLA due date for the card footer "Due on"
     // (formatted to a GDS date in the template via `formatDateGds`). The
     // backend supplies `slaDueDate` once the clock has started; null before
     // then / when unavailable, so the template renders an em dash.
-    dueOn: resolveDueOn(item)
+    dueOn: resolveDueOn(item),
+    // RA-370. Raw ISO-8601 submission timestamp from the list projection
+    // (`submittedAt`), which arrives either as a plain string or as a Mongo
+    // `{ $date }` wrapper — hence `unwrapMongoDate`. Null for an absent /
+    // unexpected shape so the template renders an em dash; the template
+    // formats it to a GDS date via `formatDateGds`, which also yields an em
+    // dash for a present-but-unparseable value.
+    submittedOn: resolveSubmittedOn(item)
   }
 }
 
@@ -593,6 +605,16 @@ function formatArchivedAt(value) {
  */
 function resolveDueOn(item) {
   return unwrapMongoDate(item.slaDueDate)
+}
+
+/**
+ * RA-370. The raw ISO-8601 submission date from the backend list projection
+ * (`submittedAt` — a required member of the list DTO), or null when absent or
+ * of an unexpected shape so the template renders an em dash. The template
+ * formats it via `formatDateGds`.
+ */
+function resolveSubmittedOn(item) {
+  return unwrapMongoDate(item.submittedAt)
 }
 
 function buildTypeOptions(selectedTypeIds) {
