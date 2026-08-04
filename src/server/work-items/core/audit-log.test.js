@@ -868,7 +868,16 @@ describe('OJ status-push audit entries (RA-368)', () => {
   })
 
   describe('summariseAuditEntry', () => {
-    test('status-push-sent summarises to the new state id', () => {
+    test('status-push-sent summarises to the new state display name', () => {
+      expect(
+        summariseAuditEntry({
+          action: 'status-push-sent',
+          details: { toStateId: 'approved', toStateDisplayName: 'Approved' }
+        })
+      ).toBe('Approved')
+    })
+
+    test('status-push-sent falls back to the raw state id when no display name', () => {
       expect(
         summariseAuditEntry({
           action: 'status-push-sent',
@@ -904,14 +913,16 @@ describe('OJ status-push audit entries (RA-368)', () => {
           createdByName: 'System',
           details: {
             actionId: 'approve',
+            actionDisplayName: 'Approve',
             fromStateId: 'awaiting-decision',
-            toStateId: 'approved'
+            toStateId: 'approved',
+            toStateDisplayName: 'Approved'
           }
         })
       ).toEqual([
-        { key: 'Action', value: 'approve' },
+        { key: 'Action', value: 'Approve' },
         { key: 'Previous state', value: 'awaiting-decision' },
-        { key: 'New state', value: 'approved' },
+        { key: 'New state', value: 'Approved' },
         { key: 'Triggered by', value: 'System' }
       ])
     })

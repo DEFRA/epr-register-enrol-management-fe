@@ -377,8 +377,10 @@ describe('#workItemAuditLogController', () => {
             actionDisplayName: 'Status failed to send to OJ',
             details: {
               actionId: 'approve',
+              actionDisplayName: 'Approve',
               fromStateId: 'awaiting-decision',
               toStateId: 'approved',
+              toStateDisplayName: 'Approved',
               errorMessage: 'OJ returned 500'
             },
             createdAt: '2026-04-27T09:00:00Z'
@@ -400,9 +402,9 @@ describe('#workItemAuditLogController', () => {
       expect.stringContaining('data-testid="work-item-audit-entry-details"')
     )
     expect(result).toEqual(expect.stringContaining('Show details'))
-    expect(result).toEqual(expect.stringContaining('approve'))
+    expect(result).toEqual(expect.stringContaining('Approve'))
     expect(result).toEqual(expect.stringContaining('awaiting-decision'))
-    expect(result).toEqual(expect.stringContaining('approved'))
+    expect(result).toEqual(expect.stringContaining('Approved'))
     expect(result).toEqual(expect.stringContaining('OJ returned 500'))
     expect(result).toEqual(
       expect.stringContaining('data-action="status-push-failed"')

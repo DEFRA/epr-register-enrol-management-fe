@@ -194,7 +194,7 @@ export function summariseAuditEntry(entry) {
     case 'notification-failed':
       return details.errorMessage ?? ''
     case 'status-push-sent':
-      return details.toStateId ?? ''
+      return details.toStateDisplayName ?? details.toStateId ?? ''
     case 'status-push-skipped':
       return details.reason ?? ''
     case 'status-push-failed':
@@ -377,24 +377,25 @@ function notificationDetailRows(entry, details) {
  * The backend's `WorkItemStatusPushHook` stamps these fields onto the
  * entry's `details` dictionary for every generic action/transition it
  * pushes on to the operator journey (OJ):
- *   - `actionId`                  — the CM action that fired the push.
- *   - `fromStateId` / `toStateId` — the CM state transition.
- *   - `reason`                    — why a push was skipped (skipped only,
- *                                   e.g. push disabled).
- *   - `errorMessage`              — the error text (failed only).
+ *   - `actionId` / `actionDisplayName` — the CM action that fired the push.
+ *   - `fromStateId` / `toStateId`      — the CM state transition.
+ *   - `toStateDisplayName`             — the state OJ was told about.
+ *   - `reason`                         — why a push was skipped (skipped
+ *                                        only, e.g. push disabled).
+ *   - `errorMessage`                   — the error text (failed only).
  *
  * Only fields actually present on the entry are rendered, mirroring the
  * notification detail rows above; we never invent rows for absent fields.
  */
 function statusPushDetailRows(entry, details) {
   const rows = []
-  if (details.actionId) rows.push({ key: 'Action', value: details.actionId })
+  const action = details.actionDisplayName ?? details.actionId
+  if (action) rows.push({ key: 'Action', value: action })
   if (details.fromStateId) {
     rows.push({ key: 'Previous state', value: details.fromStateId })
   }
-  if (details.toStateId) {
-    rows.push({ key: 'New state', value: details.toStateId })
-  }
+  const toState = details.toStateDisplayName ?? details.toStateId
+  if (toState) rows.push({ key: 'New state', value: toState })
   if (details.reason) {
     rows.push({ key: 'Reason', value: details.reason })
   }
