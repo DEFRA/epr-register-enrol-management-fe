@@ -265,13 +265,9 @@
           {#                            organisation-identity values)          #}
           {#   4. Material type      \                                         #}
           {#   5. Applicant type     / one title line, material first          #}
-          {#   6. Submitted on        (footer, only while assessment has NOT   #}
-          {#                           started — i.e. no SLA clock)            #}
-          {#   7. Assigned to         (footer, ALWAYS — "Unassigned" when no   #}
-          {#                           officer holds it)                       #}
-          {#   8. Due date            (footer, only once the SLA clock starts) #}
-          {# 6 and 8 are mutually exclusive by construction, so the footer     #}
-          {# always carries exactly two values.                                #}
+          {#   6. Submitted on       \ footer — see the footer comment below   #}
+          {#   7. Assigned to        | for the visibility rules                #}
+          {#   8. Due date           /                                         #}
           <ul class="govuk-list app-application-cards" data-testid="applications-list">
             {% for item in items %}
               <li>
@@ -306,12 +302,15 @@
                     <span data-testid="material">{{ item.material or "—" }}</span> reaccreditation (<span data-testid="applicant-type">Reprocessor</span>)
                   </p>
 
-                  {# RA-370. The footer always renders: "Assigned to" is no      #}
-                  {# longer gated on the SLA clock (it shows "Unassigned" when   #}
-                  {# nobody holds the case). "Submitted on" shows only while the #}
-                  {# assessment has NOT started, and "Due on" only once it has — #}
-                  {# `showDueDate` is the SLA-clock signal and `showSubmittedOn` #}
-                  {# its inverse, so exactly one of the two dates is present.    #}
+                  {# RA-370. The footer always renders, because "Assigned to" is #}
+                  {# no longer gated on the SLA clock — it shows "Unassigned"    #}
+                  {# when nobody holds the case. The two dates either side of it #}
+                  {# are gated INDEPENDENTLY: "Submitted on" on the work item's  #}
+                  {# state (assessment not yet started) and "Due on" on the SLA  #}
+                  {# clock. They are NOT mutually exclusive — a back-filled      #}
+                  {# 'duly-made' item carries a clock while still being          #}
+                  {# pre-assessment and shows both. See PRE_ASSESSMENT_STATE_IDS #}
+                  {# in controller.js for the full reasoning.                    #}
                   <div class="app-application-card__footer" data-testid="application-card-footer">
                     {% if item.showSubmittedOn %}
                       <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ item.submittedOn | formatDateGds or "—" }}</span></span>

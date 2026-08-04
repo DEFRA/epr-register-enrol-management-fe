@@ -428,8 +428,8 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="assigned-to">Olga Officer</span>')
     expect(result).toContain('data-testid="due-on"')
     expect(result).toContain('10 February 2026')
-    // RA-370 AC02. Once the assessment has started (SLA clock running),
-    // "Submitted on" is hidden — Due on takes its place.
+    // RA-370 AC02. Once the state has moved past duly-made the assessment has
+    // started, so "Submitted on" is hidden.
     expect(result).not.toContain('data-testid="submitted-on"')
     // RA-324 prototype fix: "Assigned to:" / "Due on:" labels are bold (their
     // own span), the values are not individually bolded.
@@ -442,9 +442,9 @@ describe('#workItemListController', () => {
   })
 
   // RA-370 AC02/AC04/AC05. A "Not started" card (no SLA clock) still gets a
-  // footer: "Submitted on" (because the assessment has not started) and
-  // "Assigned to" — but NOT "Due on", which stays gated on the clock. This
-  // replaces the RA-324 behaviour where the whole footer was hidden pre-clock.
+  // footer: "Submitted on" (the assessment has not started) and "Assigned to"
+  // — but NOT "Due on", which stays gated on the clock. This replaces the
+  // RA-324 behaviour where the whole footer was hidden pre-clock.
   test('Renders Submitted on and Assigned to, but no Due on, before the SLA clock starts', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
@@ -547,6 +547,128 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="assigned-to">Unassigned</span>')
     expect(result).toContain('data-testid="due-on">10 February 2026</span>')
     expect(result).not.toContain('data-testid="submitted-on"')
+  })
+
+  // RA-370 AC02 (regression). THE case this rule exists for:
+  // ReAccreditationDulyMadeSnapshotMigration back-fills items into 'duly-made'
+  // AND stamps an SLA clock in the same write, so a pre-assessment item can
+  // carry a running clock. "Submitted on" must still show — gating it on the
+  // clock would wrongly hide it for exactly this population. Both dates
+  // render, which is intended: the clock genuinely is running.
+  test('RA-370: shows Submitted on for a migrated duly-made item that already has an SLA clock', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'bbbbbbbb-0000-0000-0000-000000000000',
+            typeId: 'unknown-type',
+            stateId: 'duly-made',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            slaState: 'OnTrack',
+            slaDueDate: '2026-02-10T00:00:00Z',
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain(
+      'data-testid="submitted-on">15 January 2026</span>'
+    )
+    // The clock is running, so Due on renders too — the two dates are gated
+    // independently and are NOT mutually exclusive.
+    expect(result).toContain('data-testid="due-on">10 February 2026</span>')
+    // Footer order stays Submitted on -> Assigned to -> Due on even when all
+    // three render.
+    expect(result.indexOf('data-testid="submitted-on"')).toBeLessThan(
+      result.indexOf('data-testid="assigned-to"')
+    )
+    expect(result.indexOf('data-testid="assigned-to"')).toBeLessThan(
+      result.indexOf('data-testid="due-on"')
+    )
+  })
+
+  // RA-370 AC02. A duly-made item with no clock yet (the forward path before
+  // payment is recorded) shows Submitted on and no Due on.
+  test('RA-370: shows Submitted on for a duly-made item with no SLA clock', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'bbbbbbbb-0000-0000-0000-000000000001',
+            typeId: 'unknown-type',
+            stateId: 'duly-made',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain(
+      'data-testid="submitted-on">15 January 2026</span>'
+    )
+    expect(result).not.toContain('data-testid="due-on"')
+  })
+
+  // RA-370 AC02. Every state past duly-made counts as assessment-started and
+  // hides Submitted on — including 'queried' and 'updated', which are reachable
+  // from any pre-decision state and so cannot be proven pre-assessment.
+  test.each([
+    'assessment-in-progress',
+    'awaiting-decision',
+    'queried',
+    'updated',
+    'approved',
+    'rejected',
+    'withdrawn'
+  ])('RA-370: hides Submitted on in state %s', async (stateId) => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'bbbbbbbb-0000-0000-0000-000000000002',
+            typeId: 'unknown-type',
+            stateId,
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).not.toContain('data-testid="submitted-on"')
+    // No clock on these fixtures, so no Due on either — the "neither date"
+    // case. It is not reachable on the forward path (the clock is stamped on
+    // the way into assessment) but legacy data can look like this, and showing
+    // no date beats inventing one. The footer and Assigned to still render.
+    expect(result).not.toContain('data-testid="due-on"')
+    expect(result).toContain('data-testid="application-card-footer"')
+    expect(result).toContain('data-testid="assigned-to">Unassigned</span>')
   })
 
   // RA-370 AC03. The submission date arrives either as a plain ISO string or

@@ -132,6 +132,35 @@ const STATUS_OPTION_BY_VALUE = new Map(
   STATUS_FILTER_OPTIONS.map((o) => [o.value, o])
 )
 
+// RA-370. States in which the application assessment has NOT yet started, and
+// so the card shows "Submitted on". Assessment work begins at
+// 'assessment-in-progress' (that is the first state carrying assessment tasks
+// — 'duly-made' carries only "Confirm registration fee paid"), so everything
+// up to and including 'duly-made' is pre-assessment.
+//
+// This is deliberately keyed off `stateId` and NOT off the SLA clock. The two
+// usually coincide on the forward path — 'payment-received' moves duly-made ->
+// assessment-in-progress and stamps the clock in the same step — but they come
+// apart for real data: ReAccreditationDulyMadeSnapshotMigration back-fills
+// items into 'duly-made' AND stamps an SLA clock at the same time, so there is
+// a live population sitting pre-assessment WITH a running clock. Gating on the
+// clock would wrongly hide "Submitted on" for exactly those items.
+//
+// Consequences, both intended:
+//   - BOTH dates render for a clock-carrying 'duly-made' item. That is
+//     correct: the submission date is still the relevant one to show, and the
+//     clock genuinely is running, so the deadline is real.
+//   - NEITHER date renders for a post-'duly-made' item with no clock. Not
+//     reachable on the forward path (the clock is stamped on the way into
+//     assessment) but possible for legacy data the migration does not cover,
+//     in which case showing no date beats inventing one.
+//
+// 'queried' and 'updated' are deliberately absent: an item reaches either from
+// ANY pre-decision state, so the state id alone cannot tell us whether
+// assessment had started, and the safer default is to stop showing a
+// submission date once the case has moved on.
+const PRE_ASSESSMENT_STATE_IDS = new Set(['submitted', 'duly-made'])
+
 // RA-324 phase-2. Server-side sort of the FULL filtered result set. Tokens are
 // the wire contract agreed with the backend (epr-z069.6); absent = the
 // backend default (newest submitted first).
@@ -532,11 +561,8 @@ function decorate(item) {
   const archivedAtRaw = item.payload?.archivedAt
   const archivedAt = formatArchivedAt(archivedAtRaw)
 
-  // RA-324 phase-2 / RA-370. The SLA clock starts when the assessment starts,
-  // so `slaState` is the single signal for "assessment has started". It gates
-  // the two mutually-exclusive card dates: "Due on" renders only once the
-  // clock has started, "Submitted on" only before it does. "Assigned to" is
-  // NOT gated on it (RA-370) — it renders on every card.
+  // RA-324 phase-2. `slaState` is non-null exactly when the work item carries
+  // an SLA clock, and it gates "Due on" alone.
   const slaStarted = Boolean(item.slaState)
 
   return {
@@ -560,24 +586,18 @@ function decorate(item) {
     // "Fibre-based composite material"), matching the filter checkboxes,
     // active-filter chips and summary — never the raw lowercase token.
     material: materialLabel(item.payload?.material),
-    // RA-324 phase-2. The card's "Due on" renders only once the SLA clock has
-    // started.
+    // The two card dates are gated INDEPENDENTLY — see the block comment above
+    // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
+    // neither render.
     showDueDate: slaStarted,
-    // RA-370. The card's "Submitted on" renders only while the application
-    // assessment has NOT started — the exact inverse of the SLA-clock signal.
-    showSubmittedOn: !slaStarted,
-    // RA-324 phase-2. Absolute SLA due date for the card footer "Due on"
-    // (formatted to a GDS date in the template via `formatDateGds`). The
-    // backend supplies `slaDueDate` once the clock has started; null before
-    // then / when unavailable, so the template renders an em dash.
-    dueOn: resolveDueOn(item),
-    // RA-370. Raw ISO-8601 submission timestamp from the list projection
-    // (`submittedAt`), which arrives either as a plain string or as a Mongo
-    // `{ $date }` wrapper — hence `unwrapMongoDate`. Null for an absent /
-    // unexpected shape so the template renders an em dash; the template
-    // formats it to a GDS date via `formatDateGds`, which also yields an em
-    // dash for a present-but-unparseable value.
-    submittedOn: resolveSubmittedOn(item)
+    showSubmittedOn: PRE_ASSESSMENT_STATE_IDS.has(stateId),
+    // Both dates arrive either as a plain ISO-8601 string or as the Mongo
+    // `{ $date }` wrapper, hence `unwrapMongoDate`; null for an absent or
+    // unexpected shape. The template formats each via `formatDateGds`, which
+    // also yields '' for a present-but-unparseable value, so the template
+    // falls through to an em dash in every bad-input case.
+    dueOn: unwrapMongoDate(item.slaDueDate),
+    submittedOn: unwrapMongoDate(item.submittedAt)
   }
 }
 
@@ -596,25 +616,6 @@ function formatArchivedAt(value) {
     year: 'numeric',
     timeZone: 'Europe/London'
   })
-}
-
-/**
- * RA-324 phase-2. The raw ISO-8601 SLA due date from the backend list
- * projection (`slaDueDate`), or null when absent (no SLA clock started) so the
- * template renders an em dash. The template formats it via `formatDateGds`.
- */
-function resolveDueOn(item) {
-  return unwrapMongoDate(item.slaDueDate)
-}
-
-/**
- * RA-370. The raw ISO-8601 submission date from the backend list projection
- * (`submittedAt` — a required member of the list DTO), or null when absent or
- * of an unexpected shape so the template renders an em dash. The template
- * formats it via `formatDateGds`.
- */
-function resolveSubmittedOn(item) {
-  return unwrapMongoDate(item.submittedAt)
 }
 
 function buildTypeOptions(selectedTypeIds) {
