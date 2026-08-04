@@ -146,19 +146,25 @@ const STATUS_OPTION_BY_VALUE = new Map(
 // a live population sitting pre-assessment WITH a running clock. Gating on the
 // clock would wrongly hide "Submitted on" for exactly those items.
 //
-// Consequences, both intended:
-//   - BOTH dates render for a clock-carrying 'duly-made' item. That is
-//     correct: the submission date is still the relevant one to show, and the
-//     clock genuinely is running, so the deadline is real.
-//   - NEITHER date renders for a post-'duly-made' item with no clock. Not
-//     reachable on the forward path (the clock is stamped on the way into
-//     assessment) but possible for legacy data the migration does not cover,
-//     in which case showing no date beats inventing one.
+// The two dates are therefore gated on independent signals, and there is NO
+// invariant about how many of them render. Both cases below are intended:
+//   - BOTH render for a clock-carrying 'duly-made' item. Correct: the
+//     submission date is still the relevant one to show, and the clock
+//     genuinely is running, so the deadline is real.
+//   - NEITHER renders for a post-'duly-made' item with no clock. This is a
+//     live possibility, not just stale data: ReAccreditationSlaStampHook
+//     catches WorkItemConcurrencyException, logs "clock may not be persisted"
+//     and swallows it, so an item can reach 'assessment-in-progress' with no
+//     clock at all. The footer then carries "Assigned to" alone, which is
+//     better than inventing a date.
 //
-// 'queried' and 'updated' are deliberately absent: an item reaches either from
-// ANY pre-decision state, so the state id alone cannot tell us whether
-// assessment had started, and the safer default is to stop showing a
-// submission date once the case has moved on.
+// KNOWN PARTIAL MISS (bead epr-r2s4, separate story): 'queried' and 'updated'
+// are reachable from BOTH pre-assessment ('query-during-duly-making',
+// 'query-during-duly-made') and post-assessment ('query-during-assessment',
+// 'query-during-decision') transitions, so `stateId` alone cannot tell whether
+// assessment ever started. Such items do not show "Submitted on" even when it
+// never did. Resolving that needs the originating state; do not try to patch
+// it here.
 const PRE_ASSESSMENT_STATE_IDS = new Set(['submitted', 'duly-made'])
 
 // RA-324 phase-2. Server-side sort of the FULL filtered result set. Tokens are

@@ -662,13 +662,52 @@ describe('#workItemListController', () => {
     })
 
     expect(result).not.toContain('data-testid="submitted-on"')
-    // No clock on these fixtures, so no Due on either — the "neither date"
-    // case. It is not reachable on the forward path (the clock is stamped on
-    // the way into assessment) but legacy data can look like this, and showing
-    // no date beats inventing one. The footer and Assigned to still render.
+    // No clock on these fixtures, so no Due on either — the "NEITHER date"
+    // case. It is a live possibility, not just stale data:
+    // ReAccreditationSlaStampHook swallows WorkItemConcurrencyException
+    // ("clock may not be persisted"), so an item can reach
+    // assessment-in-progress with no clock. The footer must still render, with
+    // "Assigned to" alone, and must not come out empty or malformed.
     expect(result).not.toContain('data-testid="due-on"')
     expect(result).toContain('data-testid="application-card-footer"')
     expect(result).toContain('data-testid="assigned-to">Unassigned</span>')
+  })
+
+  // RA-370. The "neither date" footer is well-formed: it contains exactly the
+  // Assigned to pair and no stray label or empty meta span left behind by the
+  // two skipped conditionals.
+  test('RA-370: renders a well-formed footer when neither date applies', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'bbbbbbbb-0000-0000-0000-000000000003',
+            typeId: 'unknown-type',
+            stateId: 'assessment-in-progress',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {}
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    const footer = result
+      .split('data-testid="application-card-footer"')[1]
+      .split('</div>')[0]
+
+    expect(footer).toContain('data-testid="assigned-to">Unassigned</span>')
+    expect(footer).not.toContain('Submitted on:')
+    expect(footer).not.toContain('Due on:')
+    // Exactly one meta value in the footer — no empty leftovers.
+    expect(footer.match(/app-application-card__meta-label/g)).toHaveLength(1)
   })
 
   // RA-370 AC03. The submission date arrives either as a plain ISO string or
