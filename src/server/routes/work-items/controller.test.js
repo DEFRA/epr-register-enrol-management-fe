@@ -801,9 +801,12 @@ describe('#workItemListController', () => {
 
   // RA-370 AC01. The whole ordered field list on a single card, asserted as
   // one sequence: ref link, org name, org id, registration number, material,
-  // applicant type, submitted on, assigned to. (Due on is excluded here — it
-  // is mutually exclusive with submitted on; the started-clock ordering is
-  // covered by the footer test above.)
+  // applicant type, submitted on, assigned to. Due on is absent simply because
+  // this fixture carries no slaState/slaDueDate — NOT because the two dates
+  // exclude each other. They are gated on independent signals and both render
+  // together for a duly-made item with a running clock; that case, and the
+  // resulting three-way footer order, is asserted by the duly-made footer test
+  // above.
   test('RA-370 AC01: renders every card field in the specified order', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
