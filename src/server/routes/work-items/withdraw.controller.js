@@ -88,7 +88,7 @@ export function makeShowWithdrawController() {
             heading: 'Application not found',
             workItemId: id,
             breadcrumbs: [
-              { text: 'Work items', href: '/work-items' },
+              { text: 'Applications', href: '/work-items' },
               { text: 'Not found' }
             ]
           })

@@ -128,18 +128,21 @@
   {# notice persists across every visit to a withdrawn case and must not   #}
   {# steal focus each time.                                                #}
   {#                                                                       #}
-  {# RA-249: the case is named by its human RA-* application reference or  #}
-  {# not at all — never by the work-item Guid. The controller's            #}
-  {# `withdrawnNotice.text` already carries the correct unreferenced       #}
-  {# wording, so the else branch is a plain escape of it.                  #}
+  {# RA-249: the case is named by its human application reference or not   #}
+  {# at all — never by the work-item Guid.                                 #}
+  {#                                                                       #}
+  {# The sentence is composed in a `{% set %}` BLOCK CAPTURE, not by       #}
+  {# concatenating an HTML string. govuk-frontend renders an error-summary #}
+  {# item's `html` through `| safe`, so a hand-built string would need a   #}
+  {# hand-placed `| escape` on the reference and would be one deleted      #}
+  {# filter away from stored XSS on backend-controlled data. Inside a      #}
+  {# block capture `{{ withdrawnNotice.applicationRef }}` goes through     #}
+  {# normal autoescaping (the env sets `autoescape: true`), so there is no #}
+  {# manual filter to drop. All prose comes from the constants in          #}
+  {# core/withdrawn-notice.js so the referenced and unreferenced variants  #}
+  {# cannot drift apart.                                                   #}
   {% if withdrawnNotice %}
-    {% if withdrawnNotice.applicationRef %}
-      {% set withdrawnNoticeHtml = 'Application <strong data-testid="work-item-withdrawn-reference">'
-        + (withdrawnNotice.applicationRef | escape)
-        + '</strong> has been withdrawn. It can no longer be progressed and no further action is needed.' %}
-    {% else %}
-      {% set withdrawnNoticeHtml = withdrawnNotice.text | escape %}
-    {% endif %}
+    {% set withdrawnNoticeHtml %}{{ withdrawnNotice.subject }}{% if withdrawnNotice.applicationRef %} <strong data-testid="work-item-withdrawn-reference">{{ withdrawnNotice.applicationRef }}</strong>{% endif %} {{ withdrawnNotice.tail }}{% endset %}
     {{ govukErrorSummary({
       titleText: withdrawnNotice.title,
       errorList: [{ html: withdrawnNoticeHtml }],

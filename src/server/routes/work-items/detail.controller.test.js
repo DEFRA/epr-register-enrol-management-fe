@@ -1531,6 +1531,40 @@ describe('#workItemDetailController', () => {
       }
     )
 
+    // RA-358 security regression. govuk-frontend renders an error-summary
+    // item's `html` through `| safe`, so the notice sits on an autoescape
+    // bypass. The reference is backend-controlled and this codebase
+    // deliberately does not constrain its format, so the ONLY thing standing
+    // between it and stored XSS is the template composing the sentence in a
+    // `{% set %}` block capture rather than concatenating an HTML string.
+    // Without this test, replacing that construct with a hand-built string
+    // (or dropping an `| escape`) would go green.
+    test('escapes a hostile application reference', async () => {
+      registerWithWithdrawn()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'withdrawn',
+          payload: {
+            applicationReference: '<script>alert(1)</script>'
+          }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const notice = withdrawnNotice(result)
+      // The payload is present but inert.
+      expect(notice).toContain('&lt;script&gt;')
+      expect(notice).not.toContain('<script>')
+      // And nothing leaked a live tag into the page at large.
+      expect(result).not.toContain('<script>alert(1)</script>')
+    })
+
     test('does not regress the Outcome panel or the state badge', async () => {
       registerWithWithdrawn()
       registerDetailTemplate(

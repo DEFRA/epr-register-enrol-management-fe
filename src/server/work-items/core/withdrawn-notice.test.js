@@ -1,7 +1,10 @@
 import {
   buildWithdrawnNotice,
+  WITHDRAWN_NOTICE_TAIL,
   WITHDRAWN_NOTICE_TITLE,
-  WITHDRAWN_STATE_ID
+  WITHDRAWN_STATE_ID,
+  WITHDRAWN_SUBJECT_WITH_REFERENCE,
+  WITHDRAWN_SUBJECT_WITHOUT_REFERENCE
 } from './withdrawn-notice.js'
 
 const GUID = 'ad85d038-95e6-45ae-83ee-558ad7e769a2'
@@ -34,11 +37,12 @@ describe('#buildWithdrawnNotice (RA-358)', () => {
 
     expect(notice).toEqual({
       title: WITHDRAWN_NOTICE_TITLE,
-      text: 'Application AP000000001 has been withdrawn. It can no longer be progressed and no further action is needed.',
-      applicationRef: 'AP000000001'
+      subject: WITHDRAWN_SUBJECT_WITH_REFERENCE,
+      applicationRef: 'AP000000001',
+      tail: WITHDRAWN_NOTICE_TAIL
     })
-    // RA-249: the Guid must never appear in the copy.
-    expect(notice.text).not.toContain(GUID)
+    // RA-249: the Guid must never reach the copy.
+    expect(Object.values(notice).join(' ')).not.toContain(GUID)
   })
 
   test('falls back to the raw backend payload reference', () => {
@@ -49,7 +53,7 @@ describe('#buildWithdrawnNotice (RA-358)', () => {
     })
 
     expect(notice.applicationRef).toBe('AP000000002')
-    expect(notice.text).toContain('Application AP000000002 has been withdrawn')
+    expect(notice.subject).toBe(WITHDRAWN_SUBJECT_WITH_REFERENCE)
   })
 
   test('prefers the decorated reference over the payload reference', () => {
@@ -69,7 +73,6 @@ describe('#buildWithdrawnNotice (RA-358)', () => {
     })
 
     expect(notice.applicationRef).toBe('AP000000005')
-    expect(notice.text).toContain('Application AP000000005 has been withdrawn')
   })
 
   test.each([
@@ -89,10 +92,11 @@ describe('#buildWithdrawnNotice (RA-358)', () => {
 
       expect(notice).toEqual({
         title: WITHDRAWN_NOTICE_TITLE,
-        text: 'This application has been withdrawn. It can no longer be progressed and no further action is needed.',
-        applicationRef: null
+        subject: WITHDRAWN_SUBJECT_WITHOUT_REFERENCE,
+        applicationRef: null,
+        tail: WITHDRAWN_NOTICE_TAIL
       })
-      expect(notice.text).not.toContain(GUID)
+      expect(Object.values(notice).join(' ')).not.toContain(GUID)
     }
   )
 
@@ -114,5 +118,38 @@ describe('#buildWithdrawnNotice (RA-358)', () => {
     })
 
     expect(notice?.title).toBe(WITHDRAWN_NOTICE_TITLE)
+  })
+
+  // Both variants must read as the same sentence bar the reference, which is
+  // the whole reason the prose lives in constants rather than being retyped
+  // in the template.
+  test('both variants share one tail, so the copy cannot drift', () => {
+    const withRef = buildWithdrawnNotice({
+      stateId: 'withdrawn',
+      applicationRef: 'AP000000008'
+    })
+    const withoutRef = buildWithdrawnNotice({ stateId: 'withdrawn' })
+
+    expect(withRef.tail).toBe(withoutRef.tail)
+    expect(withRef.title).toBe(withoutRef.title)
+    expect(`${withoutRef.subject} ${withoutRef.tail}`).toBe(
+      'This application has been withdrawn. It can no longer be progressed and no further action is needed.'
+    )
+    expect(`${withRef.subject} ${withRef.applicationRef} ${withRef.tail}`).toBe(
+      'Application AP000000008 has been withdrawn. It can no longer be progressed and no further action is needed.'
+    )
+  })
+
+  // The reference format is the backend's to decide (it has already changed
+  // once, RA-318), so this module deliberately does NOT pattern-match it.
+  // Safety therefore rests entirely on the template autoescaping the value —
+  // see the render-level regression test in detail.controller.test.js.
+  test('passes an unusual reference through untouched — escaping is the template’s job', () => {
+    const notice = buildWithdrawnNotice({
+      stateId: 'withdrawn',
+      applicationRef: '<script>alert(1)</script>'
+    })
+
+    expect(notice.applicationRef).toBe('<script>alert(1)</script>')
   })
 })

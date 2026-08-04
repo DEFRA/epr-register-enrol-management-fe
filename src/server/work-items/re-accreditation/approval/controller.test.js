@@ -127,6 +127,14 @@ describe('makeShowApprovalController', () => {
 
     expect(captured.viewPath).toBe('work-items/not-found')
     expect(captured.statusCode).toBe(404)
+    // RA-358 AC2. Kept uniform with the other eight callers of the shared
+    // not-found view, so the page reads the same however it was reached.
+    expect(captured.viewCtx.heading).toBe('Application not found')
+    expect(captured.viewCtx.pageTitle).toBe('Application not found')
+    expect(captured.viewCtx.breadcrumbs).toEqual([
+      { text: 'Applications', href: '/work-items' },
+      { text: 'Not found' }
+    ])
   })
 
   test('renders the unavailable view with HTTP 502 on any other backend failure', async () => {
