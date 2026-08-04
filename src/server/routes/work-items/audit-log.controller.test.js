@@ -365,6 +365,52 @@ describe('#workItemAuditLogController', () => {
     expect(result).not.toEqual(expect.stringContaining('Template version'))
   })
 
+  test('Surfaces the action, states and error on a status-push-failed entry inside a "Show details" disclosure (RA-368)', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        auditLog: [
+          {
+            id: 'gggg7777-gggg-gggg-gggg-gggggggggggg',
+            action: 'status-push-failed',
+            actionDisplayName: 'Status failed to send to OJ',
+            details: {
+              actionId: 'approve',
+              actionDisplayName: 'Approve',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'approved',
+              toStateDisplayName: 'Approved',
+              errorMessage: 'OJ returned 500'
+            },
+            createdAt: '2026-04-27T09:00:00Z'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(
+      expect.stringContaining('Status failed to send to OJ')
+    )
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-details"')
+    )
+    expect(result).toEqual(expect.stringContaining('Show details'))
+    expect(result).toEqual(expect.stringContaining('Approve'))
+    expect(result).toEqual(expect.stringContaining('awaiting-decision'))
+    expect(result).toEqual(expect.stringContaining('Approved'))
+    expect(result).toEqual(expect.stringContaining('OJ returned 500'))
+    expect(result).toEqual(
+      expect.stringContaining('data-action="status-push-failed"')
+    )
+  })
+
   test('Renders 404 page when the backend reports no such work item', async () => {
     getWorkItem.mockResolvedValue({ ok: false, status: 404 })
 

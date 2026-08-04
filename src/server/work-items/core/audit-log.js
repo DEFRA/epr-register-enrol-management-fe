@@ -87,16 +87,19 @@ const ACTION_DISPLAY_NAMES = {
   'note-added': 'Note added',
   'notification-sent': 'Notification sent',
   'notification-skipped': 'Notification not sent',
-  'notification-failed': 'Notification failed'
+  'notification-failed': 'Notification failed',
+  'status-push-sent': 'Status sent to OJ',
+  'status-push-skipped': 'Status not sent to OJ (disabled)',
+  'status-push-failed': 'Status failed to send to OJ'
 }
 
 /**
- * Audit actions that record a failed regulator notification. These render
- * in a visually distinct (error-styled) way on the audit-log page (RA-234)
- * so notification failures are obviously displayed rather than buried as
- * another grey timeline row.
+ * Audit actions that record a failed regulator notification or a failed
+ * OJ status push. These render in a visually distinct (error-styled) way
+ * on the audit-log page (RA-234, RA-368) so failures are obviously
+ * displayed rather than buried as another grey timeline row.
  */
-const FAILURE_ACTIONS = new Set(['notification-failed'])
+const FAILURE_ACTIONS = new Set(['notification-failed', 'status-push-failed'])
 
 function isFailureAuditEntry(entry) {
   if (entry == null || typeof entry !== 'object') return false
@@ -189,6 +192,12 @@ export function summariseAuditEntry(entry) {
     case 'notification-skipped':
       return details.reason ?? ''
     case 'notification-failed':
+      return details.errorMessage ?? ''
+    case 'status-push-sent':
+      return details.toStateDisplayName ?? details.toStateId ?? ''
+    case 'status-push-skipped':
+      return details.reason ?? ''
+    case 'status-push-failed':
       return details.errorMessage ?? ''
     default:
       return ''
@@ -302,6 +311,10 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
     case 'notification-skipped':
     case 'notification-failed':
       return notificationDetailRows(entry, details)
+    case 'status-push-sent':
+    case 'status-push-skipped':
+    case 'status-push-failed':
+      return statusPushDetailRows(entry, details)
     default:
       return []
   }
@@ -347,6 +360,42 @@ function notificationDetailRows(entry, details) {
   if (details.providerMessageId) {
     rows.push({ key: 'Provider message ID', value: details.providerMessageId })
   }
+  if (details.reason) {
+    rows.push({ key: 'Reason', value: details.reason })
+  }
+  if (details.errorMessage) {
+    rows.push({ key: 'Error', value: details.errorMessage, multiline: true })
+  }
+  const actor = entry.createdByName ?? entry.createdBy
+  if (actor) rows.push({ key: 'Triggered by', value: actor })
+  return rows
+}
+
+/**
+ * Project the structured details of an OJ status-push audit entry (RA-368).
+ *
+ * The backend's `WorkItemStatusPushHook` stamps these fields onto the
+ * entry's `details` dictionary for every generic action/transition it
+ * pushes on to the operator journey (OJ):
+ *   - `actionId` / `actionDisplayName` — the CM action that fired the push.
+ *   - `fromStateId` / `toStateId`      — the CM state transition.
+ *   - `toStateDisplayName`             — the state OJ was told about.
+ *   - `reason`                         — why a push was skipped (skipped
+ *                                        only, e.g. push disabled).
+ *   - `errorMessage`                   — the error text (failed only).
+ *
+ * Only fields actually present on the entry are rendered, mirroring the
+ * notification detail rows above; we never invent rows for absent fields.
+ */
+function statusPushDetailRows(entry, details) {
+  const rows = []
+  const action = details.actionDisplayName ?? details.actionId
+  if (action) rows.push({ key: 'Action', value: action })
+  if (details.fromStateId) {
+    rows.push({ key: 'Previous state', value: details.fromStateId })
+  }
+  const toState = details.toStateDisplayName ?? details.toStateId
+  if (toState) rows.push({ key: 'New state', value: toState })
   if (details.reason) {
     rows.push({ key: 'Reason', value: details.reason })
   }
