@@ -549,13 +549,13 @@ describe('#workItemListController', () => {
     expect(result).not.toContain('data-testid="submitted-on"')
   })
 
-  // RA-370 AC02 (regression). THE case this rule exists for:
-  // ReAccreditationDulyMadeSnapshotMigration back-fills items into 'duly-made'
-  // AND stamps an SLA clock in the same write, so a pre-assessment item can
-  // carry a running clock. "Submitted on" must still show — gating it on the
-  // clock would wrongly hide it for exactly this population. Both dates
+  // RA-370 AC02 (regression). THE case this rule exists for, and the ORDINARY
+  // state of a duly-made item rather than an edge case:
+  // ReAccreditationDulyMadeHook stamps an SLA clock in the same write that
+  // moves the item to 'duly-made'. "Submitted on" must still show — gating it
+  // on the clock hid it for essentially every duly-made item. Both dates
   // render, which is intended: the clock genuinely is running.
-  test('RA-370: shows Submitted on for a migrated duly-made item that already has an SLA clock', async () => {
+  test('RA-370: shows Submitted on for a duly-made item that already has an SLA clock', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
