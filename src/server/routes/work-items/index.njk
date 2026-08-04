@@ -305,12 +305,13 @@
                   {# RA-370. The footer always renders, because "Assigned to" is #}
                   {# no longer gated on the SLA clock — it shows "Unassigned"    #}
                   {# when nobody holds the case. The two dates either side of it #}
-                  {# are gated INDEPENDENTLY: "Submitted on" on the work item's  #}
-                  {# state (assessment not yet started) and "Due on" on the SLA  #}
-                  {# clock. They are NOT mutually exclusive — a back-filled      #}
-                  {# 'duly-made' item carries a clock while still being          #}
-                  {# pre-assessment and shows both. See PRE_ASSESSMENT_STATE_IDS #}
-                  {# in controller.js for the full reasoning.                    #}
+                  {# are gated on INDEPENDENT signals: "Submitted on" on the     #}
+                  {# work item's state (assessment not yet started) and "Due on" #}
+                  {# on the SLA clock. Any combination of the two can therefore  #}
+                  {# render, including both and neither — do not assume one. In  #}
+                  {# the neither case the footer legitimately carries just the   #}
+                  {# "Assigned to" value. See PRE_ASSESSMENT_STATE_IDS in        #}
+                  {# controller.js for the full reasoning.                       #}
                   <div class="app-application-card__footer" data-testid="application-card-footer">
                     {% if item.showSubmittedOn %}
                       <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ item.submittedOn | formatDateGds or "—" }}</span></span>
