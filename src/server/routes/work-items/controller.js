@@ -138,19 +138,24 @@ const STATUS_OPTION_BY_VALUE = new Map(
 // — 'duly-made' carries only "Confirm registration fee paid"), so everything
 // up to and including 'duly-made' is pre-assessment.
 //
-// This is deliberately keyed off `stateId` and NOT off the SLA clock. The two
-// usually coincide on the forward path — 'payment-received' moves duly-made ->
-// assessment-in-progress and stamps the clock in the same step — but they come
-// apart for real data: ReAccreditationDulyMadeSnapshotMigration back-fills
-// items into 'duly-made' AND stamps an SLA clock at the same time, so there is
-// a live population sitting pre-assessment WITH a running clock. Gating on the
-// clock would wrongly hide "Submitted on" for exactly those items.
+// This is deliberately keyed off `stateId` and NOT off the SLA clock, because
+// "clock running" does NOT mean "assessment started". A duly-made item
+// normally already has a clock: ReAccreditationDulyMadeHook stamps
+// `SlaClock = new WorkItemSlaClock { StartedAt = now }` in the same write that
+// moves the item to 'duly-made', and ReAccreditationDulyMadeSlaClockBackfill-
+// Migration back-fills one onto any duly-made item still missing it (as does
+// ReAccreditationDulyMadeSnapshotMigration for items it promotes). So a
+// pre-assessment item WITH a running clock is the steady state of the ordinary
+// journey, not an edge case — gating on the clock hid "Submitted on" for
+// essentially every duly-made item. Verified end-to-end: an item taken through
+// the UI reads sub=true/due=false in 'submitted', sub=true/due=true in
+// 'duly-made', and sub=false/due=true after 'payment-received'.
 //
 // The two dates are therefore gated on independent signals, and there is NO
 // invariant about how many of them render. Both cases below are intended:
-//   - BOTH render for a clock-carrying 'duly-made' item. Correct: the
-//     submission date is still the relevant one to show, and the clock
-//     genuinely is running, so the deadline is real.
+//   - BOTH render for a clock-carrying 'duly-made' item, i.e. the normal case
+//     above. Correct: the submission date is still the relevant one to show,
+//     and the clock genuinely is running, so the deadline is real.
 //   - NEITHER renders for a post-'duly-made' item with no clock. This is a
 //     live possibility, not just stale data: ReAccreditationSlaStampHook
 //     catches WorkItemConcurrencyException, logs "clock may not be persisted"
