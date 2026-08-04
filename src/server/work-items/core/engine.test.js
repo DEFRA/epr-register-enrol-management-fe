@@ -207,10 +207,33 @@ describe('allTasksComplete', () => {
     ).toBe(false)
   })
 
-  test('an empty backend tasks array counts as complete', () => {
+  // RA-346 review. An empty array must NOT be read as "nothing to do, so
+  // everything is complete" — `[].every(...)` is vacuously true, which fails
+  // OPEN. The backend's `WorkItemService.Project` genuinely returns an empty
+  // task list when it cannot resolve the template snapshot, so this is a
+  // reachable state. It must fall through to the declaration and fail CLOSED.
+  test('an empty backend tasks array falls through to the declaration', () => {
     expect(
       allTasksComplete(sampleType(), { stateId: 'submitted', tasks: [] })
+    ).toBe(false)
+  })
+
+  test('an empty backend tasks array is complete only when the declaration has no tasks', () => {
+    expect(
+      allTasksComplete(sampleType(), { stateId: 'approved', tasks: [] })
     ).toBe(true)
+  })
+
+  // Belt and braces: the empty array must not become a way to bypass a gated
+  // action via the public `canApplyAction` entry point either.
+  test('an empty backend tasks array does not unlock a gated action', () => {
+    expect(
+      canApplyAction(
+        sampleType(),
+        { stateId: 'submitted', tasks: [] },
+        'approve'
+      )
+    ).toEqual({ allowed: false, reason: 'incomplete-tasks' })
   })
 
   test('falls back to the type declaration when there is no tasks array', () => {
@@ -229,7 +252,9 @@ describe('allTasksComplete', () => {
     expect(allTasksComplete(sampleType(), { stateId: 'approved' })).toBe(true)
   })
 
-  test('handles a null work item without throwing', () => {
-    expect(allTasksComplete(sampleType(), null)).toBe(true)
+  // We cannot prove an item we do not have is complete, so fail closed.
+  test('reports false for a missing work item', () => {
+    expect(allTasksComplete(sampleType(), null)).toBe(false)
+    expect(allTasksComplete(sampleType(), undefined)).toBe(false)
   })
 })

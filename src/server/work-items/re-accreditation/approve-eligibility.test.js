@@ -66,26 +66,26 @@ describe('evaluateApproveEligibility', () => {
     expect(result).toEqual({ allowed: false, reason: 'incomplete-tasks' })
   })
 
-  // Legacy backends emit `isComplete` rather than the canonical `status`.
-  test('honours the legacy isComplete boolean', () => {
-    const legacy = { taskId: 'record-decision-rationale', isComplete: true }
+  // The legacy `isComplete` fallback is owned and pinned by `isTaskComplete`
+  // (see `core/task-status.js` and `core/engine.test.js`) — deliberately not
+  // re-pinned here, so the behaviour has exactly one home.
 
-    expect(evaluateApproveEligibility(aWorkItem({ tasks: [legacy] }))).toEqual({
-      allowed: true
-    })
-    expect(
-      evaluateApproveEligibility(
-        aWorkItem({ tasks: [{ ...legacy, isComplete: false }] })
-      )
-    ).toEqual({ allowed: false, reason: 'incomplete-tasks' })
-  })
-
-  // No `tasks` array at all means we cannot prove the tasks are done, so the
-  // engine derives them from the type declaration — which says there IS a
-  // pending `record-decision-rationale`. Fail closed.
-  test('blocks approval when the work item carries no tasks array', () => {
+  // Neither a missing NOR an empty `tasks` array proves the work is done, so
+  // both fall through to the type declaration — which says there IS a
+  // pending `record-decision-rationale`. Fail closed. The empty case is the
+  // RA-346 review finding: the backend returns an empty task list when it
+  // cannot resolve the template snapshot, and `[].every(...)` would have
+  // vacuously permitted the approval.
+  test.each([
+    ['a missing tasks array', undefined],
+    ['an empty tasks array', []]
+  ])('blocks approval for %s', (_label, tasks) => {
     const item = aWorkItem()
-    delete item.tasks
+    if (tasks === undefined) {
+      delete item.tasks
+    } else {
+      item.tasks = tasks
+    }
 
     expect(evaluateApproveEligibility(item)).toEqual({
       allowed: false,
@@ -130,13 +130,16 @@ describe('evaluateApproveEligibility', () => {
   })
 
   // Fail CLOSED when the module is not registered: never offer an approval
-  // we cannot verify against a declaration.
-  test('blocks approval when the type is not registered', () => {
+  // we cannot verify against a declaration. The reason must be DISTINCT from
+  // the engine's `unknown-action`, which the controller renders as "can no
+  // longer be approved from its current state" — misleading for what is
+  // actually a server wiring fault.
+  test('blocks approval with a distinct reason when the type is not registered', () => {
     clearWorkItemRegistry()
 
     expect(evaluateApproveEligibility(aWorkItem())).toEqual({
       allowed: false,
-      reason: 'unknown-action'
+      reason: 'type-not-registered'
     })
   })
 })

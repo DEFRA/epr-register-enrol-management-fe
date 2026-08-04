@@ -27,21 +27,30 @@
 
 import { canApplyAction } from '../core/engine.js'
 import { getWorkItemType } from '../core/registry.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
 export const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
-export const APPROVE_ACTION_ID = 'approve'
+const APPROVE_ACTION_ID = 'approve'
+
+const logger = createLogger()
 
 /**
  * Can this work item be approved right now?
  *
- * @param {object} workItem A work item as returned by the backend (its own
- *   `tasks` array is authoritative when present).
+ * @param {object} workItem A work item as returned by the backend — the RAW
+ *   DTO, never a decorated view model. Its own `tasks` array is
+ *   authoritative when non-empty.
  * @returns {{ allowed: boolean, reason?: string }} `reason` is the engine's
  *   rejection code — notably `'incomplete-tasks'` when a decision task is
  *   still pending, and `'invalid-transition'` / `'terminal-state'` when the
- *   item is not in `awaiting-decision`.
+ *   item is not in `awaiting-decision`. Two reasons are raised here rather
+ *   than by the engine: `'wrong-type'` and `'type-not-registered'`.
  */
 export function evaluateApproveEligibility(workItem) {
+  // Reachable: the approve routes take an arbitrary `{id}` under the
+  // `/work-items/re-accreditation/` prefix, but nothing guarantees the item
+  // that comes back IS a re-accreditation. Approving a different type
+  // through this endpoint must be refused.
   if (
     workItem?.typeId != null &&
     workItem.typeId !== RE_ACCREDITATION_TYPE_ID
@@ -51,9 +60,17 @@ export function evaluateApproveEligibility(workItem) {
 
   const type = getWorkItemType(RE_ACCREDITATION_TYPE_ID)
   if (!type) {
-    // The module is not registered (only reachable in a partially-wired
-    // test server). Fail CLOSED: never offer an approval we cannot verify.
-    return { allowed: false, reason: 'unknown-action' }
+    // The module is not registered — a wiring fault, not a user error. Fail
+    // CLOSED (never offer an approval we cannot verify against a
+    // declaration) but say so distinctly: reusing the engine's
+    // `'unknown-action'` here would render the misleading "can no longer be
+    // approved from its current state" banner, sending whoever hits it
+    // looking at the work item's state instead of at the server wiring.
+    logger.error(
+      { typeId: RE_ACCREDITATION_TYPE_ID },
+      'Re-accreditation type is not registered; refusing approval'
+    )
+    return { allowed: false, reason: 'type-not-registered' }
   }
 
   return canApplyAction(type, workItem, APPROVE_ACTION_ID)

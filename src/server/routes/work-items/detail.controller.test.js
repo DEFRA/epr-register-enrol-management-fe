@@ -1788,124 +1788,109 @@ describe('#workItemDetailController', () => {
       )
     })
 
-    // Legacy backends emit `isComplete` instead of the canonical `status`.
-    // The gate must honour both, or historical items would be un-approvable.
-    test('RA-346: renders the Approve CTA for a legacy isComplete=true task', async () => {
-      registerReaccreditationWithDetailV1()
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({
+    // The legacy `isComplete` fallback is owned and pinned by
+    // `isTaskComplete` (`core/task-status.js`, exercised in
+    // `core/engine.test.js`) — deliberately not re-pinned at this layer.
+
+    // RA-346 review finding 1. The CTA gate and the approve ROUTE guard must
+    // answer identically for the same work item, or the page renders a
+    // button the route then refuses. They previously diverged: the route
+    // evaluated the raw backend DTO while the CTA evaluated `decorate`'s
+    // output, which coerces a missing `tasks` to `[]` and rewrites each
+    // task's `status`. With the empty-array fail-open in `allTasksComplete`,
+    // that combination rendered an Approve CTA on an item the route blocks.
+    test.each([
+      ['a missing tasks array', undefined],
+      ['an empty tasks array', []]
+    ])(
+      'RA-346: does not render the Approve CTA for %s (agrees with the route guard)',
+      async (_label, tasks) => {
+        registerReaccreditationWithDetailV1()
+        const workItem = aWorkItem({
           stateId: 'awaiting-decision',
-          tasks: [
-            {
-              taskId: 'record-decision-rationale',
-              displayName: 'Record decision rationale',
-              isComplete: true
-            }
-          ],
           availableActions: withdrawDuringDecision
         })
-      })
+        if (tasks === undefined) {
+          delete workItem.tasks
+        } else {
+          workItem.tasks = tasks
+        }
+        getWorkItem.mockResolvedValue({ ok: true, workItem })
 
-      const { result } = await server.inject({
-        method: 'GET',
-        url: `/work-items/${ID}`
-      })
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
 
-      expect(result).toEqual(
-        expect.stringContaining('data-testid="action-approve"')
-      )
-    })
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).not.toEqual(
+          expect.stringContaining('data-testid="action-approve"')
+        )
+      }
+    )
 
     // ------------------------------------------------------------------
-    // RA-346 AC1. `submit-for-decision` is a generic engine action, so the
-    // backend omits it from `availableActions` while assessment tasks are
-    // pending and the FE filter drops it too. Pin BOTH halves so a
-    // regression in either surface is caught here.
+    // RA-346 AC1 — `submit-for-decision`.
+    //
+    // What is ACTUALLY true, corrected after PR review: on the rendered
+    // detail page this gate is BACKEND-ONLY. `decorate` copies
+    // `availableActions` through verbatim (filtering just `sla-extend`); it
+    // never calls `projectWorkItem`, so there is no frontend
+    // `requiresAllTasksComplete` check on this path. An earlier version of
+    // these tests omitted `submit-for-decision` from the fixture's
+    // `availableActions` and then asserted it was absent — which could not
+    // fail, and wrongly implied a frontend gate existed.
+    //
+    // That backend-only arrangement is correct and deliberate: the backend
+    // is authoritative, and `docs/work-items.md` requires the engine be a
+    // mirror rather than a re-implementation. `approve` is gated in the
+    // frontend ONLY because it is absent from `availableActions` entirely,
+    // so no backend-derived signal exists to render from.
+    //
+    // So what is worth pinning here is the pass-through itself: the page
+    // renders exactly what the backend projected, in both directions. A
+    // regression that started rendering an action the backend withheld
+    // would fail the first case.
     // ------------------------------------------------------------------
-    test('RA-346 AC1: does not render submit-for-decision while assessment tasks are pending', async () => {
-      registerReaccreditationWithDetailV1()
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({
-          stateId: 'assessment-in-progress',
-          tasks: [
-            {
-              taskId: 'review-compliance-history',
-              displayName: 'Review compliance history',
-              status: 'Completed'
-            },
-            {
-              taskId: 'assess-technical-capacity',
-              displayName: 'Assess technical capacity',
-              status: 'InProgress'
-            }
-          ],
-          // The backend has already omitted submit-for-decision here.
-          availableActions: [
-            {
-              actionId: 'withdraw-during-assessment',
-              displayName: 'Withdraw',
-              fromStateId: 'assessment-in-progress',
-              toStateId: 'withdrawn',
-              requiresAllTasksComplete: false
-            }
-          ]
+    const assessmentAction = {
+      actionId: 'submit-for-decision',
+      displayName: 'Submit for decision',
+      fromStateId: 'assessment-in-progress',
+      toStateId: 'awaiting-decision',
+      requiresAllTasksComplete: true
+    }
+
+    test.each([
+      ['withholds it (tasks pending)', [], false],
+      ['projects it (tasks complete)', [assessmentAction], true]
+    ])(
+      'RA-346 AC1: renders submit-for-decision iff the backend %s',
+      async (_label, availableActions, expected) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId: 'assessment-in-progress',
+            tasks: [
+              {
+                taskId: 'assess-technical-capacity',
+                displayName: 'Assess technical capacity',
+                status: expected ? 'Completed' : 'InProgress'
+              }
+            ],
+            availableActions
+          })
         })
-      })
 
-      const { result, statusCode } = await server.inject({
-        method: 'GET',
-        url: `/work-items/${ID}`
-      })
-
-      expect(statusCode).toBe(statusCodes.ok)
-      expect(result).not.toEqual(expect.stringContaining('submit-for-decision'))
-    })
-
-    test('RA-346 AC1: renders submit-for-decision once every assessment task is complete', async () => {
-      registerReaccreditationWithDetailV1()
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({
-          stateId: 'assessment-in-progress',
-          tasks: [
-            {
-              taskId: 'review-compliance-history',
-              displayName: 'Review compliance history',
-              status: 'Completed'
-            },
-            {
-              taskId: 'assess-technical-capacity',
-              displayName: 'Assess technical capacity',
-              status: 'Completed'
-            },
-            {
-              taskId: 'assess-financial-capacity',
-              displayName: 'Assess financial capacity',
-              status: 'Completed'
-            }
-          ],
-          availableActions: [
-            {
-              actionId: 'submit-for-decision',
-              displayName: 'Submit for decision',
-              fromStateId: 'assessment-in-progress',
-              toStateId: 'awaiting-decision',
-              requiresAllTasksComplete: true
-            }
-          ]
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
         })
-      })
 
-      const { result, statusCode } = await server.inject({
-        method: 'GET',
-        url: `/work-items/${ID}`
-      })
-
-      expect(statusCode).toBe(statusCodes.ok)
-      expect(result).toEqual(expect.stringContaining('submit-for-decision'))
-    })
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result.includes('submit-for-decision')).toBe(expected)
+      }
+    )
   })
 
   // RA-249 (was RA-196): when applicationReference is missing, the

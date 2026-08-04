@@ -324,7 +324,20 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   // metadata) without leaking type logic into the generic decorator. The
   // backend is still the source of truth for authorisation — this only
   // controls which affordances render.
-  const enriched = applyReAccreditationViewModel({ workItem: decorated })
+  //
+  // RA-346. `source` is the RAW backend DTO, deliberately not `decorated`.
+  // The approve gate must see exactly what the approve ROUTE sees
+  // (`approval/controller.js` evaluates the untouched `getWorkItem`
+  // result), or the button and the URL can disagree — the item renders an
+  // Approve CTA that the route then refuses. `decorate` is a view-layer
+  // normaliser: it coerces a missing `tasks` to `[]` and rewrites each
+  // task's `status`, both of which would silently change the gate's answer.
+  // Eligibility is a domain question; it must not be asked of view-model
+  // output.
+  const enriched = applyReAccreditationViewModel({
+    workItem: decorated,
+    source: result.workItem
+  })
   const templatePath = resolveDetailTemplate(
     enriched.typeId,
     enriched.templateVersion
@@ -497,12 +510,15 @@ const RE_ACCREDITATION_TERMINAL_STATES = new Set([
   'withdrawn'
 ])
 
-function applyReAccreditationViewModel({ workItem }) {
+function applyReAccreditationViewModel({ workItem, source = workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
   }
 
-  const canApproveDirectly = evaluateApproveEligibility(workItem).allowed
+  // Gate on `source` (the raw backend DTO), never on `workItem` (the
+  // decorated view model) — see the call site for why. The flag is then
+  // merged into the view model below.
+  const canApproveDirectly = evaluateApproveEligibility(source).allowed
 
   const isReadOnlyState = RE_ACCREDITATION_TERMINAL_STATES.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared

@@ -41,10 +41,13 @@ export function projectWorkItem(type, workItem) {
     return { tasks, availableActions: [] }
   }
 
-  const allTasksComplete = tasks.every((t) => t.isComplete)
+  // Named distinctly from the exported `allTasksComplete` helper below —
+  // an identically-named local would shadow it and make the two easy to
+  // confuse when reading this function in isolation.
+  const everyTaskComplete = tasks.every((t) => t.isComplete)
   const availableActions = (type.transitions ?? [])
     .filter((t) => t.fromStateId === stateId)
-    .filter((t) => t.requiresAllTasksComplete === false || allTasksComplete)
+    .filter((t) => t.requiresAllTasksComplete === false || everyTaskComplete)
     .map((t) => ({
       actionId: t.actionId,
       displayName: t.displayName,
@@ -62,22 +65,39 @@ export function projectWorkItem(type, workItem) {
  * RA-346. Callers hand us one of two shapes, so resolve both from a single
  * place rather than letting each caller invent its own rule:
  *
- *  - A work item the BACKEND returned. It carries its own `tasks` array
- *    (each with a canonical `status`), which is authoritative — it already
+ *  - A work item the BACKEND returned. It carries its own NON-EMPTY `tasks`
+ *    array (each with a canonical `status`), which is authoritative — it
  *    reflects task state the type declaration cannot know about.
- *  - A bare `{ stateId, completedTaskIdsByState }` shape, where the task
- *    list has to be derived from the type declaration.
+ *  - Anything else — no `tasks` key, or an EMPTY array — where the task list
+ *    has to be derived from the type declaration.
+ *
+ * An empty `tasks` array is deliberately NOT treated as "nothing to do, so
+ * everything is complete". `[].every(...)` is vacuously `true`, which would
+ * fail OPEN and permit a gated action. It is also a reachable state, not a
+ * hypothetical one: the backend's `WorkItemService.Project` returns an empty
+ * task list when it cannot resolve the item's template snapshot. An empty
+ * array therefore means "the backend told us nothing useful", so we fall
+ * through to the declaration — which, for a state that genuinely declares
+ * tasks, correctly reports them incomplete and fails CLOSED.
+ *
+ * A state that declares no tasks at all still resolves to `true`, which is
+ * right: there is genuinely nothing to complete.
  *
  * `isTaskComplete` handles both the canonical `status` field and the legacy
  * `isComplete` boolean that `projectWorkItem` emits, so one predicate covers
- * both branches.
+ * both branches. It is the single owner of the legacy fallback — do not
+ * re-pin that behaviour at other layers.
  *
  * @param {object} type Work item type declaration (`module.type`).
  * @param {object} workItem
- * @returns {boolean}
+ * @returns {boolean} `false` for a missing work item — we cannot prove an
+ *   item we do not have is complete.
  */
 export function allTasksComplete(type, workItem) {
-  if (Array.isArray(workItem?.tasks)) {
+  if (workItem == null) {
+    return false
+  }
+  if (Array.isArray(workItem.tasks) && workItem.tasks.length > 0) {
     return workItem.tasks.every((task) => isTaskComplete(task))
   }
   return projectWorkItem(type, workItem).tasks.every((task) =>
