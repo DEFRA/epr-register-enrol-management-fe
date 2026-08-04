@@ -513,6 +513,13 @@ describe('GET /work-items/{id}/query', () => {
 
     expect(statusCode).toBe(statusCodes.notFound)
     expect(result).toEqual(expect.stringContaining('Application not found'))
+    // RA-358 AC2. The breadcrumb must speak the same vocabulary as the
+    // heading and the back link, all three of which point at /work-items.
+    // Scoped to the breadcrumb class: the header nav also renders a
+    // "Work items" link, so a bare substring check would be ambiguous.
+    expect(result).toContain(
+      '<a class="govuk-breadcrumbs__link" href="/work-items">Applications</a>'
+    )
   })
 
   test('renders 502 when the backend is unavailable', async () => {

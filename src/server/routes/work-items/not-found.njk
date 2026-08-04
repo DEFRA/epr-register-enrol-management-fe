@@ -16,6 +16,17 @@
 {# retained only as small, explicitly-labelled diagnostic detail for    #}
 {# support, in its own element, never as the user-facing identifier and #}
 {# never in the heading or the body copy.                               #}
+{#                                                                      #}
+{# The `data-testid` hooks below are an EXTERNAL CONTRACT consumed by   #}
+{# the epr-register-enrol-mgmt-tests WebdriverIO suite                  #}
+{# (test/page-objects/work-item-not-found.page.js). Renaming            #}
+{# `work-item-not-found`, `work-item-not-found-back` or                 #}
+{# `work-item-not-found-diagnostic` breaks journey specs in that repo,  #}
+{# which is branch-matched to this one by EXACT branch name — so a      #}
+{# rename must land on identically-named branches in both repos.        #}
+{# `work-item-not-found-diagnostic` carries a specs assertion that the  #}
+{# work-item Guid appears nowhere else on the page; that is deliberate  #}
+{# (it is AC2 itself), not an incidental check to relax.                #}
 {# ------------------------------------------------------------------- #}
 
 {% block content %}

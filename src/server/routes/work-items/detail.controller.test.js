@@ -475,6 +475,13 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(
       expect.stringContaining('work-item-not-found-diagnostic')
     )
+    // RA-358 AC2. The breadcrumb must speak the same vocabulary as the
+    // heading and the back link, all three of which point at /work-items.
+    // Scoped to the breadcrumb class: the header nav also renders a
+    // "Work items" link, so a bare substring check would be ambiguous.
+    expect(result).toContain(
+      '<a class="govuk-breadcrumbs__link" href="/work-items">Applications</a>'
+    )
   })
 
   // RA-358 AC2. The 404 page must read in application terms: the reworded
@@ -1483,6 +1490,31 @@ describe('#workItemDetailController', () => {
       expect(withdrawnNotice(result)).toContain('RA-000000001')
       // RA-249: the Guid must not be the identifier inside the notice.
       expect(withdrawnNotice(result)).not.toContain(ID)
+    })
+
+    // The three assertions above are all substring checks, so a spacing
+    // regression in the template's block capture — a missing space before
+    // `<strong>`, a doubled one after `</strong>` — satisfies every one of
+    // them while rendering "ApplicationRA-000000001has been withdrawn."
+    // The whitespace in that capture is part of the sentence, not
+    // indentation, so pin the composed result as ONE exact string. This is
+    // also what makes the trim markers in the template safe to touch: any
+    // change to them shows up here immediately.
+    test('composes the referenced sentence with exact spacing', async () => {
+      registerWithWithdrawn()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'withdrawn' })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(withdrawnNotice(result)).toContain(
+        'Application <strong data-testid="work-item-withdrawn-reference">RA-000000001</strong> has been withdrawn. It can no longer be progressed and no further action is needed.'
+      )
     })
 
     test('degrades to unqualified copy when there is no application reference', async () => {

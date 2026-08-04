@@ -141,8 +141,24 @@
   {# manual filter to drop. All prose comes from the constants in          #}
   {# core/withdrawn-notice.js so the referenced and unreferenced variants  #}
   {# cannot drift apart.                                                   #}
+  {#                                                                       #}
+  {# The whitespace below is LOAD-BEARING — it is the spacing of the       #}
+  {# rendered sentence, not indentation — so the capture uses explicit     #}
+  {# `{{-` / `-%}` trim markers to strip the line breaks while keeping the #}
+  {# two significant single spaces (before `<strong>`, and before the      #}
+  {# tail). `detail.controller.test.js` pins the fully composed referenced #}
+  {# sentence as one exact string, so any accidental change here fails.    #}
+  {#                                                                       #}
+  {# `data-testid` hooks are an EXTERNAL CONTRACT consumed by the          #}
+  {# epr-register-enrol-mgmt-tests WebdriverIO suite — renaming            #}
+  {# `work-item-withdrawn-notice` or `work-item-withdrawn-reference`       #}
+  {# breaks journey specs in that repo, which is branch-matched to this    #}
+  {# one by exact branch name. Coordinate before changing them.            #}
   {% if withdrawnNotice %}
-    {% set withdrawnNoticeHtml %}{{ withdrawnNotice.subject }}{% if withdrawnNotice.applicationRef %} <strong data-testid="work-item-withdrawn-reference">{{ withdrawnNotice.applicationRef }}</strong>{% endif %} {{ withdrawnNotice.tail }}{% endset %}
+    {% set withdrawnNoticeHtml %}
+      {{- withdrawnNotice.subject -}}
+      {%- if withdrawnNotice.applicationRef %} <strong data-testid="work-item-withdrawn-reference">{{ withdrawnNotice.applicationRef }}</strong>{% endif %} {{ withdrawnNotice.tail -}}
+    {% endset %}
     {{ govukErrorSummary({
       titleText: withdrawnNotice.title,
       errorList: [{ html: withdrawnNoticeHtml }],
