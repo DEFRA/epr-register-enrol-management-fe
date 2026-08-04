@@ -8,6 +8,10 @@ import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import { findAssignableUser } from '#/server/work-items/core/assignees.js'
+import {
+  evaluateApproveEligibility,
+  RE_ACCREDITATION_TYPE_ID
+} from '#/server/work-items/re-accreditation/approve-eligibility.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
@@ -467,9 +471,18 @@ function buildAssignmentViewModel({ workItem, user }) {
 // `typeId` is `re-accreditation`:
 //
 //  - `canApproveDirectly` — whether the primary "Approve" CTA should
-//    render. RA-323: any caseworker may approve, so this only mirrors the
-//    backend's state eligibility check (`awaiting-decision`). The backend
-//    remains authoritative; a forged POST is still rejected there.
+//    render. RA-323: any caseworker may approve, so this is purely an
+//    eligibility check. The backend remains authoritative; a forged POST is
+//    still rejected there.
+//
+//    RA-346: this used to test `stateId === 'awaiting-decision'` and nothing
+//    else, so the CTA was offered while the `record-decision-rationale` task
+//    was still pending — `approve` is not a generic engine action, so the
+//    task-completion filter that gates every other action never applied to
+//    it. It now defers to `evaluateApproveEligibility`, which asks the
+//    engine about the module's DECLARED `approve` transition
+//    (`requiresAllTasksComplete: true`). The approve route guards itself
+//    with the same helper, so the button and the URL cannot disagree.
 //  - `approveHref` — link target for the CTA.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
 //    a terminal state (approved / rejected / withdrawn), the template
@@ -478,8 +491,6 @@ function buildAssignmentViewModel({ workItem, user }) {
 //    accreditation id + a GOV.UK formatted start date for display.
 // -----------------------------------------------------------------------
 
-const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
-const RE_ACCREDITATION_ELIGIBLE_STATE = 'awaiting-decision'
 const RE_ACCREDITATION_TERMINAL_STATES = new Set([
   'approved',
   'rejected',
@@ -491,8 +502,7 @@ function applyReAccreditationViewModel({ workItem }) {
     return workItem
   }
 
-  const canApproveDirectly =
-    workItem.stateId === RE_ACCREDITATION_ELIGIBLE_STATE
+  const canApproveDirectly = evaluateApproveEligibility(workItem).allowed
 
   const isReadOnlyState = RE_ACCREDITATION_TERMINAL_STATES.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared

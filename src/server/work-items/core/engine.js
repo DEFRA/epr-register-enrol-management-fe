@@ -11,6 +11,8 @@
  * `approve` from this state if every task were complete?").
  */
 
+import { isTaskComplete } from './task-status.js'
+
 /**
  * Compute the task progress and currently-available actions for a work item.
  *
@@ -55,6 +57,35 @@ export function projectWorkItem(type, workItem) {
 }
 
 /**
+ * Are every one of this work item's current-state tasks complete?
+ *
+ * RA-346. Callers hand us one of two shapes, so resolve both from a single
+ * place rather than letting each caller invent its own rule:
+ *
+ *  - A work item the BACKEND returned. It carries its own `tasks` array
+ *    (each with a canonical `status`), which is authoritative — it already
+ *    reflects task state the type declaration cannot know about.
+ *  - A bare `{ stateId, completedTaskIdsByState }` shape, where the task
+ *    list has to be derived from the type declaration.
+ *
+ * `isTaskComplete` handles both the canonical `status` field and the legacy
+ * `isComplete` boolean that `projectWorkItem` emits, so one predicate covers
+ * both branches.
+ *
+ * @param {object} type Work item type declaration (`module.type`).
+ * @param {object} workItem
+ * @returns {boolean}
+ */
+export function allTasksComplete(type, workItem) {
+  if (Array.isArray(workItem?.tasks)) {
+    return workItem.tasks.every((task) => isTaskComplete(task))
+  }
+  return projectWorkItem(type, workItem).tasks.every((task) =>
+    isTaskComplete(task)
+  )
+}
+
+/**
  * Decide whether an action would be allowed for a work item right now.
  * Returns `{ allowed: true }` or `{ allowed: false, reason }` so callers can
  * surface the failure in a form.
@@ -77,11 +108,11 @@ export function canApplyAction(type, workItem, actionId) {
   if (transition.fromStateId !== stateId) {
     return { allowed: false, reason: 'invalid-transition' }
   }
-  if (transition.requiresAllTasksComplete !== false) {
-    const { tasks } = projectWorkItem(type, workItem)
-    if (!tasks.every((t) => t.isComplete)) {
-      return { allowed: false, reason: 'incomplete-tasks' }
-    }
+  if (
+    transition.requiresAllTasksComplete !== false &&
+    !allTasksComplete(type, workItem)
+  ) {
+    return { allowed: false, reason: 'incomplete-tasks' }
   }
   return { allowed: true }
 }

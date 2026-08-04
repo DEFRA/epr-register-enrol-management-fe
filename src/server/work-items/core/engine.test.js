@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 
-import { canApplyAction, projectWorkItem } from './engine.js'
+import { allTasksComplete, canApplyAction, projectWorkItem } from './engine.js'
 
 const sampleType = (overrides = {}) => ({
   id: 'sample',
@@ -155,5 +155,81 @@ describe('canApplyAction', () => {
       allowed: false,
       reason: 'invalid-work-item'
     })
+  })
+})
+
+// ---------------------------------------------------------------------
+// RA-346. `allTasksComplete` resolves task state from EITHER shape callers
+// hold: a work item the backend returned (authoritative `tasks` array with
+// a canonical `status`) or a bare `{ stateId, completedTaskIdsByState }`
+// that has to be derived from the type declaration. One predicate, so the
+// Approve CTA and the approve route cannot drift apart.
+// ---------------------------------------------------------------------
+describe('allTasksComplete', () => {
+  test('prefers the backend tasks array over the type declaration', () => {
+    // The declaration says `submitted` has two tasks and nothing is
+    // recorded as complete — but the backend says otherwise, and it wins.
+    const workItem = {
+      stateId: 'submitted',
+      tasks: [
+        { taskId: 'check-eligibility', status: 'Completed' },
+        { taskId: 'verify-documents', status: 'Completed' }
+      ]
+    }
+
+    expect(allTasksComplete(sampleType(), workItem)).toBe(true)
+  })
+
+  test('reports false when any task in the backend array is pending', () => {
+    const workItem = {
+      stateId: 'submitted',
+      tasks: [
+        { taskId: 'check-eligibility', status: 'Completed' },
+        { taskId: 'verify-documents', status: 'InProgress' }
+      ]
+    }
+
+    expect(allTasksComplete(sampleType(), workItem)).toBe(false)
+  })
+
+  test('honours the legacy isComplete boolean in the backend array', () => {
+    expect(
+      allTasksComplete(sampleType(), {
+        stateId: 'submitted',
+        tasks: [{ taskId: 'check-eligibility', isComplete: true }]
+      })
+    ).toBe(true)
+    expect(
+      allTasksComplete(sampleType(), {
+        stateId: 'submitted',
+        tasks: [{ taskId: 'check-eligibility', isComplete: false }]
+      })
+    ).toBe(false)
+  })
+
+  test('an empty backend tasks array counts as complete', () => {
+    expect(
+      allTasksComplete(sampleType(), { stateId: 'submitted', tasks: [] })
+    ).toBe(true)
+  })
+
+  test('falls back to the type declaration when there is no tasks array', () => {
+    expect(allTasksComplete(sampleType(), { stateId: 'submitted' })).toBe(false)
+    expect(
+      allTasksComplete(sampleType(), {
+        stateId: 'submitted',
+        completedTaskIdsByState: {
+          submitted: ['check-eligibility', 'verify-documents']
+        }
+      })
+    ).toBe(true)
+  })
+
+  test('a state with no declared tasks counts as complete', () => {
+    expect(allTasksComplete(sampleType(), { stateId: 'approved' })).toBe(true)
+  })
+
+  test('handles a null work item without throwing', () => {
+    expect(allTasksComplete(sampleType(), null)).toBe(true)
   })
 })

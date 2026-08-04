@@ -20,6 +20,7 @@ import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
+import { evaluateApproveEligibility } from '../approve-eligibility.js'
 import {
   APPROVAL_DECISION_NOTE_MAX_LENGTH,
   createApprovalService
@@ -30,9 +31,30 @@ const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
 
 const PAGE_TITLE = 'Approve this re-accreditation determination'
-const ELIGIBLE_STATE_ID = 'awaiting-decision'
 
 const logger = createLogger()
+
+/**
+ * RA-346. Banner for an approval that is not (or is no longer) permitted.
+ *
+ * `reason` is the engine's rejection code from `evaluateApproveEligibility`.
+ * The tasks-incomplete case gets its own copy because it is ACTIONABLE — the
+ * user can go and complete the task — whereas a state mismatch is terminal
+ * for this journey.
+ */
+function ineligibleBanner(reason) {
+  if (reason === 'incomplete-tasks') {
+    return {
+      type: 'error',
+      title: 'Could not approve this determination',
+      text: 'Complete every task for this application before approving the determination.'
+    }
+  }
+  return {
+    type: 'error',
+    text: 'This work item can no longer be approved from its current state.'
+  }
+}
 
 function detailHref(id) {
   return `/work-items/${encodeURIComponent(id)}`
@@ -96,16 +118,15 @@ export function makeShowApprovalController() {
       const workItem = result.workItem
       const applicationRef = workItem.payload.applicationReference
 
-      // Defensive UX: if the underlying state is no longer eligible (the
-      // user followed a stale link or the state moved on between page
-      // loads), redirect back to the detail page rather than letting
-      // them submit a request the backend will reject. The detail page
-      // is read-only in terminal states and explains the new status.
-      if (workItem.stateId !== ELIGIBLE_STATE_ID) {
-        flashBanner(request, {
-          type: 'error',
-          text: 'This work item can no longer be approved from its current state.'
-        })
+      // Defensive UX: if the work item is not eligible (the user followed a
+      // stale link, the state moved on between page loads, or — RA-346 — a
+      // decision task is still pending), redirect back to the detail page
+      // rather than letting them submit a request the backend will reject.
+      // This guards the ROUTE, not just the CTA: hiding the button is not a
+      // control, since the URL is guessable and bookmarkable.
+      const eligibility = evaluateApproveEligibility(workItem)
+      if (!eligibility.allowed) {
+        flashBanner(request, ineligibleBanner(eligibility.reason))
         return h.redirect(detailHref(id))
       }
 
@@ -177,6 +198,37 @@ export function makeSubmitApprovalController({
           .code(400)
       }
 
+      // RA-346. Guard the ROUTE, not just the CTA. Hiding the Approve button
+      // is a UX affordance, not a control — this URL is guessable, and a
+      // caseworker who bookmarked the interstitial (or replayed the form)
+      // must not be able to approve while an `awaiting-decision` task is
+      // pending. Re-read the work item so the check runs against current
+      // state rather than whatever was true when the page was rendered.
+      // Fails CLOSED: if we cannot verify eligibility, we do not approve.
+      const current = await getWorkItem({ workItemId: id, user })
+      if (!current.ok) {
+        logger.warn(
+          { workItemId: id, status: current.status },
+          'Could not verify re-accreditation approval eligibility'
+        )
+        flashBanner(request, {
+          type: 'error',
+          title: 'Could not approve this determination',
+          text: 'There was a problem approving this determination. Try again.'
+        })
+        return h.redirect(detailHref(id))
+      }
+
+      const eligibility = evaluateApproveEligibility(current.workItem)
+      if (!eligibility.allowed) {
+        logger.warn(
+          { workItemId: id, reason: eligibility.reason },
+          'Blocked re-accreditation approval: work item is not eligible'
+        )
+        flashBanner(request, ineligibleBanner(eligibility.reason))
+        return h.redirect(detailHref(id))
+      }
+
       const result = await service.approveWorkItem({
         workItemId: id,
         decisionNote,
@@ -211,6 +263,14 @@ export function makeSubmitApprovalController({
 }
 
 function bannerForFailure(result) {
+  // RA-346. The backend applies its own server-side tasks-complete gate on
+  // the approve endpoint. Reaching it means the FE guard and the backend
+  // disagreed — most plausibly a task was reopened between our eligibility
+  // re-read and the backend's check. Reuse the SAME actionable copy the FE
+  // guard uses, so the user is told what to do rather than "try again".
+  if (result.outcome === 'tasks-incomplete') {
+    return ineligibleBanner('incomplete-tasks')
+  }
   if (result.outcome === 'conflict') {
     return {
       type: 'error',

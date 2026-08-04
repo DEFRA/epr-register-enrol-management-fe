@@ -18,11 +18,57 @@ vi.mock('#/server/common/helpers/logging/logger.js', () => ({
 }))
 
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
+import {
+  clearWorkItemRegistry,
+  registerWorkItemType
+} from '#/server/work-items/core/registry.js'
+import { reAccreditationType } from '../module.js'
 
 import {
   makeShowApprovalController,
   makeSubmitApprovalController
 } from './controller.js'
+
+// RA-346. Both handlers now gate on the module's DECLARED `approve`
+// transition (`requiresAllTasksComplete: true`), resolved through the type
+// registry — so these unit tests must register the real type, exactly as the
+// plugin does at boot. Registering the REAL declaration (not a stub) means a
+// regression in `module.js` fails here too.
+beforeEach(() => {
+  clearWorkItemRegistry()
+  registerWorkItemType(reAccreditationType)
+})
+
+const COMPLETED_DECISION_TASK = {
+  taskId: 'record-decision-rationale',
+  displayName: 'Record decision rationale',
+  status: 'Completed'
+}
+
+const PENDING_DECISION_TASK = {
+  taskId: 'record-decision-rationale',
+  displayName: 'Record decision rationale',
+  status: 'InProgress'
+}
+
+/** A work item that is genuinely approvable: right state, tasks all done. */
+function anEligibleWorkItem(overrides = {}) {
+  return {
+    id: 'wi-1',
+    typeId: 're-accreditation',
+    stateId: 'awaiting-decision',
+    tasks: [COMPLETED_DECISION_TASK],
+    payload: { applicationReference: 'RA-REF-001' },
+    ...overrides
+  }
+}
+
+function mockEligible(overrides = {}) {
+  getWorkItem.mockResolvedValue({
+    ok: true,
+    workItem: anEligibleWorkItem(overrides)
+  })
+}
 
 function buildHapi(overrides = {}) {
   const captured = {}
@@ -61,14 +107,7 @@ describe('makeShowApprovalController', () => {
   })
 
   test('renders the interstitial for an eligible work item', async () => {
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: {
-        id: 'wi-1',
-        stateId: 'awaiting-decision',
-        payload: { applicationReference: 'RA-REF-001' }
-      }
-    })
+    mockEligible()
     const { request, h, captured } = buildHapi()
     await makeShowApprovalController().handler(request, h)
 
@@ -103,21 +142,46 @@ describe('makeShowApprovalController', () => {
   // renders for any authenticated caller once the item is eligible — there
   // is no assignee-or-decision-maker gate any more.
   test('renders the interstitial for a caller who is neither the assignee nor holds any special scope', async () => {
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: {
-        id: 'wi-1',
-        stateId: 'awaiting-decision',
-        assignedToId: 'someone-else',
-        payload: { applicationReference: 'RA-REF-001' }
-      }
-    })
+    mockEligible({ assignedToId: 'someone-else' })
     const { request, h, captured } = buildHapi({
       auth: { credentials: { scope: [] } }
     })
     await makeShowApprovalController().handler(request, h)
 
     expect(captured.viewPath).toBe('re-accreditation/approval/index')
+  })
+
+  // ------------------------------------------------------------------
+  // RA-346 AC2. Guarding the ROUTE, not just the CTA. Hiding the button is
+  // a UX affordance; this URL is guessable and bookmarkable, so a direct GET
+  // while `record-decision-rationale` is pending must not reach the form.
+  // ------------------------------------------------------------------
+  test('RA-346: redirects with a tasks-incomplete banner on a direct GET while a decision task is pending', async () => {
+    mockEligible({ tasks: [PENDING_DECISION_TASK] })
+    const { request, h, captured } = buildHapi()
+    await makeShowApprovalController().handler(request, h)
+
+    expect(captured.viewPath).toBeUndefined()
+    expect(captured.redirectTo).toBe('/work-items/wi-1')
+    expect(request.yar.flash).toHaveBeenCalledWith(
+      'flashBanner',
+      expect.objectContaining({
+        type: 'error',
+        title: 'Could not approve this determination',
+        text: 'Complete every task for this application before approving the determination.'
+      })
+    )
+  })
+
+  test('RA-346: the tasks-incomplete banner is distinct from the wrong-state banner', async () => {
+    mockEligible({ stateId: 'approved', tasks: [COMPLETED_DECISION_TASK] })
+    const { request, h } = buildHapi()
+    await makeShowApprovalController().handler(request, h)
+
+    const [, banner] = request.yar.flash.mock.calls[0]
+    expect(banner.text).toBe(
+      'This work item can no longer be approved from its current state.'
+    )
   })
 
   test('renders the not-found view with HTTP 404 when the backend returns 404', async () => {
@@ -153,6 +217,13 @@ describe('makeShowApprovalController', () => {
 })
 
 describe('makeSubmitApprovalController', () => {
+  // RA-346. The POST re-reads the work item and re-checks eligibility before
+  // calling the service, so every test needs an approvable item by default.
+  beforeEach(() => {
+    getWorkItem.mockReset()
+    mockEligible()
+  })
+
   test('redirects with a success banner when the approval succeeds', async () => {
     const service = {
       approveWorkItem: vi.fn().mockResolvedValue({
@@ -294,6 +365,104 @@ describe('makeSubmitApprovalController', () => {
 
     expect(service.approveWorkItem).toHaveBeenCalledWith(
       expect.objectContaining({ decisionNote: '' })
+    )
+  })
+
+  // ------------------------------------------------------------------
+  // RA-346 AC2. The route guard. A hidden button is not a control — a
+  // replayed form post or a hand-rolled POST must be refused here, BEFORE
+  // the service (and therefore the backend) is called at all.
+  // ------------------------------------------------------------------
+  test('RA-346: refuses a direct POST while a decision task is pending and never calls the service', async () => {
+    mockEligible({ tasks: [PENDING_DECISION_TASK] })
+    const service = { approveWorkItem: vi.fn() }
+    const { request, h, captured } = buildHapi()
+    await makeSubmitApprovalController({ service }).handler(request, h)
+
+    expect(service.approveWorkItem).not.toHaveBeenCalled()
+    expect(captured.redirectTo).toBe('/work-items/wi-1')
+    expect(request.yar.flash).toHaveBeenCalledWith(
+      'flashBanner',
+      expect.objectContaining({
+        type: 'error',
+        text: 'Complete every task for this application before approving the determination.'
+      })
+    )
+  })
+
+  test('RA-346: refuses a POST when the work item has left awaiting-decision', async () => {
+    mockEligible({ stateId: 'approved' })
+    const service = { approveWorkItem: vi.fn() }
+    const { request, h } = buildHapi()
+    await makeSubmitApprovalController({ service }).handler(request, h)
+
+    expect(service.approveWorkItem).not.toHaveBeenCalled()
+    const [, banner] = request.yar.flash.mock.calls[0]
+    expect(banner.text).toBe(
+      'This work item can no longer be approved from its current state.'
+    )
+  })
+
+  // Fail CLOSED: if we cannot re-read the work item we cannot prove the
+  // approval is permitted, so we must not attempt it.
+  test('RA-346: does not approve when the eligibility re-read fails', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 503, error: 'down' })
+    const service = { approveWorkItem: vi.fn() }
+    const { request, h, captured } = buildHapi()
+    await makeSubmitApprovalController({ service }).handler(request, h)
+
+    expect(service.approveWorkItem).not.toHaveBeenCalled()
+    expect(captured.redirectTo).toBe('/work-items/wi-1')
+    expect(request.yar.flash).toHaveBeenCalledWith(
+      'flashBanner',
+      expect.objectContaining({
+        type: 'error',
+        text: expect.stringMatching(/problem approving/i)
+      })
+    )
+  })
+
+  // The over-length note is rejected before the eligibility re-read, so the
+  // user gets the inline field error rather than a redirect.
+  test('RA-346: the note-length guard still short-circuits ahead of the eligibility check', async () => {
+    mockEligible({ tasks: [PENDING_DECISION_TASK] })
+    const service = { approveWorkItem: vi.fn() }
+    const { request, h, captured } = buildHapi({
+      payload: { decisionNote: 'x'.repeat(2001) }
+    })
+    await makeSubmitApprovalController({ service }).handler(request, h)
+
+    expect(captured.statusCode).toBe(400)
+    expect(service.approveWorkItem).not.toHaveBeenCalled()
+  })
+
+  // ------------------------------------------------------------------
+  // RA-346. Backend rejection. `ra346-be` adds a server-side gate on the
+  // approve endpoint; if the tasks are completed between our re-read and
+  // the backend's own check (or the FE gate is somehow bypassed), the
+  // backend's refusal must surface as the SAME actionable message the FE
+  // guard uses — not a generic "there was a problem".
+  // ------------------------------------------------------------------
+  test('RA-346: maps a backend tasks-incomplete rejection to the actionable banner', async () => {
+    const service = {
+      approveWorkItem: vi.fn().mockResolvedValue({
+        ok: false,
+        outcome: 'tasks-incomplete',
+        status: 409,
+        message: 'All tasks must be complete before approving.'
+      })
+    }
+    const { request, h, captured } = buildHapi()
+    await makeSubmitApprovalController({ service }).handler(request, h)
+
+    expect(captured.redirectTo).toBe('/work-items/wi-1')
+    expect(request.yar.flash).toHaveBeenCalledWith(
+      'flashBanner',
+      expect.objectContaining({
+        type: 'error',
+        title: 'Could not approve this determination',
+        text: 'Complete every task for this application before approving the determination.'
+      })
     )
   })
 

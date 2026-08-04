@@ -1597,14 +1597,49 @@ describe('#workItemDetailController', () => {
   })
 
   describe('RA-133 approve CTA eligibility (canApproveDirectly)', () => {
+    // RA-346. Register the REAL module type rather than the trimmed-down
+    // stub the other blocks use. The Approve CTA is now gated by the
+    // module's DECLARED `approve` transition (`requiresAllTasksComplete:
+    // true`), so a fixture type with no transitions would vacuously "pass"
+    // this suite while telling us nothing about the shipped declaration.
     function registerReaccreditationWithDetailV1() {
-      registerReaccreditation()
+      registerWorkItemType(reAccreditationType)
       registerDetailTemplate(
         're-accreditation',
         'v1',
         're-accreditation/detail-v1'
       )
     }
+
+    // The single `awaiting-decision` task, complete. RA-346's whole point is
+    // that the CTA must not render until this is done.
+    const decisionTasksComplete = [
+      {
+        taskId: 'record-decision-rationale',
+        displayName: 'Record decision rationale',
+        status: 'Completed'
+      }
+    ]
+
+    const decisionTasksPending = [
+      {
+        taskId: 'record-decision-rationale',
+        displayName: 'Record decision rationale',
+        status: 'InProgress'
+      }
+    ]
+
+    const withdrawDuringDecision = [
+      // Backend always returns withdraw-during-decision in this state
+      // (no task-completion requirement).
+      {
+        actionId: 'withdraw-during-decision',
+        displayName: 'Withdraw',
+        fromStateId: 'awaiting-decision',
+        toStateId: 'withdrawn',
+        requiresAllTasksComplete: false
+      }
+    ]
 
     // RA-323: every caseworker has the same permissions, so the Approve
     // CTA's visibility depends only on the work item's state — not on the
@@ -1616,17 +1651,8 @@ describe('#workItemDetailController', () => {
         workItem: aWorkItem({
           stateId: 'awaiting-decision',
           assignedToId: 'someone-else',
-          availableActions: [
-            // Backend always returns withdraw-during-decision in this state
-            // (no task-completion requirement) even before reject is gated.
-            {
-              actionId: 'withdraw-during-decision',
-              displayName: 'Withdraw',
-              fromStateId: 'awaiting-decision',
-              toStateId: 'withdrawn',
-              requiresAllTasksComplete: false
-            }
-          ]
+          tasks: decisionTasksComplete,
+          availableActions: withdrawDuringDecision
         })
       })
 
@@ -1665,15 +1691,8 @@ describe('#workItemDetailController', () => {
         workItem: aWorkItem({
           stateId: 'awaiting-decision',
           assignedToId: 'someone-else',
-          availableActions: [
-            {
-              actionId: 'withdraw-during-decision',
-              displayName: 'Withdraw',
-              fromStateId: 'awaiting-decision',
-              toStateId: 'withdrawn',
-              requiresAllTasksComplete: false
-            }
-          ]
+          tasks: decisionTasksComplete,
+          availableActions: withdrawDuringDecision
         })
       })
 
@@ -1704,6 +1723,188 @@ describe('#workItemDetailController', () => {
       expect(result).not.toEqual(
         expect.stringContaining('data-testid="action-approve"')
       )
+    })
+
+    // ------------------------------------------------------------------
+    // RA-346 AC2. THE regression. `approve` is not a generic engine action,
+    // so it never appears in the backend's `availableActions` and the
+    // task-completion filter that gates every other action never applied to
+    // it — the CTA was offered (and approval succeeded) with
+    // `record-decision-rationale` still pending.
+    // ------------------------------------------------------------------
+    test('RA-346: does not render the Approve CTA while an awaiting-decision task is pending', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          tasks: decisionTasksPending,
+          availableActions: withdrawDuringDecision
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-approve"')
+      )
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="re-accreditation-approve-cta"')
+      )
+      // The page must still render normally — gating the CTA is not an error.
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="re-accreditation-detail"')
+      )
+    })
+
+    test('RA-346: does not render the Approve CTA when the task is merely NotStarted', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          tasks: [
+            {
+              taskId: 'record-decision-rationale',
+              displayName: 'Record decision rationale',
+              status: 'NotStarted'
+            }
+          ],
+          availableActions: withdrawDuringDecision
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-approve"')
+      )
+    })
+
+    // Legacy backends emit `isComplete` instead of the canonical `status`.
+    // The gate must honour both, or historical items would be un-approvable.
+    test('RA-346: renders the Approve CTA for a legacy isComplete=true task', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          tasks: [
+            {
+              taskId: 'record-decision-rationale',
+              displayName: 'Record decision rationale',
+              isComplete: true
+            }
+          ],
+          availableActions: withdrawDuringDecision
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-approve"')
+      )
+    })
+
+    // ------------------------------------------------------------------
+    // RA-346 AC1. `submit-for-decision` is a generic engine action, so the
+    // backend omits it from `availableActions` while assessment tasks are
+    // pending and the FE filter drops it too. Pin BOTH halves so a
+    // regression in either surface is caught here.
+    // ------------------------------------------------------------------
+    test('RA-346 AC1: does not render submit-for-decision while assessment tasks are pending', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'assessment-in-progress',
+          tasks: [
+            {
+              taskId: 'review-compliance-history',
+              displayName: 'Review compliance history',
+              status: 'Completed'
+            },
+            {
+              taskId: 'assess-technical-capacity',
+              displayName: 'Assess technical capacity',
+              status: 'InProgress'
+            }
+          ],
+          // The backend has already omitted submit-for-decision here.
+          availableActions: [
+            {
+              actionId: 'withdraw-during-assessment',
+              displayName: 'Withdraw',
+              fromStateId: 'assessment-in-progress',
+              toStateId: 'withdrawn',
+              requiresAllTasksComplete: false
+            }
+          ]
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(expect.stringContaining('submit-for-decision'))
+    })
+
+    test('RA-346 AC1: renders submit-for-decision once every assessment task is complete', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'assessment-in-progress',
+          tasks: [
+            {
+              taskId: 'review-compliance-history',
+              displayName: 'Review compliance history',
+              status: 'Completed'
+            },
+            {
+              taskId: 'assess-technical-capacity',
+              displayName: 'Assess technical capacity',
+              status: 'Completed'
+            },
+            {
+              taskId: 'assess-financial-capacity',
+              displayName: 'Assess financial capacity',
+              status: 'Completed'
+            }
+          ],
+          availableActions: [
+            {
+              actionId: 'submit-for-decision',
+              displayName: 'Submit for decision',
+              fromStateId: 'assessment-in-progress',
+              toStateId: 'awaiting-decision',
+              requiresAllTasksComplete: true
+            }
+          ]
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(expect.stringContaining('submit-for-decision'))
     })
   })
 

@@ -16,6 +16,11 @@
  *  - { ok: false, outcome: 'note-failed', message }  when the optional
  *      note POST failed; the approval is NOT attempted because the
  *      note is part of the auditable rationale.
+ *  - { ok: false, outcome: 'tasks-incomplete', status: 409, message }
+ *      RA-346: the backend's server-side gate refused because an
+ *      `awaiting-decision` task is still pending. Distinguished from a
+ *      plain `conflict` by the ProblemDetails detail — see
+ *      `approveOutcomeFor` at the bottom of this file.
  *  - { ok: false, outcome: 'conflict' | 'forbidden' | 'not-found' |
  *      'invalid' | 'server' | 'network' | 'unauthorized',
  *      status?, message }                            on approval failure
@@ -88,7 +93,7 @@ export function createApprovalService({
 
       return {
         ok: false,
-        outcome: APPROVE_OUTCOME[approveResult.reason] ?? 'server',
+        outcome: approveOutcomeFor(approveResult),
         status: approveResult.status,
         message: approveResult.message ?? 'Approval failed'
       }
@@ -106,4 +111,41 @@ const APPROVE_OUTCOME = {
   conflict: 'conflict',
   server: 'server',
   network: 'network'
+}
+
+/**
+ * RA-346. The backend refuses an approve while any `awaiting-decision` task
+ * is pending. Contract confirmed with the backend owner:
+ *
+ *   HTTP 409, ProblemDetails
+ *     title:  "Could not approve re-accreditation"
+ *     detail: "Action 'approve' requires every task for state
+ *              'awaiting-decision' to be complete first."
+ *
+ * There is deliberately NO machine-readable discriminator: the service has
+ * no `errorCode` / extension-member convention, and introducing one on this
+ * endpoint alone would be a new inconsistent contract (a repo-wide
+ * `failureCode` is a separate follow-up, not RA-346). The discriminator is
+ * therefore (409 + detail), which is safe here because the backend now
+ * generates this message from ONE place — `WorkItemEngineRules
+ * .RequireAllTasksComplete` — so it is byte-identical whichever path
+ * produced it, varying only in the interpolated action and state ids. The
+ * frontend already string-matches this same shape in `core/service.test.js`.
+ *
+ * Matching on 409 alone would be WRONG: the other 409 on this endpoint is
+ * the optimistic-concurrency conflict ("was modified concurrently"), which
+ * needs the existing "refresh and try again" copy, not "complete your
+ * tasks". Hence the substring test rather than a bare status check.
+ */
+const TASKS_INCOMPLETE_DETAIL = /requires every task/i
+
+function approveOutcomeFor(approveResult) {
+  const outcome = APPROVE_OUTCOME[approveResult.reason] ?? 'server'
+  if (
+    outcome === 'conflict' &&
+    TASKS_INCOMPLETE_DETAIL.test(approveResult.message ?? '')
+  ) {
+    return 'tasks-incomplete'
+  }
+  return outcome
 }
