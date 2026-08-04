@@ -447,9 +447,35 @@ async function loadPriorYear({ workItem, id, user }) {
  * caseworker has the same permissions, so the reassign / unassign links are
  * always available; the backend remains the source of truth and rejects
  * anything the caller may not do.
+ *
+ * RA-358 NARROWS BOTH OF THE ABOVE. "All the way through" now means through
+ * the ACTIVE lifecycle: once a case reaches a terminal state (approved,
+ * rejected, withdrawn) no assignment affordance renders at all.
+ *
+ * What was traded away, recorded deliberately so this does not read as an
+ * oversight: RA-295 AC03's stated rationale was that a CLOSED case stays
+ * reassignable SO IT CAN BE HANDED OVER, and there was a passing journey
+ * test asserting exactly that (`ra-295-assignment-and-query.e2e.js`). Tom
+ * overrode it as product authority after finding that "Assign to yourself
+ * and start" on a withdrawn case worked — the label is nonsense on a closed
+ * case, and before management-be's terminal-state guard the click really did
+ * assign it. The hand-over use case was put to him explicitly and he chose
+ * the gate; if it is ever reinstated, this is the flag to remove.
+ *
+ * This is a UI gate, not the enforcement point: management-be now rejects
+ * assign/unassign on a terminal item with 409 TerminalState, so a forged
+ * POST is still refused. The gate exists so the UI stops OFFERING an action
+ * that can only fail — previously the page showed the withdrawn notice
+ * ("no further action is needed") directly above three controls that
+ * contradicted it.
  */
 function buildAssignmentViewModel({ workItem, user }) {
   const callerIsAssignee = user?.id != null && workItem.assignedToId === user.id
+  // Reuses the single TERMINAL_STATE_IDS list that also drives the
+  // re-accreditation read-only Outcome panel, so the two cannot disagree.
+  // Unlike that one this is NOT type-scoped: any registered type reaching
+  // one of these states gets the gate, which is the desired behaviour.
+  const isClosed = TERMINAL_STATE_IDS.has(workItem.stateId)
 
   return {
     assignedToId: workItem.assignedToId ?? null,
@@ -457,11 +483,17 @@ function buildAssignmentViewModel({ workItem, user }) {
     assignedAt: workItem.assignedAt ?? null,
     assignedBy: workItem.assignedBy ?? null,
     callerIsAssignee,
-    canSelfAssign: user?.id != null && !callerIsAssignee
+    // RA-358. Drives the "This application is closed" line in place of the
+    // affordances. Kept as its own flag rather than being folded into
+    // `canSelfAssign` because the template needs to distinguish "no button
+    // because you already hold it" from "no controls because it is closed".
+    isClosed,
+    canSelfAssign: user?.id != null && !callerIsAssignee && !isClosed
     // RA-295 removed `isUnassigned`, `canUnassign` and `assignableUsers`
-    // from this model: the reassign / unassign links are now unconditional
-    // (AC03) and the assignee picker moved to the reassign interstitial,
-    // which builds its own list from the directory.
+    // from this model: the reassign / unassign links are unconditional
+    // WITHIN the active lifecycle (AC03, as narrowed by RA-358 above) and
+    // the assignee picker moved to the reassign interstitial, which builds
+    // its own list from the directory.
   }
 }
 
@@ -486,11 +518,16 @@ function buildAssignmentViewModel({ workItem, user }) {
 
 const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
 const RE_ACCREDITATION_ELIGIBLE_STATE = 'awaiting-decision'
-const RE_ACCREDITATION_TERMINAL_STATES = new Set([
-  'approved',
-  'rejected',
-  'withdrawn'
-])
+// The states in which a case is closed. Drives BOTH the re-accreditation
+// read-only Outcome panel (`isReadOnlyState`) and, since RA-358, the
+// assignment gate in `buildAssignmentViewModel` — deliberately ONE list, so
+// the two cannot disagree about what "closed" means.
+//
+// Still a hardcoded literal rather than a registry lookup: every registered
+// type's terminal states should ultimately derive from the module's declared
+// `states[].isTerminal` flag, which is tracked separately as epr-uf42. Reuse
+// this constant rather than adding another list.
+const TERMINAL_STATE_IDS = new Set(['approved', 'rejected', 'withdrawn'])
 
 function applyReAccreditationViewModel({ workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
@@ -500,7 +537,7 @@ function applyReAccreditationViewModel({ workItem }) {
   const canApproveDirectly =
     workItem.stateId === RE_ACCREDITATION_ELIGIBLE_STATE
 
-  const isReadOnlyState = RE_ACCREDITATION_TERMINAL_STATES.has(workItem.stateId)
+  const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
   // state-badge map so it matches the list and the envelope State badge.
   const stateTagClasses = stateTagClass(workItem.stateId)

@@ -924,11 +924,17 @@ describe('#workItemDetailController', () => {
 
   // RA-295 AC03 / RA-323: every caseworker has the same permissions, so the
   // reassign / unassign / due-date affordances are offered in the assignment
-  // panel in EVERY state — the picker itself now lives on the reassign
+  // panel in every state — the picker itself now lives on the reassign
   // interstitial the panel links to.
-  test('AC03: the assignment panel offers reassign, unassign and due-date links in every state', async () => {
+  //
+  // RA-358 NARROWED THIS to the ACTIVE lifecycle: `approved` was dropped from
+  // the list below because a closed case now renders no assignment affordance
+  // at all. The remaining states are the point of the test — "every state"
+  // was never about terminal ones; it was about not gating on assignment
+  // status or role. See the RA-358 describe block for the terminal cases.
+  test('AC03: the assignment panel offers reassign, unassign and due-date links in every active state', async () => {
     registerReaccreditation()
-    for (const stateId of ['submitted', 'awaiting-decision', 'approved']) {
+    for (const stateId of ['submitted', 'awaiting-decision', 'queried']) {
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
@@ -1048,12 +1054,23 @@ describe('#workItemDetailController', () => {
     expect(closed.result).not.toEqual(
       expect.stringContaining(`/work-items/${ID}/sla/override`)
     )
-    // ...while assignment stays available, per AC03.
-    expect(closed.result).toEqual(
+    // RA-358 REVERSED the original tail of this test, which asserted that
+    // "assignment stays available, per AC03" on an approved item. A closed
+    // case now renders no assignment affordance either, so the SLA links are
+    // no longer distinguishable from assignment BY STATE — what still
+    // distinguishes them is the mechanism: SLA follows the engine's
+    // `sla-extend` projection (see the live half above, where a non-terminal
+    // item with the action projected DOES show them), whereas assignment
+    // follows the terminal-state gate. The first half of this test is what
+    // keeps it meaningful.
+    expect(closed.result).not.toEqual(
       expect.stringContaining('data-testid="reassign-link"')
     )
-    expect(closed.result).toEqual(
+    expect(closed.result).not.toEqual(
       expect.stringContaining('data-testid="unassign-link"')
+    )
+    expect(closed.result).toEqual(
+      expect.stringContaining('data-testid="assignment-closed"')
     )
   })
 
@@ -1625,6 +1642,125 @@ describe('#workItemDetailController', () => {
       expect(result).toEqual(
         expect.stringContaining('data-testid="re-accreditation-state-tag"')
       )
+    })
+  })
+
+  // RA-358. Tom's decision: no assignment affordance renders on a closed
+  // case. This NARROWS RA-295 AC03 ("assignment available all the way
+  // through") to the active lifecycle — see buildAssignmentViewModel for the
+  // hand-over rationale that was traded away.
+  describe('RA-358 assignment gate on terminal states', () => {
+    const AFFORDANCES = ['self-assign-submit', 'reassign-link', 'unassign-link']
+
+    function registerWithTerminalStates() {
+      registerWorkItemType({
+        id: 're-accreditation',
+        displayName: 'Re-accreditation',
+        initialState: { id: 'submitted', displayName: 'Submitted' },
+        states: [
+          { id: 'submitted', displayName: 'Submitted' },
+          { id: 'approved', displayName: 'Approved', isTerminal: true },
+          { id: 'rejected', displayName: 'Rejected', isTerminal: true },
+          { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
+        ],
+        getTasksForState: () => []
+      })
+    }
+
+    async function renderInState(stateId) {
+      registerWithTerminalStates()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId })
+      })
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      return result
+    }
+
+    test.each(['withdrawn', 'approved', 'rejected'])(
+      'suppresses every assignment affordance in the %s state',
+      async (stateId) => {
+        const result = await renderInState(stateId)
+
+        // Positive hook FIRST. Asserting only the absence of the three
+        // affordances would pass vacuously if the panel stopped rendering
+        // altogether, so anchor on something that must be present.
+        expect(result).toContain('data-testid="case-assignment-panel"')
+        expect(result).toContain('data-testid="assignment-closed"')
+        expect(result).toContain(
+          'This application is closed. It cannot be assigned or reassigned.'
+        )
+
+        for (const testId of AFFORDANCES) {
+          expect(result).not.toContain(`data-testid="${testId}"`)
+        }
+        // Suppressed outright, not rendered as an RA-335 inert span.
+        expect(result).not.toContain('app-action-link--disabled')
+        // The self-assign form must not survive the button.
+        expect(result).not.toContain(`/work-items/${ID}/self-assign`)
+      }
+    )
+
+    test('still offers every assignment affordance in a non-terminal state', async () => {
+      const result = await renderInState('submitted')
+
+      expect(result).toContain('data-testid="case-assignment-panel"')
+      expect(result).not.toContain('data-testid="assignment-closed"')
+      for (const testId of AFFORDANCES) {
+        expect(result).toContain(`data-testid="${testId}"`)
+      }
+      expect(result).toContain(`/work-items/${ID}/self-assign`)
+    })
+
+    // The gate hides the whole links list, which the SLA affordances share.
+    // Called out explicitly because it is a deliberate side effect: the
+    // existing canChangeDueDate comment already says moving a due date on a
+    // closed case is wrong.
+    test('also suppresses the SLA links on a closed case', async () => {
+      registerWithTerminalStates()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'withdrawn',
+          availableActions: [{ actionId: 'sla-extend', displayName: 'Extend' }]
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toContain('data-testid="assignment-closed"')
+      expect(result).not.toContain('data-testid="action-sla-extend"')
+      expect(result).not.toContain('data-testid="action-sla-override"')
+    })
+
+    // The assignee is information, not an affordance: a handed-over case
+    // should still show who holds it after it closes.
+    test('still shows the current assignee on a closed case', async () => {
+      registerWithTerminalStates()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'withdrawn',
+          assignedToId: 'user-1',
+          assignedToName: 'Casey Worker'
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toContain('data-testid="assignment-current"')
+      expect(result).toContain('Casey Worker')
+      expect(result).toContain('data-testid="assignment-closed"')
     })
   })
 
