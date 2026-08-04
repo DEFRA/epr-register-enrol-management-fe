@@ -247,15 +247,31 @@
         {% endif %}
 
         {% if items.length > 0 %}
-          {# RA-324 phase-2. Applications render as cards matching the         #}
-          {# prototype (AC04): a bold application-ref link + status badge in   #}
-          {# the header; a "Reprocessor reaccreditation: {Material}" title; an #}
-          {# "{Org} ({Org ID})" line; and — only once the SLA clock has        #}
-          {# started — an "Assigned to / Due on" footer. GOV.UK macros + plain #}
-          {# HTML only, no JavaScript (RA-94). Every interpolation is a plain  #}
-          {# `{{ ... }}` so Nunjucks auto-escapes it (epr-6fi). Field          #}
-          {# data-testids are scoped by the enclosing card; per-item hooks     #}
-          {# (link, badge, archived) are id-keyed for the e2e suite.           #}
+          {# RA-324 phase-2 / RA-370. Applications render as cards matching     #}
+          {# the prototype (AC04): an application-ref link + status badge in   #}
+          {# the header, then the card body. GOV.UK macros + plain HTML only,  #}
+          {# no JavaScript (RA-94). Every interpolation is a plain `{{ ... }}` #}
+          {# so Nunjucks auto-escapes it (epr-6fi). Field data-testids are     #}
+          {# scoped by the enclosing card; per-item hooks (link, badge,        #}
+          {# archived) are id-keyed for the e2e suite.                         #}
+          {#                                                                   #}
+          {# RA-370 fixes the field ORDER, which must be identical on every    #}
+          {# card. In render order:                                            #}
+          {#   1. Application ref no   (header link)                           #}
+          {#   2. Org name            \                                        #}
+          {#   3. Org ID              / one "{Org} ({Org ID})" line            #}
+          {#      Registration number  (RA-295 AC06 — not an RA-370 field;     #}
+          {#                            kept here, grouped with the other      #}
+          {#                            organisation-identity values)          #}
+          {#   4. Material type      \                                         #}
+          {#   5. Applicant type     / one title line, material first          #}
+          {#   6. Submitted on        (footer, only while assessment has NOT   #}
+          {#                           started — i.e. no SLA clock)            #}
+          {#   7. Assigned to         (footer, ALWAYS — "Unassigned" when no   #}
+          {#                           officer holds it)                       #}
+          {#   8. Due date            (footer, only once the SLA clock starts) #}
+          {# 6 and 8 are mutually exclusive by construction, so the footer     #}
+          {# always carries exactly two values.                                #}
           <ul class="govuk-list app-application-cards" data-testid="applications-list">
             {% for item in items %}
               <li>
@@ -266,16 +282,6 @@
                     </h2>
                     {{ govukTag({ text: item.stateDisplayName, classes: item.stateTagClass, attributes: { "data-testid": "work-item-state-tag-" + item.id } }) }}
                   </div>
-
-                  {# Applicant type is hard-coded "Reprocessor" BY DESIGN: this #}
-                  {# service is reprocessor-only for now — the backend has no    #}
-                  {# reprocessor/exporter type distinction on a work item yet, so #}
-                  {# there is no per-item value to read. When the backend models  #}
-                  {# that distinction (see follow-up bead) this must switch to a  #}
-                  {# real field, otherwise a second type would be mislabelled.    #}
-                  <p class="govuk-body app-application-card__title" data-testid="application-card-title">
-                    <span data-testid="applicant-type">Reprocessor</span> reaccreditation: <span data-testid="material">{{ item.material or "—" }}</span>
-                  </p>
 
                   <p class="govuk-body app-application-card__org" data-testid="application-org">
                     <span data-testid="org-name">{{ item.orgName or "—" }}</span>{% if item.orgId %} (<span data-testid="org-id">{{ item.orgId }}</span>){% endif %}
@@ -289,12 +295,32 @@
                     <span data-testid="registration-number">{{ item.registrationNumber or "—" }}</span>
                   </p>
 
-                  {% if item.showDueDate %}
-                    <div class="app-application-card__footer" data-testid="application-card-footer">
-                      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
+                  {# RA-370. Material type then applicant type, in that order.   #}
+                  {# Applicant type is hard-coded "Reprocessor" BY DESIGN: this  #}
+                  {# service is reprocessor-only for now — the backend has no    #}
+                  {# reprocessor/exporter type distinction on a work item yet, so #}
+                  {# there is no per-item value to read. When the backend models  #}
+                  {# that distinction (see follow-up bead) this must switch to a  #}
+                  {# real field, otherwise a second type would be mislabelled.    #}
+                  <p class="govuk-body app-application-card__title" data-testid="application-card-title">
+                    <span data-testid="material">{{ item.material or "—" }}</span> reaccreditation (<span data-testid="applicant-type">Reprocessor</span>)
+                  </p>
+
+                  {# RA-370. The footer always renders: "Assigned to" is no      #}
+                  {# longer gated on the SLA clock (it shows "Unassigned" when   #}
+                  {# nobody holds the case). "Submitted on" shows only while the #}
+                  {# assessment has NOT started, and "Due on" only once it has — #}
+                  {# `showDueDate` is the SLA-clock signal and `showSubmittedOn` #}
+                  {# its inverse, so exactly one of the two dates is present.    #}
+                  <div class="app-application-card__footer" data-testid="application-card-footer">
+                    {% if item.showSubmittedOn %}
+                      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ item.submittedOn | formatDateGds or "—" }}</span></span>
+                    {% endif %}
+                    <span class="app-application-card__meta"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
+                    {% if item.showDueDate %}
                       <span class="app-application-card__meta"><span class="app-application-card__meta-label">Due on:</span> <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
-                    </div>
-                  {% endif %}
+                    {% endif %}
+                  </div>
 
                   {% if item.archivedAt %}
                     <p class="govuk-body-s app-application-card__archived" data-testid="work-item-archived-at-{{ item.id }}">Archived: {{ item.archivedAt }}</p>
