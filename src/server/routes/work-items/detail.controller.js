@@ -5,6 +5,7 @@ import {
 import { notificationFailureDetected } from '#/server/work-items/core/audit-log.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
+import { buildWithdrawnNotice } from '#/server/work-items/core/withdrawn-notice.js'
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import { findAssignableUser } from '#/server/work-items/core/assignees.js'
@@ -288,8 +289,8 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   if (result.ok === false && result.status === 404) {
     return h
       .view(NOT_FOUND_VIEW, {
-        pageTitle: 'Work item not found',
-        heading: 'Work item not found',
+        pageTitle: 'Application not found',
+        heading: 'Application not found',
         workItemId: id,
         breadcrumbs: [
           { text: 'Work items', href: '/work-items' },
@@ -385,6 +386,11 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       successBanner,
       flashBanner,
       notificationFailedBanner,
+      // RA-358. A withdrawn application still renders a normal 200 detail
+      // page (management-be never deletes withdrawn items), so the page has
+      // to say so itself. Built from the DECORATED item, whose
+      // `applicationRef` is already the RA-249-safe "human ref or null".
+      withdrawnNotice: buildWithdrawnNotice(enriched),
       slaMaxDays,
       reasonMaxLength: 500
     })

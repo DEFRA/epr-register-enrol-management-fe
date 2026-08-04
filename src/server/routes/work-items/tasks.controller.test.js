@@ -182,7 +182,7 @@ describe('#workItemTasksController (RA-129)', () => {
       })
 
       expect(statusCode).toBe(statusCodes.notFound)
-      expect(result).toEqual(expect.stringContaining('Work item not found'))
+      expect(result).toEqual(expect.stringContaining('Application not found'))
     })
 
     test('renders the unavailable view when the backend errors', async () => {

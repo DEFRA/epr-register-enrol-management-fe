@@ -81,6 +81,10 @@ describe('makeShowWithdrawController', () => {
 
     expect(captured.viewPath).toBe('work-items/not-found')
     expect(captured.statusCode).toBe(404)
+    // RA-358 AC2. The withdraw interstitial's 404 branch must stay in step
+    // with the detail controller's — same view, same application-terms copy.
+    expect(captured.viewCtx.heading).toBe('Application not found')
+    expect(captured.viewCtx.pageTitle).toBe('Application not found')
   })
 
   test('renders 502 when the backend is unavailable', async () => {

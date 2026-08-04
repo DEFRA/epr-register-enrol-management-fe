@@ -115,6 +115,39 @@
     {% endif %}
   {% endif %}
 
+  {# RA-358. Withdrawn applications are never deleted by management-be —   #}
+  {# `GET /work-items/{id}` returns a normal 200 for them — so this page   #}
+  {# has to state the withdrawal itself rather than leaving it to the grey #}
+  {# state tag and the read-only Outcome panel.                            #}
+  {#                                                                       #}
+  {# Rendered as an error summary, not a notification banner, for the same #}
+  {# reason as the RA-211 banner below: govukNotificationBanner only       #}
+  {# honours type 'success', and core/_header.scss sets                    #}
+  {# --govuk-brand-colour to Defra green service-wide, so any other banner  #}
+  {# comes out green and reads as good news. disableAutoFocus because the  #}
+  {# notice persists across every visit to a withdrawn case and must not   #}
+  {# steal focus each time.                                                #}
+  {#                                                                       #}
+  {# RA-249: the case is named by its human RA-* application reference or  #}
+  {# not at all — never by the work-item Guid. The controller's            #}
+  {# `withdrawnNotice.text` already carries the correct unreferenced       #}
+  {# wording, so the else branch is a plain escape of it.                  #}
+  {% if withdrawnNotice %}
+    {% if withdrawnNotice.applicationRef %}
+      {% set withdrawnNoticeHtml = 'Application <strong data-testid="work-item-withdrawn-reference">'
+        + (withdrawnNotice.applicationRef | escape)
+        + '</strong> has been withdrawn. It can no longer be progressed and no further action is needed.' %}
+    {% else %}
+      {% set withdrawnNoticeHtml = withdrawnNotice.text | escape %}
+    {% endif %}
+    {{ govukErrorSummary({
+      titleText: withdrawnNotice.title,
+      errorList: [{ html: withdrawnNoticeHtml }],
+      disableAutoFocus: true,
+      attributes: { "data-testid": "work-item-withdrawn-notice" }
+    }) }}
+  {% endif %}
+
   {# RA-211: surfaces when the audit log has an unresolved                #}
   {# notification-failed entry (no later notification-sent).              #}
   {# govukNotificationBanner only honours type: 'success' — any other     #}

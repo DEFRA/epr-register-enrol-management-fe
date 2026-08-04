@@ -68,6 +68,27 @@ function siteAddressRow(html) {
   return detailRow(html, 'site-address')
 }
 
+/**
+ * Extract the rendered RA-358 withdrawn notice (a govuk error summary:
+ * outer div → role="alert" → title → body → `<ul>` of items), so a
+ * "the Guid is not in here" assertion is scoped to the notice and cannot
+ * pass merely because the id moved elsewhere on the page. The detail page
+ * legitimately still carries the work-item id in its reference footer.
+ *
+ * THROWS when the notice is absent, for the same reason `detailRow` does:
+ * a negative assertion scoped to a missing element passes vacuously.
+ */
+function withdrawnNotice(html) {
+  const start = html.indexOf('data-testid="work-item-withdrawn-notice"')
+  if (start === -1) {
+    throw new Error(
+      'No withdrawn notice in the rendered page — a scoped assertion against it would pass vacuously.'
+    )
+  }
+  const end = html.indexOf('</ul>', start)
+  return html.slice(start, end === -1 ? undefined : end)
+}
+
 function aWorkItem(overrides = {}) {
   return {
     id: ID,
@@ -441,8 +462,39 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.notFound)
-    expect(result).toEqual(expect.stringContaining('Work item not found'))
+    expect(result).toEqual(expect.stringContaining('Application not found'))
+    // RA-358 AC2. The id survives ONLY as explicitly-labelled diagnostic
+    // detail in its own element — never as the heading caption, the subject
+    // of the body copy or an emphasised value.
     expect(result).toEqual(expect.stringContaining(ID))
+    expect(result).not.toEqual(expect.stringContaining('No work item exists'))
+    expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).not.toEqual(
+      expect.stringContaining(`<strong>${ID}</strong>`)
+    )
+    expect(result).toEqual(
+      expect.stringContaining('work-item-not-found-diagnostic')
+    )
+  })
+
+  // RA-358 AC2. The 404 page must read in application terms: the reworded
+  // body copy and the help / back links replace the old GUID-led sentence.
+  test('404 page is worded in application terms with no GUID caption', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 404 })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toEqual(
+      expect.stringContaining('This application could not be found')
+    )
+    expect(result).toEqual(expect.stringContaining('work-item-not-found-help'))
+    expect(result).toEqual(expect.stringContaining('Back to all applications'))
+    // The heading caption element is not rendered at all now that it has no
+    // GUID to carry.
+    expect(result).not.toEqual(expect.stringContaining('app-heading-caption'))
   })
 
   test('Renders 502 page when the backend cannot be reached', async () => {
@@ -1379,6 +1431,133 @@ describe('#workItemDetailController', () => {
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).not.toEqual(
         expect.stringContaining('data-testid="work-item-success-banner"')
+      )
+    })
+  })
+
+  // RA-358 AC1. A withdrawn work item is never deleted by management-be, so
+  // its detail page renders a normal 200 — the page itself has to say the
+  // application was withdrawn, in application terms and named by its human
+  // reference, not by the work-item Guid.
+  describe('RA-358 withdrawn application notice', () => {
+    function registerWithWithdrawn() {
+      registerWorkItemType({
+        id: 're-accreditation',
+        displayName: 'Re-accreditation',
+        initialState: { id: 'submitted', displayName: 'Submitted' },
+        states: [
+          { id: 'submitted', displayName: 'Submitted' },
+          { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
+        ],
+        getTasksForState: () => []
+      })
+    }
+
+    test('renders the notice, named by the application reference', async () => {
+      registerWithWithdrawn()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'withdrawn' })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="work-item-withdrawn-notice"')
+      )
+      expect(result).toEqual(
+        expect.stringContaining('This application has been withdrawn')
+      )
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="work-item-withdrawn-reference"')
+      )
+      expect(result).toEqual(
+        expect.stringContaining(
+          'has been withdrawn. It can no longer be progressed and no further action is needed.'
+        )
+      )
+      expect(withdrawnNotice(result)).toContain('RA-000000001')
+      // RA-249: the Guid must not be the identifier inside the notice.
+      expect(withdrawnNotice(result)).not.toContain(ID)
+    })
+
+    test('degrades to unqualified copy when there is no application reference', async () => {
+      registerWithWithdrawn()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'withdrawn',
+          payload: { applicantName: 'Acme' }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const notice = withdrawnNotice(result)
+      expect(notice).toContain(
+        'This application has been withdrawn. It can no longer be progressed'
+      )
+      expect(notice).not.toContain(ID)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="work-item-withdrawn-reference"')
+      )
+    })
+
+    test.each(['submitted', 'approved'])(
+      'does not render the notice for a %s work item',
+      async (stateId) => {
+        registerWithWithdrawn()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId })
+        })
+
+        const { result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(result).not.toEqual(
+          expect.stringContaining('data-testid="work-item-withdrawn-notice"')
+        )
+      }
+    )
+
+    test('does not regress the Outcome panel or the state badge', async () => {
+      registerWithWithdrawn()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'withdrawn' })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="work-item-withdrawn-notice"')
+      )
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="re-accreditation-readonly-actions"'
+        )
+      )
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="re-accreditation-state-tag"')
       )
     })
   })

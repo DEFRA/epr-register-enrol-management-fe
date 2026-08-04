@@ -26,8 +26,8 @@ export const workItemAuditLogController = {
     if (result.ok === false && result.status === 404) {
       return h
         .view(NOT_FOUND_VIEW, {
-          pageTitle: 'Work item not found',
-          heading: 'Work item not found',
+          pageTitle: 'Application not found',
+          heading: 'Application not found',
           workItemId: id,
           breadcrumbs: [
             { text: 'Work items', href: '/work-items' },

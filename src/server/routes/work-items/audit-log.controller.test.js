@@ -374,7 +374,7 @@ describe('#workItemAuditLogController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.notFound)
-    expect(result).toEqual(expect.stringContaining('Work item not found'))
+    expect(result).toEqual(expect.stringContaining('Application not found'))
   })
 
   test('Renders 502 page when the backend cannot be reached', async () => {

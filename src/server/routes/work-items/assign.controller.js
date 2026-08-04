@@ -50,8 +50,8 @@ async function loadWorkItem(request, h, id) {
     return {
       response: h
         .view(NOT_FOUND_VIEW, {
-          pageTitle: 'Work item not found',
-          heading: 'Work item not found',
+          pageTitle: 'Application not found',
+          heading: 'Application not found',
           workItemId: id,
           breadcrumbs: [
             { text: 'Applications', href: '/work-items' },

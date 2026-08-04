@@ -1,16 +1,47 @@
 {% extends 'layouts/page.njk' %}
 
+{# ------------------------------------------------------------------- #}
+{# Shared 404 page for every individual work-item route (detail, tasks, #}
+{# audit log, assign, query, withdraw confirmation, SLA, approve).      #}
+{#                                                                      #}
+{# RA-358 AC2. This page used to present the system-generated work-item #}
+{# Guid as THE identifier: it was the heading caption, the subject of   #}
+{# the body copy and the only emphasised value on the page ("No work    #}
+{# item exists with id <strong>{guid}</strong>"). That is meaningless   #}
+{# to a regulator, who knows the case by its application reference.     #}
+{#                                                                      #}
+{# The reference genuinely is NOT retrievable here — by definition the  #}
+{# backend has no record to read it from — so the copy is written to    #}
+{# work without one rather than inventing a value. The raw id is        #}
+{# retained only as small, explicitly-labelled diagnostic detail for    #}
+{# support, in its own element, never as the user-facing identifier and #}
+{# never in the heading or the body copy.                               #}
+{# ------------------------------------------------------------------- #}
+
 {% block content %}
-  {{ appHeading({
-    text: heading,
-    caption: "Work item " + workItemId
-  }) }}
+  {{ appHeading({ text: heading }) }}
 
   <p class="govuk-body" data-testid="work-item-not-found">
-    No work item exists with id <strong>{{ workItemId }}</strong>.
+    This application could not be found. It may have been removed, or the
+    link you followed may be out of date.
+  </p>
+
+  <p class="govuk-body" data-testid="work-item-not-found-help">
+    Search for the application by its reference on the applications list. If
+    you followed a link from an email, ask the sender to confirm the
+    application reference.
   </p>
 
   <p class="govuk-body">
-    <a class="govuk-link" href="/work-items">Back to all work items</a>
+    <a class="govuk-link"
+       href="/work-items"
+       data-testid="work-item-not-found-back">Back to all applications</a>
   </p>
+
+  {% if workItemId %}
+    <p class="govuk-hint govuk-!-font-size-16 govuk-!-margin-top-6"
+       data-testid="work-item-not-found-diagnostic">
+      If you need to report this, quote this reference: {{ workItemId }}
+    </p>
+  {% endif %}
 {% endblock %}
