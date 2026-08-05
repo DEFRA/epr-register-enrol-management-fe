@@ -68,6 +68,27 @@ function siteAddressRow(html) {
   return detailRow(html, 'site-address')
 }
 
+/**
+ * Extract the rendered RA-358 withdrawn notice (a govuk error summary:
+ * outer div → role="alert" → title → body → `<ul>` of items), so a
+ * "the Guid is not in here" assertion is scoped to the notice and cannot
+ * pass merely because the id moved elsewhere on the page. The detail page
+ * legitimately still carries the work-item id in its reference footer.
+ *
+ * THROWS when the notice is absent, for the same reason `detailRow` does:
+ * a negative assertion scoped to a missing element passes vacuously.
+ */
+function withdrawnNotice(html) {
+  const start = html.indexOf('data-testid="work-item-withdrawn-notice"')
+  if (start === -1) {
+    throw new Error(
+      'No withdrawn notice in the rendered page — a scoped assertion against it would pass vacuously.'
+    )
+  }
+  const end = html.indexOf('</ul>', start)
+  return html.slice(start, end === -1 ? undefined : end)
+}
+
 function aWorkItem(overrides = {}) {
   return {
     id: ID,
@@ -441,8 +462,46 @@ describe('#workItemDetailController', () => {
     })
 
     expect(statusCode).toBe(statusCodes.notFound)
-    expect(result).toEqual(expect.stringContaining('Work item not found'))
+    expect(result).toEqual(expect.stringContaining('Application not found'))
+    // RA-358 AC2. The id survives ONLY as explicitly-labelled diagnostic
+    // detail in its own element — never as the heading caption, the subject
+    // of the body copy or an emphasised value.
     expect(result).toEqual(expect.stringContaining(ID))
+    expect(result).not.toEqual(expect.stringContaining('No work item exists'))
+    expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
+    expect(result).not.toEqual(
+      expect.stringContaining(`<strong>${ID}</strong>`)
+    )
+    expect(result).toEqual(
+      expect.stringContaining('work-item-not-found-diagnostic')
+    )
+    // RA-358 AC2. The breadcrumb must speak the same vocabulary as the
+    // heading and the back link, all three of which point at /work-items.
+    // Scoped to the breadcrumb class: the header nav also renders a
+    // "Work items" link, so a bare substring check would be ambiguous.
+    expect(result).toContain(
+      '<a class="govuk-breadcrumbs__link" href="/work-items">Applications</a>'
+    )
+  })
+
+  // RA-358 AC2. The 404 page must read in application terms: the reworded
+  // body copy and the help / back links replace the old GUID-led sentence.
+  test('404 page is worded in application terms with no GUID caption', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 404 })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toEqual(
+      expect.stringContaining('This application could not be found')
+    )
+    expect(result).toEqual(expect.stringContaining('work-item-not-found-help'))
+    expect(result).toEqual(expect.stringContaining('Back to all applications'))
+    // The heading caption element is not rendered at all now that it has no
+    // GUID to carry.
+    expect(result).not.toEqual(expect.stringContaining('app-heading-caption'))
   })
 
   test('Renders 502 page when the backend cannot be reached', async () => {
@@ -865,11 +924,17 @@ describe('#workItemDetailController', () => {
 
   // RA-295 AC03 / RA-323: every caseworker has the same permissions, so the
   // reassign / unassign / due-date affordances are offered in the assignment
-  // panel in EVERY state — the picker itself now lives on the reassign
+  // panel in every state — the picker itself now lives on the reassign
   // interstitial the panel links to.
-  test('AC03: the assignment panel offers reassign, unassign and due-date links in every state', async () => {
+  //
+  // RA-358 NARROWED THIS to the ACTIVE lifecycle: `approved` was dropped from
+  // the list below because a closed case now renders no assignment affordance
+  // at all. The remaining states are the point of the test — "every state"
+  // was never about terminal ones; it was about not gating on assignment
+  // status or role. See the RA-358 describe block for the terminal cases.
+  test('AC03: the assignment panel offers reassign, unassign and due-date links in every active state', async () => {
     registerReaccreditation()
-    for (const stateId of ['submitted', 'awaiting-decision', 'approved']) {
+    for (const stateId of ['submitted', 'awaiting-decision', 'queried']) {
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
@@ -989,12 +1054,23 @@ describe('#workItemDetailController', () => {
     expect(closed.result).not.toEqual(
       expect.stringContaining(`/work-items/${ID}/sla/override`)
     )
-    // ...while assignment stays available, per AC03.
-    expect(closed.result).toEqual(
+    // RA-358 REVERSED the original tail of this test, which asserted that
+    // "assignment stays available, per AC03" on an approved item. A closed
+    // case now renders no assignment affordance either, so the SLA links are
+    // no longer distinguishable from assignment BY STATE — what still
+    // distinguishes them is the mechanism: SLA follows the engine's
+    // `sla-extend` projection (see the live half above, where a non-terminal
+    // item with the action projected DOES show them), whereas assignment
+    // follows the terminal-state gate. The first half of this test is what
+    // keeps it meaningful.
+    expect(closed.result).not.toEqual(
       expect.stringContaining('data-testid="reassign-link"')
     )
-    expect(closed.result).toEqual(
+    expect(closed.result).not.toEqual(
       expect.stringContaining('data-testid="unassign-link"')
+    )
+    expect(closed.result).toEqual(
+      expect.stringContaining('data-testid="assignment-closed"')
     )
   })
 
@@ -1380,6 +1456,311 @@ describe('#workItemDetailController', () => {
       expect(result).not.toEqual(
         expect.stringContaining('data-testid="work-item-success-banner"')
       )
+    })
+  })
+
+  // RA-358 AC1. A withdrawn work item is never deleted by management-be, so
+  // its detail page renders a normal 200 — the page itself has to say the
+  // application was withdrawn, in application terms and named by its human
+  // reference, not by the work-item Guid.
+  describe('RA-358 withdrawn application notice', () => {
+    function registerWithWithdrawn() {
+      registerWorkItemType({
+        id: 're-accreditation',
+        displayName: 'Re-accreditation',
+        initialState: { id: 'submitted', displayName: 'Submitted' },
+        states: [
+          { id: 'submitted', displayName: 'Submitted' },
+          { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
+        ],
+        getTasksForState: () => []
+      })
+    }
+
+    test('renders the notice, named by the application reference', async () => {
+      registerWithWithdrawn()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'withdrawn' })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="work-item-withdrawn-notice"')
+      )
+      expect(result).toEqual(
+        expect.stringContaining('This application has been withdrawn')
+      )
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="work-item-withdrawn-reference"')
+      )
+      expect(result).toEqual(
+        expect.stringContaining(
+          'has been withdrawn. It can no longer be progressed and no further action is needed.'
+        )
+      )
+      expect(withdrawnNotice(result)).toContain('RA-000000001')
+      // RA-249: the Guid must not be the identifier inside the notice.
+      expect(withdrawnNotice(result)).not.toContain(ID)
+    })
+
+    // The three assertions above are all substring checks, so a spacing
+    // regression in the template's block capture — a missing space before
+    // `<strong>`, a doubled one after `</strong>` — satisfies every one of
+    // them while rendering "ApplicationRA-000000001has been withdrawn."
+    // The whitespace in that capture is part of the sentence, not
+    // indentation, so pin the composed result as ONE exact string. This is
+    // also what makes the trim markers in the template safe to touch: any
+    // change to them shows up here immediately.
+    test('composes the referenced sentence with exact spacing', async () => {
+      registerWithWithdrawn()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'withdrawn' })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(withdrawnNotice(result)).toContain(
+        'Application <strong data-testid="work-item-withdrawn-reference">RA-000000001</strong> has been withdrawn. It can no longer be progressed and no further action is needed.'
+      )
+    })
+
+    test('degrades to unqualified copy when there is no application reference', async () => {
+      registerWithWithdrawn()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'withdrawn',
+          payload: { applicantName: 'Acme' }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const notice = withdrawnNotice(result)
+      expect(notice).toContain(
+        'This application has been withdrawn. It can no longer be progressed'
+      )
+      expect(notice).not.toContain(ID)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="work-item-withdrawn-reference"')
+      )
+    })
+
+    test.each(['submitted', 'approved'])(
+      'does not render the notice for a %s work item',
+      async (stateId) => {
+        registerWithWithdrawn()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId })
+        })
+
+        const { result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(result).not.toEqual(
+          expect.stringContaining('data-testid="work-item-withdrawn-notice"')
+        )
+      }
+    )
+
+    // RA-358 security regression. govuk-frontend renders an error-summary
+    // item's `html` through `| safe`, so the notice sits on an autoescape
+    // bypass. The reference is backend-controlled and this codebase
+    // deliberately does not constrain its format, so the ONLY thing standing
+    // between it and stored XSS is the template composing the sentence in a
+    // `{% set %}` block capture rather than concatenating an HTML string.
+    // Without this test, replacing that construct with a hand-built string
+    // (or dropping an `| escape`) would go green.
+    test('escapes a hostile application reference', async () => {
+      registerWithWithdrawn()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'withdrawn',
+          payload: {
+            applicationReference: '<script>alert(1)</script>'
+          }
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const notice = withdrawnNotice(result)
+      // The payload is present but inert.
+      expect(notice).toContain('&lt;script&gt;')
+      expect(notice).not.toContain('<script>')
+      // And nothing leaked a live tag into the page at large.
+      expect(result).not.toContain('<script>alert(1)</script>')
+    })
+
+    test('does not regress the Outcome panel or the state badge', async () => {
+      registerWithWithdrawn()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'withdrawn' })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="work-item-withdrawn-notice"')
+      )
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="re-accreditation-readonly-actions"'
+        )
+      )
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="re-accreditation-state-tag"')
+      )
+    })
+  })
+
+  // RA-358. Tom's decision: no assignment affordance renders on a closed
+  // case. This NARROWS RA-295 AC03 ("assignment available all the way
+  // through") to the active lifecycle — see buildAssignmentViewModel for the
+  // hand-over rationale that was traded away.
+  describe('RA-358 assignment gate on terminal states', () => {
+    const AFFORDANCES = ['self-assign-submit', 'reassign-link', 'unassign-link']
+
+    function registerWithTerminalStates() {
+      registerWorkItemType({
+        id: 're-accreditation',
+        displayName: 'Re-accreditation',
+        initialState: { id: 'submitted', displayName: 'Submitted' },
+        states: [
+          { id: 'submitted', displayName: 'Submitted' },
+          { id: 'approved', displayName: 'Approved', isTerminal: true },
+          { id: 'rejected', displayName: 'Rejected', isTerminal: true },
+          { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
+        ],
+        getTasksForState: () => []
+      })
+    }
+
+    async function renderInState(stateId) {
+      registerWithTerminalStates()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId })
+      })
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      return result
+    }
+
+    test.each(['withdrawn', 'approved', 'rejected'])(
+      'suppresses every assignment affordance in the %s state',
+      async (stateId) => {
+        const result = await renderInState(stateId)
+
+        // Positive hook FIRST. Asserting only the absence of the three
+        // affordances would pass vacuously if the panel stopped rendering
+        // altogether, so anchor on something that must be present.
+        expect(result).toContain('data-testid="case-assignment-panel"')
+        expect(result).toContain('data-testid="assignment-closed"')
+        expect(result).toContain(
+          'This application is closed. It cannot be assigned or reassigned.'
+        )
+
+        for (const testId of AFFORDANCES) {
+          expect(result).not.toContain(`data-testid="${testId}"`)
+        }
+        // Suppressed outright, not rendered as an RA-335 inert span.
+        expect(result).not.toContain('app-action-link--disabled')
+        // The self-assign form must not survive the button.
+        expect(result).not.toContain(`/work-items/${ID}/self-assign`)
+      }
+    )
+
+    test('still offers every assignment affordance in a non-terminal state', async () => {
+      const result = await renderInState('submitted')
+
+      expect(result).toContain('data-testid="case-assignment-panel"')
+      expect(result).not.toContain('data-testid="assignment-closed"')
+      for (const testId of AFFORDANCES) {
+        expect(result).toContain(`data-testid="${testId}"`)
+      }
+      expect(result).toContain(`/work-items/${ID}/self-assign`)
+    })
+
+    // The gate hides the whole links list, which the SLA affordances share.
+    // Called out explicitly because it is a deliberate side effect: the
+    // existing canChangeDueDate comment already says moving a due date on a
+    // closed case is wrong.
+    test('also suppresses the SLA links on a closed case', async () => {
+      registerWithTerminalStates()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'withdrawn',
+          availableActions: [{ actionId: 'sla-extend', displayName: 'Extend' }]
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toContain('data-testid="assignment-closed"')
+      expect(result).not.toContain('data-testid="action-sla-extend"')
+      expect(result).not.toContain('data-testid="action-sla-override"')
+    })
+
+    // The assignee is information, not an affordance: a handed-over case
+    // should still show who holds it after it closes.
+    test('still shows the current assignee on a closed case', async () => {
+      registerWithTerminalStates()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'withdrawn',
+          assignedToId: 'user-1',
+          assignedToName: 'Casey Worker'
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toContain('data-testid="assignment-current"')
+      expect(result).toContain('Casey Worker')
+      expect(result).toContain('data-testid="assignment-closed"')
     })
   })
 

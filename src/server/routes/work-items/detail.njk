@@ -115,6 +115,58 @@
     {% endif %}
   {% endif %}
 
+  {# RA-358. Withdrawn applications are never deleted by management-be —   #}
+  {# `GET /work-items/{id}` returns a normal 200 for them — so this page   #}
+  {# has to state the withdrawal itself rather than leaving it to the grey #}
+  {# state tag and the read-only Outcome panel.                            #}
+  {#                                                                       #}
+  {# Rendered as an error summary, not a notification banner, for the same #}
+  {# reason as the RA-211 banner below: govukNotificationBanner only       #}
+  {# honours type 'success', and core/_header.scss sets                    #}
+  {# --govuk-brand-colour to Defra green service-wide, so any other banner  #}
+  {# comes out green and reads as good news. disableAutoFocus because the  #}
+  {# notice persists across every visit to a withdrawn case and must not   #}
+  {# steal focus each time.                                                #}
+  {#                                                                       #}
+  {# RA-249: the case is named by its human application reference or not   #}
+  {# at all — never by the work-item Guid.                                 #}
+  {#                                                                       #}
+  {# The sentence is composed in a `{% set %}` BLOCK CAPTURE, not by       #}
+  {# concatenating an HTML string. govuk-frontend renders an error-summary #}
+  {# item's `html` through `| safe`, so a hand-built string would need a   #}
+  {# hand-placed `| escape` on the reference and would be one deleted      #}
+  {# filter away from stored XSS on backend-controlled data. Inside a      #}
+  {# block capture `{{ withdrawnNotice.applicationRef }}` goes through     #}
+  {# normal autoescaping (the env sets `autoescape: true`), so there is no #}
+  {# manual filter to drop. All prose comes from the constants in          #}
+  {# core/withdrawn-notice.js so the referenced and unreferenced variants  #}
+  {# cannot drift apart.                                                   #}
+  {#                                                                       #}
+  {# The whitespace below is LOAD-BEARING — it is the spacing of the       #}
+  {# rendered sentence, not indentation — so the capture uses explicit     #}
+  {# `{{-` / `-%}` trim markers to strip the line breaks while keeping the #}
+  {# two significant single spaces (before `<strong>`, and before the      #}
+  {# tail). `detail.controller.test.js` pins the fully composed referenced #}
+  {# sentence as one exact string, so any accidental change here fails.    #}
+  {#                                                                       #}
+  {# `data-testid` hooks are an EXTERNAL CONTRACT consumed by the          #}
+  {# epr-register-enrol-mgmt-tests WebdriverIO suite — renaming            #}
+  {# `work-item-withdrawn-notice` or `work-item-withdrawn-reference`       #}
+  {# breaks journey specs in that repo, which is branch-matched to this    #}
+  {# one by exact branch name. Coordinate before changing them.            #}
+  {% if withdrawnNotice %}
+    {% set withdrawnNoticeHtml %}
+      {{- withdrawnNotice.subject -}}
+      {%- if withdrawnNotice.applicationRef %} <strong data-testid="work-item-withdrawn-reference">{{ withdrawnNotice.applicationRef }}</strong>{% endif %} {{ withdrawnNotice.tail -}}
+    {% endset %}
+    {{ govukErrorSummary({
+      titleText: withdrawnNotice.title,
+      errorList: [{ html: withdrawnNoticeHtml }],
+      disableAutoFocus: true,
+      attributes: { "data-testid": "work-item-withdrawn-notice" }
+    }) }}
+  {% endif %}
+
   {# RA-211: surfaces when the audit log has an unresolved                #}
   {# notification-failed entry (no later notification-sent).              #}
   {# govukNotificationBanner only honours type: 'success' — any other     #}
@@ -281,6 +333,26 @@
           </p>
         {% endif %}
 
+        {# RA-358. Once the case is closed (approved / rejected / withdrawn)   #}
+        {# NO assignment affordance renders — not an inert RA-335 span, but   #}
+        {# absent. RA-335's greyed span says "this action is not for YOU";    #}
+        {# here the action is meaningless for everyone, so offering it in any #}
+        {# form is the wrong message. management-be rejects assign/unassign   #}
+        {# on a terminal item with 409 TerminalState, so this gate only stops #}
+        {# the UI offering what can only fail — it is not the enforcement     #}
+        {# point. See buildAssignmentViewModel for what RA-295 AC03 traded    #}
+        {# away.                                                              #}
+        {#                                                                    #}
+        {# The replacement line is a POSITIVE hook on purpose: asserting only #}
+        {# the absence of the three affordances would pass vacuously if this  #}
+        {# panel ever failed to render at all. The mgmt-tests suite asserts   #}
+        {# `assignment-closed` present AND the affordances absent.            #}
+        {% if assignment.isClosed %}
+          <p class="govuk-body govuk-!-margin-bottom-0"
+             data-testid="assignment-closed">
+            This application is closed. It cannot be assigned or reassigned.
+          </p>
+        {% else %}
         {% if assignment.canSelfAssign %}
           <form method="post"
                 action="/work-items/{{ workItem.id }}/self-assign"
@@ -346,6 +418,7 @@
             </li>
           {% endif %}
         </ul>
+        {% endif %}
       </div>
 
       {# ---------------------------- Actions ---------------------------- #}
