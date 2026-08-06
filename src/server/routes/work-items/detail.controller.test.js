@@ -2110,6 +2110,11 @@ describe('#workItemDetailController', () => {
     const updatedWorkItem = (overrides = {}) =>
       aWorkItem({
         stateId: 'updated',
+        // RA-372. The backend stamps `taskStateId` with the state whose
+        // checklist `tasks` actually holds. Differing from `stateId` is
+        // what marks this item as parked in a waypoint — it is the signal
+        // the CTA keys off, NOT the literal state id.
+        taskStateId: 'assessment-in-progress',
         assignedToId: 'someone-else',
         // What the backend actually returns for an item in `updated`: the
         // ORIGINATING state's tasks, with the pre-query completion intact.
@@ -2253,6 +2258,11 @@ describe('#workItemDetailController', () => {
         ok: true,
         workItem: aWorkItem({
           stateId,
+          // Explicitly NOT a waypoint: the tasks belong to the state the
+          // item is actually in. Set deliberately rather than omitted, so
+          // this asserts "same state means no CTA" rather than passing
+          // vacuously because the field happens to be missing.
+          taskStateId: stateId,
           availableActions: [
             {
               actionId: 'withdraw',
@@ -2293,8 +2303,49 @@ describe('#workItemDetailController', () => {
       )
     })
 
+    // RA-372. The waypoint signal itself, isolated from any state id. The
+    // CTA must key off "tasks belong to a different state", which is what
+    // the backend actually tells us, and nothing else.
+    test('does not render the CTA when the tasks belong to the current state', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: updatedWorkItem({ taskStateId: 'updated' })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+    })
+
+    // Backwards compatibility: an envelope from a backend that predates
+    // `taskStateId` must not blow up or render a CTA whose POST the
+    // backend would reject. It degrades to "no waypoint".
+    test('does not render the CTA when the envelope omits taskStateId', async () => {
+      registerReaccreditationWithDetailV1()
+      const workItem = updatedWorkItem()
+      delete workItem.taskStateId
+      getWorkItem.mockResolvedValue({ ok: true, workItem })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+    })
+
     // The CTA is re-accreditation-specific decoration; another registered
-    // type sitting in an `updated` state must not pick it up.
+    // type sitting in a waypoint must not pick it up — detecting the
+    // waypoint is generic, but the CTA that leaves it is the module's.
     test('does not render the CTA for a different work item type', async () => {
       registerWorkItemType({
         id: 'other-type',
@@ -2305,7 +2356,11 @@ describe('#workItemDetailController', () => {
       })
       getWorkItem.mockResolvedValue({
         ok: true,
-        workItem: aWorkItem({ typeId: 'other-type', stateId: 'updated' })
+        workItem: aWorkItem({
+          typeId: 'other-type',
+          stateId: 'updated',
+          taskStateId: 'assessment-in-progress'
+        })
       })
 
       const { result } = await server.inject({

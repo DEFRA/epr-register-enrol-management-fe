@@ -1291,6 +1291,38 @@ describe('#continueReviewReAccreditation (RA-372)', () => {
     expect(result).toEqual({ ok: true, workItem })
   })
 
+  // RA-372. The backend answers a repeat call for an item that has
+  // already left `updated` with 200 + `x-idempotent-replay: true`. That
+  // MUST read as plain success: it is what a double-clicked button gets,
+  // and what the `submitted` origin's duly-made auto-advance produces.
+  //
+  // This currently holds because the client does not inspect response
+  // headers at all, so the test pins the CONTRACT rather than the
+  // implementation. If anyone later starts branching on headers, this
+  // fails rather than quietly turning a benign replay into an error
+  // banner.
+  test('treats an idempotent replay as ordinary success', async () => {
+    const workItem = { id: 'wi-1', stateId: 'duly-made' }
+    const responseHeaders = new Map([['x-idempotent-replay', 'true']])
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get: (name) => responseHeaders.get(name.toLowerCase()) ?? null
+      },
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await continueReviewReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
   test('percent-encodes the work item id into the path', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

@@ -71,13 +71,18 @@ const TRANSITIONS = [
     toStateId: 'awaiting-decision',
     requiresAllTasksComplete: true
   },
-  {
-    actionId: 'approve',
-    displayName: 'Approve',
-    fromStateId: 'awaiting-decision',
-    toStateId: 'approved',
-    requiresAllTasksComplete: true
-  },
+  // RA-132 / RA-372. `approve` is deliberately NOT declared. The backend
+  // omits it from `ReAccreditationType.Transitions` on purpose, so its
+  // generic engine rejects `/work-items/{id}/actions/approve` and a caller
+  // cannot bypass the bespoke side-effects of
+  // `ReAccreditationApprovalService` (accreditation id issuance, SLA clock
+  // stop, queued publishing job). Declaring it here would make the mirror
+  // claim a generic action that does not exist and that the backend would
+  // refuse. The Approve CTA is driven by `canApproveDirectly` (a state
+  // check in the detail controller) and posts to the type-specific
+  // `/work-items/re-accreditation/{id}/approve`, never through the
+  // generic action route. `reject` DOES go through the generic engine and
+  // so is declared below.
   {
     actionId: 'reject',
     displayName: 'Reject',
@@ -127,11 +132,88 @@ const TRANSITIONS = [
     toStateId: 'withdrawn',
     requiresAllTasksComplete: false
   },
+  // RA-291 / RA-211. A case worker can query an application from any
+  // pre-decision state. Caller-invocable: each has a distinct
+  // `fromStateId`, so the engine's from-state guard resolves them
+  // unambiguously and the caller picking one is safe. There is
+  // deliberately no transition out of `queried` back to `queried` — an
+  // application awaiting a response cannot be queried again.
+  {
+    actionId: 'query-during-duly-making',
+    displayName: 'Query',
+    fromStateId: 'submitted',
+    toStateId: 'queried',
+    requiresAllTasksComplete: false
+  },
+  {
+    actionId: 'query-during-duly-made',
+    displayName: 'Query',
+    fromStateId: 'duly-made',
+    toStateId: 'queried',
+    requiresAllTasksComplete: false
+  },
+  {
+    actionId: 'query-during-assessment',
+    displayName: 'Query',
+    fromStateId: 'assessment-in-progress',
+    toStateId: 'queried',
+    requiresAllTasksComplete: false
+  },
+  {
+    actionId: 'query-during-decision',
+    displayName: 'Query',
+    fromStateId: 'awaiting-decision',
+    toStateId: 'queried',
+    requiresAllTasksComplete: false
+  },
+  // RA-311/MBE-1. The inverse of the four `query-during-*` above: an
+  // operator's resubmission moves the application out of `queried` and
+  // into `updated`. Same `callerInvocable: false` reasoning as the
+  // `continue-review-during-*` block below — all four share
+  // `fromStateId: 'queried'`, so a caller who could invoke them directly
+  // would pick the target state regardless of where the item was actually
+  // queried from, bypassing the backend's audit-history resolution and
+  // skipping intermediate states and their tasks entirely.
+  {
+    actionId: 'resume-during-duly-making',
+    displayName: 'Resume',
+    fromStateId: 'queried',
+    toStateId: 'updated',
+    requiresAllTasksComplete: false,
+    callerInvocable: false
+  },
+  {
+    actionId: 'resume-during-duly-made',
+    displayName: 'Resume',
+    fromStateId: 'queried',
+    toStateId: 'updated',
+    requiresAllTasksComplete: false,
+    callerInvocable: false
+  },
+  {
+    actionId: 'resume-during-assessment',
+    displayName: 'Resume',
+    fromStateId: 'queried',
+    toStateId: 'updated',
+    requiresAllTasksComplete: false,
+    callerInvocable: false
+  },
+  {
+    actionId: 'resume-during-decision',
+    displayName: 'Resume',
+    fromStateId: 'queried',
+    toStateId: 'updated',
+    requiresAllTasksComplete: false,
+    callerInvocable: false
+  },
   // RA-372. The four onward transitions out of `updated`, one per state a
   // query can be raised from. Mirrored here because the frontend now
   // *drives* this transition (the "Continue review" CTA), so the mirror
   // going on claiming `updated` is a dead end would be actively
-  // misleading.
+  // misleading. The same argument applied to `queried`, which is why the
+  // `query-during-*` / `resume-during-*` blocks above landed at the same
+  // time: this list is now a complete mirror of the backend's
+  // `ReAccreditationType.Transitions`, and should be kept that way.
   //
   // `callerInvocable: false` matters and is not decoration: the backend
   // declares all four that way, and resolves which one applies from the

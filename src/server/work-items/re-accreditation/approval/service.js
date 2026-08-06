@@ -25,6 +25,8 @@
  * `backend-api.js`'s typed clients.
  */
 
+import { toOutcome } from '../../core/backend-outcome.js'
+
 const NOTE_MAX_LENGTH = 2000
 
 async function defaultApprove(args) {
@@ -88,7 +90,7 @@ export function createApprovalService({
 
       return {
         ok: false,
-        outcome: APPROVE_OUTCOME[approveResult.reason] ?? 'server',
+        outcome: toOutcome(approveResult.reason),
         status: approveResult.status,
         message: approveResult.message ?? 'Approval failed'
       }
@@ -97,13 +99,3 @@ export function createApprovalService({
 }
 
 export const APPROVAL_DECISION_NOTE_MAX_LENGTH = NOTE_MAX_LENGTH
-
-const APPROVE_OUTCOME = {
-  invalid: 'invalid',
-  unauthorized: 'unauthorized',
-  forbidden: 'forbidden',
-  'not-found': 'not-found',
-  conflict: 'conflict',
-  server: 'server',
-  network: 'network'
-}

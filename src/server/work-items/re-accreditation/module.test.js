@@ -96,7 +96,6 @@ describe('reAccreditationModule', () => {
       'awaiting-decision',
       true
     ],
-    ['approve', 'awaiting-decision', 'approved', true],
     ['reject', 'awaiting-decision', 'rejected', true],
     ['withdraw', 'submitted', 'withdrawn', false],
     ['withdraw-during-duly-made', 'duly-made', 'withdrawn', false],
@@ -108,7 +107,17 @@ describe('reAccreditationModule', () => {
     ],
     ['withdraw-during-decision', 'awaiting-decision', 'withdrawn', false],
     ['withdraw-during-query', 'queried', 'withdrawn', false],
-    ['withdraw-during-updated', 'updated', 'withdrawn', false]
+    ['withdraw-during-updated', 'updated', 'withdrawn', false],
+    // RA-291. Caller-invocable: each has a distinct from-state.
+    ['query-during-duly-making', 'submitted', 'queried', false],
+    ['query-during-duly-made', 'duly-made', 'queried', false],
+    ['query-during-assessment', 'assessment-in-progress', 'queried', false],
+    ['query-during-decision', 'awaiting-decision', 'queried', false],
+    // RA-311/MBE-1. All four share from-state `queried`.
+    ['resume-during-duly-making', 'queried', 'updated', false],
+    ['resume-during-duly-made', 'queried', 'updated', false],
+    ['resume-during-assessment', 'queried', 'updated', false],
+    ['resume-during-decision', 'queried', 'updated', false]
   ])(
     'declares transition %s: %s -> %s (requires=%s)',
     (actionId, fromStateId, toStateId, requires) => {
@@ -150,16 +159,76 @@ describe('reAccreditationModule', () => {
     })
   })
 
-  test('leaves every other transition caller-invocable', () => {
+  // RA-372. The backend declares EIGHT non-caller-invocable transitions —
+  // the four `continue-review-during-*` above plus the four
+  // `resume-during-*` — and this assertion is exhaustive against that
+  // list, not just against the ones this ticket added.
+  //
+  // Getting this wrong is a live security regression, not a cosmetic
+  // mismatch: dropping the flag from any of the eight would make the
+  // mirror advertise a set of same-from-state transitions as caller-
+  // choosable, i.e. as if the user could pick the destination state.
+  test('flags exactly the eight server-resolved transitions the backend does', () => {
     const serverResolved = reAccreditationType.transitions
       .filter((t) => t.callerInvocable === false)
       .map((t) => t.actionId)
+      .sort()
 
     expect(serverResolved).toEqual([
-      'continue-review-during-duly-making',
-      'continue-review-during-duly-made',
       'continue-review-during-assessment',
-      'continue-review-during-decision'
+      'continue-review-during-decision',
+      'continue-review-during-duly-made',
+      'continue-review-during-duly-making',
+      'resume-during-assessment',
+      'resume-during-decision',
+      'resume-during-duly-made',
+      'resume-during-duly-making'
+    ])
+  })
+
+  // RA-132. `approve` is deliberately absent: the backend omits it so its
+  // generic engine refuses `/actions/approve`, forcing callers through
+  // the bespoke approval endpoint and its side-effects. A mirror that
+  // declared it would advertise a generic action the backend rejects.
+  test('does not declare an approve transition', () => {
+    expect(
+      reAccreditationType.transitions.find((t) => t.actionId === 'approve')
+    ).toBeUndefined()
+    // `reject` DOES go through the generic engine, so it must be present
+    // — guards against "tidying" both away together.
+    expect(
+      reAccreditationType.transitions.find((t) => t.actionId === 'reject')
+    ).toBeDefined()
+  })
+
+  // The whole mirror, pinned in one place. RA-372 found it three blocks
+  // short; this is what stops that recurring silently.
+  test('mirrors the full backend transition set', () => {
+    expect(
+      reAccreditationType.transitions.map((t) => t.actionId).sort()
+    ).toEqual([
+      'continue-review-during-assessment',
+      'continue-review-during-decision',
+      'continue-review-during-duly-made',
+      'continue-review-during-duly-making',
+      'payment-received',
+      'query-during-assessment',
+      'query-during-decision',
+      'query-during-duly-made',
+      'query-during-duly-making',
+      'reject',
+      'resume-during-assessment',
+      'resume-during-decision',
+      'resume-during-duly-made',
+      'resume-during-duly-making',
+      'sla-extend',
+      'submit-for-decision',
+      'withdraw',
+      'withdraw-during-assessment',
+      'withdraw-during-decision',
+      'withdraw-during-duly-made',
+      'withdraw-during-query',
+      'withdraw-during-updated'
     ])
   })
 

@@ -510,12 +510,14 @@ function buildAssignmentViewModel({ workItem, user }) {
 //    remains authoritative; a forged POST is still rejected there.
 //  - `approveHref` — link target for the CTA.
 //  - `canContinueReview` + `continueReviewHref` (RA-372) — whether the
-//    "Continue review" CTA should render, and where it posts. Mirrors the
-//    backend's state check only (`updated`): the endpoint is protected by
-//    plain authentication, with no `assign` role and no assigned-officer
-//    check, and it is NOT gated on task completion (all four underlying
-//    `continue-review-during-*` transitions are
-//    `RequiresAllTasksComplete: false`). The backend remains authoritative.
+//    "Continue review" CTA should render, and where it posts. Reads the
+//    GENERIC `isTaskWaypoint` flag (see `decorate`) rather than testing
+//    for `updated` itself, so the only re-accreditation knowledge here is
+//    the route. The endpoint is protected by plain authentication — no
+//    `assign` role, no assigned-officer check — and is NOT gated on task
+//    completion (all four underlying `continue-review-during-*`
+//    transitions are `RequiresAllTasksComplete: false`). The backend
+//    remains authoritative.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
 //    a terminal state (approved / rejected / withdrawn), the template
 //    suppresses the generic action panel and shows a status tag.
@@ -525,10 +527,6 @@ function buildAssignmentViewModel({ workItem, user }) {
 
 const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
 const RE_ACCREDITATION_ELIGIBLE_STATE = 'awaiting-decision'
-// RA-372. The state an application sits in once an operator has responded
-// to a query and before a case worker has picked the review back up. The
-// only state the "Continue review" CTA renders in.
-const RE_ACCREDITATION_UPDATED_STATE = 'updated'
 // The states in which a case is closed. Drives BOTH the re-accreditation
 // read-only Outcome panel (`isReadOnlyState`) and, since RA-358, the
 // assignment gate in `buildAssignmentViewModel` — deliberately ONE list, so
@@ -548,12 +546,17 @@ function applyReAccreditationViewModel({ workItem }) {
   const canApproveDirectly =
     workItem.stateId === RE_ACCREDITATION_ELIGIBLE_STATE
 
-  // RA-372. Deliberately NOT `&& allTasksComplete`: `updated` shows the
+  // RA-372. Derived from the generic waypoint flag, so the `updated`
+  // literal lives only in `re-accreditation/module.js` — for a
+  // re-accreditation, "its tasks belong to a different state" IS the
+  // updated state, and the backend is the one that decides that.
+  //
+  // Deliberately NOT `&& allTasksComplete`: the waypoint shows the
   // originating state's tasks, and the whole point of continuing the
   // review is to get back to that state so the outstanding ones can be
   // finished there. Gating on completion would recreate the dead end this
   // ticket exists to remove.
-  const canContinueReview = workItem.stateId === RE_ACCREDITATION_UPDATED_STATE
+  const canContinueReview = workItem.isTaskWaypoint === true
 
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
@@ -708,6 +711,21 @@ function decorate(workItem) {
     // summary and the re-accreditation payload block, both of which are
     // gone; the operator registration id is now a reference-block row and
     // RA-245's address normalisation lives in `buildSiteAddressLines`.
+    // RA-372. `taskStateId` is the state whose checklist `tasks` actually
+    // holds. It is normally identical to `stateId`; when the two DIFFER
+    // the item is parked in a "waypoint" state and is being worked
+    // against another state's checklist — exactly the situation a
+    // re-accreditation is in while `updated`, showing the tasks of the
+    // state its query was raised from.
+    //
+    // Deliberately this generic comparison rather than a state-id
+    // literal. The backend went to real trouble to keep its core ignorant
+    // that `updated` exists; hardcoding `'updated'` here would just
+    // relocate that coupling into the frontend's type-agnostic layer. The
+    // generic layer detects the waypoint; the module supplies whatever
+    // CTA leaves it.
+    isTaskWaypoint:
+      workItem.taskStateId != null && workItem.taskStateId !== workItem.stateId,
     tasks: Array.isArray(workItem.tasks)
       ? workItem.tasks.map(decorateTask)
       : [],

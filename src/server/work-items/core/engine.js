@@ -90,6 +90,13 @@ export function canApplyAction(type, workItem, actionId) {
   // RA-372. Kept in step with the `callerInvocable` filter in
   // `projectWorkItem` above, so the two helpers cannot disagree about
   // whether a caller may ask for an action.
+  //
+  // NOT a security control, and must not be audited as one: this helper
+  // has no production callers, and the generic action POST route does
+  // not consult it — it goes straight through `core/service.js` to the
+  // backend. The backend's own guard, checked against the work item's
+  // frozen template snapshot, is the only thing rejecting a forged
+  // non-caller-invocable action. See `docs/work-items.md`.
   if (transition.callerInvocable === false) {
     return { allowed: false, reason: 'not-caller-invocable' }
   }

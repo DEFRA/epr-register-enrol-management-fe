@@ -24,6 +24,8 @@
  * call without mocking `undici`.
  */
 
+import { toOutcome } from '../../core/backend-outcome.js'
+
 async function defaultContinueReview(args) {
   const mod = await import('#/server/common/helpers/backend-api/backend-api.js')
   return mod.continueReviewReAccreditation(args)
@@ -50,20 +52,10 @@ export function createContinueReviewService({
 
       return {
         ok: false,
-        outcome: CONTINUE_REVIEW_OUTCOME[result.reason] ?? 'server',
+        outcome: toOutcome(result.reason),
         status: result.status,
         message: result.message ?? 'Continue review failed'
       }
     }
   }
-}
-
-const CONTINUE_REVIEW_OUTCOME = {
-  invalid: 'invalid',
-  unauthorized: 'unauthorized',
-  forbidden: 'forbidden',
-  'not-found': 'not-found',
-  conflict: 'conflict',
-  server: 'server',
-  network: 'network'
 }

@@ -554,7 +554,7 @@ export async function approveReAccreditation({
       (problem && (problem.detail || problem.title)) ||
       `Backend returned ${response.status}`
 
-    const reason = APPROVE_REASON_BY_STATUS[response.status] ?? 'server'
+    const reason = REASON_BY_STATUS[response.status] ?? 'server'
     return {
       ok: false,
       reason,
@@ -576,7 +576,11 @@ export async function approveReAccreditation({
   }
 }
 
-const APPROVE_REASON_BY_STATUS = {
+// Shared by every type-specific POST client below (approve,
+// continue-review, ...). Nothing in it is specific to any one of them —
+// it is just the HTTP-status-to-reason translation the whole backend
+// speaks.
+const REASON_BY_STATUS = {
   400: 'invalid',
   401: 'unauthorized',
   403: 'forbidden',
@@ -636,7 +640,7 @@ export async function continueReviewReAccreditation({
 
   return {
     ok: false,
-    reason: APPROVE_REASON_BY_STATUS[result.status] ?? 'server',
+    reason: REASON_BY_STATUS[result.status] ?? 'server',
     status: result.status,
     message:
       result.problem?.detail ??

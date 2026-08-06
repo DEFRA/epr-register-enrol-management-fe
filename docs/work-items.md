@@ -56,16 +56,26 @@ export const myTypeModule = {
     // `callerInvocable: false` (RA-372) mirrors the backend flag of the
     // same name: the transition exists, but the SERVER decides when to
     // apply it, so it is never offered as a caller-chosen action.
-    // `projectWorkItem` filters those out of `availableActions` and
-    // `canApplyAction` rejects them with `not-caller-invocable`, exactly
-    // as the backend does. Use it when several transitions share a
-    // `fromStateId` and something other than the caller picks between
-    // them — letting the caller choose would let them choose the
-    // destination state. Such a transition needs a type-specific route
-    // hitting the backend's dedicated endpoint (see
+    // `projectWorkItem` filters those out of `availableActions`, and
+    // `canApplyAction` reports `not-caller-invocable`. Use it when
+    // several transitions share a `fromStateId` and something other than
+    // the caller picks between them — letting the caller choose would let
+    // them choose the destination state. Such a transition needs a
+    // type-specific route hitting the backend's dedicated endpoint (see
     // `re-accreditation/continue-review/`), not the generic
     // `/work-items/{id}/actions/{actionId}` route. Omitting the flag
     // means invocable, matching the backend default.
+    //
+    // ⚠ This flag is a UI-correctness control, NOT a security control,
+    // and must not be audited as one. Nothing on the request path of a
+    // forged `POST /work-items/{id}/actions/{actionId}` consults it: that
+    // route goes straight through `core/service.js` to the backend, and
+    // `canApplyAction` has no production callers at all. The BFF is not a
+    // second enforcement layer here — the backend's own guard, checked
+    // against each work item's frozen template snapshot, is the only
+    // thing rejecting a non-caller-invocable action, and it is what any
+    // threat model should rely on. What the flag buys is that the
+    // frontend never RENDERS an affordance the backend would refuse.
     transitions: [
       {
         actionId: 'approve',
