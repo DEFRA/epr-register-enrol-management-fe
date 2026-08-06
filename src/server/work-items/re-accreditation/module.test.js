@@ -96,6 +96,7 @@ describe('reAccreditationModule', () => {
       'awaiting-decision',
       true
     ],
+    ['approve', 'awaiting-decision', 'approved', true],
     ['reject', 'awaiting-decision', 'rejected', true],
     ['withdraw', 'submitted', 'withdrawn', false],
     ['withdraw-during-duly-made', 'duly-made', 'withdrawn', false],
@@ -186,27 +187,40 @@ describe('reAccreditationModule', () => {
     ])
   })
 
-  // RA-132. `approve` is deliberately absent: the backend omits it so its
-  // generic engine refuses `/actions/approve`, forcing callers through
-  // the bespoke approval endpoint and its side-effects. A mirror that
-  // declared it would advertise a generic action the backend rejects.
-  test('does not declare an approve transition', () => {
+  // ⚠ DO NOT DELETE THE `approve` TRANSITION. It looks like mirror drift
+  // — the backend deliberately omits `approve` from
+  // `ReAccreditationType.Transitions` so its generic engine refuses
+  // `/actions/approve` — and RA-372 removed it on exactly that reasoning
+  // before restoring it here.
+  //
+  // It is load-bearing on THIS side: RA-346 (`approve-eligibility.js`,
+  // in-flight in PR #143) reads this declaration to gate both the Approve
+  // CTA and the approve route. Deleting it re-opens the RA-346 bug, and
+  // the deletion merges CLEANLY rather than conflicting, so nothing else
+  // would flag it. Whether the mirror should declare it at all is a real
+  // question — but it is RA-346's to answer, not something to tidy away
+  // from an unrelated branch.
+  test('still declares the approve transition RA-346 gating depends on', () => {
     expect(
       reAccreditationType.transitions.find((t) => t.actionId === 'approve')
-    ).toBeUndefined()
-    // `reject` DOES go through the generic engine, so it must be present
-    // — guards against "tidying" both away together.
-    expect(
-      reAccreditationType.transitions.find((t) => t.actionId === 'reject')
-    ).toBeDefined()
+    ).toMatchObject({
+      fromStateId: 'awaiting-decision',
+      toStateId: 'approved',
+      requiresAllTasksComplete: true
+    })
   })
 
   // The whole mirror, pinned in one place. RA-372 found it three blocks
   // short; this is what stops that recurring silently.
-  test('mirrors the full backend transition set', () => {
+  //
+  // One KNOWN divergence from the backend, deliberately kept: `approve`
+  // is declared here but not there (see the guard test above). Everything
+  // else is one-for-one with `ReAccreditationType.Transitions`.
+  test('pins the full declared transition set (backend set, plus approve)', () => {
     expect(
       reAccreditationType.transitions.map((t) => t.actionId).sort()
     ).toEqual([
+      'approve',
       'continue-review-during-assessment',
       'continue-review-during-decision',
       'continue-review-during-duly-made',

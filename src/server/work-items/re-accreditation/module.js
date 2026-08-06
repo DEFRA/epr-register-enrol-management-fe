@@ -71,18 +71,13 @@ const TRANSITIONS = [
     toStateId: 'awaiting-decision',
     requiresAllTasksComplete: true
   },
-  // RA-132 / RA-372. `approve` is deliberately NOT declared. The backend
-  // omits it from `ReAccreditationType.Transitions` on purpose, so its
-  // generic engine rejects `/work-items/{id}/actions/approve` and a caller
-  // cannot bypass the bespoke side-effects of
-  // `ReAccreditationApprovalService` (accreditation id issuance, SLA clock
-  // stop, queued publishing job). Declaring it here would make the mirror
-  // claim a generic action that does not exist and that the backend would
-  // refuse. The Approve CTA is driven by `canApproveDirectly` (a state
-  // check in the detail controller) and posts to the type-specific
-  // `/work-items/re-accreditation/{id}/approve`, never through the
-  // generic action route. `reject` DOES go through the generic engine and
-  // so is declared below.
+  {
+    actionId: 'approve',
+    displayName: 'Approve',
+    fromStateId: 'awaiting-decision',
+    toStateId: 'approved',
+    requiresAllTasksComplete: true
+  },
   {
     actionId: 'reject',
     displayName: 'Reject',
