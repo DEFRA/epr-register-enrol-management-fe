@@ -60,7 +60,7 @@ describe('config production hardening', () => {
     process.env.AUTH_STUB_ENABLED = 'false'
     process.env.ENTRA_CLIENT_ID = 'azure-client-id'
     process.env.ENTRA_CLIENT_SECRET = 'azure-client-secret'
-    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    process.env.BACKEND_API_SHARED_SECRET = 'a-shared-secret'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
@@ -100,7 +100,7 @@ describe('config production hardening', () => {
     process.env.AUTH_STUB_ENABLED = 'true'
     delete process.env.ENTRA_CLIENT_ID
     delete process.env.ENTRA_CLIENT_SECRET
-    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    process.env.BACKEND_API_SHARED_SECRET = 'a-shared-secret'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
@@ -118,7 +118,7 @@ describe('config production hardening', () => {
     process.env.AUTH_STUB_ENABLED = 'true'
     delete process.env.ENTRA_CLIENT_ID
     delete process.env.ENTRA_CLIENT_SECRET
-    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    process.env.BACKEND_API_SHARED_SECRET = 'a-shared-secret'
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
@@ -130,29 +130,31 @@ describe('config production hardening', () => {
     expect(err).toBeNull()
   })
 
-  test('deployed boot rejects missing AUTH_SHARED_SECRET in non-local environments', async () => {
+  test('deployed boot rejects missing BACKEND_API_SHARED_SECRET in non-local environments', async () => {
     process.env.NODE_ENV = 'production'
     process.env.ENVIRONMENT = 'dev'
     process.env.SESSION_COOKIE_PASSWORD = REAL_SECRET
     process.env.AUTH_STUB_ENABLED = 'true'
-    delete process.env.AUTH_SHARED_SECRET
+    delete process.env.BACKEND_API_SHARED_SECRET
     process.env.REDIS_HOST = 'redis.example.internal'
     process.env.REDIS_USERNAME = 'redis-user'
     process.env.REDIS_PASSWORD = 'redis-password'
 
-    await expect(import('./config.js')).rejects.toThrow(/AUTH_SHARED_SECRET/)
+    await expect(import('./config.js')).rejects.toThrow(
+      /BACKEND_API_SHARED_SECRET/
+    )
   })
 
-  test('local boot succeeds without AUTH_SHARED_SECRET', async () => {
+  test('local boot succeeds without BACKEND_API_SHARED_SECRET', async () => {
     process.env.NODE_ENV = 'development'
     process.env.ENVIRONMENT = 'local'
-    delete process.env.AUTH_SHARED_SECRET
+    delete process.env.BACKEND_API_SHARED_SECRET
     delete process.env.SESSION_COOKIE_PASSWORD
     delete process.env.SESSION_COOKIE_SECURE
     delete process.env.AUTH_STUB_ENABLED
 
     const mod = await import('./config.js')
-    expect(mod.config.get('auth.sharedSecret')).toBe('')
+    expect(mod.config.get('backendApi.sharedSecret')).toBe('')
   })
 
   test('non-production boot accepts empty Azure creds', async () => {
@@ -202,7 +204,7 @@ describe('config production hardening', () => {
     process.env.AUTH_STUB_ENABLED = 'false'
     process.env.ENTRA_CLIENT_ID = 'azure-client-id'
     process.env.ENTRA_CLIENT_SECRET = 'azure-client-secret'
-    process.env.AUTH_SHARED_SECRET = 'a-shared-secret'
+    process.env.BACKEND_API_SHARED_SECRET = 'a-shared-secret'
   }
 
   test('production boot rejects empty REDIS_PASSWORD', async () => {
