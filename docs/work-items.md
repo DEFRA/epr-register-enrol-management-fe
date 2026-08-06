@@ -52,6 +52,20 @@ export const myTypeModule = {
     // any action whose `requiresAllTasksComplete` is unset/`true` while
     // tasks for the from-state are outstanding. Set it to `false` for
     // actions that should always be available (e.g. "withdraw").
+    //
+    // `callerInvocable: false` (RA-372) mirrors the backend flag of the
+    // same name: the transition exists, but the SERVER decides when to
+    // apply it, so it is never offered as a caller-chosen action.
+    // `projectWorkItem` filters those out of `availableActions` and
+    // `canApplyAction` rejects them with `not-caller-invocable`, exactly
+    // as the backend does. Use it when several transitions share a
+    // `fromStateId` and something other than the caller picks between
+    // them — letting the caller choose would let them choose the
+    // destination state. Such a transition needs a type-specific route
+    // hitting the backend's dedicated endpoint (see
+    // `re-accreditation/continue-review/`), not the generic
+    // `/work-items/{id}/actions/{actionId}` route. Omitting the flag
+    // means invocable, matching the backend default.
     transitions: [
       {
         actionId: 'approve',

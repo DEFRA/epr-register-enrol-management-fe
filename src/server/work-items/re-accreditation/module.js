@@ -1,6 +1,7 @@
 import { config } from '#/config/config.js'
 import { registerModuleDetailTemplates } from '../core/templates.js'
 import { buildApprovalRoutes } from './approval/routes.js'
+import { buildContinueReviewRoutes } from './continue-review/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
 
 /**
@@ -125,6 +126,53 @@ const TRANSITIONS = [
     fromStateId: 'updated',
     toStateId: 'withdrawn',
     requiresAllTasksComplete: false
+  },
+  // RA-372. The four onward transitions out of `updated`, one per state a
+  // query can be raised from. Mirrored here because the frontend now
+  // *drives* this transition (the "Continue review" CTA), so the mirror
+  // going on claiming `updated` is a dead end would be actively
+  // misleading.
+  //
+  // `callerInvocable: false` matters and is not decoration: the backend
+  // declares all four that way, and resolves which one applies from the
+  // work item's own `resume-during-*` audit history. A caller must never
+  // pick — all four share `fromStateId: 'updated'`, so a caller-chosen
+  // action could send the application to the wrong (attacker-selected)
+  // stage. That is exactly why the UI posts to the type-specific
+  // `/continue-review` endpoint instead of the generic
+  // `/actions/{actionId}` route, and why `projectWorkItem` filters these
+  // out of `availableActions` rather than rendering four buttons.
+  {
+    actionId: 'continue-review-during-duly-making',
+    displayName: 'Continue review',
+    fromStateId: 'updated',
+    toStateId: 'submitted',
+    requiresAllTasksComplete: false,
+    callerInvocable: false
+  },
+  {
+    actionId: 'continue-review-during-duly-made',
+    displayName: 'Continue review',
+    fromStateId: 'updated',
+    toStateId: 'duly-made',
+    requiresAllTasksComplete: false,
+    callerInvocable: false
+  },
+  {
+    actionId: 'continue-review-during-assessment',
+    displayName: 'Continue review',
+    fromStateId: 'updated',
+    toStateId: 'assessment-in-progress',
+    requiresAllTasksComplete: false,
+    callerInvocable: false
+  },
+  {
+    actionId: 'continue-review-during-decision',
+    displayName: 'Continue review',
+    fromStateId: 'updated',
+    toStateId: 'awaiting-decision',
+    requiresAllTasksComplete: false,
+    callerInvocable: false
   }
 ]
 
@@ -165,6 +213,14 @@ const TASKS_BY_STATE = {
       displayName: 'Record decision rationale'
     }
   ]
+  // RA-372. There is deliberately NO `updated` entry, and adding one would
+  // be wrong. `updated` owns no tasks of its own; while an item sits there
+  // the backend projects the tasks of the state the query was raised from,
+  // resolved per work item from its audit history and carrying that
+  // state's existing completion status. That is a property of the
+  // individual work item, not of the state, so it cannot be expressed in
+  // this static map — the detail and tasks pages read `workItem.tasks`
+  // off the API response and render whatever the backend projected.
 }
 
 export const reAccreditationType = {
@@ -197,6 +253,12 @@ export const reAccreditationModule = {
     // v9: RA-252 withdraw-during-query transition out of 'queried'
     // v10: RA-252 withdraw-during-updated transition out of 'updated'
     //
+    // RA-372 deliberately did NOT bump the version (confirmed with the
+    // backend). Showing the originating state's tasks while an item is in
+    // `updated` is a projection-time fix applied against the snapshot each
+    // work item already carries, so live v8/v9/v10 items are corrected
+    // without a migration and without a new entry below.
+    //
     // ⚠ THIS MAP MUST GAIN AN ENTRY WHENEVER THE BACKEND BUMPS
     // `ReAccreditationType.TemplateVersion`. The backend stamps its
     // version onto every work item at submission and the framework
@@ -226,6 +288,14 @@ export const reAccreditationModule = {
     // — the FE button only renders when the work item is eligible, and
     // the backend is the source of truth for authorisation.
     server.route(buildApprovalRoutes())
+
+    // RA-372. Continue-review flow: the onward path out of `updated` once
+    // a case worker has reviewed an operator's response to a query. Hits
+    // the type-specific backend endpoint because the underlying
+    // `continue-review-during-*` transitions are not caller-invocable —
+    // see the TRANSITIONS comment above. Always mounted; the CTA only
+    // renders for a work item actually in `updated`.
+    server.route(buildContinueReviewRoutes())
 
     // RA-127. The create-work-item demo form is feature-flagged so it
     // can be hidden in production. When the flag is off the routes are

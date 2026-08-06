@@ -509,6 +509,13 @@ function buildAssignmentViewModel({ workItem, user }) {
 //    backend's state eligibility check (`awaiting-decision`). The backend
 //    remains authoritative; a forged POST is still rejected there.
 //  - `approveHref` — link target for the CTA.
+//  - `canContinueReview` + `continueReviewHref` (RA-372) — whether the
+//    "Continue review" CTA should render, and where it posts. Mirrors the
+//    backend's state check only (`updated`): the endpoint is protected by
+//    plain authentication, with no `assign` role and no assigned-officer
+//    check, and it is NOT gated on task completion (all four underlying
+//    `continue-review-during-*` transitions are
+//    `RequiresAllTasksComplete: false`). The backend remains authoritative.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
 //    a terminal state (approved / rejected / withdrawn), the template
 //    suppresses the generic action panel and shows a status tag.
@@ -518,6 +525,10 @@ function buildAssignmentViewModel({ workItem, user }) {
 
 const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
 const RE_ACCREDITATION_ELIGIBLE_STATE = 'awaiting-decision'
+// RA-372. The state an application sits in once an operator has responded
+// to a query and before a case worker has picked the review back up. The
+// only state the "Continue review" CTA renders in.
+const RE_ACCREDITATION_UPDATED_STATE = 'updated'
 // The states in which a case is closed. Drives BOTH the re-accreditation
 // read-only Outcome panel (`isReadOnlyState`) and, since RA-358, the
 // assignment gate in `buildAssignmentViewModel` — deliberately ONE list, so
@@ -537,6 +548,13 @@ function applyReAccreditationViewModel({ workItem }) {
   const canApproveDirectly =
     workItem.stateId === RE_ACCREDITATION_ELIGIBLE_STATE
 
+  // RA-372. Deliberately NOT `&& allTasksComplete`: `updated` shows the
+  // originating state's tasks, and the whole point of continuing the
+  // review is to get back to that state so the outstanding ones can be
+  // finished there. Gating on completion would recreate the dead end this
+  // ticket exists to remove.
+  const canContinueReview = workItem.stateId === RE_ACCREDITATION_UPDATED_STATE
+
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
   // state-badge map so it matches the list and the envelope State badge.
@@ -548,6 +566,8 @@ function applyReAccreditationViewModel({ workItem }) {
     ...workItem,
     canApproveDirectly,
     approveHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/approve`,
+    canContinueReview,
+    continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
     isReadOnlyState,
     stateTagClasses,
     decisionMetadata

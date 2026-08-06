@@ -585,6 +585,67 @@ const APPROVE_REASON_BY_STATUS = {
 }
 
 /**
+ * Continue the review of a re-accreditation work item sitting in the
+ * `updated` state (RA-372).
+ *
+ * Wraps `POST /work-items/re-accreditation/{id}/continue-review`. The
+ * endpoint takes NO body: which of the four `continue-review-during-*`
+ * transitions applies is resolved server-side from the work item's own
+ * `resume-during-*` audit history, precisely so a caller cannot choose
+ * (and therefore cannot send the item to an attacker-picked stage). The
+ * target state is read off the returned envelope, never predicted here.
+ *
+ * A repeat call for an item that has already left `updated` into a valid
+ * continue target is an idempotent replay: the backend answers 200 with
+ * the current envelope and an `x-idempotent-replay: true` header. That is
+ * deliberately surfaced as plain success — a double-clicked button, or the
+ * `submitted` auto-transition to `duly-made` that can fire when the last
+ * task is completed while in `updated`, must not look like an error.
+ *
+ * Result shape mirrors {@link approveReAccreditation}.
+ */
+export async function continueReviewReAccreditation({
+  workItemId,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/continue-review`
+
+  const result = await postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'continueReviewReAccreditation'
+  })
+
+  if (result.ok) {
+    return { ok: true, workItem: result.workItem }
+  }
+
+  // `postJson` reports transport failures without a status.
+  if (result.status == null) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: result.error ?? 'Request failed'
+    }
+  }
+
+  return {
+    ok: false,
+    reason: APPROVE_REASON_BY_STATUS[result.status] ?? 'server',
+    status: result.status,
+    message:
+      result.problem?.detail ??
+      result.problem?.title ??
+      `Backend returned ${result.status}`
+  }
+}
+
+/**
  * Extend the SLA clock on a work item (RA-131).
  *
  * Wraps `POST /work-items/{id}/sla/extend`.

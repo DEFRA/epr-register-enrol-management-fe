@@ -2088,6 +2088,237 @@ describe('#workItemDetailController', () => {
     })
   })
 
+  // RA-372 -----------------------------------------------------------------
+  // Before this ticket an application sitting in `updated` (operator has
+  // answered a query, caseworker has not yet picked the review back up) had
+  // no onward route in the UI at all except Withdraw. The four
+  // `continue-review-during-*` transitions that carry it back to the state
+  // the query was raised from are declared `CallerInvocable: false` in the
+  // backend and therefore never appear in `availableActions`, so the
+  // generic action loop cannot render them — hence a bespoke CTA posting to
+  // the type-specific endpoint.
+  describe('RA-372 Continue review CTA (canContinueReview)', () => {
+    function registerReaccreditationWithDetailV1() {
+      registerReaccreditation()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+    }
+
+    const updatedWorkItem = (overrides = {}) =>
+      aWorkItem({
+        stateId: 'updated',
+        assignedToId: 'someone-else',
+        // What the backend actually returns for an item in `updated`: the
+        // ORIGINATING state's tasks, with the pre-query completion intact.
+        tasks: [
+          {
+            taskId: 'review-compliance-history',
+            displayName: 'Review compliance history',
+            status: 'Completed'
+          },
+          {
+            taskId: 'assess-technical-capacity',
+            displayName: 'Assess technical capacity',
+            status: 'NotStarted'
+          }
+        ],
+        availableActions: [
+          {
+            actionId: 'withdraw-during-updated',
+            displayName: 'Withdraw',
+            fromStateId: 'updated',
+            toStateId: 'withdrawn',
+            requiresAllTasksComplete: false
+          }
+        ],
+        ...overrides
+      })
+
+    test('renders the Continue review CTA as a form POST to the type-specific endpoint', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining(
+          'data-testid="re-accreditation-continue-review-cta"'
+        )
+      )
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+      expect(result).toEqual(expect.stringContaining('Continue review'))
+      // A real form POST, not a link to an interstitial.
+      expect(result).toEqual(
+        expect.stringContaining(
+          `action="/work-items/re-accreditation/${ID}/continue-review"`
+        )
+      )
+      // CSRF-protected like every other state-changing form on this page.
+      expect(result).toMatch(
+        /<form[^>]*continue-review"[^>]*>[\s\S]*?name="crumb"/
+      )
+    })
+
+    // The whole point of the ticket: the outstanding tasks must be
+    // reachable, so the CTA cannot be gated on completing them first.
+    test('renders the CTA even though tasks are outstanding', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      // Guards against a vacuous pass: the fixture really does have an
+      // incomplete task.
+      expect(result).toEqual(expect.stringContaining('1 of 2 tasks complete'))
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+    })
+
+    // AC1 / AC2 through the real template: the projected originating-state
+    // tasks and their pre-query progress render through the existing
+    // markup, and the "no tasks" message is gone.
+    test('shows the projected originating-state tasks and prior progress', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toEqual(expect.stringContaining('1 of 2 tasks complete'))
+      expect(result).toEqual(expect.stringContaining('Tasks (2)'))
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="work-item-no-tasks"')
+      )
+    })
+
+    test('renders the CTA alongside the Withdraw link rather than replacing it', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-withdraw-during-updated"')
+      )
+    })
+
+    // RA-335. The button is disabled rather than removed, matching the
+    // other primary action buttons; `requireStandard` on the route is the
+    // actual gate.
+    test('renders the CTA disabled for a read-only support user', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'support-readonly' }
+      })
+
+      expect(result).toMatch(
+        /<button(?=[^>]*data-testid="action-continue-review")(?=[^>]*disabled)[^>]*>/
+      )
+    })
+
+    test.each([
+      'queried',
+      'submitted',
+      'duly-made',
+      'assessment-in-progress',
+      'awaiting-decision'
+    ])('does not render the CTA in the %s state', async (stateId) => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId,
+          availableActions: [
+            {
+              actionId: 'withdraw',
+              displayName: 'Withdraw',
+              fromStateId: stateId,
+              toStateId: 'withdrawn',
+              requiresAllTasksComplete: false
+            }
+          ]
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+    })
+
+    test('does not render the CTA in a terminal state', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'withdrawn', availableActions: [] })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+    })
+
+    // The CTA is re-accreditation-specific decoration; another registered
+    // type sitting in an `updated` state must not pick it up.
+    test('does not render the CTA for a different work item type', async () => {
+      registerWorkItemType({
+        id: 'other-type',
+        displayName: 'Other type',
+        initialState: { id: 'updated', displayName: 'Updated' },
+        states: [{ id: 'updated', displayName: 'Updated' }],
+        getTasksForState: () => []
+      })
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ typeId: 'other-type', stateId: 'updated' })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+    })
+  })
+
   // RA-249 (was RA-196): when applicationReference is missing, the
   // NAVIGATIONAL label (page title / caption / breadcrumb leaf) still falls
   // back to the work-item id — an identifier is legitimately useful there.

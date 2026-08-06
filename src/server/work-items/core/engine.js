@@ -42,6 +42,16 @@ export function projectWorkItem(type, workItem) {
   const allTasksComplete = tasks.every((t) => t.isComplete)
   const availableActions = (type.transitions ?? [])
     .filter((t) => t.fromStateId === stateId)
+    // RA-372. Mirrors the backend's `CallerInvocable` flag. A transition
+    // declared `callerInvocable: false` is applied by the server on the
+    // caller's behalf (from an auto-transition hook, or from a
+    // type-specific endpoint that resolves WHICH of several same-from-state
+    // transitions applies) and must never be offered as a caller-chosen
+    // action. Omitting the flag means invocable, matching the backend
+    // default. Without this filter the mirror would advertise all four
+    // re-accreditation `continue-review-during-*` transitions out of
+    // `updated` as if the user could pick a destination.
+    .filter((t) => t.callerInvocable !== false)
     .filter((t) => t.requiresAllTasksComplete === false || allTasksComplete)
     .map((t) => ({
       actionId: t.actionId,
@@ -76,6 +86,12 @@ export function canApplyAction(type, workItem, actionId) {
   }
   if (transition.fromStateId !== stateId) {
     return { allowed: false, reason: 'invalid-transition' }
+  }
+  // RA-372. Kept in step with the `callerInvocable` filter in
+  // `projectWorkItem` above, so the two helpers cannot disagree about
+  // whether a caller may ask for an action.
+  if (transition.callerInvocable === false) {
+    return { allowed: false, reason: 'not-caller-invocable' }
   }
   if (transition.requiresAllTasksComplete !== false) {
     const { tasks } = projectWorkItem(type, workItem)

@@ -257,5 +257,126 @@ describe('#workItemTasksController (RA-129)', () => {
       expect(result).toEqual(expect.stringContaining('Not started'))
       expect(result).toEqual(expect.stringContaining('Completed'))
     })
+
+    // RA-372 -------------------------------------------------------------
+    // While an application is in `updated` the backend projects the tasks
+    // of the state the query was RAISED FROM, carrying that state's
+    // existing completion status. This page is type-agnostic and renders
+    // whatever `workItem.tasks` holds, so the fix needs no change here —
+    // these tests pin that, because a future "this state has no tasks,
+    // skip the render" shortcut in this controller would silently
+    // reintroduce the bug.
+    describe('an application in the updated state', () => {
+      const updatedWorkItem = () =>
+        aWorkItem({
+          stateId: 'updated',
+          tasks: [
+            {
+              taskId: 'review-compliance-history',
+              displayName: 'Review compliance history',
+              status: 'Completed',
+              isComplete: true
+            },
+            {
+              taskId: 'assess-technical-capacity',
+              displayName: 'Assess technical capacity',
+              status: 'NotStarted',
+              isComplete: false
+            },
+            {
+              taskId: 'assess-financial-capacity',
+              displayName: 'Assess financial capacity',
+              status: 'InProgress',
+              isComplete: false
+            }
+          ]
+        })
+
+      test('lists the originating state tasks instead of an empty list', async () => {
+        registerReaccreditation()
+        getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
+
+        const { statusCode, result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}/tasks`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).toEqual(
+          expect.stringContaining(
+            'data-testid="work-item-task-review-compliance-history"'
+          )
+        )
+        expect(result).toEqual(
+          expect.stringContaining(
+            'data-testid="work-item-task-assess-technical-capacity"'
+          )
+        )
+        expect(result).toEqual(
+          expect.stringContaining(
+            'data-testid="work-item-task-assess-financial-capacity"'
+          )
+        )
+        // The exact symptom this ticket reported.
+        expect(result).not.toEqual(
+          expect.stringContaining('data-testid="work-item-no-tasks"')
+        )
+      })
+
+      test('renders the pre-query completion so prior progress stays visible', async () => {
+        registerReaccreditation()
+        getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
+
+        const { result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}/tasks`
+        })
+
+        expect(result).toEqual(
+          expect.stringContaining('data-testid="task-group-Completed"')
+        )
+        expect(result).toEqual(
+          expect.stringContaining('data-testid="task-group-NotStarted"')
+        )
+        expect(result).toEqual(
+          expect.stringContaining('data-testid="task-group-InProgress"')
+        )
+      })
+
+      test('offers the complete and status controls on the outstanding tasks', async () => {
+        registerReaccreditation()
+        getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
+
+        const { result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}/tasks`
+        })
+
+        // AC3: the remaining tasks are completable from the UI while the
+        // item is still in `updated`.
+        expect(result).toEqual(
+          expect.stringContaining(
+            'data-testid="complete-task-assess-technical-capacity"'
+          )
+        )
+        expect(result).toEqual(
+          expect.stringContaining(
+            'data-testid="set-task-status-assess-technical-capacity"'
+          )
+        )
+        // An already-completed task keeps its status tag but offers no
+        // quick-complete control.
+        expect(result).toEqual(
+          expect.stringContaining(
+            'data-testid="task-status-tag-review-compliance-history"'
+          )
+        )
+        expect(result).not.toEqual(
+          expect.stringContaining(
+            'data-testid="complete-task-review-compliance-history"'
+          )
+        )
+      })
+    })
   })
 })

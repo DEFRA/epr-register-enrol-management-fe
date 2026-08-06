@@ -123,6 +123,46 @@ describe('reAccreditationModule', () => {
     }
   )
 
+  // RA-372. The four onward transitions out of `updated`, one per state a
+  // query can be raised from. Their existence is what makes `updated` a
+  // pass-through rather than the dead end the bug reported.
+  test.each([
+    ['continue-review-during-duly-making', 'submitted'],
+    ['continue-review-during-duly-made', 'duly-made'],
+    ['continue-review-during-assessment', 'assessment-in-progress'],
+    ['continue-review-during-decision', 'awaiting-decision']
+  ])('declares transition %s: updated -> %s', (actionId, toStateId) => {
+    const transition = reAccreditationType.transitions.find(
+      (t) => t.actionId === actionId
+    )
+    expect(transition).toMatchObject({
+      displayName: 'Continue review',
+      fromStateId: 'updated',
+      toStateId,
+      // Never gated on task completion: `updated` shows the originating
+      // state's tasks, and the point of continuing is to get back to that
+      // state so the outstanding ones can be finished there.
+      requiresAllTasksComplete: false,
+      // Resolved server-side from the work item's audit history. All four
+      // share `fromStateId: 'updated'`, so a caller-chosen action could
+      // send the application to the wrong stage.
+      callerInvocable: false
+    })
+  })
+
+  test('leaves every other transition caller-invocable', () => {
+    const serverResolved = reAccreditationType.transitions
+      .filter((t) => t.callerInvocable === false)
+      .map((t) => t.actionId)
+
+    expect(serverResolved).toEqual([
+      'continue-review-during-duly-making',
+      'continue-review-during-duly-made',
+      'continue-review-during-assessment',
+      'continue-review-during-decision'
+    ])
+  })
+
   test.each([
     [
       'submitted',
@@ -150,6 +190,21 @@ describe('reAccreditationModule', () => {
       expect(reAccreditationType.getTasksForState(stateId)).toEqual([])
     }
   )
+
+  // RA-372. Guards against a well-meaning "fix" that adds an `updated`
+  // entry to TASKS_BY_STATE. The tasks shown while an item is in `updated`
+  // are the ORIGINATING state's, resolved per work item by the backend
+  // from its audit history and carrying that state's existing completion
+  // status — a property of the item, not of the state. The UI reads them
+  // off `workItem.tasks` in the API response; a static list here would be
+  // wrong for every item whose query came from a different state.
+  test('getTasksForState(updated) is empty — the backend projects them per item', () => {
+    expect(reAccreditationType.getTasksForState('updated')).toEqual([])
+  })
+
+  test('getTasksForState(queried) is empty', () => {
+    expect(reAccreditationType.getTasksForState('queried')).toEqual([])
+  })
 
   test('register registers a detail template for every version up to the declared current one', async () => {
     // Resolve falls back to the generic detail before register runs.
@@ -226,9 +281,10 @@ describe('reAccreditationModule', () => {
       config.set(flagKey, true)
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
-      // Approval routes (RA-132) are always mounted; create routes
-      // (RA-127) are only mounted when the flag is on.
-      expect(server.route).toHaveBeenCalledTimes(2)
+      // Approval routes (RA-132) and continue-review routes (RA-372) are
+      // always mounted; create routes (RA-127) are only mounted when the
+      // flag is on.
+      expect(server.route).toHaveBeenCalledTimes(3)
       const createCall = server.route.mock.calls.find(([routes]) =>
         routes.some((r) => r.path === '/work-items/re-accreditation/new')
       )
@@ -263,12 +319,33 @@ describe('reAccreditationModule', () => {
       config.set(flagKey, false)
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
-      // Only the always-on approval routes (RA-132) are mounted.
-      expect(server.route).toHaveBeenCalledTimes(1)
-      const [routes] = server.route.mock.calls[0]
+      // Only the always-on approval (RA-132) and continue-review (RA-372)
+      // routes are mounted.
+      expect(server.route).toHaveBeenCalledTimes(2)
       expect(
-        routes.every((r) => r.path !== '/work-items/re-accreditation/new')
+        server.route.mock.calls.every(([routes]) =>
+          routes.every((r) => r.path !== '/work-items/re-accreditation/new')
+        )
       ).toBe(true)
+    })
+
+    // RA-372.
+    test('always mounts the continue-review route regardless of the create flag', async () => {
+      for (const flag of [true, false]) {
+        config.set(flagKey, flag)
+        const server = { route: vi.fn() }
+        await reAccreditationModule.register(server)
+        const continueReviewCall = server.route.mock.calls.find(([routes]) =>
+          routes.some(
+            (r) =>
+              r.path === '/work-items/re-accreditation/{id}/continue-review'
+          )
+        )
+        expect(continueReviewCall).toBeDefined()
+        expect(
+          continueReviewCall[0].map((r) => `${r.method} ${r.path}`)
+        ).toEqual(['POST /work-items/re-accreditation/{id}/continue-review'])
+      }
     })
   })
 })
