@@ -499,6 +499,18 @@
       {# RA-129. Task progression lives on a dedicated /tasks page so the   #}
       {# summary stays focused on the application data. The panel keeps a   #}
       {# read-only progress indicator + a deep link.                        #}
+      {#                                                                     #}
+      {# ⚠ RA-372. `work-item-task-progress` shares a prefix with the        #}
+      {# per-task `work-item-task-<taskId>` hooks on the tasks page, and     #}
+      {# the mgmt-tests page object selects those with a PREFIX match        #}
+      {# (`li[data-testid^="work-item-task-"]`). It gets away with it        #}
+      {# because this one is a `<p>` on a different page — so do NOT add     #}
+      {# another `work-item-task-*` hook here or on the tasks page, and      #}
+      {# never make this one an `<li>`. Either would silently fold a         #}
+      {# non-task element into that suite's task list. Use the              #}
+      {# `work-item-tasks-*` prefix (as `work-item-tasks-link` below does)   #}
+      {# for anything that is about the task COLLECTION rather than an       #}
+      {# individual task.                                                    #}
       <div class="app-case-panel" data-testid="tasks-panel">
         <h2 class="govuk-heading-m">Tasks</h2>
         {% if workItem.taskProgress.total > 0 %}
