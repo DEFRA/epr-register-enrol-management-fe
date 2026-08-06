@@ -48,6 +48,19 @@ those how-tos for the authoritative platform behaviour.
   stubbed in non-prod environments). `AUTH_STUB_ENABLED` **must** remain
   `false` when `ENVIRONMENT=prod`; the boot-time hardening assertion fails
   if stub auth is enabled in that environment.
+- `BACKEND_API_SHARED_SECRET` — HMAC-SHA256 secret this service signs its
+  outbound requests to the case management backend with (sent as
+  `x-cdp-auth-signature` alongside `BACKEND_API_COGNITO_CLIENT_ID`'s
+  value). **Required in all non-Development environments** — the
+  boot-time hardening assertion in
+  [`src/config/config.js`](../src/config/config.js) refuses to start the
+  process otherwise. Must match `AUTH_SHARED_SECRET__MANAGEMENT_FE` on
+  `epr-register-enrol-management-be` exactly, and must be **distinct**
+  from whatever `epr-register-enrol-backend` uses for its own calls into
+  that same backend (`CASE_MANAGEMENT_API_SHARED_SECRET`) — RA-345 moved
+  that backend from one secret shared across both callers to a secret per
+  caller specifically so a compromise of one doesn't grant the other's
+  identity. Generate with `openssl rand -base64 32`.
 
 ## AWS resources to provision
 
