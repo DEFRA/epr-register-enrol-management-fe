@@ -841,6 +841,159 @@ describe('notification audit entries (RA-234)', () => {
   })
 })
 
+describe('OJ status-push audit entries (RA-368)', () => {
+  describe('actionDisplayNameFor fallbacks', () => {
+    test('status-push-sent falls back to "Status sent to OJ"', () => {
+      const [decorated] = decorateAuditLog([
+        { action: 'status-push-sent', details: {} }
+      ])
+      expect(decorated.actionDisplayName).toBe('Status sent to OJ')
+    })
+
+    test('status-push-skipped falls back to "Status not sent to OJ (disabled)"', () => {
+      const [decorated] = decorateAuditLog([
+        { action: 'status-push-skipped', details: {} }
+      ])
+      expect(decorated.actionDisplayName).toBe(
+        'Status not sent to OJ (disabled)'
+      )
+    })
+
+    test('status-push-failed falls back to "Status failed to send to OJ"', () => {
+      const [decorated] = decorateAuditLog([
+        { action: 'status-push-failed', details: {} }
+      ])
+      expect(decorated.actionDisplayName).toBe('Status failed to send to OJ')
+    })
+  })
+
+  describe('summariseAuditEntry', () => {
+    test('status-push-sent summarises to the new state display name', () => {
+      expect(
+        summariseAuditEntry({
+          action: 'status-push-sent',
+          details: { toStateId: 'approved', toStateDisplayName: 'Approved' }
+        })
+      ).toBe('Approved')
+    })
+
+    test('status-push-sent falls back to the raw state id when no display name', () => {
+      expect(
+        summariseAuditEntry({
+          action: 'status-push-sent',
+          details: { toStateId: 'approved' }
+        })
+      ).toBe('approved')
+    })
+
+    test('status-push-skipped summarises to the reason', () => {
+      expect(
+        summariseAuditEntry({
+          action: 'status-push-skipped',
+          details: { reason: 'push-disabled' }
+        })
+      ).toBe('push-disabled')
+    })
+
+    test('status-push-failed summarises to the error message', () => {
+      expect(
+        summariseAuditEntry({
+          action: 'status-push-failed',
+          details: { errorMessage: 'OJ returned 500' }
+        })
+      ).toBe('OJ returned 500')
+    })
+  })
+
+  describe('detailRowsForAuditEntry', () => {
+    test('projects action, from/to state and actor for a status-push-sent entry', () => {
+      expect(
+        detailRowsForAuditEntry({
+          action: 'status-push-sent',
+          createdByName: 'System',
+          details: {
+            actionId: 'approve',
+            actionDisplayName: 'Approve',
+            fromStateId: 'awaiting-decision',
+            toStateId: 'approved',
+            toStateDisplayName: 'Approved'
+          }
+        })
+      ).toEqual([
+        { key: 'Action', value: 'Approve' },
+        { key: 'Previous state', value: 'awaiting-decision' },
+        { key: 'New state', value: 'Approved' },
+        { key: 'Triggered by', value: 'System' }
+      ])
+    })
+
+    test('projects the reason for a status-push-skipped entry', () => {
+      expect(
+        detailRowsForAuditEntry({
+          action: 'status-push-skipped',
+          details: {
+            actionId: 'approve',
+            toStateId: 'approved',
+            reason: 'push-disabled'
+          }
+        })
+      ).toEqual([
+        { key: 'Action', value: 'approve' },
+        { key: 'New state', value: 'approved' },
+        { key: 'Reason', value: 'push-disabled' }
+      ])
+    })
+
+    test('projects the error message as a multiline row for a status-push-failed entry', () => {
+      expect(
+        detailRowsForAuditEntry({
+          action: 'status-push-failed',
+          details: {
+            actionId: 'approve',
+            toStateId: 'approved',
+            errorMessage: 'OJ returned 500\nstatus: ServiceUnavailable'
+          }
+        })
+      ).toEqual([
+        { key: 'Action', value: 'approve' },
+        { key: 'New state', value: 'approved' },
+        {
+          key: 'Error',
+          value: 'OJ returned 500\nstatus: ServiceUnavailable',
+          multiline: true
+        }
+      ])
+    })
+
+    test('returns an empty array for a status-push entry with no details and no actor', () => {
+      expect(
+        detailRowsForAuditEntry({ action: 'status-push-sent', details: {} })
+      ).toEqual([])
+      expect(detailRowsForAuditEntry({ action: 'status-push-failed' })).toEqual(
+        []
+      )
+    })
+  })
+
+  describe('isFailure flag on decorateAuditLog', () => {
+    test('marks status-push-failed entries as failures', () => {
+      const [decorated] = decorateAuditLog([
+        { action: 'status-push-failed', details: {} }
+      ])
+      expect(decorated.isFailure).toBe(true)
+    })
+
+    test('does not mark status-push-sent or status-push-skipped as failures', () => {
+      const decorated = decorateAuditLog([
+        { action: 'status-push-sent', details: {} },
+        { action: 'status-push-skipped', details: {} }
+      ])
+      expect(decorated[0].isFailure).toBe(false)
+      expect(decorated[1].isFailure).toBe(false)
+    })
+  })
+})
+
 describe('notificationFailureDetected', () => {
   test('returns true when a notification-failed entry has no later notification-sent entry', () => {
     const auditLog = [

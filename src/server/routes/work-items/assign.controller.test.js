@@ -334,7 +334,7 @@ describe('RA-295 AC03 interstitials render end-to-end', () => {
         url: `/work-items/wi%201/${path}`
       })
       expect(statusCode).toBe(404)
-      expect(result).toContain('Work item not found')
+      expect(result).toContain('Application not found')
     }
   })
 })

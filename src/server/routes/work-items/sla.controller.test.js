@@ -59,6 +59,29 @@ describe('#makeShowExtendController', () => {
     expect(result).toEqual(expect.stringContaining('sla-extend-form'))
     expect(result).toEqual(expect.stringContaining(REF))
   })
+
+  // RA-358 AC2. This route is one of the nine callers of the shared
+  // not-found view, but had no 404 coverage at all, so its copy could
+  // drift back without anything failing.
+  test('GET renders the 404 page in application terms', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 404 })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/sla/extend`
+    })
+
+    expect(statusCode).toBe(statusCodes.notFound)
+    expect(result).toEqual(expect.stringContaining('Application not found'))
+    // The breadcrumb must speak the same vocabulary as the heading and the
+    // back link, all three of which point at /work-items. Scoped to the
+    // breadcrumb class: the header nav also renders a "Work items" link, so
+    // a bare substring check would be ambiguous.
+    expect(result).toContain(
+      '<a class="govuk-breadcrumbs__link" href="/work-items">Applications</a>'
+    )
+    expect(result).not.toEqual(expect.stringContaining('No work item exists'))
+  })
 })
 
 describe('#makeSubmitExtendController', () => {
@@ -203,6 +226,24 @@ describe('#makeShowOverrideController', () => {
     expect(result).toEqual(expect.stringContaining('Override SLA'))
     expect(result).toEqual(expect.stringContaining('sla-override-form'))
     expect(result).toEqual(expect.stringContaining(REF))
+  })
+
+  // RA-358 AC2. As above — the second of this controller's two callers of
+  // the shared not-found view, previously uncovered.
+  test('GET renders the 404 page in application terms', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 404 })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/sla/override`
+    })
+
+    expect(statusCode).toBe(statusCodes.notFound)
+    expect(result).toEqual(expect.stringContaining('Application not found'))
+    expect(result).toContain(
+      '<a class="govuk-breadcrumbs__link" href="/work-items">Applications</a>'
+    )
+    expect(result).not.toEqual(expect.stringContaining('No work item exists'))
   })
 })
 
