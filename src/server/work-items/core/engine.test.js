@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 
-import { canApplyAction, projectWorkItem } from './engine.js'
+import { allTasksComplete, canApplyAction, projectWorkItem } from './engine.js'
 
 const sampleType = (overrides = {}) => ({
   id: 'sample',
@@ -275,5 +275,106 @@ describe('projectWorkItem — caller-invocable transitions', () => {
       'withdraw',
       'server-resolved'
     ])
+  })
+})
+
+// ---------------------------------------------------------------------
+// RA-346. `allTasksComplete` resolves task state from EITHER shape callers
+// hold: a work item the backend returned (authoritative `tasks` array with
+// a canonical `status`) or a bare `{ stateId, completedTaskIdsByState }`
+// that has to be derived from the type declaration. One predicate, so the
+// Approve CTA and the approve route cannot drift apart.
+// ---------------------------------------------------------------------
+describe('allTasksComplete', () => {
+  test('prefers the backend tasks array over the type declaration', () => {
+    // The declaration says `submitted` has two tasks and nothing is
+    // recorded as complete — but the backend says otherwise, and it wins.
+    const workItem = {
+      stateId: 'submitted',
+      tasks: [
+        { taskId: 'check-eligibility', status: 'Completed' },
+        { taskId: 'verify-documents', status: 'Completed' }
+      ]
+    }
+
+    expect(allTasksComplete(sampleType(), workItem)).toBe(true)
+  })
+
+  test('reports false when any task in the backend array is pending', () => {
+    const workItem = {
+      stateId: 'submitted',
+      tasks: [
+        { taskId: 'check-eligibility', status: 'Completed' },
+        { taskId: 'verify-documents', status: 'InProgress' }
+      ]
+    }
+
+    expect(allTasksComplete(sampleType(), workItem)).toBe(false)
+  })
+
+  test('honours the legacy isComplete boolean in the backend array', () => {
+    expect(
+      allTasksComplete(sampleType(), {
+        stateId: 'submitted',
+        tasks: [{ taskId: 'check-eligibility', isComplete: true }]
+      })
+    ).toBe(true)
+    expect(
+      allTasksComplete(sampleType(), {
+        stateId: 'submitted',
+        tasks: [{ taskId: 'check-eligibility', isComplete: false }]
+      })
+    ).toBe(false)
+  })
+
+  // RA-346 review. An empty array must NOT be read as "nothing to do, so
+  // everything is complete" — `[].every(...)` is vacuously true, which fails
+  // OPEN. The backend's `WorkItemService.Project` genuinely returns an empty
+  // task list when it cannot resolve the template snapshot, so this is a
+  // reachable state. It must fall through to the declaration and fail CLOSED.
+  test('an empty backend tasks array falls through to the declaration', () => {
+    expect(
+      allTasksComplete(sampleType(), { stateId: 'submitted', tasks: [] })
+    ).toBe(false)
+  })
+
+  test('an empty backend tasks array is complete only when the declaration has no tasks', () => {
+    expect(
+      allTasksComplete(sampleType(), { stateId: 'approved', tasks: [] })
+    ).toBe(true)
+  })
+
+  // Belt and braces: the empty array must not become a way to bypass a gated
+  // action via the public `canApplyAction` entry point either.
+  test('an empty backend tasks array does not unlock a gated action', () => {
+    expect(
+      canApplyAction(
+        sampleType(),
+        { stateId: 'submitted', tasks: [] },
+        'approve'
+      )
+    ).toEqual({ allowed: false, reason: 'incomplete-tasks' })
+  })
+
+  test('falls back to the type declaration when there is no tasks array', () => {
+    expect(allTasksComplete(sampleType(), { stateId: 'submitted' })).toBe(false)
+    expect(
+      allTasksComplete(sampleType(), {
+        stateId: 'submitted',
+        completedTaskIdsByState: {
+          submitted: ['check-eligibility', 'verify-documents']
+        }
+      })
+    ).toBe(true)
+  })
+
+  test('a state with no declared tasks counts as complete', () => {
+    expect(allTasksComplete(sampleType(), { stateId: 'approved' })).toBe(true)
+  })
+
+  // We cannot prove an item we do not have is complete, so fail closed.
+  test('reports false for a missing work item', () => {
+    expect(allTasksComplete(sampleType(), null)).toBe(false)
+    expect(allTasksComplete(sampleType(), undefined)).toBe(false)
   })
 })

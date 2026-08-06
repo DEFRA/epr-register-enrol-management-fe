@@ -11,6 +11,8 @@
  * `approve` from this state if every task were complete?").
  */
 
+import { isTaskComplete } from './task-status.js'
+
 /**
  * Compute the task progress and currently-available actions for a work item.
  *
@@ -39,7 +41,10 @@ export function projectWorkItem(type, workItem) {
     return { tasks, availableActions: [] }
   }
 
-  const allTasksComplete = tasks.every((t) => t.isComplete)
+  // Named distinctly from the exported `allTasksComplete` helper below —
+  // an identically-named local would shadow it and make the two easy to
+  // confuse when reading this function in isolation.
+  const everyTaskComplete = tasks.every((t) => t.isComplete)
   const availableActions = (type.transitions ?? [])
     .filter((t) => t.fromStateId === stateId)
     // RA-372. Mirrors the backend's `CallerInvocable` flag. A transition
@@ -52,7 +57,7 @@ export function projectWorkItem(type, workItem) {
     // re-accreditation `continue-review-during-*` transitions out of
     // `updated` as if the user could pick a destination.
     .filter((t) => t.callerInvocable !== false)
-    .filter((t) => t.requiresAllTasksComplete === false || allTasksComplete)
+    .filter((t) => t.requiresAllTasksComplete === false || everyTaskComplete)
     .map((t) => ({
       actionId: t.actionId,
       displayName: t.displayName,
@@ -62,6 +67,52 @@ export function projectWorkItem(type, workItem) {
     }))
 
   return { tasks, availableActions }
+}
+
+/**
+ * Are every one of this work item's current-state tasks complete?
+ *
+ * RA-346. Callers hand us one of two shapes, so resolve both from a single
+ * place rather than letting each caller invent its own rule:
+ *
+ *  - A work item the BACKEND returned. It carries its own NON-EMPTY `tasks`
+ *    array (each with a canonical `status`), which is authoritative — it
+ *    reflects task state the type declaration cannot know about.
+ *  - Anything else — no `tasks` key, or an EMPTY array — where the task list
+ *    has to be derived from the type declaration.
+ *
+ * An empty `tasks` array is deliberately NOT treated as "nothing to do, so
+ * everything is complete". `[].every(...)` is vacuously `true`, which would
+ * fail OPEN and permit a gated action. It is also a reachable state, not a
+ * hypothetical one: the backend's `WorkItemService.Project` returns an empty
+ * task list when it cannot resolve the item's template snapshot. An empty
+ * array therefore means "the backend told us nothing useful", so we fall
+ * through to the declaration — which, for a state that genuinely declares
+ * tasks, correctly reports them incomplete and fails CLOSED.
+ *
+ * A state that declares no tasks at all still resolves to `true`, which is
+ * right: there is genuinely nothing to complete.
+ *
+ * `isTaskComplete` handles both the canonical `status` field and the legacy
+ * `isComplete` boolean that `projectWorkItem` emits, so one predicate covers
+ * both branches. It is the single owner of the legacy fallback — do not
+ * re-pin that behaviour at other layers.
+ *
+ * @param {object} type Work item type declaration (`module.type`).
+ * @param {object} workItem
+ * @returns {boolean} `false` for a missing work item — we cannot prove an
+ *   item we do not have is complete.
+ */
+export function allTasksComplete(type, workItem) {
+  if (workItem == null) {
+    return false
+  }
+  if (Array.isArray(workItem.tasks) && workItem.tasks.length > 0) {
+    return workItem.tasks.every((task) => isTaskComplete(task))
+  }
+  return projectWorkItem(type, workItem).tasks.every((task) =>
+    isTaskComplete(task)
+  )
 }
 
 /**
@@ -91,20 +142,25 @@ export function canApplyAction(type, workItem, actionId) {
   // `projectWorkItem` above, so the two helpers cannot disagree about
   // whether a caller may ask for an action.
   //
-  // NOT a security control, and must not be audited as one: this helper
-  // has no production callers, and the generic action POST route does
-  // not consult it — it goes straight through `core/service.js` to the
-  // backend. The backend's own guard, checked against the work item's
-  // frozen template snapshot, is the only thing rejecting a forged
-  // non-caller-invocable action. See `docs/work-items.md`.
+  // NOT a security control for the GENERIC action route, and must not be
+  // audited as one. A forged `POST /work-items/{id}/actions/{actionId}`
+  // never reaches here — that route goes straight through
+  // `core/service.js` to the backend, whose own guard, checked against
+  // the work item's frozen template snapshot, is the only thing
+  // rejecting it.
+  //
+  // This helper DOES have a production caller — RA-346's
+  // `re-accreditation/approve-eligibility.js` — but that one gates a
+  // bespoke endpoint which applies its own server-side check, so the same
+  // "backend is authoritative" reading holds. See `docs/work-items.md`.
   if (transition.callerInvocable === false) {
     return { allowed: false, reason: 'not-caller-invocable' }
   }
-  if (transition.requiresAllTasksComplete !== false) {
-    const { tasks } = projectWorkItem(type, workItem)
-    if (!tasks.every((t) => t.isComplete)) {
-      return { allowed: false, reason: 'incomplete-tasks' }
-    }
+  if (
+    transition.requiresAllTasksComplete !== false &&
+    !allTasksComplete(type, workItem)
+  ) {
+    return { allowed: false, reason: 'incomplete-tasks' }
   }
   return { allowed: true }
 }

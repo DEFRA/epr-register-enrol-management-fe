@@ -191,15 +191,17 @@ describe('reAccreditationModule', () => {
   // — the backend deliberately omits `approve` from
   // `ReAccreditationType.Transitions` so its generic engine refuses
   // `/actions/approve` — and RA-372 removed it on exactly that reasoning
-  // before restoring it here.
+  // before restoring it.
   //
-  // It is load-bearing on THIS side: RA-346 (`approve-eligibility.js`,
-  // in-flight in PR #143) reads this declaration to gate both the Approve
-  // CTA and the approve route. Deleting it re-opens the RA-346 bug, and
-  // the deletion merges CLEANLY rather than conflicting, so nothing else
-  // would flag it. Whether the mirror should declare it at all is a real
-  // question — but it is RA-346's to answer, not something to tidy away
-  // from an unrelated branch.
+  // It is load-bearing on THIS side: `approve-eligibility.js` (RA-346, now
+  // merged) reads this declaration to gate both the Approve CTA and the
+  // approve route, and `requiresAllTasksComplete: true` here is the ONLY
+  // thing stopping an approval while `record-decision-rationale` is
+  // pending. Deleting it, or dropping that flag, silently re-opens the
+  // RA-346 bug — and because the deletion merges CLEANLY rather than
+  // conflicting, nothing else would flag it. `approve-eligibility.test.js`
+  // guards the same declaration from the consumer side; this is the
+  // declaration-side guard.
   test('still declares the approve transition RA-346 gating depends on', () => {
     expect(
       reAccreditationType.transitions.find((t) => t.actionId === 'approve')
@@ -213,9 +215,10 @@ describe('reAccreditationModule', () => {
   // The whole mirror, pinned in one place. RA-372 found it three blocks
   // short; this is what stops that recurring silently.
   //
-  // One KNOWN divergence from the backend, deliberately kept: `approve`
-  // is declared here but not there (see the guard test above). Everything
-  // else is one-for-one with `ReAccreditationType.Transitions`.
+  // One KNOWN divergence from the backend, deliberately kept and now
+  // documented at the declaration itself: `approve` is declared here but
+  // not there, because it is frontend-only (see the guard test above).
+  // Everything else is one-for-one with `ReAccreditationType.Transitions`.
   test('pins the full declared transition set (backend set, plus approve)', () => {
     expect(
       reAccreditationType.transitions.map((t) => t.actionId).sort()
