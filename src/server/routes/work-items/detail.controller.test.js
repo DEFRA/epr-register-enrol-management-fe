@@ -1977,15 +1977,181 @@ describe('#workItemDetailController', () => {
     })
   })
 
+  // RA-346 x RA-358. Merging `main` into this branch brought two rules into
+  // the same neighbourhood of `renderDetail`, and BOTH decide which
+  // affordances render: RA-358's closed-case assignment gate
+  // (`buildAssignmentViewModel`, keyed off the DECORATED item's `stateId`)
+  // and RA-346's approve gate (`applyReAccreditationViewModel`, keyed off
+  // the RAW backend DTO via `source`). Each is covered on its own above.
+  // What is pinned here is that the two COMPOSE — a merge that compiles and
+  // leaves both suites green is not by itself evidence of that, because
+  // neither suite exercises the pair in a single render.
+  describe('RA-346 x RA-358: the approve gate and the closed-case gate compose', () => {
+    const AFFORDANCES = ['self-assign-submit', 'reassign-link', 'unassign-link']
+
+    // The single `awaiting-decision` task, COMPLETE — so that in every test
+    // below nothing but the STATE can decide the approve gate's answer.
+    const decisionTasksComplete = [
+      {
+        taskId: 'record-decision-rationale',
+        displayName: 'Record decision rationale',
+        status: 'Completed'
+      }
+    ]
+
+    // The backend always projects `withdraw-during-decision` in
+    // `awaiting-decision` (it carries no task-completion requirement). The
+    // fixture has to carry it: detail.njk nests the `approveAction` block
+    // INSIDE `{% if workItem.availableActions.length > 0 %}`, so an
+    // otherwise-actionless item would hide the CTA for a reason that has
+    // nothing to do with the RA-346 gate under test here.
+    const withdrawDuringDecision = [
+      {
+        actionId: 'withdraw-during-decision',
+        displayName: 'Withdraw',
+        fromStateId: 'awaiting-decision',
+        toStateId: 'withdrawn',
+        requiresAllTasksComplete: false
+      }
+    ]
+
+    // The REAL module + its real detail template. RA-358's own block above
+    // registers a trimmed-down stub that declares NO transitions, so it
+    // cannot show either gate still holding against the shipped declaration.
+    function renderReal(workItem) {
+      registerWorkItemType(reAccreditationType)
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+      getWorkItem.mockResolvedValue({ ok: true, workItem })
+      return server.inject({ method: 'GET', url: `/work-items/${ID}` })
+    }
+
+    // Both rules in their PERMISSIVE direction, in one render. This is the
+    // half that catches one gate over-reaching into the other's territory:
+    // an approve gate that also suppressed assignment, or a closed-case gate
+    // that mistook an active `awaiting-decision` item for a closed one.
+    test('an active awaiting-decision case offers BOTH the Approve CTA and every assignment affordance', async () => {
+      const { result, statusCode } = await renderReal(
+        aWorkItem({
+          stateId: 'awaiting-decision',
+          tasks: decisionTasksComplete,
+          availableActions: withdrawDuringDecision
+        })
+      )
+
+      expect(statusCode).toBe(statusCodes.ok)
+      // RA-346 half: the gate read the RAW DTO, found a complete task set
+      // and a declared `approve` transition out of `awaiting-decision`.
+      expect(result).toContain('data-testid="action-approve"')
+      // RA-358 half: not terminal, so nothing is suppressed.
+      expect(result).toContain('data-testid="case-assignment-panel"')
+      expect(result).not.toContain('data-testid="assignment-closed"')
+      for (const testId of AFFORDANCES) {
+        expect(result).toContain(`data-testid="${testId}"`)
+      }
+    })
+
+    // Driving the state list off the module declaration (rather than
+    // repeating a literal) also pins the invariant the merge resolution
+    // leans on: `TERMINAL_STATE_IDS` in detail.controller.js is a hardcoded
+    // list (epr-uf42 tracks deriving it from `states[].isTerminal`). If the
+    // module ever declares a terminal state that list does not know about,
+    // the closed-case gate silently stops firing for it and this fails.
+    const declaredTerminalStates = reAccreditationType.states
+      .filter((state) => state.isTerminal)
+      .map((state) => state.id)
+
+    test('the module still declares the terminal states this block relies on', () => {
+      // `test.each` over an empty array is a silent no-op, so the list the
+      // case below iterates has to be pinned or it could pass vacuously.
+      expect(declaredTerminalStates).toEqual([
+        'approved',
+        'rejected',
+        'withdrawn'
+      ])
+    })
+
+    test.each(declaredTerminalStates)(
+      'a closed case in the %s state suppresses assignment and offers no approval',
+      async (stateId) => {
+        const { result, statusCode } = await renderReal(
+          aWorkItem({ stateId, tasks: decisionTasksComplete })
+        )
+
+        expect(statusCode).toBe(statusCodes.ok)
+
+        // RA-358 half, now against the REAL module declaration. Positive
+        // hook first, so the absence assertions cannot pass vacuously.
+        expect(result).toContain('data-testid="case-assignment-panel"')
+        expect(result).toContain('data-testid="assignment-closed"')
+        for (const testId of AFFORDANCES) {
+          expect(result).not.toContain(`data-testid="${testId}"`)
+        }
+
+        // RA-346 half, recorded honestly as belt-and-braces rather than
+        // dressed up as proof of the controller gate: on a terminal state
+        // detail-v1's `actionsPanel` override does not call `super()`, and
+        // `approveAction` is nested INSIDE that block, so the CTA cannot
+        // render here whatever `canApproveDirectly` says. The controller
+        // -level proof that a terminal item is refused lives in
+        // approve-eligibility.test.js ('blocks approval from a terminal
+        // state'). What this pins is the composed OUTCOME the user sees —
+        // a closed case never offers approval by either route.
+        expect(result).not.toContain('data-testid="action-approve"')
+        expect(result).toContain(
+          'data-testid="re-accreditation-readonly-actions"'
+        )
+      }
+    )
+  })
+
   describe('RA-133 approve CTA eligibility (canApproveDirectly)', () => {
+    // RA-346. Register the REAL module type rather than the trimmed-down
+    // stub the other blocks use. The Approve CTA is now gated by the
+    // module's DECLARED `approve` transition (`requiresAllTasksComplete:
+    // true`), so a fixture type with no transitions would vacuously "pass"
+    // this suite while telling us nothing about the shipped declaration.
     function registerReaccreditationWithDetailV1() {
-      registerReaccreditation()
+      registerWorkItemType(reAccreditationType)
       registerDetailTemplate(
         're-accreditation',
         'v1',
         're-accreditation/detail-v1'
       )
     }
+
+    // The single `awaiting-decision` task, complete. RA-346's whole point is
+    // that the CTA must not render until this is done.
+    const decisionTasksComplete = [
+      {
+        taskId: 'record-decision-rationale',
+        displayName: 'Record decision rationale',
+        status: 'Completed'
+      }
+    ]
+
+    const decisionTasksPending = [
+      {
+        taskId: 'record-decision-rationale',
+        displayName: 'Record decision rationale',
+        status: 'InProgress'
+      }
+    ]
+
+    const withdrawDuringDecision = [
+      // Backend always returns withdraw-during-decision in this state
+      // (no task-completion requirement).
+      {
+        actionId: 'withdraw-during-decision',
+        displayName: 'Withdraw',
+        fromStateId: 'awaiting-decision',
+        toStateId: 'withdrawn',
+        requiresAllTasksComplete: false
+      }
+    ]
 
     // RA-323: every caseworker has the same permissions, so the Approve
     // CTA's visibility depends only on the work item's state — not on the
@@ -1997,17 +2163,8 @@ describe('#workItemDetailController', () => {
         workItem: aWorkItem({
           stateId: 'awaiting-decision',
           assignedToId: 'someone-else',
-          availableActions: [
-            // Backend always returns withdraw-during-decision in this state
-            // (no task-completion requirement) even before reject is gated.
-            {
-              actionId: 'withdraw-during-decision',
-              displayName: 'Withdraw',
-              fromStateId: 'awaiting-decision',
-              toStateId: 'withdrawn',
-              requiresAllTasksComplete: false
-            }
-          ]
+          tasks: decisionTasksComplete,
+          availableActions: withdrawDuringDecision
         })
       })
 
@@ -2046,15 +2203,8 @@ describe('#workItemDetailController', () => {
         workItem: aWorkItem({
           stateId: 'awaiting-decision',
           assignedToId: 'someone-else',
-          availableActions: [
-            {
-              actionId: 'withdraw-during-decision',
-              displayName: 'Withdraw',
-              fromStateId: 'awaiting-decision',
-              toStateId: 'withdrawn',
-              requiresAllTasksComplete: false
-            }
-          ]
+          tasks: decisionTasksComplete,
+          availableActions: withdrawDuringDecision
         })
       })
 
@@ -2086,6 +2236,173 @@ describe('#workItemDetailController', () => {
         expect.stringContaining('data-testid="action-approve"')
       )
     })
+
+    // ------------------------------------------------------------------
+    // RA-346 AC2. THE regression. `approve` is not a generic engine action,
+    // so it never appears in the backend's `availableActions` and the
+    // task-completion filter that gates every other action never applied to
+    // it — the CTA was offered (and approval succeeded) with
+    // `record-decision-rationale` still pending.
+    // ------------------------------------------------------------------
+    test('RA-346: does not render the Approve CTA while an awaiting-decision task is pending', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          tasks: decisionTasksPending,
+          availableActions: withdrawDuringDecision
+        })
+      })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-approve"')
+      )
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="re-accreditation-approve-cta"')
+      )
+      // The page must still render normally — gating the CTA is not an error.
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="re-accreditation-detail"')
+      )
+    })
+
+    test('RA-346: does not render the Approve CTA when the task is merely NotStarted', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          tasks: [
+            {
+              taskId: 'record-decision-rationale',
+              displayName: 'Record decision rationale',
+              status: 'NotStarted'
+            }
+          ],
+          availableActions: withdrawDuringDecision
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-approve"')
+      )
+    })
+
+    // The legacy `isComplete` fallback is owned and pinned by
+    // `isTaskComplete` (`core/task-status.js`, exercised in
+    // `core/engine.test.js`) — deliberately not re-pinned at this layer.
+
+    // RA-346 review finding 1. The CTA gate and the approve ROUTE guard must
+    // answer identically for the same work item, or the page renders a
+    // button the route then refuses. They previously diverged: the route
+    // evaluated the raw backend DTO while the CTA evaluated `decorate`'s
+    // output, which coerces a missing `tasks` to `[]` and rewrites each
+    // task's `status`. With the empty-array fail-open in `allTasksComplete`,
+    // that combination rendered an Approve CTA on an item the route blocks.
+    test.each([
+      ['a missing tasks array', undefined],
+      ['an empty tasks array', []]
+    ])(
+      'RA-346: does not render the Approve CTA for %s (agrees with the route guard)',
+      async (_label, tasks) => {
+        registerReaccreditationWithDetailV1()
+        const workItem = aWorkItem({
+          stateId: 'awaiting-decision',
+          availableActions: withdrawDuringDecision
+        })
+        if (tasks === undefined) {
+          delete workItem.tasks
+        } else {
+          workItem.tasks = tasks
+        }
+        getWorkItem.mockResolvedValue({ ok: true, workItem })
+
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).not.toEqual(
+          expect.stringContaining('data-testid="action-approve"')
+        )
+      }
+    )
+
+    // ------------------------------------------------------------------
+    // RA-346 AC1 — `submit-for-decision`.
+    //
+    // What is ACTUALLY true, corrected after PR review: on the rendered
+    // detail page this gate is BACKEND-ONLY. `decorate` copies
+    // `availableActions` through verbatim (filtering just `sla-extend`); it
+    // never calls `projectWorkItem`, so there is no frontend
+    // `requiresAllTasksComplete` check on this path. An earlier version of
+    // these tests omitted `submit-for-decision` from the fixture's
+    // `availableActions` and then asserted it was absent — which could not
+    // fail, and wrongly implied a frontend gate existed.
+    //
+    // That backend-only arrangement is correct and deliberate: the backend
+    // is authoritative, and `docs/work-items.md` requires the engine be a
+    // mirror rather than a re-implementation. `approve` is gated in the
+    // frontend ONLY because it is absent from `availableActions` entirely,
+    // so no backend-derived signal exists to render from.
+    //
+    // So what is worth pinning here is the pass-through itself: the page
+    // renders exactly what the backend projected, in both directions. A
+    // regression that started rendering an action the backend withheld
+    // would fail the first case.
+    // ------------------------------------------------------------------
+    const assessmentAction = {
+      actionId: 'submit-for-decision',
+      displayName: 'Submit for decision',
+      fromStateId: 'assessment-in-progress',
+      toStateId: 'awaiting-decision',
+      requiresAllTasksComplete: true
+    }
+
+    test.each([
+      ['withholds it (tasks pending)', [], false],
+      ['projects it (tasks complete)', [assessmentAction], true]
+    ])(
+      'RA-346 AC1: renders submit-for-decision iff the backend %s',
+      async (_label, availableActions, expected) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId: 'assessment-in-progress',
+            tasks: [
+              {
+                taskId: 'assess-technical-capacity',
+                displayName: 'Assess technical capacity',
+                status: expected ? 'Completed' : 'InProgress'
+              }
+            ],
+            availableActions
+          })
+        })
+
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result.includes('submit-for-decision')).toBe(expected)
+      }
+    )
   })
 
   // RA-249 (was RA-196): when applicationReference is missing, the

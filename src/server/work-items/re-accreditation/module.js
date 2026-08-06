@@ -70,6 +70,21 @@ const TRANSITIONS = [
     toStateId: 'awaiting-decision',
     requiresAllTasksComplete: true
   },
+  // ⚠ RA-346. This entry is FRONTEND-ONLY. Unlike every other transition
+  // here, the backend deliberately does NOT register `approve` as a
+  // `WorkItemTransition` — approval runs through `ReAccreditationApprovalService`
+  // and its own endpoint (`POST /work-items/re-accreditation/{id}/approve`),
+  // so `approve` never appears in the projected `availableActions`.
+  //
+  // Two consequences. First, the "mirror the backend type declaration"
+  // discipline that protects the other entries cannot protect this one:
+  // there is nothing upstream to diff it against, so a drift between this
+  // declaration and `ReAccreditationApprovalService`'s own rules will not
+  // show up as a mismatch. Second, this entry is not decorative — it is
+  // what `approve-eligibility.js` reads to gate BOTH the Approve CTA and
+  // the approve route. Removing it, or dropping `requiresAllTasksComplete`,
+  // silently re-opens the RA-346 bug. `approve-eligibility.test.js` runs
+  // against this real declaration to catch exactly that.
   {
     actionId: 'approve',
     displayName: 'Approve',

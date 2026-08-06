@@ -157,6 +157,83 @@ describe('createApprovalService', () => {
     })
   })
 
+  // ------------------------------------------------------------------
+  // RA-346. The backend's server-side tasks-complete gate. Contract agreed
+  // with the backend owner: HTTP 409 with the ProblemDetails detail below,
+  // and deliberately NO machine-readable discriminator — so the frontend
+  // separates it from the OTHER 409 (optimistic-concurrency) by the detail
+  // substring. These tests pin both halves of that discrimination.
+  // ------------------------------------------------------------------
+  const TASKS_INCOMPLETE_DETAIL =
+    "Action 'approve' requires every task for state 'awaiting-decision' to be complete first."
+
+  test('RA-346: maps the backend tasks-incomplete 409 to outcome=tasks-incomplete', async () => {
+    const approve = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      message: TASKS_INCOMPLETE_DETAIL
+    })
+
+    const result = await buildService({ approve }).approveWorkItem({
+      workItemId: 'wi-1'
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      outcome: 'tasks-incomplete',
+      status: 409,
+      message: TASKS_INCOMPLETE_DETAIL
+    })
+  })
+
+  // The regression that a bare `status === 409` check would cause: the
+  // concurrency conflict must KEEP its "refresh and try again" outcome.
+  test('RA-346: leaves the concurrency 409 as outcome=conflict', async () => {
+    const approve = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      message:
+        "Work item 'wi-1' was modified concurrently. Reload the work item and retry."
+    })
+
+    const result = await buildService({ approve }).approveWorkItem({
+      workItemId: 'wi-1'
+    })
+
+    expect(result.outcome).toBe('conflict')
+  })
+
+  // Only a 409 means tasks-incomplete. The same wording arriving on a
+  // different status is some other failure and must not be re-badged.
+  test('RA-346: does not re-badge a non-conflict failure that mentions tasks', async () => {
+    const approve = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: 'server',
+      status: 500,
+      message: TASKS_INCOMPLETE_DETAIL
+    })
+
+    const result = await buildService({ approve }).approveWorkItem({
+      workItemId: 'wi-1'
+    })
+
+    expect(result.outcome).toBe('server')
+  })
+
+  test('RA-346: tolerates a conflict failure with no message at all', async () => {
+    const approve = vi
+      .fn()
+      .mockResolvedValue({ ok: false, reason: 'conflict', status: 409 })
+
+    const result = await buildService({ approve }).approveWorkItem({
+      workItemId: 'wi-1'
+    })
+
+    expect(result.outcome).toBe('conflict')
+  })
+
   test('uses a default message when the approve failure has none', async () => {
     const approve = vi.fn().mockResolvedValue({ ok: false, reason: 'server' })
 

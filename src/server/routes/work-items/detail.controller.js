@@ -9,6 +9,10 @@ import { buildWithdrawnNotice } from '#/server/work-items/core/withdrawn-notice.
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import { findAssignableUser } from '#/server/work-items/core/assignees.js'
+import {
+  evaluateApproveEligibility,
+  RE_ACCREDITATION_TYPE_ID
+} from '#/server/work-items/re-accreditation/approve-eligibility.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
@@ -321,7 +325,20 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   // metadata) without leaking type logic into the generic decorator. The
   // backend is still the source of truth for authorisation — this only
   // controls which affordances render.
-  const enriched = applyReAccreditationViewModel({ workItem: decorated })
+  //
+  // RA-346. `source` is the RAW backend DTO, deliberately not `decorated`.
+  // The approve gate must see exactly what the approve ROUTE sees
+  // (`approval/controller.js` evaluates the untouched `getWorkItem`
+  // result), or the button and the URL can disagree — the item renders an
+  // Approve CTA that the route then refuses. `decorate` is a view-layer
+  // normaliser: it coerces a missing `tasks` to `[]` and rewrites each
+  // task's `status`, both of which would silently change the gate's answer.
+  // Eligibility is a domain question; it must not be asked of view-model
+  // output.
+  const enriched = applyReAccreditationViewModel({
+    workItem: decorated,
+    source: result.workItem
+  })
   const templatePath = resolveDetailTemplate(
     enriched.typeId,
     enriched.templateVersion
@@ -505,9 +522,18 @@ function buildAssignmentViewModel({ workItem, user }) {
 // `typeId` is `re-accreditation`:
 //
 //  - `canApproveDirectly` — whether the primary "Approve" CTA should
-//    render. RA-323: any caseworker may approve, so this only mirrors the
-//    backend's state eligibility check (`awaiting-decision`). The backend
-//    remains authoritative; a forged POST is still rejected there.
+//    render. RA-323: any caseworker may approve, so this is purely an
+//    eligibility check. The backend remains authoritative; a forged POST is
+//    still rejected there.
+//
+//    RA-346: this used to test `stateId === 'awaiting-decision'` and nothing
+//    else, so the CTA was offered while the `record-decision-rationale` task
+//    was still pending — `approve` is not a generic engine action, so the
+//    task-completion filter that gates every other action never applied to
+//    it. It now defers to `evaluateApproveEligibility`, which asks the
+//    engine about the module's DECLARED `approve` transition
+//    (`requiresAllTasksComplete: true`). The approve route guards itself
+//    with the same helper, so the button and the URL cannot disagree.
 //  - `approveHref` — link target for the CTA.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
 //    a terminal state (approved / rejected / withdrawn), the template
@@ -516,8 +542,6 @@ function buildAssignmentViewModel({ workItem, user }) {
 //    accreditation id + a GOV.UK formatted start date for display.
 // -----------------------------------------------------------------------
 
-const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
-const RE_ACCREDITATION_ELIGIBLE_STATE = 'awaiting-decision'
 // The states in which a case is closed. Drives BOTH the re-accreditation
 // read-only Outcome panel (`isReadOnlyState`) and, since RA-358, the
 // assignment gate in `buildAssignmentViewModel` — deliberately ONE list, so
@@ -527,15 +551,24 @@ const RE_ACCREDITATION_ELIGIBLE_STATE = 'awaiting-decision'
 // type's terminal states should ultimately derive from the module's declared
 // `states[].isTerminal` flag, which is tracked separately as epr-uf42. Reuse
 // this constant rather than adding another list.
+//
+// RA-346 note for anyone tempted to add a terminal-state check to the
+// approve gate below: there is deliberately none. `canApproveDirectly` is
+// answered by `evaluateApproveEligibility`, which asks the engine about the
+// DECLARED `approve` transition (`fromStateId: 'awaiting-decision'`), so a
+// closed case fails it as an invalid transition without consulting this
+// list. The two rules are independent and both must hold.
 const TERMINAL_STATE_IDS = new Set(['approved', 'rejected', 'withdrawn'])
 
-function applyReAccreditationViewModel({ workItem }) {
+function applyReAccreditationViewModel({ workItem, source = workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
   }
 
-  const canApproveDirectly =
-    workItem.stateId === RE_ACCREDITATION_ELIGIBLE_STATE
+  // Gate on `source` (the raw backend DTO), never on `workItem` (the
+  // decorated view model) — see the call site for why. The flag is then
+  // merged into the view model below.
+  const canApproveDirectly = evaluateApproveEligibility(source).allowed
 
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
