@@ -15,6 +15,7 @@ import {
 } from '#/server/work-items/re-accreditation/approve-eligibility.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
+import { isCallerInvocable } from '#/server/work-items/core/engine.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { config } from '#/config/config.js'
@@ -679,9 +680,25 @@ function decorate(workItem) {
   const stateDisplayName =
     type?.states?.find((state) => state.id === workItem.stateId)?.displayName ??
     workItem.stateId
-  const projectedActions = Array.isArray(workItem.availableActions)
-    ? workItem.availableActions
-    : []
+  // RA-364. Drop actions the backend flagged `callerInvocable: false` BEFORE
+  // anything downstream reads the list — see `isCallerInvocable` for why the
+  // backend projects actions the caller may not invoke.
+  //
+  // The filter belongs here rather than in the template loops for exactly the
+  // reason the `sla-extend` filter above does: the template's
+  // `availableActions.length > 0` check decides between the actions list and
+  // the "No actions are currently available" message. Skipping entries inside
+  // the `{% for %}` loops would leave an item whose actions are ALL
+  // non-invocable rendering an empty panel with no empty-state message.
+  //
+  // Filtering at the source (rather than only on the rendered list) also
+  // keeps `canChangeDueDate` below honest, and covers the type-specific
+  // templates that override the `actionsPanel` block and re-loop over
+  // `availableActions` themselves. `sla-extend` is caller-invocable, so the
+  // due-date affordance is unaffected.
+  const projectedActions = (
+    Array.isArray(workItem.availableActions) ? workItem.availableActions : []
+  ).filter(isCallerInvocable)
   return {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,

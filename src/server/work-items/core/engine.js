@@ -14,6 +14,43 @@
 import { isTaskComplete } from './task-status.js'
 
 /**
+ * Is this projected action one the caller is actually allowed to invoke?
+ *
+ * RA-364. The backend's `WorkItemTransition` carries a `CallerInvocable`
+ * flag (serialised as `callerInvocable`) that gates the generic
+ * `POST /work-items/{id}/actions/{actionId}` endpoint. It is set to `false`
+ * for transitions a module resolves server-side from the work item's own
+ * history — most importantly when SEVERAL transitions share one
+ * `fromStateId` and so cannot be disambiguated by the caller. In
+ * re-accreditation that is four `resume-during-*` transitions out of
+ * `queried` (all displayed "Resume") and four `continue-review-during-*`
+ * out of `updated` (all displayed "Continue review").
+ *
+ * Those entries appear in `availableActions`, so a UI that renders one
+ * control per entry draws four identical buttons, every one of which the
+ * backend rejects on click. This predicate is the frontend half of the fix:
+ * defence in depth, so the page is correct even against an unpatched or
+ * older backend that still projects them.
+ *
+ * Filtering by this flag is deliberately NOT the same as de-duplicating by
+ * `displayName`. Two distinct actions may legitimately share a label; the
+ * flag is the authoritative signal for "the caller may not pick this one".
+ *
+ * Only an EXPLICIT `false` suppresses an action. A missing or `undefined`
+ * flag means invocable, which keeps older backend payloads — and any
+ * fixture that predates the flag — rendering exactly as they do today. That
+ * default is safe because the backend serialises the property
+ * unconditionally (no `DefaultIgnoreCondition`), so a genuine `false` is
+ * always on the wire and never silently absent.
+ *
+ * @param {{ callerInvocable?: boolean }} action A projected action.
+ * @returns {boolean}
+ */
+export function isCallerInvocable(action) {
+  return action?.callerInvocable !== false
+}
+
+/**
  * Compute the task progress and currently-available actions for a work item.
  *
  * @param {object} type Work item type declaration (`module.type`).

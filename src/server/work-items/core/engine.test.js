@@ -1,6 +1,11 @@
 import { describe, test, expect } from 'vitest'
 
-import { allTasksComplete, canApplyAction, projectWorkItem } from './engine.js'
+import {
+  allTasksComplete,
+  canApplyAction,
+  isCallerInvocable,
+  projectWorkItem
+} from './engine.js'
 
 const sampleType = (overrides = {}) => ({
   id: 'sample',
@@ -256,5 +261,88 @@ describe('allTasksComplete', () => {
   test('reports false for a missing work item', () => {
     expect(allTasksComplete(sampleType(), null)).toBe(false)
     expect(allTasksComplete(sampleType(), undefined)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------
+// RA-364. The backend projects transitions the caller may NOT invoke: four
+// `resume-during-*` out of `queried` (all labelled "Resume") and four
+// `continue-review-during-*` out of `updated` (all labelled "Continue
+// review"). The detail page rendered one control per entry, so the user saw
+// four identical buttons, every one of which the backend rejected on click.
+// ---------------------------------------------------------------------
+describe('isCallerInvocable', () => {
+  test('suppresses an action flagged callerInvocable: false', () => {
+    expect(
+      isCallerInvocable({
+        actionId: 'resume-during-assessment',
+        displayName: 'Resume',
+        callerInvocable: false
+      })
+    ).toBe(false)
+  })
+
+  test('admits an action flagged callerInvocable: true', () => {
+    expect(
+      isCallerInvocable({
+        actionId: 'withdraw-during-query',
+        displayName: 'Withdraw',
+        callerInvocable: true
+      })
+    ).toBe(true)
+  })
+
+  // The flag is absent from older backend payloads and from every fixture
+  // written before RA-364. Treating "missing" as invocable is what keeps
+  // those rendering exactly as they always did.
+  test('admits an action with the flag absent', () => {
+    expect(
+      isCallerInvocable({ actionId: 'withdraw', displayName: 'Withdraw' })
+    ).toBe(true)
+  })
+
+  test('admits an action with the flag explicitly undefined', () => {
+    expect(
+      isCallerInvocable({ actionId: 'withdraw', callerInvocable: undefined })
+    ).toBe(true)
+  })
+
+  // Only a boolean `false` suppresses. A malformed or absent action fails
+  // TOWARDS rendering rather than silently blanking the actions panel, and
+  // must not throw.
+  test.each([
+    ['null', null],
+    ['undefined', undefined]
+  ])('admits a %s action rather than throwing', (_label, action) => {
+    expect(isCallerInvocable(action)).toBe(true)
+  })
+
+  test('is not fooled by a falsy-but-not-false flag', () => {
+    expect(isCallerInvocable({ actionId: 'a', callerInvocable: 0 })).toBe(true)
+    expect(isCallerInvocable({ actionId: 'a', callerInvocable: '' })).toBe(true)
+  })
+
+  // The flag is the signal, NEVER the display name: two distinct actions may
+  // legitimately share a label, so de-duplicating by label would suppress a
+  // real affordance.
+  test('does not suppress duplicate labels that are caller-invocable', () => {
+    const actions = [
+      { actionId: 'withdraw-during-query', displayName: 'Withdraw' },
+      { actionId: 'withdraw-during-updated', displayName: 'Withdraw' }
+    ]
+    expect(actions.filter(isCallerInvocable)).toHaveLength(2)
+  })
+
+  test('filters a mixed list down to the invocable entries only', () => {
+    const actions = [
+      { actionId: 'resume-during-duly-making', callerInvocable: false },
+      { actionId: 'resume-during-duly-made', callerInvocable: false },
+      { actionId: 'withdraw-during-query' },
+      { actionId: 'query-during-assessment', callerInvocable: true }
+    ]
+    expect(actions.filter(isCallerInvocable).map((a) => a.actionId)).toEqual([
+      'withdraw-during-query',
+      'query-during-assessment'
+    ])
   })
 })
