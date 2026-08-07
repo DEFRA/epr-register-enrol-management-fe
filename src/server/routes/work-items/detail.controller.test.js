@@ -1107,15 +1107,23 @@ describe('#workItemDetailController', () => {
   })
 
   // -------------------------------------------------------------------
-  // RA-364. The backend projects transitions the caller may NOT invoke
-  // (`callerInvocable: false`), and the detail page rendered one control
-  // per entry — four identical "Resume" buttons out of `queried`, four
-  // "Continue review" out of `updated`, all of which the backend's action
-  // endpoint rejects on click.
+  // RA-364. The backend USED TO project transitions the caller may not
+  // invoke (`callerInvocable: false`) into `availableActions`, and the
+  // detail page rendered one control per entry — four identical "Resume"
+  // buttons out of `queried`, four "Continue review" out of `updated`,
+  // every one of which the backend's action endpoint rejected on click.
   //
-  // The frontend half is defence in depth: the page must be correct even
-  // against an unpatched or older backend that still projects them. The
-  // filter lives in `decorate`, NOT in the template loops, so the
+  // DO NOT DELETE THESE TESTS AS DEAD CODE. The fixtures below contain
+  // `callerInvocable: false` actions that a CURRENT backend never emits:
+  // management-be now filters them at source, so against a patched
+  // backend this filter never fires. That is exactly the point. This is
+  // the defence-in-depth half of a two-sided fix, and the case it defends
+  // is a STALE backend — a frontend deployed ahead of the backend, which
+  // is precisely the window in which the four-buttons bug was visible.
+  // The backend's own filter cannot protect that window; only this one
+  // can. Both halves are deliberately kept.
+  //
+  // The filter lives in `decorate`, NOT in the template loops, so the
   // empty-state decision sees the same filtered list.
   //
   // The `updated` state is deliberately covered here rather than in the

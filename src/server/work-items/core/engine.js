@@ -26,11 +26,15 @@ import { isTaskComplete } from './task-status.js'
  * `queried` (all displayed "Resume") and four `continue-review-during-*`
  * out of `updated` (all displayed "Continue review").
  *
- * Those entries appear in `availableActions`, so a UI that renders one
- * control per entry draws four identical buttons, every one of which the
- * backend rejects on click. This predicate is the frontend half of the fix:
- * defence in depth, so the page is correct even against an unpatched or
- * older backend that still projects them.
+ * Those entries used to appear in `availableActions`, so a UI that renders
+ * one control per entry drew four identical buttons, every one of which the
+ * backend rejected on click.
+ *
+ * management-be now filters them at source, so against a patched backend
+ * this predicate never fires. It is kept deliberately as the second half of
+ * a two-sided fix: the case it defends is a STALE backend — a frontend
+ * deployed ahead of the backend — which is precisely the window in which the
+ * bug was visible, and the one window the backend's own filter cannot cover.
  *
  * Filtering by this flag is deliberately NOT the same as de-duplicating by
  * `displayName`. Two distinct actions may legitimately share a label; the

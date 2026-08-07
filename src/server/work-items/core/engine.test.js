@@ -265,11 +265,18 @@ describe('allTasksComplete', () => {
 })
 
 // ---------------------------------------------------------------------
-// RA-364. The backend projects transitions the caller may NOT invoke: four
-// `resume-during-*` out of `queried` (all labelled "Resume") and four
-// `continue-review-during-*` out of `updated` (all labelled "Continue
-// review"). The detail page rendered one control per entry, so the user saw
-// four identical buttons, every one of which the backend rejected on click.
+// RA-364. The backend used to project transitions the caller may NOT
+// invoke: four `resume-during-*` out of `queried` (all labelled "Resume")
+// and four `continue-review-during-*` out of `updated` (all labelled
+// "Continue review"). The detail page rendered one control per entry, so the
+// user saw four identical buttons, every one of which the backend rejected
+// on click.
+//
+// management-be now filters them at source, so this predicate never fires
+// against a patched backend. It is kept deliberately to cover the STALE
+// backend case (frontend deployed ahead of backend) — see the header on the
+// RA-364 block in `routes/work-items/detail.controller.test.js`. Not dead
+// code.
 // ---------------------------------------------------------------------
 describe('isCallerInvocable', () => {
   test('suppresses an action flagged callerInvocable: false', () => {
