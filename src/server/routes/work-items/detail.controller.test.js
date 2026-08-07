@@ -1106,6 +1106,388 @@ describe('#workItemDetailController', () => {
     )
   })
 
+  // -------------------------------------------------------------------
+  // RA-364. The backend USED TO project transitions the caller may not
+  // invoke (`callerInvocable: false`) into `availableActions`, and the
+  // detail page rendered one control per entry — four identical "Resume"
+  // buttons out of `queried`, four "Continue review" out of `updated`,
+  // every one of which the backend's action endpoint rejected on click.
+  //
+  // DO NOT DELETE THESE TESTS AS DEAD CODE. The fixtures below contain
+  // `callerInvocable: false` actions that a CURRENT backend never emits:
+  // management-be now filters them at source, so against a patched
+  // backend this filter never fires. That is exactly the point. This is
+  // the defence-in-depth half of a two-sided fix, and the case it defends
+  // is a STALE backend — a frontend deployed ahead of the backend, which
+  // is precisely the window in which the four-buttons bug was visible.
+  // The backend's own filter cannot protect that window; only this one
+  // can. Both halves are deliberately kept.
+  //
+  // The filter lives in `decorate`, NOT in the template loops, so the
+  // empty-state decision sees the same filtered list.
+  //
+  // The `updated` state is deliberately covered here rather than in the
+  // e2e suite: the only transitions INTO it are the four
+  // `resume-during-*`, all non-invocable, so no browser journey can reach
+  // it. These unit tests are its only coverage.
+  // -------------------------------------------------------------------
+  describe('RA-364: non-caller-invocable actions are never rendered', () => {
+    /**
+     * Slice out the actions panel so a count of action controls cannot be
+     * inflated by `action-sla-extend` (which lives in the ASSIGNMENT panel)
+     * or by anything else on the page. The actions panel is immediately
+     * followed by the tasks panel, so that sibling is the end marker.
+     *
+     * THROWS when the panel is absent, for the same reason `detailRow`
+     * does: a count or negative assertion scoped to a missing element
+     * passes vacuously.
+     */
+    function actionsPanel(html) {
+      const start = html.indexOf('data-testid="actions-panel"')
+      if (start === -1) {
+        throw new Error(
+          'No actions panel in the rendered page — a scoped assertion against it would pass vacuously.'
+        )
+      }
+      const end = html.indexOf('data-testid="tasks-panel"', start)
+      return html.slice(start, end === -1 ? undefined : end)
+    }
+
+    /** Every action control rendered inside the actions panel. */
+    function actionTestIds(html) {
+      return [
+        ...actionsPanel(html).matchAll(/data-testid="(action-[^"]+)"/g)
+      ].map((m) => m[1])
+    }
+
+    function get() {
+      return server.inject({ method: 'GET', url: `/work-items/${ID}` })
+    }
+
+    const RESUME_ACTIONS = [
+      'resume-during-duly-making',
+      'resume-during-duly-made',
+      'resume-during-assessment',
+      'resume-during-decision'
+    ].map((actionId) => ({
+      actionId,
+      displayName: 'Resume',
+      fromStateId: 'queried',
+      toStateId: 'submitted',
+      requiresAllTasksComplete: false,
+      callerInvocable: false
+    }))
+
+    const CONTINUE_REVIEW_ACTIONS = [
+      'continue-review-during-duly-making',
+      'continue-review-during-duly-made',
+      'continue-review-during-assessment',
+      'continue-review-during-decision'
+    ].map((actionId) => ({
+      actionId,
+      displayName: 'Continue review',
+      fromStateId: 'updated',
+      toStateId: 'submitted',
+      requiresAllTasksComplete: false,
+      callerInvocable: false
+    }))
+
+    const withdrawDuringQuery = {
+      actionId: 'withdraw-during-query',
+      displayName: 'Withdraw',
+      fromStateId: 'queried',
+      toStateId: 'withdrawn',
+      requiresAllTasksComplete: false
+    }
+
+    const withdrawDuringUpdated = {
+      actionId: 'withdraw-during-updated',
+      displayName: 'Withdraw',
+      fromStateId: 'updated',
+      toStateId: 'withdrawn',
+      requiresAllTasksComplete: false
+    }
+
+    // AC3. The reported bug, exactly as screenshotted: a queried
+    // re-accreditation showed four green "Resume" buttons over a Withdraw
+    // link. Only the Withdraw link is real.
+    test('a queried item renders only Withdraw, and no Resume buttons', async () => {
+      registerWorkItemType(reAccreditationType)
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'queried',
+          availableActions: [...RESUME_ACTIONS, withdrawDuringQuery]
+        })
+      })
+
+      const { result, statusCode } = await get()
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(actionTestIds(result)).toEqual(['action-withdraw-during-query'])
+      expect(actionsPanel(result)).not.toContain('Resume')
+      for (const action of RESUME_ACTIONS) {
+        expect(result).not.toContain(action.actionId)
+      }
+    })
+
+    // AC4. Same defect, different state and label. Unreachable from the
+    // browser, so this is the only place it is pinned.
+    test('an updated item renders only Withdraw, and no Continue review controls', async () => {
+      registerWorkItemType(reAccreditationType)
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'updated',
+          availableActions: [...CONTINUE_REVIEW_ACTIONS, withdrawDuringUpdated]
+        })
+      })
+
+      const { result, statusCode } = await get()
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(actionTestIds(result)).toEqual(['action-withdraw-during-updated'])
+      expect(actionsPanel(result)).not.toContain('Continue review')
+      for (const action of CONTINUE_REVIEW_ACTIONS) {
+        expect(result).not.toContain(action.actionId)
+      }
+    })
+
+    // AC2. The whole reason the filter is in the controller rather than in
+    // the `{% for %}` loops. Filtering inside the loops would leave this
+    // item rendering an EMPTY actions panel with no empty-state message.
+    test('an item whose actions are ALL non-invocable renders the empty state', async () => {
+      registerWorkItemType(reAccreditationType)
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'queried',
+          availableActions: RESUME_ACTIONS
+        })
+      })
+
+      const { result, statusCode } = await get()
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toContain('data-testid="work-item-no-actions"')
+      expect(result).toContain(
+        'No actions are currently available for this work item.'
+      )
+      expect(result).not.toContain('data-testid="work-item-actions"')
+      expect(actionTestIds(result)).toEqual([])
+    })
+
+    // Partial filtering: the invocable entries must survive untouched.
+    test('a mixed list renders exactly the invocable actions', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          availableActions: [
+            {
+              actionId: 'hidden-one',
+              displayName: 'Hidden',
+              callerInvocable: false
+            },
+            {
+              actionId: 'reject',
+              displayName: 'Reject',
+              callerInvocable: true
+            },
+            {
+              actionId: 'hidden-two',
+              displayName: 'Hidden',
+              callerInvocable: false
+            },
+            {
+              actionId: 'submit-for-decision',
+              displayName: 'Submit for decision'
+            }
+          ]
+        })
+      })
+
+      const { result, statusCode } = await get()
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(actionTestIds(result)).toEqual([
+        'action-reject',
+        'action-submit-for-decision'
+      ])
+      expect(result).toContain('data-testid="work-item-actions"')
+      expect(result).not.toContain('data-testid="work-item-no-actions"')
+    })
+
+    // AC5, both halves. A regression here would blank the actions panel for
+    // every older payload and every fixture written before RA-364, so it is
+    // asserted as a rendered-control count, not just a substring.
+    test.each([
+      ['absent', undefined],
+      ['true', true]
+    ])(
+      'renders every action when the flag is %s (nothing is filtered)',
+      async (_label, callerInvocable) => {
+        registerReaccreditation()
+        const flag = callerInvocable === undefined ? {} : { callerInvocable }
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            availableActions: [
+              { actionId: 'approve', displayName: 'Approve', ...flag },
+              { actionId: 'reject', displayName: 'Reject', ...flag }
+            ]
+          })
+        })
+
+        const { result, statusCode } = await get()
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(actionTestIds(result)).toEqual([
+          'action-approve',
+          'action-reject'
+        ])
+        expect(result).not.toContain('data-testid="work-item-no-actions"')
+      }
+    )
+
+    // AC6. The query/withdraw link special-casing is unchanged. Note the
+    // query link's testid is hardcoded `action-query` regardless of the
+    // real action id, while withdraw uses the id verbatim.
+    test('keeps the query and withdraw link special-casing intact', async () => {
+      registerWorkItemType(reAccreditationType)
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'queried',
+          availableActions: [
+            ...RESUME_ACTIONS,
+            {
+              actionId: 'query-during-assessment',
+              displayName: 'Query',
+              callerInvocable: true
+            },
+            withdrawDuringQuery
+          ]
+        })
+      })
+
+      const { result, statusCode } = await get()
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(actionTestIds(result)).toEqual([
+        'action-query',
+        'action-withdraw-during-query'
+      ])
+      expect(result).toContain(`/work-items/${ID}/query`)
+      expect(result).toContain(
+        `/work-items/${ID}/actions/withdraw-during-query/confirm`
+      )
+    })
+
+    // A non-invocable query action must be filtered too — the special-cased
+    // branches read the same decorated list, so nothing sneaks past.
+    test('filters a non-invocable query action out of the link row', async () => {
+      registerWorkItemType(reAccreditationType)
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'queried',
+          availableActions: [
+            {
+              actionId: 'query-during-assessment',
+              displayName: 'Query',
+              callerInvocable: false
+            },
+            withdrawDuringQuery
+          ]
+        })
+      })
+
+      const { result } = await get()
+
+      expect(actionTestIds(result)).toEqual(['action-withdraw-during-query'])
+      expect(result).not.toContain('data-testid="action-query"')
+    })
+
+    // The filter is applied at the SOURCE, so it also covers a
+    // type-specific template that overrides the `actionsPanel` block and
+    // re-loops over `availableActions` via `super()`.
+    test('applies through the re-accreditation detail-v1 template override', async () => {
+      registerReaccreditation()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          availableActions: [
+            ...RESUME_ACTIONS,
+            { actionId: 'reject', displayName: 'Reject' }
+          ]
+        })
+      })
+
+      const { result, statusCode } = await get()
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toContain('data-testid="re-accreditation-detail"')
+      expect(actionTestIds(result)).toEqual(['action-reject'])
+      expect(actionsPanel(result)).not.toContain('Resume')
+    })
+
+    // `sla-extend` is caller-invocable, so the due-date affordance is
+    // unaffected by the filter — guarding the one place where filtering at
+    // the source (rather than only on the rendered list) changes another
+    // derived flag.
+    test('leaves the caller-invocable sla-extend due-date affordance alone', async () => {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          availableActions: [
+            { actionId: 'sla-extend', displayName: 'Extend SLA' },
+            {
+              actionId: 'hidden',
+              displayName: 'Hidden',
+              callerInvocable: false
+            }
+          ]
+        })
+      })
+
+      const { result } = await get()
+
+      expect(result).toContain('data-testid="action-sla-extend"')
+      expect(result).toContain('data-testid="work-item-no-actions"')
+    })
+
+    // The filter runs over the SAME defensive non-array fallback the
+    // `sla-extend` filter already relied on, so a malformed payload must
+    // still render the empty state rather than throw on `.filter`.
+    test.each([
+      ['missing', undefined],
+      ['null', null],
+      ['not an array', 'nope']
+    ])(
+      'renders the empty state when availableActions is %s',
+      async (_label, availableActions) => {
+        registerReaccreditation()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ availableActions })
+        })
+
+        const { result, statusCode } = await get()
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).toContain('data-testid="work-item-no-actions"')
+        expect(actionTestIds(result)).toEqual([])
+      }
+    )
+  })
+
   describe('POST /work-items/{id}/self-assign (RA-153)', () => {
     test('RA-295: shows "Assign to yourself and start" on an unassigned work item', async () => {
       registerReaccreditation()
