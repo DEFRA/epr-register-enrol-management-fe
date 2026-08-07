@@ -272,6 +272,13 @@ export const config = convict({
       format: String,
       default: 'frontend',
       env: 'BACKEND_API_COGNITO_CLIENT_ID'
+    },
+    sharedSecret: {
+      doc: 'HMAC-SHA256 secret for signing outbound requests to the case management backend (BACKEND_API_SHARED_SECRET). Empty string disables signing (local dev). Must match the secret the backend verifies this caller against (AUTH_SHARED_SECRET__MANAGEMENT_FE in epr-register-enrol-management-be) — RA-345 moved that backend from one secret shared with epr-register-enrol-backend to a secret per caller, so this value must be distinct from whatever epr-register-enrol-backend signs with.',
+      format: String,
+      default: '',
+      env: 'BACKEND_API_SHARED_SECRET',
+      sensitive: true
     }
   },
   environment: {
@@ -334,13 +341,6 @@ export const config = convict({
       format: String,
       default: 'http://localhost:3000',
       env: 'AUTH_CALLBACK_BASE_URL'
-    },
-    sharedSecret: {
-      doc: 'HMAC-SHA256 shared secret for backend request signing (AUTH_SHARED_SECRET). Empty string disables signing (local dev).',
-      format: String,
-      default: '',
-      env: 'AUTH_SHARED_SECRET',
-      sensitive: true
     },
     azureEntraId: {
       clientId: {
@@ -435,14 +435,22 @@ if (config.get('isProduction') && !config.get('auth.stubEnabled')) {
   }
 }
 
-// 4. AUTH_SHARED_SECRET: the HMAC key used to sign outbound backend requests.
-//    Without it the backend rejects every call with 401 in all non-local
-//    environments. The default is an empty string so local dev works without
-//    secrets, but an empty value in a deployed environment means missing
-//    Secrets Manager wiring and would fail opaquely at request time.
-if (config.get('environment') !== 'local' && !config.get('auth.sharedSecret')) {
+// 4. BACKEND_API_SHARED_SECRET: the HMAC key used to sign outbound backend
+//    requests. Without it the backend rejects every call with 401 in all
+//    non-local environments. The default is an empty string so local dev
+//    works without secrets, but an empty value in a deployed environment
+//    means missing Secrets Manager wiring and would fail opaquely at
+//    request time. RA-345 renamed this from AUTH_SHARED_SECRET so it can't
+//    be confused with the single shared secret epr-register-enrol-management-be
+//    retired in the same change — this service's secret is now distinct
+//    from epr-register-enrol-backend's, matched against
+//    AUTH_SHARED_SECRET__MANAGEMENT_FE specifically.
+if (
+  config.get('environment') !== 'local' &&
+  !config.get('backendApi.sharedSecret')
+) {
   throw new Error(
-    'AUTH_SHARED_SECRET must be set via Secrets Manager in deployed ' +
+    'BACKEND_API_SHARED_SECRET must be set via Secrets Manager in deployed ' +
       'environments. The backend will reject all requests with 401 without ' +
       'a valid HMAC signature.'
   )

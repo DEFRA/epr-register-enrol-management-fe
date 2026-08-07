@@ -26,7 +26,7 @@ const SIGNATURE_HEADER = 'x-cdp-auth-signature'
 export function signRequestHeaders(
   headers,
   {
-    sharedSecret = config.get('auth.sharedSecret'),
+    sharedSecret = config.get('backendApi.sharedSecret'),
     timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     nonce = randomBytes(16).toString('base64url')
   } = {}

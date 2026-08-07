@@ -1102,10 +1102,12 @@ describe('#buildHeaders signing integration', () => {
     vi.restoreAllMocks()
   })
 
-  test('attaches x-cdp-auth-* signing headers to outbound requests when AUTH_SHARED_SECRET is set', async () => {
+  test('attaches x-cdp-auth-* signing headers to outbound requests when BACKEND_API_SHARED_SECRET is set', async () => {
     const realGet = config.get.bind(config)
     vi.spyOn(config, 'get').mockImplementation((key) =>
-      key === 'auth.sharedSecret' ? 'integration-test-secret' : realGet(key)
+      key === 'backendApi.sharedSecret'
+        ? 'integration-test-secret'
+        : realGet(key)
     )
 
     const fetchImpl = vi.fn().mockResolvedValue({
