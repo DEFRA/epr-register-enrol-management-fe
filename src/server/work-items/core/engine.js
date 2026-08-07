@@ -47,6 +47,16 @@ export function projectWorkItem(type, workItem) {
   const everyTaskComplete = tasks.every((t) => t.isComplete)
   const availableActions = (type.transitions ?? [])
     .filter((t) => t.fromStateId === stateId)
+    // RA-372. Mirrors the backend's `CallerInvocable` flag. A transition
+    // declared `callerInvocable: false` is applied by the server on the
+    // caller's behalf (from an auto-transition hook, or from a
+    // type-specific endpoint that resolves WHICH of several same-from-state
+    // transitions applies) and must never be offered as a caller-chosen
+    // action. Omitting the flag means invocable, matching the backend
+    // default. Without this filter the mirror would advertise all four
+    // re-accreditation `continue-review-during-*` transitions out of
+    // `updated` as if the user could pick a destination.
+    .filter((t) => t.callerInvocable !== false)
     .filter((t) => t.requiresAllTasksComplete === false || everyTaskComplete)
     .map((t) => ({
       actionId: t.actionId,
@@ -127,6 +137,24 @@ export function canApplyAction(type, workItem, actionId) {
   }
   if (transition.fromStateId !== stateId) {
     return { allowed: false, reason: 'invalid-transition' }
+  }
+  // RA-372. Kept in step with the `callerInvocable` filter in
+  // `projectWorkItem` above, so the two helpers cannot disagree about
+  // whether a caller may ask for an action.
+  //
+  // NOT a security control for the GENERIC action route, and must not be
+  // audited as one. A forged `POST /work-items/{id}/actions/{actionId}`
+  // never reaches here — that route goes straight through
+  // `core/service.js` to the backend, whose own guard, checked against
+  // the work item's frozen template snapshot, is the only thing
+  // rejecting it.
+  //
+  // This helper DOES have a production caller — RA-346's
+  // `re-accreditation/approve-eligibility.js` — but that one gates a
+  // bespoke endpoint which applies its own server-side check, so the same
+  // "backend is authoritative" reading holds. See `docs/work-items.md`.
+  if (transition.callerInvocable === false) {
+    return { allowed: false, reason: 'not-caller-invocable' }
   }
   if (
     transition.requiresAllTasksComplete !== false &&

@@ -52,6 +52,38 @@ export const myTypeModule = {
     // any action whose `requiresAllTasksComplete` is unset/`true` while
     // tasks for the from-state are outstanding. Set it to `false` for
     // actions that should always be available (e.g. "withdraw").
+    //
+    // `callerInvocable: false` (RA-372) mirrors the backend flag of the
+    // same name: the transition exists, but the SERVER decides when to
+    // apply it, so it is never offered as a caller-chosen action.
+    // `projectWorkItem` filters those out of `availableActions`, and
+    // `canApplyAction` reports `not-caller-invocable`. Use it when
+    // several transitions share a `fromStateId` and something other than
+    // the caller picks between them — letting the caller choose would let
+    // them choose the destination state. Such a transition needs a
+    // type-specific route hitting the backend's dedicated endpoint (see
+    // `re-accreditation/continue-review/`), not the generic
+    // `/work-items/{id}/actions/{actionId}` route. Omitting the flag
+    // means invocable, matching the backend default.
+    //
+    // ⚠ This flag is a UI-correctness control, NOT a security control for
+    // the GENERIC action route, and must not be audited as one. Nothing on
+    // the request path of a forged
+    // `POST /work-items/{id}/actions/{actionId}` consults it: that route
+    // goes straight through `core/service.js` to the backend. The BFF is
+    // not a second enforcement layer there — the backend's own guard,
+    // checked against each work item's frozen template snapshot, is the
+    // only thing rejecting a non-caller-invocable action, and it is what
+    // any threat model should rely on. What the flag buys is that the
+    // frontend never RENDERS an affordance the backend would refuse.
+    //
+    // `canApplyAction` itself DOES have one production caller — RA-346's
+    // `re-accreditation/approve-eligibility.js`, which gates the Approve
+    // CTA and the approve route against the declared `approve` transition.
+    // That does not make the BFF authoritative either: the bespoke approve
+    // endpoint applies the same rule server-side and rejects a forged POST
+    // regardless. Frontend gate for the affordance, backend gate for the
+    // action — the same division as above.
     transitions: [
       {
         actionId: 'approve',

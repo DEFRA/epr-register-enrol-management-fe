@@ -27,6 +27,7 @@
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 {% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
 {% from "govuk/components/panel/macro.njk" import govukPanel %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "action-link/macro.njk" import appActionLink %}
 
 {% block content %}
@@ -58,6 +59,19 @@
 {# generic action panel — those would be either no-op or rejected by     #}
 {# the backend, which is confusing. Show the status as a govuk tag so    #}
 {# the read-only nature is obvious.                                      #}
+{# RA-372. "Continue review" — the onward path out of the `updated` state, #}
+{# where an operator has answered a query and the case worker has         #}
+{# finished looking at the response. It cannot ride on the generic action #}
+{# loop below: all four underlying `continue-review-during-*` transitions #}
+{# share `fromStateId: 'updated'`, so the backend declares them           #}
+{# non-caller-invocable and never projects them into `availableActions`.  #}
+{# Which one applies is resolved server-side, hence the POST to the       #}
+{# type-specific endpoint with no action id.                              #}
+{#                                                                         #}
+{# Rendered ABOVE `super()` so it reads as the primary action, and NOT     #}
+{# gated on task completion — see `canContinueReview` in the controller.   #}
+{# `data-testid` hooks here are an EXTERNAL CONTRACT consumed by the       #}
+{# mgmt-tests journey suite; renaming one breaks those specs.             #}
 {% block actionsPanel %}
   {% if workItem.isReadOnlyState %}
     <h2 class="govuk-heading-m">Outcome</h2>
@@ -72,6 +86,19 @@
       }) }}
     </p>
   {% else %}
+    {% if workItem.canContinueReview %}
+      <div data-testid="re-accreditation-continue-review-cta">
+        <form method="post" action="{{ workItem.continueReviewHref }}" novalidate>
+          <input type="hidden" name="crumb" value="{{ crumb }}" />
+          {{ govukButton({
+            text: "Continue review",
+            classes: "app-case-panel__primary-action",
+            disabled: user.isReadOnly,
+            attributes: { "data-testid": "action-continue-review" }
+          }) }}
+        </form>
+      </div>
+    {% endif %}
     {{ super() }}
   {% endif %}
 {% endblock %}

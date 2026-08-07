@@ -8,6 +8,7 @@ import {
   assertSafeHeaderValue,
   assignWorkItem,
   completeWorkItemTask,
+  continueReviewReAccreditation,
   createWorkItem,
   extendWorkItemSla,
   getBackendHealth,
@@ -1251,6 +1252,230 @@ describe('#approveReAccreditation (RA-132)', () => {
       ok: false,
       reason: 'network',
       message: 'connection refused'
+    })
+  })
+})
+
+describe('#continueReviewReAccreditation (RA-372)', () => {
+  test('POSTs to the type-specific continue-review endpoint with no body and returns the work item on 200', async () => {
+    const workItem = { id: 'wi-1', stateId: 'assessment-in-progress' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await continueReviewReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi-1/continue-review',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          accept: 'application/json',
+          'x-cdp-user-id': 'u-1',
+          'x-cdp-user-name': 'Alice'
+        })
+      })
+    )
+    // The endpoint takes no body, and sending one would imply the caller
+    // gets to choose the target state — which is exactly what the
+    // backend's non-caller-invocable transitions forbid.
+    const [, requestInit] = fetchImpl.mock.calls[0]
+    expect(requestInit.body).toBeUndefined()
+    expect(requestInit.headers['content-type']).toBeUndefined()
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  // RA-372. The backend answers a repeat call for an item that has
+  // already left `updated` with 200 + `x-idempotent-replay: true`. That
+  // MUST read as plain success: it is what a double-clicked button gets,
+  // and what the `submitted` origin's duly-made auto-advance produces.
+  //
+  // This currently holds because the client does not inspect response
+  // headers at all, so the test pins the CONTRACT rather than the
+  // implementation. If anyone later starts branching on headers, this
+  // fails rather than quietly turning a benign replay into an error
+  // banner.
+  test('treats an idempotent replay as ordinary success', async () => {
+    const workItem = { id: 'wi-1', stateId: 'duly-made' }
+    const responseHeaders = new Map([['x-idempotent-replay', 'true']])
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get: (name) => responseHeaders.get(name.toLowerCase()) ?? null
+      },
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await continueReviewReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('percent-encodes the work item id into the path', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'a/b' })
+    })
+
+    await continueReviewReAccreditation({
+      workItemId: 'a/b',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/a%2Fb/continue-review',
+      expect.anything()
+    )
+  })
+
+  test.each([
+    [400, 'invalid'],
+    [401, 'unauthorized'],
+    [403, 'forbidden'],
+    [404, 'not-found'],
+    [409, 'conflict'],
+    [500, 'server']
+  ])(
+    'maps HTTP %s to reason %s with the problem detail',
+    async (status, reason) => {
+      const fetchImpl = vi.fn().mockResolvedValue({
+        ok: false,
+        status,
+        json: () => Promise.resolve({ detail: `boom ${status}` })
+      })
+
+      const result = await continueReviewReAccreditation({
+        workItemId: 'wi-1',
+        baseUrl: 'http://backend:8085',
+        timeoutMs: 1000,
+        fetchImpl
+      })
+
+      expect(result).toEqual({
+        ok: false,
+        reason,
+        status,
+        message: `boom ${status}`
+      })
+    }
+  )
+
+  test('falls back to the problem title when there is no detail', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () =>
+        Promise.resolve({ title: 'Could not continue re-accreditation review' })
+    })
+
+    const result = await continueReviewReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      message: 'Could not continue re-accreditation review'
+    })
+  })
+
+  test('falls back to a generic message when the problem body is unreadable', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: () => Promise.reject(new Error('not json'))
+    })
+
+    const result = await continueReviewReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'server',
+      status: 503,
+      message: 'Backend returned 503'
+    })
+  })
+
+  test('returns a network reason and the abort message when the request times out', async () => {
+    const abortError = Object.assign(new Error('aborted'), {
+      name: 'AbortError'
+    })
+    const fetchImpl = vi.fn().mockRejectedValue(abortError)
+
+    const result = await continueReviewReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'Request timed out'
+    })
+  })
+
+  test('returns a network reason and the underlying error message on other transport errors', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('connection refused'))
+
+    const result = await continueReviewReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'connection refused'
+    })
+  })
+
+  test('falls back to a generic message when a transport failure carries none', async () => {
+    // A rejection that is not an Error instance leaves the transport
+    // result with no message at all; the controller still has to put
+    // SOMETHING in the banner rather than "undefined".
+    const fetchImpl = vi.fn().mockRejectedValue({ name: 'WeirdFailure' })
+
+    const result = await continueReviewReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'Request failed'
     })
   })
 })
