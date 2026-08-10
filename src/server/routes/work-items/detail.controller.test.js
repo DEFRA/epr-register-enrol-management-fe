@@ -3517,7 +3517,7 @@ describe('RA-295 individual work item page', () => {
     code2: 'GH013',
     code3: 'Y48',
     repatriatedLoads: 0,
-    conditionsOfExport: 'Baled and shrink-wrapped',
+    conditionsOfExport: true,
     isNewSite: true,
     registeredNowAccredited: false,
     isEu: true,
@@ -3730,6 +3730,8 @@ describe('RA-295 individual work item page', () => {
       // render path would drop exactly these two rows and nothing else,
       // which is why they are asserted by value and not merely by presence.
       ['overseas-site-repatriated-loads', '0'],
+      // A nullable boolean on the wire, not free text.
+      ['overseas-site-conditions-of-export', 'Yes'],
       ['overseas-site-registered-now-accredited', 'No'],
       ['overseas-site-eu-country', 'Yes'],
       ['overseas-site-oecd-country', 'Yes']
@@ -3740,7 +3742,6 @@ describe('RA-295 individual work item page', () => {
     }
 
     expect(ors).toContain('Europoort Industrial Park')
-    expect(ors).toContain('Baled and shrink-wrapped')
     expect(ors).toContain('Basel/OECD codes')
   })
 

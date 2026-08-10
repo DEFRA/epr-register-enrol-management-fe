@@ -775,7 +775,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
     code2: 'GH013',
     code3: 'Y48',
     repatriatedLoads: 3,
-    conditionsOfExport: 'Baled and shrink-wrapped',
+    conditionsOfExport: true,
     isNewSite: true,
     registeredNowAccredited: false,
     isEu: true,
@@ -809,7 +809,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
       ['operation-code', ['R3']],
       ['waste-codes', ['B3011, GH013, Y48']],
       ['repatriated-loads', ['3']],
-      ['conditions-of-export', ['Baled and shrink-wrapped']],
+      ['conditions-of-export', ['Yes']],
       ['registered-now-accredited', ['No']],
       ['eu-country', ['Yes']],
       ['oecd-country', ['Yes']]
@@ -897,6 +897,24 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
         townOrCity: 'Bilbao'
       })
       expect(orsDetail(site, 'address')).toEqual(['Calle Uno', 'Bilbao'])
+    })
+
+    // A substring test would drop "York" as already present in "New York
+    // Road" and lose the town entirely. Segment-exact comparison keeps it.
+    test('keeps a structured part that is merely a substring of the flat one', () => {
+      const site = buildOverseasSite({
+        siteAddress: '14 New York Road',
+        townOrCity: 'York'
+      })
+      expect(orsDetail(site, 'address')).toEqual(['14 New York Road', 'York'])
+    })
+
+    test('matches a repeated segment regardless of case and padding', () => {
+      const site = buildOverseasSite({
+        siteAddress: 'Calle Uno,  BILBAO ',
+        townOrCity: 'Bilbao'
+      })
+      expect(orsDetail(site, 'address')).toEqual(['Calle Uno,  BILBAO'])
     })
 
     test('falls back to the structured parts when there is no flat string', () => {

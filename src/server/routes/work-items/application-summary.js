@@ -215,11 +215,30 @@ export function isFlaggedNew(value) {
 /**
  * RA-292. Normalise an arbitrary wire value into zero or more display lines.
  *
- * The RA-292 site fields are a grab-bag of shapes — strings, numbers,
- * booleans, string arrays (`conditionsOfExport`) — and any of them may be
- * absent or null on a pre-RA-292 work item. Rather than a per-field
- * null-check ladder (thirteen of them, each its own chance to throw on a
- * regulator's case screen), every field goes through here.
+ * The RA-292 site fields are a grab-bag of shapes, and any of them may be
+ * absent on a pre-RA-292 work item. Rather than a per-field null-check ladder
+ * (thirteen of them, each its own chance to throw on a regulator's case
+ * screen), every field goes through here.
+ *
+ * The shapes, as VERIFIED against captured producer output rather than
+ * inferred from the field names — several of them read as one type and
+ * serialise as another:
+ *
+ *   - `coordinates` and `repatriatedLoads` are STRINGS ("48.8566,2.3522",
+ *     "12"), not a lat/long pair and not a number.
+ *   - `conditionsOfExport` is a nullable BOOLEAN (`bool?` on
+ *     `AccreditationApplicationOverseasSites`), NOT free text — so it renders
+ *     "Yes"/"No". An earlier revision of this comment called it a string
+ *     array; that was wrong, and the same mistake had already been seeded as
+ *     prose in management-be, so it cost a correction cycle across three
+ *     repos. If you are about to describe a field's type here, check the
+ *     producer's model first.
+ *   - `isEu`, `isOecd`, `registeredNowAccredited` are booleans.
+ *   - Everything else is a string.
+ *
+ * The array branch below is NOT for any of those — it exists for genuinely
+ * repeating fields, and is what keeps this helper usable for the next one
+ * that arrives. Nothing in the current ORS or interim shape is an array.
  *
  * Returning an ARRAY rather than a string-or-null is what lets the caller
  * drop empty fields entirely: a detail row with no lines is not rendered, so
@@ -271,9 +290,22 @@ function wasteCodeLines(site) {
  *
  * So `addressLine1` is the test, not emptiness: it is what makes the
  * structured fields a whole address. Without it the flat string leads and any
- * structured field it does not already contain is appended, so nothing is
+ * structured field it does not already repeat is appended, so nothing is
  * lost either way and the address is never printed twice.
+ *
+ * The de-duplication compares whole comma-separated SEGMENTS of the flat
+ * string, not substrings. A substring test drops a structured value that
+ * merely appears inside the flat one — `townOrCity: "York"` against
+ * `"New York Road"` would lose the town from the site's address entirely,
+ * which is the same silent data loss this function exists to prevent.
  */
+function addressSegments(lines) {
+  return lines
+    .flatMap((line) => line.split(','))
+    .map((segment) => segment.trim().toLowerCase())
+    .filter((segment) => segment !== '')
+}
+
 function overseasSiteAddressLines(site) {
   const structured = [
     site.addressLine1,
@@ -286,9 +318,12 @@ function overseasSiteAddressLines(site) {
   const flat = toDisplayLines(site.siteAddress)
   if (flat.length === 0) return structured
 
+  const segments = addressSegments(flat)
   return [
     ...flat,
-    ...structured.filter((line) => !flat.some((f) => f.includes(line)))
+    ...structured.filter(
+      (line) => !segments.includes(line.trim().toLowerCase())
+    )
   ]
 }
 
