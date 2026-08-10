@@ -536,6 +536,15 @@ function buildAssignmentViewModel({ workItem, user }) {
 //    (`requiresAllTasksComplete: true`). The approve route guards itself
 //    with the same helper, so the button and the URL cannot disagree.
 //  - `approveHref` — link target for the CTA.
+//  - `canContinueReview` + `continueReviewHref` (RA-372) — whether the
+//    "Continue review" CTA should render, and where it posts. Reads the
+//    GENERIC `isTaskWaypoint` flag (see `decorate`) rather than testing
+//    for `updated` itself, so the only re-accreditation knowledge here is
+//    the route. The endpoint is protected by plain authentication — no
+//    `assign` role, no assigned-officer check — and is NOT gated on task
+//    completion (all four underlying `continue-review-during-*`
+//    transitions are `RequiresAllTasksComplete: false`). The backend
+//    remains authoritative.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
 //    a terminal state (approved / rejected / withdrawn), the template
 //    suppresses the generic action panel and shows a status tag.
@@ -571,6 +580,18 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
   // merged into the view model below.
   const canApproveDirectly = evaluateApproveEligibility(source).allowed
 
+  // RA-372. Derived from the generic waypoint flag, so the `updated`
+  // literal lives only in `re-accreditation/module.js` — for a
+  // re-accreditation, "its tasks belong to a different state" IS the
+  // updated state, and the backend is the one that decides that.
+  //
+  // Deliberately NOT `&& allTasksComplete`: the waypoint shows the
+  // originating state's tasks, and the whole point of continuing the
+  // review is to get back to that state so the outstanding ones can be
+  // finished there. Gating on completion would recreate the dead end this
+  // ticket exists to remove.
+  const canContinueReview = workItem.isTaskWaypoint === true
+
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
   // state-badge map so it matches the list and the envelope State badge.
@@ -582,6 +603,8 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     ...workItem,
     canApproveDirectly,
     approveHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/approve`,
+    canContinueReview,
+    continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
     isReadOnlyState,
     stateTagClasses,
     decisionMetadata
@@ -738,6 +761,21 @@ function decorate(workItem) {
     // summary and the re-accreditation payload block, both of which are
     // gone; the operator registration id is now a reference-block row and
     // RA-245's address normalisation lives in `buildSiteAddressLines`.
+    // RA-372. `taskStateId` is the state whose checklist `tasks` actually
+    // holds. It is normally identical to `stateId`; when the two DIFFER
+    // the item is parked in a "waypoint" state and is being worked
+    // against another state's checklist — exactly the situation a
+    // re-accreditation is in while `updated`, showing the tasks of the
+    // state its query was raised from.
+    //
+    // Deliberately this generic comparison rather than a state-id
+    // literal. The backend went to real trouble to keep its core ignorant
+    // that `updated` exists; hardcoding `'updated'` here would just
+    // relocate that coupling into the frontend's type-agnostic layer. The
+    // generic layer detects the waypoint; the module supplies whatever
+    // CTA leaves it.
+    isTaskWaypoint:
+      workItem.taskStateId != null && workItem.taskStateId !== workItem.stateId,
     tasks: Array.isArray(workItem.tasks)
       ? workItem.tasks.map(decorateTask)
       : [],
