@@ -1089,6 +1089,83 @@ describe('#buildAuthorityToIssueContacts (RA-292 AC03)', () => {
   })
 })
 
+describe('RA-292 producer contract (verbatim captured payload)', () => {
+  // Copied verbatim from a serialised payload captured in the producer's own
+  // test — a site with only its mandatory model fields set. It is here rather
+  // than paraphrased because the whole point is to catch a producer-side
+  // change: the producer serialises with `WhenWritingNull`, so an optional
+  // field with no value is an ABSENT KEY, never a null. Every optional field
+  // below is missing, while all four booleans are present and two of them are
+  // false.
+  const SPARSE_SITE = {
+    siteId: 3,
+    siteName: 'Sparse Site',
+    isEu: false,
+    isOecd: false,
+    isNewSite: true,
+    registeredNowAccredited: false,
+    besEvidence: { files: [] }
+  }
+
+  test('renders a sparse site without inventing rows for absent fields', () => {
+    const site = buildOverseasSite(SPARSE_SITE)
+
+    expect(site.siteName).toBe('Sparse Site')
+    expect(site.isNew).toBe(true)
+    expect(site.country).toBeNull()
+    expect(site.interimSite).toBeNull()
+
+    // Exactly the fields that are PRESENT — and all three false booleans are
+    // among them. If the omit rule ever regressed to a truthiness test these
+    // three would vanish and the site would render as if it carried nothing
+    // but a name.
+    expect(site.details.map((detail) => [detail.key, detail.values])).toEqual([
+      ['registered-now-accredited', ['No']],
+      ['eu-country', ['No']],
+      ['oecd-country', ['No']]
+    ])
+  })
+
+  // `conditionsOfExport` is the one NULLABLE field in the set, so it is absent
+  // even on otherwise-complete sites — and it is a boolean, not free text.
+  test('renders conditionsOfExport as a boolean, and omits it when absent', () => {
+    expect(
+      orsDetail(
+        buildOverseasSite({ conditionsOfExport: false }),
+        'conditions-of-export'
+      )
+    ).toEqual(['No'])
+    expect(
+      orsDetail(
+        buildOverseasSite({ conditionsOfExport: true }),
+        'conditions-of-export'
+      )
+    ).toEqual(['Yes'])
+    expect(
+      orsDetail(buildOverseasSite({}), 'conditions-of-export')
+    ).toBeUndefined()
+  })
+
+  // Strings on the wire, despite reading as a number and a coordinate pair.
+  test('renders repatriatedLoads and coordinates as the strings they are', () => {
+    const site = buildOverseasSite({
+      repatriatedLoads: '12',
+      coordinates: '48.8566,2.3522'
+    })
+    expect(orsDetail(site, 'repatriated-loads')).toEqual(['12'])
+    expect(orsDetail(site, 'coordinates')).toEqual(['48.8566,2.3522'])
+  })
+
+  test('renders a repatriatedLoads of "0" — a string zero is still an answer', () => {
+    expect(
+      orsDetail(
+        buildOverseasSite({ repatriatedLoads: '0' }),
+        'repatriated-loads'
+      )
+    ).toEqual(['0'])
+  })
+})
+
 describe('RA-292 backwards compatibility (pre-story work items)', () => {
   // The whole point of the story's optionality contract: items already in
   // Mongo carry NONE of the RA-292 fields, and must render exactly as they
