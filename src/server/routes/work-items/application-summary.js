@@ -220,6 +220,23 @@ function authoriserEmail(authoriser) {
  * A default here would recreate it a layer further out, where that test
  * cannot see it. Absent means NOT NEW, and that is a positive statement about
  * the site rather than an absence of information.
+ *
+ * The producer's fix stops new bad reads; it does NOT repair values already
+ * written. `isNewSite` shipped to case management on 2026-07-26, before that
+ * default was corrected, and the operator backend saves sites by whole-
+ * document replace — so a site stored in the weeks before it existed could
+ * have had `true` written back permanently, and any submission freezes
+ * whatever it read into the work-item payload, which is never re-derived.
+ * A work item may therefore carry a `true` that is not true. Tracked as
+ * `epr-2uxy`; remediation, if any, is on the stored payloads, not here.
+ *
+ * Do NOT try to compensate for that in this file. The tempting heuristic —
+ * "every site on this item is flagged, so probably none of them are" — would
+ * silently suppress the badge on an application where every site genuinely IS
+ * new, which is a normal thing for an application to be. A frontend that
+ * second-guesses its input is worse than one that renders a wrong value
+ * faithfully, because the wrong value is at least traceable to the data.
+ * Render what the payload says and let the fix happen where the data is.
  */
 export function isFlaggedNew(value) {
   return value === true
