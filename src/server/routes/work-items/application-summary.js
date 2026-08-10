@@ -207,6 +207,19 @@ function authoriserEmail(authoriser) {
  * new and have no way to tell which sites actually need scrutiny. Strict
  * equality fails closed instead: an unexpected shape shows no tag, which is
  * wrong in the safe direction and is caught by the contract fixtures.
+ *
+ * DO NOT add a "we don't know, so assume new to be safe" fallback here. It
+ * reads as the cautious choice and is the opposite. That exact default —
+ * `= true` on the producer's model — was a live defect found during RA-292:
+ * the BSON deserialiser leaves a C# property initializer in place for a
+ * missing element, so every site stored before the field existed came back
+ * flagged, and the corrupted set was precisely the HISTORICAL case data a
+ * regulator has most of. It is now server-derived and defaults to false, with
+ * a test in the producer pinning that.
+ *
+ * A default here would recreate it a layer further out, where that test
+ * cannot see it. Absent means NOT NEW, and that is a positive statement about
+ * the site rather than an absence of information.
  */
 export function isFlaggedNew(value) {
   return value === true
