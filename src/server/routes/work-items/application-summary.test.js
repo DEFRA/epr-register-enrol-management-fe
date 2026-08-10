@@ -1120,7 +1120,7 @@ describe('RA-292 producer contract (verbatim captured payload)', () => {
     siteName: 'Sparse Site',
     isEu: false,
     isOecd: false,
-    isNewSite: true,
+    isNewSite: false,
     registeredNowAccredited: false,
     besEvidence: { files: [] }
   }
@@ -1129,7 +1129,14 @@ describe('RA-292 producer contract (verbatim captured payload)', () => {
     const site = buildOverseasSite(SPARSE_SITE)
 
     expect(site.siteName).toBe('Sparse Site')
-    expect(site.isNew).toBe(true)
+    // A site with no stored newness arrives UNflagged. `isNewSite` used to
+    // default to true on the producer's model, which meant a site carrying no
+    // newness at all — a legacy work item, say — rendered as new. That is the
+    // failure this badge cannot survive: a badge on everything is
+    // indistinguishable from a correct one, so a regulator has no way to
+    // notice it has stopped meaning anything. Now server-derived and
+    // defaulting to false, so the failure direction is a MISSING badge.
+    expect(site.isNew).toBe(false)
     expect(site.country).toBeNull()
     expect(site.interimSite).toBeNull()
 
