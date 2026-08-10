@@ -38,22 +38,31 @@
   </li>
 {% endmacro %}
 
-{# RA-292. The blue "New" tag.                                              #}
+{# RA-292. The "NEW: " prefix.                                              #}
 {#                                                                          #}
-{# DESIGN NOTE: a `govuk-tag--blue` reading "New", inline against the thing  #}
-{# it flags, is the GOV.UK Design System component for this job, and GDS is  #}
-{# this service's default whenever a supplied design does not show something #}
-{# else. None was supplied for RA-292, so GDS applies and this IS the        #}
-{# design — not a placeholder for one. Do not rework it as provisional.      #}
-{# It also costs no bespoke CSS: the page already renders govukTag for scan  #}
-{# status and for the state badge, so this is the established pattern here.  #}
+{# DESIGN NOTE: a design was supplied for RA-292 and this follows it. The    #}
+{# mock-ups show newness as a literal `NEW: ` prefix on the value itself —   #}
+{# `NEW: Bharat Recycling` — not as a badge beside it. An earlier revision   #}
+{# used a `govuk-tag--blue` reading "New", which was correct while no design #}
+{# existed (GDS is this service's default in that case) and is superseded    #}
+{# now that one does. Do not revert it to a tag.                             #}
 {#                                                                          #}
-{# The tag is rendered ONLY when the flag is strictly true (the view model   #}
-{# resolves that, not this macro), so a caller's `{% if %}` guard is the     #}
-{# whole story: absent means absent from the DOM, never merely hidden.       #}
-{% macro newTag(testId) %}
-  {{ govukTag({ text: 'New', classes: 'govuk-tag--blue', attributes: { "data-testid": testId } }) }}
-{% endmacro %}
+{# The prefix is LITERAL TEXT, deliberately. It must not become a CSS        #}
+{# ::before, a background image or anything else that conveys it by styling  #}
+{# alone — losing the tag's visual affordance is only acceptable because the #}
+{# replacement is real text that reaches assistive technology and copies     #}
+{# with the value. Bolding it is within the design; giving it a colour or a  #}
+{# pseudo-element is not.                                                    #}
+{#                                                                          #}
+{# The space after the colon is an ordinary ASCII space, NOT `&nbsp;`. A     #}
+{# non-breaking space renders identically and would silently break every     #}
+{# downstream `NEW: ` string assertion, so the wrapping it would prevent is  #}
+{# not worth buying here.                                                    #}
+{#                                                                          #}
+{# Rendered ONLY when the flag is strictly true (the view model resolves     #}
+{# that, not this macro), so a caller's `{% if %}` guard is the whole story: #}
+{# absent means absent from the DOM, never merely hidden.                    #}
+{% macro newPrefix(testId) %}<span data-testid="{{ testId }}">NEW:</span> {% endmacro %}
 
 {# RA-292 AC04. A site's detail fields as a nested borderless summary list. #}
 {#                                                                          #}
@@ -310,17 +319,29 @@
                 {# serves when an application declares several.               #}
                 {% for site in row.sites %}
                   <div class="govuk-!-margin-bottom-4" data-testid="overseas-site">
+                    {# Name line then address line — the design's shape. The  #}
+                    {# `NEW:` prefix is nested INSIDE the name element, so    #}
+                    {# that element's text is the full "NEW: <name>" string   #}
+                    {# and a prefix assertion scoped to it cannot be          #}
+                    {# satisfied by a nested interim site's prefix.           #}
                     <p class="govuk-body govuk-!-margin-bottom-1"
                        data-testid="overseas-site-name">
-                      <strong>{{ site.siteName }}</strong>{% if site.country %} ({{ site.country }}){% endif %}{% if site.isNew %} {{ newTag('overseas-site-new-tag') }}{% endif %}
+                      <strong>{% if site.isNew %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>{% if site.country %} ({{ site.country }}){% endif %}
                     </p>
+                    {% for line in site.addressLines %}
+                      <p class="govuk-body govuk-!-margin-bottom-1"
+                         data-testid="overseas-site-address">{{ line }}</p>
+                    {% endfor %}
                     {{ siteDetails(site.details, 'overseas-site') }}
                     {% if site.interimSite %}
                       <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-0"
                            data-testid="interim-site">
+                        {# Sub-label per the design. Plural as specified,     #}
+                        {# even though an ORS carries at most one.            #}
+                        <p class="govuk-body govuk-!-margin-bottom-1"><strong>Interim sites</strong></p>
                         <p class="govuk-body govuk-!-margin-bottom-1"
                            data-testid="interim-site-name">
-                          Interim site: <strong>{{ site.interimSite.siteName }}</strong>{% if site.interimSite.country %} ({{ site.interimSite.country }}){% endif %}{% if site.interimSite.isNew %} {{ newTag('interim-site-new-tag') }}{% endif %}
+                          <strong>{% if site.interimSite.isNew %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ site.interimSite.siteName }}</strong>{% if site.interimSite.country %} ({{ site.interimSite.country }}){% endif %}
                         </p>
                         {{ siteDetails(site.interimSite.details, 'interim-site') }}
                       </div>
@@ -335,10 +356,16 @@
                 {# previous `lines` rendering ("Name (email)"), so anything   #}
                 {# asserting on this row's text still passes; what is new is  #}
                 {# the per-contact block and its "New" tag.                   #}
+                {# The prefix sits OUTSIDE `authority-to-issue-contact-name`, #}
+                {# unlike the site blocks. That element means "the contact's  #}
+                {# name" and is read as a value, so folding "NEW:" into it    #}
+                {# would make its text stop being the name. The line-level    #}
+                {# element is `authority-to-issue-contact`, and that is where #}
+                {# the full "NEW: <name> (<email>)" string lives.             #}
                 {% for contact in row.contacts %}
                   <p class="govuk-body govuk-!-margin-bottom-1"
                      data-testid="authority-to-issue-contact">
-                    <span data-testid="authority-to-issue-contact-name">{{ contact.name }}</span>{% if contact.email %} ({{ contact.email }}){% endif %}{% if contact.isNew %} {{ newTag('authority-to-issue-new-tag') }}{% endif %}
+                    {% if contact.isNew %}{{ newPrefix('authority-to-issue-new-tag') }}{% endif %}<span data-testid="authority-to-issue-contact-name">{{ contact.name }}</span>{% if contact.email %} ({{ contact.email }}){% endif %}
                   </p>
                 {% else %}
                   —

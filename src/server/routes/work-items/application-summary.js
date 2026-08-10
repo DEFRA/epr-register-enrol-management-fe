@@ -380,8 +380,11 @@ function interimSiteAddressLines(site) {
  * so a rename here is a contract change.
  */
 const ORS_DETAIL_FIELDS = [
+  // NOTE: `address` is deliberately absent from this list. The RA-292 design
+  // puts the address on its own unlabelled line directly beneath the site
+  // name, so it is built separately as `addressLines` on the view model. It
+  // keeps its `overseas-site-address` testid in that new position.
   ['ors-id', 'ORS ID', (site) => toDisplayLines(site.orsId)],
-  ['address', 'Address', overseasSiteAddressLines],
   // A pre-formatted string ("48.8566,2.3522"), NOT a {lat,long} pair —
   // confirmed against a captured payload by the producer, who pins it with an
   // exact-JSON test. An earlier revision also handled the object shape; it was
@@ -484,6 +487,10 @@ export function buildOverseasSite(site) {
     siteName: firstLineOr(source.siteName, EM_DASH),
     country: firstLineOr(source.country, null),
     isNew: isFlaggedNew(source.isNewSite),
+    // Separate from `details` because the design gives the address its own
+    // unlabelled line under the site name rather than a labelled row in the
+    // detail list.
+    addressLines: overseasSiteAddressLines(source),
     details: buildDetails(ORS_DETAIL_FIELDS, source),
     interimSite: buildInterimSite(source.interimSite)
   }

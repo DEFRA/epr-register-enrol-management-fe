@@ -299,9 +299,7 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     expect(bes.sites[0]).not.toHaveProperty('siteAddress')
 
     const ors = row(rows, 'ors')
-    expect(orsDetail(ors.sites[0], 'address')).toEqual([
-      '1 Overseas Lane, Rotterdam'
-    ])
+    expect(ors.sites[0].addressLines).toEqual(['1 Overseas Lane, Rotterdam'])
     expect(ors.sites[0].country).toBe('Netherlands')
   })
 
@@ -798,10 +796,17 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
   )
 
   test('AC04: surfaces every site field, in reading order, with its label', () => {
-    const { details } = buildOverseasSite(FULL_SITE)
+    const { details, addressLines } = buildOverseasSite(FULL_SITE)
+
+    // The design puts the address on its own unlabelled line beneath the site
+    // name, so it is NOT a labelled detail row.
+    expect(addressLines).toEqual([
+      '1 Havenstraat',
+      'Europoort Industrial Park',
+      'Rotterdam'
+    ])
     expect(details.map((detail) => [detail.key, detail.values])).toEqual([
       ['ors-id', ['ORS-2026-0292']],
-      ['address', ['1 Havenstraat', 'Europoort Industrial Park', 'Rotterdam']],
       ['coordinates', ['51.9244, 4.4777']],
       ['contact-name', ['Johan de Vries']],
       ['contact-email', ['johan@example.com']],
@@ -845,10 +850,8 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
       townOrCity: 'Bilbao',
       country: 'Spain'
     })
-    expect(site.details.map((detail) => detail.key)).toEqual([
-      'ors-id',
-      'address'
-    ])
+    expect(site.details.map((detail) => detail.key)).toEqual(['ors-id'])
+    expect(site.addressLines).toEqual(['Calle Uno, Bilbao'])
     expect(site.isNew).toBe(false)
     expect(site.interimSite).toBeNull()
   })
@@ -858,6 +861,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
       siteName: EM_DASH,
       country: null,
       isNew: false,
+      addressLines: [],
       details: [],
       interimSite: null
     })
@@ -877,7 +881,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
       })
       // The flat string is NOT appended: it says the same thing, and printing
       // an address twice on a review screen reads as two addresses.
-      expect(orsDetail(site, 'address')).toEqual(['1 Havenstraat', 'Rotterdam'])
+      expect(site.addressLines).toEqual(['1 Havenstraat', 'Rotterdam'])
     })
 
     // The case that makes "structured wins if non-empty" wrong. Without
@@ -888,7 +892,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
         siteAddress: 'Calle Uno, Bilbao',
         townOrCity: 'Bilbao'
       })
-      expect(orsDetail(site, 'address')).toEqual(['Calle Uno, Bilbao'])
+      expect(site.addressLines).toEqual(['Calle Uno, Bilbao'])
     })
 
     test('appends a structured part the flat string does not already contain', () => {
@@ -896,7 +900,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
         siteAddress: 'Calle Uno',
         townOrCity: 'Bilbao'
       })
-      expect(orsDetail(site, 'address')).toEqual(['Calle Uno', 'Bilbao'])
+      expect(site.addressLines).toEqual(['Calle Uno', 'Bilbao'])
     })
 
     // A substring test would drop "York" as already present in "New York
@@ -906,7 +910,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
         siteAddress: '14 New York Road',
         townOrCity: 'York'
       })
-      expect(orsDetail(site, 'address')).toEqual(['14 New York Road', 'York'])
+      expect(site.addressLines).toEqual(['14 New York Road', 'York'])
     })
 
     test('matches a repeated segment regardless of case and padding', () => {
@@ -914,18 +918,16 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
         siteAddress: 'Calle Uno,  BILBAO ',
         townOrCity: 'Bilbao'
       })
-      expect(orsDetail(site, 'address')).toEqual(['Calle Uno,  BILBAO'])
+      expect(site.addressLines).toEqual(['Calle Uno,  BILBAO'])
     })
 
     test('falls back to the structured parts when there is no flat string', () => {
       const site = buildOverseasSite({ townOrCity: 'Bilbao' })
-      expect(orsDetail(site, 'address')).toEqual(['Bilbao'])
+      expect(site.addressLines).toEqual(['Bilbao'])
     })
 
-    test('omits the row when the site has no address at all', () => {
-      expect(
-        orsDetail(buildOverseasSite({ siteName: 'X' }), 'address')
-      ).toBeUndefined()
+    test('yields no address lines when the site has no address at all', () => {
+      expect(buildOverseasSite({ siteName: 'X' }).addressLines).toEqual([])
     })
   })
 
@@ -1212,6 +1214,6 @@ describe('RA-292 backwards compatibility (pre-story work items)', () => {
     expect(site.siteName).toBe('Rotterdam Reprocessing')
     expect(site.isNew).toBe(false)
     expect(site.interimSite).toBeNull()
-    expect(orsDetail(site, 'address')).toEqual(['1 Overseas Lane, Rotterdam'])
+    expect(site.addressLines).toEqual(['1 Overseas Lane, Rotterdam'])
   })
 })

@@ -3501,6 +3501,30 @@ describe('RA-295 individual work item page', () => {
     return html.slice(start, next === -1 ? undefined : next)
   }
 
+  // The rendered TEXT of every element carrying `testId`, tags stripped and
+  // whitespace collapsed — i.e. what `getText()` returns in the e2e suite.
+  //
+  // Prefix assertions MUST be scoped this way and never to a whole block.
+  // An interim site renders INSIDE its parent ORS block, so the parent's text
+  // contains its child's `NEW:`. A block-scoped absence check would then fail
+  // on a correctly-rendered page whenever an established ORS holds a new
+  // interim site, and — worse — a block-scoped presence check would PASS for
+  // an ORS that is not new, because its child supplied the string. Neither
+  // failure is visible in the assertion itself. (Raised by the mgmt-tests
+  // teammate, which scopes to the same elements.)
+  function lineTexts(html, testId) {
+    const pattern = new RegExp(
+      `<p[^>]*data-testid="${testId}"[^>]*>([\\s\\S]*?)</p>`,
+      'g'
+    )
+    return [...html.matchAll(pattern)].map((match) =>
+      match[1]
+        .replace(/<[^>]+>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    )
+  }
+
   const ROTTERDAM = {
     orsId: 'ORS-2026-0292',
     siteName: 'Rotterdam New Reprocessing Site',
@@ -3574,38 +3598,44 @@ describe('RA-295 individual work item page', () => {
     return result
   }
 
-  test('RA-292 AC01: tags a new ORS, and only the new one', async () => {
+  test('RA-292 AC01: prefixes a new ORS, and only the new one', async () => {
     const ors = detailValue(
       await renderWithSites([ROTTERDAM, HAMBURG, BILBAO]),
       'ors'
     )
 
-    // One tag for three sites: the established and the legacy sites must not
-    // carry one, or the badge tells a regulator nothing.
+    // One prefix for three sites: the established and the legacy sites must
+    // not carry one, or the flag tells a regulator nothing.
     expect(ors.match(/data-testid="overseas-site-new-tag"/g)).toHaveLength(1)
     expect(ors.match(/data-testid="overseas-site"/g)).toHaveLength(3)
 
-    // The tag belongs to the site that declared itself new. Scoping to the
-    // block proves the association, not just co-presence on the page.
-    const rotterdamIdx = ors.indexOf('Rotterdam New Reprocessing Site')
-    const hamburgIdx = ors.indexOf('Hamburg Established Reprocessing Site')
-    const tagIdx = ors.indexOf('data-testid="overseas-site-new-tag"')
-    expect(tagIdx).toBeGreaterThan(rotterdamIdx)
-    expect(tagIdx).toBeLessThan(hamburgIdx)
+    // Scoped per site name, so the prefix is proved to belong to the site
+    // that declared itself new rather than merely to be somewhere on the page.
+    expect(lineTexts(ors, 'overseas-site-name')).toEqual([
+      'NEW: Rotterdam New Reprocessing Site (Netherlands)',
+      'Hamburg Established Reprocessing Site (Germany)',
+      'Bilbao Legacy Reprocessing Site (Spain)'
+    ])
   })
 
-  test('RA-292 AC01: the tag is a blue GOV.UK tag reading "New"', async () => {
+  test('RA-292 AC01: the flag renders as a literal "NEW: " text prefix', async () => {
     const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
-    const tagIdx = ors.indexOf('data-testid="overseas-site-new-tag"')
-    // The whole element, so `govuk-tag--blue` cannot be satisfied by some
-    // other tag elsewhere in the row.
-    const tag = ors.slice(
-      ors.lastIndexOf('<strong', tagIdx),
-      ors.indexOf('</strong>', tagIdx)
+    const [name] = lineTexts(ors, 'overseas-site-name')
+
+    expect(name).toBe('NEW: Rotterdam New Reprocessing Site (Netherlands)')
+
+    // The separator is an ASCII space, never U+00A0. A non-breaking space
+    // renders identically and would silently break every downstream string
+    // assertion — including the e2e suite's — while looking perfect.
+    expect(name).not.toContain('\u00a0')
+    expect(ors).toContain(
+      '<span data-testid="overseas-site-new-tag">NEW:</span> '
     )
-    expect(tag).toContain('govuk-tag')
-    expect(tag).toContain('govuk-tag--blue')
-    expect(tag).toContain('New')
+
+    // Literal text, not styling: the design's affordance IS the word, so it
+    // has to reach assistive technology and survive copy-paste. This also
+    // pins that the superseded blue tag does not come back.
+    expect(ors).not.toContain('govuk-tag--blue')
   })
 
   test.each([
@@ -3613,16 +3643,18 @@ describe('RA-295 individual work item page', () => {
     ['null', null],
     ['absent', undefined]
   ])(
-    'RA-292 AC01: renders NO tag element at all when isNewSite is %s',
+    'RA-292 AC01: renders NO prefix at all when isNewSite is %s',
     async (_label, isNewSite) => {
       const ors = detailValue(
         await renderWithSites([{ ...ROTTERDAM, isNewSite }]),
         'ors'
       )
-      // Positive assertion first so the negative is scoped to a block that
+      // Positive assertion first, so the negatives are scoped to a block that
       // demonstrably rendered.
       expect(ors).toContain('data-testid="overseas-site"')
+      // Absent from the DOM, not empty and not hidden.
       expect(ors).not.toContain('overseas-site-new-tag')
+      expect(lineTexts(ors, 'overseas-site-name')[0]).not.toContain('NEW:')
     }
   )
 
@@ -3636,17 +3668,50 @@ describe('RA-295 individual work item page', () => {
     expect(ors).toContain('data-testid="interim-site-new-tag"')
   })
 
-  test('RA-292 AC02: tags only the new interim site', async () => {
+  test('RA-292 AC02: prefixes only the new interim site', async () => {
     const ors = detailValue(await renderWithSites([ROTTERDAM, HAMBURG]), 'ors')
 
     expect(ors.match(/data-testid="interim-site"/g)).toHaveLength(2)
     expect(ors.match(/data-testid="interim-site-new-tag"/g)).toHaveLength(1)
 
-    const antwerpIdx = ors.indexOf('Antwerp Interim Holding Site')
-    const bremenIdx = ors.indexOf('Bremen Interim Holding Site')
-    const tagIdx = ors.indexOf('data-testid="interim-site-new-tag"')
-    expect(tagIdx).toBeGreaterThan(antwerpIdx)
-    expect(tagIdx).toBeLessThan(bremenIdx)
+    expect(lineTexts(ors, 'interim-site-name')).toEqual([
+      'NEW: Antwerp Interim Holding Site (Belgium)',
+      'Bremen Interim Holding Site (Germany)'
+    ])
+  })
+
+  // The trap the nesting creates, pinned explicitly: an established ORS
+  // holding a NEW interim site. The parent block's text contains "NEW:"
+  // because its child supplied it, so only a name-scoped assertion tells the
+  // two apart — and getting it wrong fails silently in BOTH directions (a
+  // block-scoped absence check fails on a correct page; a block-scoped
+  // presence check passes for a site that is not new).
+  test('RA-292 AC02: a not-new ORS holding a new interim site prefixes only the child', async () => {
+    const ors = detailValue(
+      await renderWithSites([
+        { ...HAMBURG, interimSite: { ...HAMBURG.interimSite, isNewSite: true } }
+      ]),
+      'ors'
+    )
+
+    expect(lineTexts(ors, 'overseas-site-name')).toEqual([
+      'Hamburg Established Reprocessing Site (Germany)'
+    ])
+    expect(lineTexts(ors, 'interim-site-name')).toEqual([
+      'NEW: Bremen Interim Holding Site (Germany)'
+    ])
+    // The parent block's text DOES carry the child's prefix. This is the
+    // assertion that would mislead if it were the only one.
+    expect(ors).toContain('NEW:')
+    expect(ors).not.toContain('data-testid="overseas-site-new-tag"')
+  })
+
+  test('RA-292 AC02: renders the "Interim sites" sub-label', async () => {
+    const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
+    const interimIdx = ors.indexOf('data-testid="interim-site"')
+    expect(ors.slice(interimIdx, interimIdx + 400)).toContain(
+      '<strong>Interim sites</strong>'
+    )
   })
 
   test('RA-292 AC02: an ORS with no interim site renders no interim block', async () => {
@@ -3655,7 +3720,7 @@ describe('RA-295 individual work item page', () => {
     expect(ors).not.toContain('interim-site')
   })
 
-  test('RA-292 AC03: tags only the new authority-to-issue contact', async () => {
+  test('RA-292 AC03: prefixes only the new authority-to-issue contact', async () => {
     const authority = detailValue(
       await renderWithSites([], {
         prns: {
@@ -3685,11 +3750,38 @@ describe('RA-295 individual work item page', () => {
       authority.match(/data-testid="authority-to-issue-new-tag"/g)
     ).toHaveLength(1)
 
-    const graceIdx = authority.indexOf('Grace Adeyemi')
-    const martinIdx = authority.indexOf('Martin Cole')
-    const tagIdx = authority.indexOf('data-testid="authority-to-issue-new-tag"')
-    expect(tagIdx).toBeGreaterThan(graceIdx)
-    expect(tagIdx).toBeLessThan(martinIdx)
+    expect(lineTexts(authority, 'authority-to-issue-contact')).toEqual([
+      'NEW: Grace Adeyemi (grace@example.com)',
+      'Martin Cole (martin@example.com)',
+      'Priya Nair (priya@example.com)'
+    ])
+  })
+
+  // Unlike the site blocks, the prefix sits OUTSIDE the contact-name element:
+  // that element means "the contact's name", so folding "NEW:" into it would
+  // stop its text being the name. Pinned because it is the difference between
+  // the e2e suite asserting on the right element and asserting on one that
+  // can never contain the prefix — which would pass forever.
+  test('RA-292 AC03: the prefix is on the contact line, not inside the name', async () => {
+    const authority = detailValue(
+      await renderWithSites([], {
+        prns: {
+          plannedTonnageBand: 'UpTo1000',
+          authorisers: [
+            {
+              fullName: 'Grace Adeyemi',
+              email: 'grace@example.com',
+              isNew: true
+            }
+          ]
+        }
+      }),
+      'authority-to-issue'
+    )
+
+    expect(authority).toContain(
+      '<span data-testid="authority-to-issue-new-tag">NEW:</span> <span data-testid="authority-to-issue-contact-name">Grace Adeyemi</span>'
+    )
   })
 
   test('RA-292 AC03: contact text is still "Name (email)"', async () => {
@@ -3719,7 +3811,6 @@ describe('RA-295 individual work item page', () => {
 
     for (const [testId, value] of [
       ['overseas-site-ors-id', 'ORS-2026-0292'],
-      ['overseas-site-address', '1 Havenstraat'],
       ['overseas-site-coordinates', '51.9244, 4.4777'],
       ['overseas-site-contact-name', 'Johan de Vries'],
       ['overseas-site-contact-email', 'johan@example.com'],
@@ -3741,6 +3832,15 @@ describe('RA-295 individual work item page', () => {
       expect(ors.slice(idx, idx + 400)).toContain(value)
     }
 
+    // The address is no longer a labelled detail row: the design puts it on
+    // its own unlabelled lines directly beneath the site name, one <p> per
+    // line. It keeps the `overseas-site-address` testid in that position.
+    expect(ors.match(/data-testid="overseas-site-address"/g)).toHaveLength(3)
+    const nameIdx = ors.indexOf('data-testid="overseas-site-name"')
+    const addressIdx = ors.indexOf('data-testid="overseas-site-address"')
+    const detailIdx = ors.indexOf('data-testid="overseas-site-ors-id"')
+    expect(addressIdx).toBeGreaterThan(nameIdx)
+    expect(addressIdx).toBeLessThan(detailIdx)
     expect(ors).toContain('Europoort Industrial Park')
     expect(ors).toContain('Basel/OECD codes')
   })
@@ -3828,8 +3928,8 @@ describe('RA-295 individual work item page', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toContain('data-testid="application-details"')
-    expect(result).not.toContain('govuk-tag--blue')
     expect(result).not.toContain('-new-tag')
+    expect(result).not.toContain('NEW:')
     expect(result).not.toContain('data-testid="app-detail-row-ors"')
   })
 })
