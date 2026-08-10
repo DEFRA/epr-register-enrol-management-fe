@@ -111,7 +111,7 @@ src/
                           auth-scopes (requireStandard),
                           providers/azure-entra-id.js
         backend-api/      Single backend HTTP client (undici fetch). Adds
-                          x-cdp-cognito-client-id + x-cdp-user-* headers.
+                          x-cdp-client-id + x-cdp-user-* headers.
         proxy/            global-agent setup for CDP HTTP(S)_PROXY
         session-cache/    Catbox engine selector
         logging/          pino factory
@@ -259,7 +259,7 @@ the module's `register(server)` callback; paths are relative to
   uses `undici`'s `fetch` so it picks up the forward-proxy configured in
   `setup-proxy.js` (CDP `HTTP_PROXY` / `HTTPS_PROXY`).
 - **`buildHeaders(extra, user)`** is the single place outbound headers
-  are assembled. It always sets `x-cdp-cognito-client-id` (when
+  are assembled. It always sets `x-cdp-client-id` (when
   configured) and forwards the acting user's identity via
   `x-cdp-user-id` and `x-cdp-user-name` — audit trail only. It does
   **not** send any role/scope header; the backend has no notion of the
@@ -307,7 +307,7 @@ the module's `register(server)` callback; paths are relative to
   pass a `ProxyAgent` dispatcher explicitly per the CDP node-frontend
   template guidance.
 - **Forwarded headers are an explicit allow-list** in the backend client.
-  Currently: `x-cdp-cognito-client-id`, `x-cdp-user-id|name|roles`,
+  Currently: `x-cdp-client-id`, `x-cdp-user-id|name|roles`,
   `accept`. Never forward `Cookie`, `Authorization` or browser-supplied
   `x-cdp-*` headers from the inbound request — always use the
   authenticated user from `request.auth.credentials`.

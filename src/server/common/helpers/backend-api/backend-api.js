@@ -6,7 +6,7 @@ import { signRequestHeaders } from './sign-request.js'
 
 const logger = createLogger()
 
-const COGNITO_CLIENT_ID_HEADER = 'x-cdp-cognito-client-id'
+const CLIENT_ID_HEADER = 'x-cdp-client-id'
 const USER_ID_HEADER = 'x-cdp-user-id'
 const USER_NAME_HEADER = 'x-cdp-user-name'
 
@@ -35,10 +35,10 @@ export function assertSafeHeaderValue(value) {
 }
 
 /**
- * Build the headers attached to every backend call. The Cognito client id
- * identifies the BFF *as a service* and is required (CDP itself adds it on
- * service-to-service calls); the optional user-* headers forward the
- * acting end-user's identity for audit attribution. Authorization is not
+ * Build the headers attached to every backend call. The client id
+ * identifies the BFF *as a service* and is required — proven via the HMAC
+ * signature below, not by CDP itself; the optional user-* headers forward
+ * the acting end-user's identity for audit attribution. Authorization is not
  * one of the backend's concerns — it trusts any caller that can produce a
  * validly-signed request and defers all access decisions to this BFF, so
  * role membership is not forwarded.
@@ -48,10 +48,10 @@ export function assertSafeHeaderValue(value) {
  */
 function buildHeaders(extra = {}, user = null) {
   const headers = { ...extra }
-  const clientId = config.get('backendApi.cognitoClientId')
+  const clientId = config.get('backendApi.clientId')
   if (clientId) {
     assertSafeHeaderValue(clientId)
-    headers[COGNITO_CLIENT_ID_HEADER] = clientId
+    headers[CLIENT_ID_HEADER] = clientId
   }
   if (user) {
     if (user.id) {

@@ -8,7 +8,7 @@ const SECRET = 'test-shared-secret-for-hmac-signing'
 describe('signRequestHeaders', () => {
   test('produces the correct HMAC-SHA256 signature for a full header set', () => {
     const headers = {
-      'x-cdp-cognito-client-id': 'frontend',
+      'x-cdp-client-id': 'frontend',
       'x-cdp-user-id': 'user-123',
       'x-cdp-user-name': 'Alice Example'
     }
@@ -45,7 +45,7 @@ describe('signRequestHeaders', () => {
   })
 
   test('uses empty strings for absent optional identity fields', () => {
-    const headers = { 'x-cdp-cognito-client-id': 'frontend' }
+    const headers = { 'x-cdp-client-id': 'frontend' }
     const timestamp = '2026-05-18T10:00:00Z'
     const nonce = 'testnonce'
 
@@ -96,7 +96,7 @@ describe('signRequestHeaders', () => {
 
   test('returns empty object when shared secret is not configured', () => {
     const result = signRequestHeaders(
-      { 'x-cdp-cognito-client-id': 'frontend' },
+      { 'x-cdp-client-id': 'frontend' },
       { sharedSecret: '' }
     )
     expect(result).toEqual({})

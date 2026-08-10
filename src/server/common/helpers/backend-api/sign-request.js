@@ -37,7 +37,7 @@ export function signRequestHeaders(
 
   const payload = [
     'v3',
-    headers['x-cdp-cognito-client-id'] ?? '',
+    headers['x-cdp-client-id'] ?? '',
     headers['x-cdp-user-id'] ?? '',
     headers['x-cdp-user-name'] ?? '',
     timestamp,

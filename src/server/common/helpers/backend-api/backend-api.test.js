@@ -115,7 +115,7 @@ describe('#getWorkItems', () => {
         signal: expect.any(AbortSignal),
         headers: expect.objectContaining({
           accept: 'application/json',
-          'x-cdp-cognito-client-id': expect.any(String)
+          'x-cdp-client-id': expect.any(String)
         })
       })
     )
@@ -549,7 +549,7 @@ describe('#getWorkItem', () => {
         signal: expect.any(AbortSignal),
         headers: expect.objectContaining({
           accept: 'application/json',
-          'x-cdp-cognito-client-id': expect.any(String)
+          'x-cdp-client-id': expect.any(String)
         })
       })
     )

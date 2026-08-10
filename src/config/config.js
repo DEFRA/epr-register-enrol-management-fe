@@ -267,11 +267,11 @@ export const config = convict({
       default: 5000,
       env: 'BACKEND_API_TIMEOUT_MS'
     },
-    cognitoClientId: {
-      doc: 'CDP Cognito client id sent on outbound calls to the backend (x-cdp-cognito-client-id header). Empty string disables the header.',
+    clientId: {
+      doc: 'CDP client id sent on outbound calls to the backend (x-cdp-client-id header). Empty string disables the header.',
       format: String,
       default: 'frontend',
-      env: 'BACKEND_API_COGNITO_CLIENT_ID'
+      env: 'BACKEND_API_CLIENT_ID'
     },
     sharedSecret: {
       doc: 'HMAC-SHA256 secret for signing outbound requests to the case management backend (BACKEND_API_SHARED_SECRET). Empty string disables signing (local dev). Must match the secret the backend verifies this caller against (AUTH_SHARED_SECRET__MANAGEMENT_FE in epr-register-enrol-management-be) — RA-345 moved that backend from one secret shared with epr-register-enrol-backend to a secret per caller, so this value must be distinct from whatever epr-register-enrol-backend signs with.',
