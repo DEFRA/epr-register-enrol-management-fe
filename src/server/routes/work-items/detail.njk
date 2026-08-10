@@ -38,6 +38,50 @@
   </li>
 {% endmacro %}
 
+{# RA-292. The blue "New" tag.                                              #}
+{#                                                                          #}
+{# DESIGN NOTE: the ticket says three times that Callum will supply how      #}
+{# this should be shown, and no design was supplied. A `govuk-tag--blue`     #}
+{# reading "New", inline against the thing it flags, is the team lead's      #}
+{# convention pending that input — chosen because the page already uses      #}
+{# govukTag for scan status and the state badge, so it needs no bespoke CSS. #}
+{#                                                                          #}
+{# The tag is rendered ONLY when the flag is strictly true (the view model   #}
+{# resolves that, not this macro), so a caller's `{% if %}` guard is the     #}
+{# whole story: absent means absent from the DOM, never merely hidden.       #}
+{% macro newTag(testId) %}
+  {{ govukTag({ text: 'New', classes: 'govuk-tag--blue', attributes: { "data-testid": testId } }) }}
+{% endmacro %}
+
+{# RA-292 AC04. A site's detail fields as a nested borderless summary list. #}
+{#                                                                          #}
+{# `testIdPrefix` ("overseas-site" / "interim-site") plus the view model's   #}
+{# own field key forms the value testid — e.g. `overseas-site-address`,     #}
+{# which is also how the pre-RA-292 address hook keeps its exact name.      #}
+{#                                                                          #}
+{# Rows are omitted upstream when the field is absent, so there is no        #}
+{# emptiness test here — and critically no truthiness test either: a         #}
+{# `repatriatedLoads` of 0 and a `registeredNowAccredited` of false are      #}
+{# answers a regulator needs, and a `{% if value %}` guard anywhere on this  #}
+{# path would silently drop exactly those.                                   #}
+{% macro siteDetails(details, testIdPrefix) %}
+  {% if details.length %}
+    <dl class="govuk-summary-list app-summary-list--borderless govuk-!-margin-bottom-2">
+      {% for detail in details %}
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">{{ detail.label }}</dt>
+          <dd class="govuk-summary-list__value"
+              data-testid="{{ testIdPrefix }}-{{ detail.key }}">
+            {% for line in detail.values %}
+              <p class="govuk-body govuk-!-margin-bottom-0">{{ line }}</p>
+            {% endfor %}
+          </dd>
+        </div>
+      {% endfor %}
+    </dl>
+  {% endif %}
+{% endmacro %}
+
 {# One business-plan category: bold label, PRN-income share, narrative.     #}
 {# `testId` is a parameter because the AC02 business-plan row and the       #}
 {# previous-year section render the same shape but are counted separately — #}
@@ -236,22 +280,64 @@
                   —
                 {% endfor %}
 
-              {% elif row.kind == 'sites' %}
+              {% elif row.kind == 'bes-sites' %}
+                {# BES evidence, grouped by the site it evidences. The block  #}
+                {# testid is `bes-site`, NOT `overseas-site` — see the        #}
+                {# `bes-sites` note in application-summary.js.                #}
                 {% for site in row.sites %}
-                  <div data-testid="overseas-site">
+                  <div data-testid="bes-site">
                     <p class="govuk-body govuk-!-margin-bottom-1">
                       <strong>{{ site.siteName }}</strong>{% if site.country %} ({{ site.country }}){% endif %}
                     </p>
-                    {% if site.siteAddress %}
-                      <p class="govuk-body govuk-!-margin-bottom-1"
-                         data-testid="overseas-site-address">{{ site.siteAddress }}</p>
-                    {% endif %}
                     {% if site.files.length %}
                       <ul class="govuk-list">
                         {% for file in site.files %}{{ documentItem(file) }}{% endfor %}
                       </ul>
                     {% endif %}
                   </div>
+                {% else %}
+                  —
+                {% endfor %}
+
+              {% elif row.kind == 'overseas-sites' %}
+                {# RA-292 AC01 + AC02 + AC04. One block per overseas site:    #}
+                {# name (+ "New" tag), the full site detail, and the interim  #}
+                {# site NESTED inside its parent — an interim site belongs to #}
+                {# an ORS rather than standing beside it, and the nesting is  #}
+                {# what tells a regulator which ORS a given interim site      #}
+                {# serves when an application declares several.               #}
+                {% for site in row.sites %}
+                  <div class="govuk-!-margin-bottom-4" data-testid="overseas-site">
+                    <p class="govuk-body govuk-!-margin-bottom-1"
+                       data-testid="overseas-site-name">
+                      <strong>{{ site.siteName }}</strong>{% if site.country %} ({{ site.country }}){% endif %}{% if site.isNew %} {{ newTag('overseas-site-new-tag') }}{% endif %}
+                    </p>
+                    {{ siteDetails(site.details, 'overseas-site') }}
+                    {% if site.interimSite %}
+                      <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-0"
+                           data-testid="interim-site">
+                        <p class="govuk-body govuk-!-margin-bottom-1"
+                           data-testid="interim-site-name">
+                          Interim site: <strong>{{ site.interimSite.siteName }}</strong>{% if site.interimSite.country %} ({{ site.interimSite.country }}){% endif %}{% if site.interimSite.isNew %} {{ newTag('interim-site-new-tag') }}{% endif %}
+                        </p>
+                        {{ siteDetails(site.interimSite.details, 'interim-site') }}
+                      </div>
+                    {% endif %}
+                  </div>
+                {% else %}
+                  —
+                {% endfor %}
+
+              {% elif row.kind == 'authority-contacts' %}
+                {# RA-292 AC03. The contact text is unchanged from the        #}
+                {# previous `lines` rendering ("Name (email)"), so anything   #}
+                {# asserting on this row's text still passes; what is new is  #}
+                {# the per-contact block and its "New" tag.                   #}
+                {% for contact in row.contacts %}
+                  <p class="govuk-body govuk-!-margin-bottom-1"
+                     data-testid="authority-to-issue-contact">
+                    <span data-testid="authority-to-issue-contact-name">{{ contact.name }}</span>{% if contact.email %} ({{ contact.email }}){% endif %}{% if contact.isNew %} {{ newTag('authority-to-issue-new-tag') }}{% endif %}
+                  </p>
                 {% else %}
                   —
                 {% endfor %}

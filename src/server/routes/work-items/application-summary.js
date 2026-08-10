@@ -183,15 +183,249 @@ export function authoriserName(authoriser) {
   return authoriser?.fullName || authoriser?.email || EM_DASH
 }
 
-function authoriserLine(authoriser) {
-  const name = authoriser?.fullName || null
-  const email = authoriser?.email || null
-  if (name && email) return `${name} (${email})`
-  return name || email || EM_DASH
+/**
+ * The email is shown parenthetically only when there is a NAME to put it
+ * beside. A nameless authoriser has already fallen back to its email as the
+ * display name (`authoriserName`), so emitting it again would render
+ * "x@example.com (x@example.com)".
+ */
+function authoriserEmail(authoriser) {
+  return authoriser?.fullName ? authoriser?.email || null : null
 }
 
 /**
- * Resolve "Authority to issue" (AC02 item 6).
+ * RA-292. "Is this thing new?" — the ONE place the new-flag rule lives.
+ *
+ * Every RA-292 field is optional: work items that predate the story carry
+ * none of them, and the producer may emit `null` for a flag it has no answer
+ * for. Only an explicit `true` earns the blue "New" tag. `undefined`, `null`,
+ * `false`, `0`, `''` and the string `'true'` all mean "not new".
+ *
+ * The string case is the one that matters: a JS truthiness test would flag
+ * every site the moment a serialiser started emitting `"false"`, and the
+ * failure would be invisible — a regulator would just see everything marked
+ * new and have no way to tell which sites actually need scrutiny. Strict
+ * equality fails closed instead: an unexpected shape shows no tag, which is
+ * wrong in the safe direction and is caught by the contract fixtures.
+ */
+export function isFlaggedNew(value) {
+  return value === true
+}
+
+/**
+ * RA-292. Normalise an arbitrary wire value into zero or more display lines.
+ *
+ * The RA-292 site fields are a grab-bag of shapes — strings, numbers,
+ * booleans, string arrays (`conditionsOfExport`) — and any of them may be
+ * absent or null on a pre-RA-292 work item. Rather than a per-field
+ * null-check ladder (thirteen of them, each its own chance to throw on a
+ * regulator's case screen), every field goes through here.
+ *
+ * Returning an ARRAY rather than a string-or-null is what lets the caller
+ * drop empty fields entirely: a detail row with no lines is not rendered, so
+ * the page shows the data that exists instead of a column of em-dashes. The
+ * em-dash fallback is kept for the things that must always be on the page —
+ * the site name and an empty site/contact list — where silence would read as
+ * "no site" rather than "no value".
+ *
+ * Booleans deliberately render "Yes"/"No" rather than being dropped when
+ * false: `isEu: false` is a substantive answer a regulator needs, unlike an
+ * absent field. Only the new-flags use strict-true-or-nothing.
+ */
+export function toDisplayLines(value) {
+  if (value == null) return []
+  if (Array.isArray(value)) return value.flatMap(toDisplayLines)
+  if (typeof value === 'boolean') return [value ? 'Yes' : 'No']
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? [String(value)] : []
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed === '' ? [] : [trimmed]
+  }
+  // Objects we have no mapping for contribute nothing rather than rendering
+  // "[object Object]" onto a case screen.
+  return []
+}
+
+function firstLineOr(value, fallback) {
+  return toDisplayLines(value)[0] ?? fallback
+}
+
+/** The three Basel/OECD waste codes read as one comma-separated line. */
+function wasteCodeLines(site) {
+  const codes = [site.code1, site.code2, site.code3].flatMap(toDisplayLines)
+  return codes.length > 0 ? [codes.join(', ')] : []
+}
+
+/**
+ * An overseas site's address, from whichever of the two overlapping shapes it
+ * actually arrived in.
+ *
+ * `siteAddress` is the legacy single-line form; `addressLine1` / `2` +
+ * `townOrCity` is the structured form RA-292 added. A site may carry both,
+ * one, or a PARTIAL structured form — which is the case that makes a plain
+ * "structured wins if non-empty" rule wrong. A site with only `townOrCity`
+ * and a flat `siteAddress` would render as the bare town, silently dropping
+ * the street from a regulator's review of the site.
+ *
+ * So `addressLine1` is the test, not emptiness: it is what makes the
+ * structured fields a whole address. Without it the flat string leads and any
+ * structured field it does not already contain is appended, so nothing is
+ * lost either way and the address is never printed twice.
+ */
+function overseasSiteAddressLines(site) {
+  const structured = [
+    site.addressLine1,
+    site.addressLine2,
+    site.townOrCity
+  ].flatMap(toDisplayLines)
+
+  if (toDisplayLines(site.addressLine1).length > 0) return structured
+
+  const flat = toDisplayLines(site.siteAddress)
+  if (flat.length === 0) return structured
+
+  return [
+    ...flat,
+    ...structured.filter((line) => !flat.some((f) => f.includes(line)))
+  ]
+}
+
+/**
+ * The interim site has no legacy flat-string form — it only ever arrives
+ * structured — so this is a straight concatenation of the populated parts.
+ */
+function interimSiteAddressLines(site) {
+  return [
+    site.addressLine1,
+    site.addressLine2,
+    site.townOrCity,
+    site.stateOrRegion,
+    site.postcode
+  ].flatMap(toDisplayLines)
+}
+
+/**
+ * AC04. The ORS detail a regulator needs to review the site, in reading
+ * order: what it is, where it is, who to contact, what it is permitted to do.
+ *
+ * Declared as data rather than built inline so the field list, its labels and
+ * its `data-testid` keys read in one place — the e2e suite pins these keys,
+ * so a rename here is a contract change.
+ */
+const ORS_DETAIL_FIELDS = [
+  ['ors-id', 'ORS ID', (site) => toDisplayLines(site.orsId)],
+  ['address', 'Address', overseasSiteAddressLines],
+  // A pre-formatted string ("48.8566,2.3522"), NOT a {lat,long} pair —
+  // confirmed against a captured payload by the producer, who pins it with an
+  // exact-JSON test. An earlier revision also handled the object shape; it was
+  // removed once confirmed dead, for the reason spelled out on
+  // `isExporterApplication` above — a branch that can never fire still reads
+  // as a working feature to the next person.
+  ['coordinates', 'Coordinates', (site) => toDisplayLines(site.coordinates)],
+  ['contact-name', 'Contact name', (site) => toDisplayLines(site.contactName)],
+  [
+    'contact-email',
+    'Contact email',
+    (site) => toDisplayLines(site.contactEmail)
+  ],
+  [
+    'contact-phone',
+    'Contact phone',
+    (site) => toDisplayLines(site.contactPhone)
+  ],
+  [
+    'operation-code',
+    'Operation code',
+    (site) => toDisplayLines(site.operationCode)
+  ],
+  ['waste-codes', 'Basel/OECD codes', wasteCodeLines],
+  [
+    'repatriated-loads',
+    'Repatriated loads',
+    (site) => toDisplayLines(site.repatriatedLoads)
+  ],
+  [
+    'conditions-of-export',
+    'Conditions of export',
+    (site) => toDisplayLines(site.conditionsOfExport)
+  ],
+  [
+    'registered-now-accredited',
+    'Registered, now seeking accreditation',
+    (site) => toDisplayLines(site.registeredNowAccredited)
+  ],
+  ['eu-country', 'EU country', (site) => toDisplayLines(site.isEu)],
+  ['oecd-country', 'OECD country', (site) => toDisplayLines(site.isOecd)]
+]
+
+/**
+ * AC04, interim half. A shorter list than the ORS one because the interim
+ * site carries no operation/waste codes — it is a staging point, not a
+ * reprocessor. It does carry `stateOrRegion` and `postcode`, which the ORS
+ * shape does not.
+ */
+const INTERIM_DETAIL_FIELDS = [
+  ['site-number', 'Site number', (site) => toDisplayLines(site.siteNumber)],
+  ['address', 'Address', interimSiteAddressLines],
+  ['contact-name', 'Contact name', (site) => toDisplayLines(site.contactName)],
+  [
+    'contact-email',
+    'Contact email',
+    (site) => toDisplayLines(site.contactEmail)
+  ],
+  [
+    'contact-phone',
+    'Contact phone',
+    (site) => toDisplayLines(site.contactPhone)
+  ]
+]
+
+function buildDetails(fields, site) {
+  return fields.flatMap(([key, label, read]) => {
+    const values = read(site)
+    return values.length > 0 ? [{ key, label, values }] : []
+  })
+}
+
+/**
+ * RA-292 AC02 + AC04. An interim site is a CHILD of an overseas site — at
+ * most one per ORS — not a peer, so it is built here and nested inside the
+ * ORS view model rather than becoming a row of its own.
+ *
+ * An ORS with no interim site OMITS the key entirely rather than sending
+ * null: the producer serialises with `DefaultIgnoreCondition =
+ * WhenWritingNull`, so in practice a literal null never arrives. The `== null`
+ * test covers both anyway, because "absent" and "null" must not be allowed to
+ * diverge into two behaviours here.
+ *
+ * @returns {object|null} null when the ORS has no interim site.
+ */
+export function buildInterimSite(site) {
+  if (site == null || typeof site !== 'object') return null
+  return {
+    siteName: firstLineOr(site.siteName, EM_DASH),
+    country: firstLineOr(site.country, null),
+    isNew: isFlaggedNew(site.isNewSite),
+    details: buildDetails(INTERIM_DETAIL_FIELDS, site)
+  }
+}
+
+/** RA-292 AC01 + AC04. One overseas site with its detail and interim child. */
+export function buildOverseasSite(site) {
+  const source = site ?? {}
+  return {
+    siteName: firstLineOr(source.siteName, EM_DASH),
+    country: firstLineOr(source.country, null),
+    isNew: isFlaggedNew(source.isNewSite),
+    details: buildDetails(ORS_DETAIL_FIELDS, source),
+    interimSite: buildInterimSite(source.interimSite)
+  }
+}
+
+/**
+ * Resolve "Authority to issue" (AC02 item 6, RA-292 AC03).
  *
  * TODO(epr-ow16): there is no separate authority-to-issue field on the wire.
  * `HttpCaseWorkingApiAdapter.BuildPayload` emits `prns` as exactly
@@ -205,10 +439,21 @@ function authoriserLine(authoriser) {
  * the `isExporterApplication` comment above warns against — so the
  * speculative reads are gone. Add one back when the producer actually emits
  * the field, with a contract-fixture update proving it.
+ *
+ * RA-292 AC03 adds `isNew` per authoriser, so the row now carries a view
+ * model per contact instead of a flat string — the "New" tag has to attach to
+ * an individual contact, which a plain line cannot express. Name and email
+ * are kept apart so the name gets its own e2e hook, but the rendered text is
+ * unchanged ("Name (email)"), so nothing downstream that reads the row's text
+ * is affected.
  */
-function buildAuthorityToIssue(prns) {
+export function buildAuthorityToIssueContacts(prns) {
   const authorisers = Array.isArray(prns?.authorisers) ? prns.authorisers : []
-  return authorisers.map(authoriserLine)
+  return authorisers.map((authoriser) => ({
+    name: authoriserName(authoriser),
+    email: authoriserEmail(authoriser),
+    isNew: isFlaggedNew(authoriser?.isNew)
+  }))
 }
 
 /**
@@ -279,8 +524,11 @@ export function buildApplicationSummary({ workItem }) {
     {
       key: 'authority-to-issue',
       label: 'Authority to issue',
-      kind: 'lines',
-      values: buildAuthorityToIssue(prns)
+      // RA-292 AC03: `authority-contacts`, not `lines`, because the "New" tag
+      // has to attach to an INDIVIDUAL contact. The rendered text per contact
+      // is unchanged.
+      kind: 'authority-contacts',
+      contacts: buildAuthorityToIssueContacts(prns)
     },
     {
       key: 'sampling-inspection-plan',
@@ -302,11 +550,15 @@ export function buildApplicationSummary({ workItem }) {
       {
         key: 'bes',
         label: 'Broadly Equivalent Standards (BES)',
-        kind: 'sites',
+        // RA-292 renamed this kind from the generic `sites`. It is now the
+        // BES row's alone: the ORS row moved to `overseas-sites` to carry the
+        // full site detail, and leaving both on one kind meant both emitted
+        // `data-testid="overseas-site"` — so a per-site e2e lookup matched
+        // 2N blocks and could not tell an ORS from its BES evidence.
+        kind: 'bes-sites',
         sites: overseasSites.map((site) => ({
           siteName: site?.siteName || EM_DASH,
           country: site?.country || null,
-          siteAddress: null,
           files: (Array.isArray(site?.besEvidence?.files)
             ? site.besEvidence.files
             : []
@@ -316,13 +568,10 @@ export function buildApplicationSummary({ workItem }) {
       {
         key: 'ors',
         label: 'Overseas Reprocessing Site (ORS)',
-        kind: 'sites',
-        sites: overseasSites.map((site) => ({
-          siteName: site?.siteName || EM_DASH,
-          country: site?.country || null,
-          siteAddress: site?.siteAddress || null,
-          files: []
-        }))
+        // RA-292 AC01/AC02/AC04. Carries the new-site flag, the full site
+        // detail and the nested interim site.
+        kind: 'overseas-sites',
+        sites: overseasSites.map((site) => buildOverseasSite(site))
       }
     )
   }

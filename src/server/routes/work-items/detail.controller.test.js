@@ -3470,4 +3470,365 @@ describe('RA-295 individual work item page', () => {
     const thirdIdx = result.lastIndexOf('govuk-grid-column-one-third', panelIdx)
     expect(thirdIdx).toBeGreaterThan(-1)
   })
+
+  // RA-292 ------------------------------------------------------------
+  //
+  // Rendering-level cover for the three "New" badges and the AC04 site
+  // detail. The view-model rules themselves are pinned in
+  // application-summary.test.js; what these assert is the markup contract the
+  // e2e suite in epr-register-enrol-mgmt-tests reads, which cannot be checked
+  // any other way.
+  //
+  // `data-testid` values here are an EXTERNAL CONTRACT — renaming one
+  // silently skips the matching e2e assertion rather than failing it.
+
+  // The generic `detailRow` helper slices to the first `</div>`, which the
+  // RA-292 ORS block outgrew — it now nests a summary list inside the row. So
+  // scope to the row's VALUE cell and run to the next row instead.
+  //
+  // For `ors`, which is the last row, that runs to the end of the document.
+  // That is deliberate: every positive assertion below targets a testid that
+  // appears nowhere else on the page, and an over-broad slice can only make
+  // the NEGATIVE assertions stricter, never vacuous.
+  function detailValue(html, key) {
+    const start = html.indexOf(`data-testid="app-detail-value-${key}"`)
+    if (start === -1) {
+      throw new Error(
+        `No application-details value cell "${key}" in the rendered page — a scoped assertion against it would pass vacuously.`
+      )
+    }
+    const next = html.indexOf('data-testid="app-detail-row-', start)
+    return html.slice(start, next === -1 ? undefined : next)
+  }
+
+  const ROTTERDAM = {
+    orsId: 'ORS-2026-0292',
+    siteName: 'Rotterdam New Reprocessing Site',
+    addressLine1: '1 Havenstraat',
+    addressLine2: 'Europoort Industrial Park',
+    townOrCity: 'Rotterdam',
+    country: 'Netherlands',
+    coordinates: '51.9244, 4.4777',
+    contactName: 'Johan de Vries',
+    contactEmail: 'johan@example.com',
+    contactPhone: '+31 10 123 4567',
+    operationCode: 'R3',
+    code1: 'B3011',
+    code2: 'GH013',
+    code3: 'Y48',
+    repatriatedLoads: 0,
+    conditionsOfExport: 'Baled and shrink-wrapped',
+    isNewSite: true,
+    registeredNowAccredited: false,
+    isEu: true,
+    isOecd: true,
+    interimSite: {
+      siteNumber: 'INT-001',
+      isNewSite: true,
+      country: 'Belgium',
+      siteName: 'Antwerp Interim Holding Site',
+      addressLine1: '4 Scheldelaan',
+      townOrCity: 'Antwerp',
+      stateOrRegion: 'Flanders',
+      postcode: '2030',
+      contactName: 'Marieke Peeters',
+      contactEmail: 'marieke@example.com',
+      contactPhone: '+32 3 555 0100'
+    }
+  }
+
+  const HAMBURG = {
+    siteName: 'Hamburg Established Reprocessing Site',
+    country: 'Germany',
+    addressLine1: '9 Hafenstrasse',
+    townOrCity: 'Hamburg',
+    isNewSite: false,
+    interimSite: {
+      siteName: 'Bremen Interim Holding Site',
+      country: 'Germany',
+      isNewSite: false,
+      addressLine1: '2 Weserstrasse',
+      townOrCity: 'Bremen'
+    }
+  }
+
+  const BILBAO = {
+    orsId: 'ORS-2026-0003',
+    siteName: 'Bilbao Legacy Reprocessing Site',
+    siteAddress: 'Calle Uno, Bilbao',
+    townOrCity: 'Bilbao',
+    country: 'Spain'
+  }
+
+  async function renderWithSites(sites, payload = {}) {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        payload: { overseasSites: { sites }, ...payload }
+      })
+    })
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+    return result
+  }
+
+  test('RA-292 AC01: tags a new ORS, and only the new one', async () => {
+    const ors = detailValue(
+      await renderWithSites([ROTTERDAM, HAMBURG, BILBAO]),
+      'ors'
+    )
+
+    // One tag for three sites: the established and the legacy sites must not
+    // carry one, or the badge tells a regulator nothing.
+    expect(ors.match(/data-testid="overseas-site-new-tag"/g)).toHaveLength(1)
+    expect(ors.match(/data-testid="overseas-site"/g)).toHaveLength(3)
+
+    // The tag belongs to the site that declared itself new. Scoping to the
+    // block proves the association, not just co-presence on the page.
+    const rotterdamIdx = ors.indexOf('Rotterdam New Reprocessing Site')
+    const hamburgIdx = ors.indexOf('Hamburg Established Reprocessing Site')
+    const tagIdx = ors.indexOf('data-testid="overseas-site-new-tag"')
+    expect(tagIdx).toBeGreaterThan(rotterdamIdx)
+    expect(tagIdx).toBeLessThan(hamburgIdx)
+  })
+
+  test('RA-292 AC01: the tag is a blue GOV.UK tag reading "New"', async () => {
+    const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
+    const tagIdx = ors.indexOf('data-testid="overseas-site-new-tag"')
+    // The whole element, so `govuk-tag--blue` cannot be satisfied by some
+    // other tag elsewhere in the row.
+    const tag = ors.slice(
+      ors.lastIndexOf('<strong', tagIdx),
+      ors.indexOf('</strong>', tagIdx)
+    )
+    expect(tag).toContain('govuk-tag')
+    expect(tag).toContain('govuk-tag--blue')
+    expect(tag).toContain('New')
+  })
+
+  test.each([
+    ['false', false],
+    ['null', null],
+    ['absent', undefined]
+  ])(
+    'RA-292 AC01: renders NO tag element at all when isNewSite is %s',
+    async (_label, isNewSite) => {
+      const ors = detailValue(
+        await renderWithSites([{ ...ROTTERDAM, isNewSite }]),
+        'ors'
+      )
+      // Positive assertion first so the negative is scoped to a block that
+      // demonstrably rendered.
+      expect(ors).toContain('data-testid="overseas-site"')
+      expect(ors).not.toContain('overseas-site-new-tag')
+    }
+  )
+
+  test('RA-292 AC02: renders the interim site, nested inside its parent ORS', async () => {
+    const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
+
+    const parentIdx = ors.indexOf('data-testid="overseas-site"')
+    const interimIdx = ors.indexOf('data-testid="interim-site"')
+    expect(interimIdx).toBeGreaterThan(parentIdx)
+    expect(ors).toContain('Antwerp Interim Holding Site')
+    expect(ors).toContain('data-testid="interim-site-new-tag"')
+  })
+
+  test('RA-292 AC02: tags only the new interim site', async () => {
+    const ors = detailValue(await renderWithSites([ROTTERDAM, HAMBURG]), 'ors')
+
+    expect(ors.match(/data-testid="interim-site"/g)).toHaveLength(2)
+    expect(ors.match(/data-testid="interim-site-new-tag"/g)).toHaveLength(1)
+
+    const antwerpIdx = ors.indexOf('Antwerp Interim Holding Site')
+    const bremenIdx = ors.indexOf('Bremen Interim Holding Site')
+    const tagIdx = ors.indexOf('data-testid="interim-site-new-tag"')
+    expect(tagIdx).toBeGreaterThan(antwerpIdx)
+    expect(tagIdx).toBeLessThan(bremenIdx)
+  })
+
+  test('RA-292 AC02: an ORS with no interim site renders no interim block', async () => {
+    const ors = detailValue(await renderWithSites([BILBAO]), 'ors')
+    expect(ors).toContain('Bilbao Legacy Reprocessing Site')
+    expect(ors).not.toContain('interim-site')
+  })
+
+  test('RA-292 AC03: tags only the new authority-to-issue contact', async () => {
+    const authority = detailValue(
+      await renderWithSites([], {
+        prns: {
+          plannedTonnageBand: 'UpTo1000',
+          authorisers: [
+            {
+              fullName: 'Grace Adeyemi',
+              email: 'grace@example.com',
+              isNew: true
+            },
+            {
+              fullName: 'Martin Cole',
+              email: 'martin@example.com',
+              isNew: false
+            },
+            { fullName: 'Priya Nair', email: 'priya@example.com' }
+          ]
+        }
+      }),
+      'authority-to-issue'
+    )
+
+    expect(
+      authority.match(/data-testid="authority-to-issue-contact"/g)
+    ).toHaveLength(3)
+    expect(
+      authority.match(/data-testid="authority-to-issue-new-tag"/g)
+    ).toHaveLength(1)
+
+    const graceIdx = authority.indexOf('Grace Adeyemi')
+    const martinIdx = authority.indexOf('Martin Cole')
+    const tagIdx = authority.indexOf('data-testid="authority-to-issue-new-tag"')
+    expect(tagIdx).toBeGreaterThan(graceIdx)
+    expect(tagIdx).toBeLessThan(martinIdx)
+  })
+
+  test('RA-292 AC03: contact text is still "Name (email)"', async () => {
+    // The row changed shape from flat lines to per-contact blocks. The
+    // RENDERED TEXT must not change with it: it is the only place the
+    // authoriser email appears on the page.
+    const authority = detailValue(
+      await renderWithSites([]),
+      'authority-to-issue'
+    )
+    expect(authority).toContain('data-testid="authority-to-issue-contact-name"')
+    expect(authority).toContain('Harry Edge')
+    expect(authority).toContain('(harry@example.com)')
+  })
+
+  test('RA-292 AC03: an application with no authorisers renders an em dash', async () => {
+    const authority = detailValue(
+      await renderWithSites([], { prns: { plannedTonnageBand: 'UpTo1000' } }),
+      'authority-to-issue'
+    )
+    expect(authority).not.toContain('authority-to-issue-contact')
+    expect(authority).toContain('—')
+  })
+
+  test('RA-292 AC04: renders every ORS detail field with its own hook', async () => {
+    const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
+
+    for (const [testId, value] of [
+      ['overseas-site-ors-id', 'ORS-2026-0292'],
+      ['overseas-site-address', '1 Havenstraat'],
+      ['overseas-site-coordinates', '51.9244, 4.4777'],
+      ['overseas-site-contact-name', 'Johan de Vries'],
+      ['overseas-site-contact-email', 'johan@example.com'],
+      ['overseas-site-contact-phone', '+31 10 123 4567'],
+      ['overseas-site-operation-code', 'R3'],
+      ['overseas-site-waste-codes', 'B3011, GH013, Y48'],
+      // Zero and false are ANSWERS. A truthiness guard anywhere on the
+      // render path would drop exactly these two rows and nothing else,
+      // which is why they are asserted by value and not merely by presence.
+      ['overseas-site-repatriated-loads', '0'],
+      ['overseas-site-registered-now-accredited', 'No'],
+      ['overseas-site-eu-country', 'Yes'],
+      ['overseas-site-oecd-country', 'Yes']
+    ]) {
+      const idx = ors.indexOf(`data-testid="${testId}"`)
+      expect(idx, `${testId} is missing from the ORS row`).toBeGreaterThan(-1)
+      expect(ors.slice(idx, idx + 400)).toContain(value)
+    }
+
+    expect(ors).toContain('Europoort Industrial Park')
+    expect(ors).toContain('Baled and shrink-wrapped')
+    expect(ors).toContain('Basel/OECD codes')
+  })
+
+  test('RA-292 AC04: renders every interim site detail field with its own hook', async () => {
+    const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
+
+    for (const [testId, value] of [
+      ['interim-site-site-number', 'INT-001'],
+      ['interim-site-address', '4 Scheldelaan'],
+      ['interim-site-contact-name', 'Marieke Peeters'],
+      ['interim-site-contact-email', 'marieke@example.com'],
+      ['interim-site-contact-phone', '+32 3 555 0100']
+    ]) {
+      const idx = ors.indexOf(`data-testid="${testId}"`)
+      expect(
+        idx,
+        `${testId} is missing from the interim block`
+      ).toBeGreaterThan(-1)
+      expect(ors.slice(idx, idx + 400)).toContain(value)
+    }
+
+    // Country sits on the name line rather than repeating as a detail row.
+    const nameIdx = ors.indexOf('data-testid="interim-site-name"')
+    expect(ors.slice(nameIdx, nameIdx + 300)).toContain('Belgium')
+    expect(ors).toContain('Flanders')
+    expect(ors).toContain('2030')
+  })
+
+  test('RA-292 AC04: omits the fields a near-minimal site does not carry', async () => {
+    const ors = detailValue(await renderWithSites([BILBAO]), 'ors')
+
+    expect(ors).toContain('data-testid="overseas-site-ors-id"')
+    expect(ors).toContain('data-testid="overseas-site-address"')
+    // The legacy flat address survives — a pre-RA-292 site has no
+    // addressLine1, and leading with the structured `townOrCity` alone would
+    // drop the street.
+    expect(ors).toContain('Calle Uno, Bilbao')
+    for (const testId of [
+      'overseas-site-coordinates',
+      'overseas-site-contact-name',
+      'overseas-site-operation-code',
+      'overseas-site-waste-codes',
+      'overseas-site-repatriated-loads',
+      'overseas-site-eu-country'
+    ]) {
+      expect(ors, `${testId} should be omitted, not em-dashed`).not.toContain(
+        testId
+      )
+    }
+  })
+
+  test('RA-292: BES evidence blocks are bes-site, never overseas-site', async () => {
+    // Both rows used to emit `overseas-site`, so a per-site e2e lookup
+    // matched 2N blocks and could not tell an ORS from its BES evidence.
+    const result = await renderWithSites([
+      {
+        ...ROTTERDAM,
+        besEvidence: {
+          files: [
+            { fileId: 'b-1', filename: 'bes-evidence.pdf', scanStatus: 'Clean' }
+          ]
+        }
+      }
+    ])
+
+    const bes = detailValue(result, 'bes')
+    expect(bes).toContain('data-testid="bes-site"')
+    expect(bes).toContain('bes-evidence.pdf')
+    expect(bes).not.toContain('data-testid="overseas-site"')
+    // ...and the ORS row still carries exactly one site block.
+    expect(
+      detailValue(result, 'ors').match(/data-testid="overseas-site"/g)
+    ).toHaveLength(1)
+  })
+
+  test('RA-292: a pre-story work item renders with no New tag anywhere', async () => {
+    // The backwards-compatibility path: every RA-292 field is optional and
+    // items already in Mongo carry none of them.
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('data-testid="application-details"')
+    expect(result).not.toContain('govuk-tag--blue')
+    expect(result).not.toContain('-new-tag')
+    expect(result).not.toContain('data-testid="app-detail-row-ors"')
+  })
 })
