@@ -161,6 +161,126 @@ describe('canApplyAction', () => {
       reason: 'invalid-work-item'
     })
   })
+
+  // RA-372 -----------------------------------------------------------------
+  test('rejects a transition the backend reserves to itself', () => {
+    const type = sampleType({
+      transitions: [
+        {
+          actionId: 'server-resolved',
+          displayName: 'Server resolved',
+          fromStateId: 'submitted',
+          toStateId: 'approved',
+          requiresAllTasksComplete: false,
+          callerInvocable: false
+        }
+      ]
+    })
+
+    expect(
+      canApplyAction(type, { stateId: 'submitted' }, 'server-resolved')
+    ).toEqual({
+      allowed: false,
+      reason: 'not-caller-invocable'
+    })
+  })
+
+  test('allows a transition that explicitly opts in to being caller-invocable', () => {
+    const type = sampleType({
+      transitions: [
+        {
+          actionId: 'withdraw',
+          displayName: 'Withdraw',
+          fromStateId: 'submitted',
+          toStateId: 'rejected',
+          requiresAllTasksComplete: false,
+          callerInvocable: true
+        }
+      ]
+    })
+
+    expect(canApplyAction(type, { stateId: 'submitted' }, 'withdraw')).toEqual({
+      allowed: true
+    })
+  })
+})
+
+// RA-372. The backend declares transitions it resolves on the caller's
+// behalf as `CallerInvocable: false` and never projects them into
+// `availableActions` — re-accreditation's four `continue-review-during-*`
+// transitions all share `fromStateId: 'updated'`, so offering them as a
+// caller choice would let the caller pick the destination state. The
+// mirror has to reproduce that, or it advertises actions the UI must never
+// render as buttons.
+describe('projectWorkItem — caller-invocable transitions', () => {
+  const withServerResolvedTransition = (overrides = {}) =>
+    sampleType({
+      transitions: [
+        {
+          actionId: 'withdraw',
+          displayName: 'Withdraw',
+          fromStateId: 'submitted',
+          toStateId: 'rejected',
+          requiresAllTasksComplete: false
+        },
+        {
+          actionId: 'server-resolved',
+          displayName: 'Server resolved',
+          fromStateId: 'submitted',
+          toStateId: 'approved',
+          requiresAllTasksComplete: false,
+          callerInvocable: false,
+          ...overrides
+        }
+      ]
+    })
+
+  test('omits a transition flagged callerInvocable: false', () => {
+    const projection = projectWorkItem(withServerResolvedTransition(), {
+      stateId: 'submitted'
+    })
+
+    expect(projection.availableActions.map((a) => a.actionId)).toEqual([
+      'withdraw'
+    ])
+  })
+
+  test('omits it even when every task is complete', () => {
+    const projection = projectWorkItem(withServerResolvedTransition(), {
+      stateId: 'submitted',
+      completedTaskIdsByState: {
+        submitted: ['check-eligibility', 'verify-documents']
+      }
+    })
+
+    expect(projection.availableActions.map((a) => a.actionId)).not.toContain(
+      'server-resolved'
+    )
+  })
+
+  test('treats an omitted flag as invocable, matching the backend default', () => {
+    const projection = projectWorkItem(
+      withServerResolvedTransition({ callerInvocable: undefined }),
+      { stateId: 'submitted' }
+    )
+
+    expect(projection.availableActions.map((a) => a.actionId)).toEqual([
+      'withdraw',
+      'server-resolved'
+    ])
+  })
+
+  test('keeps a transition that explicitly opts in', () => {
+    const projection = projectWorkItem(
+      withServerResolvedTransition({ callerInvocable: true }),
+      { stateId: 'submitted' }
+    )
+
+    expect(projection.availableActions.map((a) => a.actionId)).toEqual([
+      'withdraw',
+      'server-resolved'
+    ])
+  })
 })
 
 // ---------------------------------------------------------------------

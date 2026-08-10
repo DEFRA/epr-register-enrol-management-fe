@@ -30,6 +30,8 @@
  * `backend-api.js`'s typed clients.
  */
 
+import { toOutcome } from '../../core/backend-outcome.js'
+
 const NOTE_MAX_LENGTH = 2000
 
 async function defaultApprove(args) {
@@ -102,17 +104,6 @@ export function createApprovalService({
 }
 
 export const APPROVAL_DECISION_NOTE_MAX_LENGTH = NOTE_MAX_LENGTH
-
-const APPROVE_OUTCOME = {
-  invalid: 'invalid',
-  unauthorized: 'unauthorized',
-  forbidden: 'forbidden',
-  'not-found': 'not-found',
-  conflict: 'conflict',
-  server: 'server',
-  network: 'network'
-}
-
 /**
  * RA-346. The backend refuses an approve while any `awaiting-decision` task
  * is pending. Contract confirmed with the backend owner:
@@ -136,11 +127,17 @@ const APPROVE_OUTCOME = {
  * the optimistic-concurrency conflict ("was modified concurrently"), which
  * needs the existing "refresh and try again" copy, not "complete your
  * tasks". Hence the substring test rather than a bare status check.
+ *
+ * RA-372 merge note: the base outcome now comes from the shared
+ * `core/backend-outcome.js` allow-list rather than a map duplicated per
+ * service. `tasks-incomplete` is layered ON TOP of that — it is not a
+ * backend `reason`, it is this endpoint reading a 409's detail more
+ * closely, so it stays local to the approval service.
  */
 const TASKS_INCOMPLETE_DETAIL = /requires every task/i
 
 function approveOutcomeFor(approveResult) {
-  const outcome = APPROVE_OUTCOME[approveResult.reason] ?? 'server'
+  const outcome = toOutcome(approveResult.reason)
   if (
     outcome === 'conflict' &&
     TASKS_INCOMPLETE_DETAIL.test(approveResult.message ?? '')
