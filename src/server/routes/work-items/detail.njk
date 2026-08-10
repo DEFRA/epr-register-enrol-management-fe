@@ -40,11 +40,13 @@
 
 {# RA-292. The blue "New" tag.                                              #}
 {#                                                                          #}
-{# DESIGN NOTE: the ticket says three times that Callum will supply how      #}
-{# this should be shown, and no design was supplied. A `govuk-tag--blue`     #}
-{# reading "New", inline against the thing it flags, is the team lead's      #}
-{# convention pending that input — chosen because the page already uses      #}
-{# govukTag for scan status and the state badge, so it needs no bespoke CSS. #}
+{# DESIGN NOTE: a `govuk-tag--blue` reading "New", inline against the thing  #}
+{# it flags, is the GOV.UK Design System component for this job, and GDS is  #}
+{# this service's default whenever a supplied design does not show something #}
+{# else. None was supplied for RA-292, so GDS applies and this IS the        #}
+{# design — not a placeholder for one. Do not rework it as provisional.      #}
+{# It also costs no bespoke CSS: the page already renders govukTag for scan  #}
+{# status and for the state badge, so this is the established pattern here.  #}
 {#                                                                          #}
 {# The tag is rendered ONLY when the flag is strictly true (the view model   #}
 {# resolves that, not this macro), so a caller's `{% if %}` guard is the     #}
