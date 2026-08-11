@@ -210,10 +210,16 @@ export function formatChargeAmount(pence) {
  * `applicationReference` shows the regulator the reference that is
  * genuinely on the payment, not a different identifier wearing its label.
  *
- * The `paymentReference` payload field is treated as an OVERRIDE rather
- * than the primary source because it is structurally absent on initial
- * submit — legacy-be assigns the application reference only after the
- * adapter call fires, so it has nothing to send at that point.
+ * ⚠ THE FALLBACK IS THE PRIMARY PATH, not an edge case, and must not be
+ * "tidied away" by someone who reads it as one. `paymentReference` is
+ * structurally absent on a real submission — the operator backend has no
+ * payment reference at submission time — so the overwhelming majority of
+ * work items in production AND in every seeded environment resolve
+ * through `applicationReference`. management-be seeds it on exactly one
+ * of ten items (`full-payload-verification`) precisely to keep the
+ * override path exercised; the other nine render an `RA-#########`.
+ * Deleting the fallback would blank the payment reference on almost every
+ * application.
  *
  * @returns {string|null} `null` only when neither exists.
  */

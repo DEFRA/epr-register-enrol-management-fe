@@ -200,6 +200,31 @@ describe('formatChargeAmount', () => {
     expect(formatChargeAmount(327600)).toBe('£3,276')
   })
 
+  /**
+   * The pounds/pence boundary is the single most likely place this
+   * contract breaks, because it fails silently and PLAUSIBLY: "£54,600"
+   * and "£546" are both believable renderings of the same integer, and
+   * nothing throws either way. These are management-be's actual seeded
+   * values, following the operator backend's real fee bands (£546 /
+   * £2,184 / £3,276 / £3,965, plus £328 per overseas reprocessing site),
+   * so a factor-of-100 slip fails here rather than in a compose run.
+   */
+  test.each([
+    [54600, '£546'],
+    [218400, '£2,184'],
+    [327600, '£3,276'],
+    [396500, '£3,965'],
+    [360400, '£3,604']
+  ])('formats the seeded amount %i as %s', (pence, expected) => {
+    expect(formatChargeAmount(pence)).toBe(expected)
+  })
+
+  test('does not confuse pence with pounds', () => {
+    // The failure mode: rendering the raw integer as pounds.
+    expect(formatChargeAmount(54600)).not.toBe('£54,600')
+    expect(formatChargeAmount(327600)).not.toBe('£327,600')
+  })
+
   test('keeps pence when the amount is not whole pounds', () => {
     expect(formatChargeAmount(327650)).toBe('£3,276.50')
     expect(formatChargeAmount(1)).toBe('£0.01')
