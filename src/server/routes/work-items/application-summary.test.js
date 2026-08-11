@@ -952,6 +952,33 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
       ])
     })
 
+    // THE INVARIANT, stated as tests: de-duplication reconciles the legacy
+    // flat string against the structured fields, and NEVER compares two
+    // structured fields with each other.
+    //
+    // A flat string repeating a structured value is an artefact — one address
+    // in two representations. Two structured fields agreeing is a fact. These
+    // two tests are the pair that keeps that distinction from being
+    // "simplified" into a single tidy-looking rule.
+    test.each([['Singapore'], ['Luxembourg'], ['Monaco'], ['Djibouti']])(
+      'keeps the country when the city shares its name (%s)',
+      (cityAndCountry) => {
+        const site = buildOverseasSite({
+          addressLine1: '1 Main St',
+          townOrCity: cityAndCountry,
+          country: cityAndCountry
+        })
+        // Both render. For an OVERSEAS reprocessing site the country is the
+        // field a regulator most needs, and an earlier revision dropped it
+        // here — output that looked tidy and was data loss.
+        expect(site.addressLines).toEqual([
+          '1 Main St',
+          cityAndCountry,
+          cityAndCountry
+        ])
+      }
+    )
+
     test('falls back to the structured parts when there is no flat string', () => {
       const site = buildOverseasSite({ townOrCity: 'Bilbao' })
       expect(site.addressLines).toEqual(['Bilbao'])
@@ -1055,6 +1082,28 @@ describe('#buildInterimSite (RA-292 AC02 + AC04)', () => {
   // serialiser drops null-valued fields), so "absent" is the case that
   // actually occurs — but absent and null must not diverge into two
   // behaviours here, so both are pinned.
+  // Bremen is a German city-state, so `townOrCity` and `stateOrRegion` are
+  // both correctly "Bremen". Both render: the interim shape has no legacy flat
+  // string, so by the de-duplication invariant there is nothing to reconcile
+  // and nothing to drop. Raised by the mgmt-tests teammate, and pinned here so
+  // the behaviour is a decision rather than a side effect.
+  test('preserves a genuine repeat — a city-state whose town and region match', () => {
+    const site = buildInterimSite({
+      addressLine1: '8 Speicherstrasse',
+      townOrCity: 'Bremen',
+      stateOrRegion: 'Bremen',
+      postcode: '28217',
+      country: 'Germany'
+    })
+    expect(site.addressLines).toEqual([
+      '8 Speicherstrasse',
+      'Bremen',
+      'Bremen',
+      '28217',
+      'Germany'
+    ])
+  })
+
   test.each([
     ['absent', undefined],
     ['null', null],

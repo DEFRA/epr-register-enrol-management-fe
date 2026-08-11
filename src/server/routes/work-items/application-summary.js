@@ -337,28 +337,33 @@ function addressSegments(lines) {
 }
 
 /**
- * Append each candidate that the existing lines do not already contain, by
- * whole comma-separated segment.
+ * THE DE-DUPLICATION INVARIANT — read before changing this.
  *
- * Kept as a separate step, and kept segment-wise, because the design renders
- * these parts JOINED into one line. Joining earlier and de-duplicating on the
- * joined string would be a substring test by another name, and would resurrect
- * the `"York"` / `"New York Road"` loss. The parts stay an array right up to
- * the template, which joins them for display only.
+ * De-duplication only ever reconciles the LEGACY FLAT `siteAddress` against
+ * the structured fields. It NEVER compares two structured fields with each
+ * other.
+ *
+ * That distinction is the whole rule, and it is a data-fidelity decision
+ * rather than a formatting one. A flat string repeating a structured value is
+ * an ARTEFACT: one address held in two representations, concatenated, so the
+ * repeat carries no information and "…, Netherlands, Netherlands" is just
+ * noise. Two structured fields agreeing is a FACT: each was captured
+ * separately and each is independently true.
+ *
+ * An earlier revision de-duplicated the country against the structured parts
+ * too, and silently ate the country for every city that shares its country's
+ * name — Singapore, Luxembourg, Monaco, Djibouti. Those render "1 Main St,
+ * Singapore" with the country simply gone, which for an OVERSEAS reprocessing
+ * site is the one field a regulator most needs. It looked like tidy output and
+ * was data loss. (Raised by the mgmt-tests teammate via the equivalent
+ * `townOrCity == stateOrRegion` case: Bremen is a German city-state, so both
+ * are correctly "Bremen" and both must render.)
+ *
+ * The parts also stay an ARRAY right up to the template, which joins them for
+ * display only. Joining earlier and de-duplicating the joined string would be
+ * a substring test by another name and would resurrect the `"York"` /
+ * `"New York Road"` loss.
  */
-function appendUnseen(lines, candidates) {
-  const seen = addressSegments(lines)
-  const appended = [...lines]
-  for (const candidate of candidates) {
-    const key = candidate.trim().toLowerCase()
-    if (!seen.includes(key)) {
-      appended.push(candidate)
-      seen.push(key)
-    }
-  }
-  return appended
-}
-
 function overseasSiteAddressLines(site) {
   const structured = [
     site.addressLine1,
@@ -367,26 +372,40 @@ function overseasSiteAddressLines(site) {
   ].flatMap(toDisplayLines)
 
   // The country is the LAST part of the address, per the design — it used to
-  // sit on the site-name line in parentheses. It goes through the same
-  // de-duplication as everything else, because a legacy flat `siteAddress`
-  // routinely already ends with the country and "…, Netherlands, Netherlands"
-  // is exactly the kind of thing nobody notices in review.
+  // sit on the site-name line in parentheses.
   const country = toDisplayLines(site.country)
 
+  // Fully structured: every part was captured independently, so nothing here
+  // is an artefact and nothing is dropped.
   if (toDisplayLines(site.addressLine1).length > 0) {
-    return appendUnseen(structured, country)
+    return [...structured, ...country]
   }
 
   const flat = toDisplayLines(site.siteAddress)
-  if (flat.length === 0) return appendUnseen(structured, country)
+  if (flat.length === 0) return [...structured, ...country]
 
-  return appendUnseen(appendUnseen(flat, structured), country)
+  // Flat string leads. Structured parts and the country are each measured
+  // against the FLAT STRING's segments only — never against one another.
+  const flatSegments = addressSegments(flat)
+  const notAlreadyInFlat = (line) =>
+    !flatSegments.includes(line.trim().toLowerCase())
+
+  return [
+    ...flat,
+    ...structured.filter(notAlreadyInFlat),
+    ...country.filter(notAlreadyInFlat)
+  ]
 }
 
 /**
  * The interim site has no legacy flat-string form — it only ever arrives
- * structured — so this is a straight concatenation of the populated parts,
- * country last to match the ORS ordering.
+ * structured — so by the invariant above there is nothing to reconcile and
+ * this is a straight concatenation of the populated parts, country last to
+ * match the ORS ordering.
+ *
+ * That means a genuine repeat is PRESERVED: Bremen is a German city-state, so
+ * `townOrCity` and `stateOrRegion` are both correctly "Bremen" and both
+ * render. Do not add de-duplication here to tidy it up — see the invariant.
  *
  * Unlike the ORS shape this one carries `stateOrRegion` and `postcode`; the
  * ORS shape has NO postcode field on the wire at all.
