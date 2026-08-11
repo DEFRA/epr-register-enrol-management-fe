@@ -204,7 +204,11 @@ export function createAuthControllers({
       roles: [internalRole]
     }
 
-    const redirectTo = popPostLoginRedirect(request, '/work-items')
+    const redirectTo = popPostLoginRedirect(
+      request,
+      internalRole,
+      '/work-items'
+    )
 
     // Reset the session before storing the authenticated user to defeat
     // session-fixation: any pre-login session id (which an attacker might

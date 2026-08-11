@@ -82,8 +82,9 @@ const STUB_SUPPORT_USER = {
 
 export function stubLoginPostController(request, h) {
   const { nation, loginAs } = request.payload ?? {}
+  const role = loginAs === 'support' ? ROLE_SUPPORT_READONLY : ROLE_STANDARD
 
-  const redirectTo = popPostLoginRedirect(request, '/work-items')
+  const redirectTo = popPostLoginRedirect(request, role, '/work-items')
 
   // RA-299 AC10/14: mirror the real OAuth callback's yar.reset() so a stub
   // (re-)login also drops any session-persisted filters (e.g. the

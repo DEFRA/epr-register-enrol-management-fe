@@ -1,11 +1,17 @@
 import Boom from '@hapi/boom'
+import { vi } from 'vitest'
 import {
   redirectToLogin,
   confirmPostLoginRedirect,
   popPostLoginRedirect
 } from './auth-redirect.js'
+import {
+  ROLE_STANDARD,
+  ROLE_SUPPORT_READONLY
+} from '#/server/common/helpers/auth/auth-scopes.js'
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
+import { config } from '#/config/config.js'
 
 function fakeYar() {
   const store = new Map()
@@ -58,6 +64,58 @@ describe('redirectToLogin', () => {
       expect(stashed.target).toBe('/work-items/123?foo=bar')
       expect(typeof stashed.nonce).toBe('string')
       expect(stashed.nonce.length).toBeGreaterThan(0)
+    })
+
+    test('stashes no required role for a route with no scope requirement', () => {
+      const yar = fakeYar()
+      const request = {
+        response: { isBoom: true, output: { statusCode: 401 } },
+        method: 'get',
+        path: '/work-items',
+        url: { search: '' },
+        route: { settings: { auth: { access: [] } } },
+        yar
+      }
+      redirectToLogin(request, h)
+      expect(yar.get('postLoginRedirect').role).toBeNull()
+    })
+
+    test('stashes the required role for a standard-scoped route', () => {
+      const yar = fakeYar()
+      const request = {
+        response: { isBoom: true, output: { statusCode: 401 } },
+        method: 'get',
+        path: '/work-items/123/assign',
+        url: { search: '' },
+        route: {
+          settings: {
+            auth: { access: [{ scope: { selection: [ROLE_STANDARD] } }] }
+          }
+        },
+        yar
+      }
+      redirectToLogin(request, h)
+      expect(yar.get('postLoginRedirect').role).toBe(ROLE_STANDARD)
+    })
+
+    test('stashes the required role for a support-readonly-scoped route', () => {
+      const yar = fakeYar()
+      const request = {
+        response: { isBoom: true, output: { statusCode: 401 } },
+        method: 'get',
+        path: '/backend-status',
+        url: { search: '' },
+        route: {
+          settings: {
+            auth: {
+              access: [{ scope: { selection: [ROLE_SUPPORT_READONLY] } }]
+            }
+          }
+        },
+        yar
+      }
+      redirectToLogin(request, h)
+      expect(yar.get('postLoginRedirect').role).toBe(ROLE_SUPPORT_READONLY)
     })
 
     test('carries the nonce in the login redirect query string', () => {
@@ -131,24 +189,69 @@ describe('#confirmPostLoginRedirect', () => {
 })
 
 describe('#popPostLoginRedirect', () => {
-  test('returns and clears the stashed target', () => {
+  test('returns and clears a role-agnostic stashed target regardless of the login role', () => {
     const yar = fakeYar()
-    yar.set('postLoginRedirect', { target: '/work-items/123', nonce: 'n1' })
+    yar.set('postLoginRedirect', {
+      target: '/work-items/123',
+      nonce: 'n1',
+      role: null
+    })
     const request = { yar }
-    expect(popPostLoginRedirect(request, '/work-items')).toBe('/work-items/123')
+    expect(
+      popPostLoginRedirect(request, ROLE_SUPPORT_READONLY, '/work-items')
+    ).toBe('/work-items/123')
+    expect(yar.get('postLoginRedirect')).toBeUndefined()
+  })
+
+  test('returns the target when the login role matches the stashed required role', () => {
+    const yar = fakeYar()
+    yar.set('postLoginRedirect', {
+      target: '/work-items/123/assign',
+      nonce: 'n1',
+      role: ROLE_STANDARD
+    })
+    const request = { yar }
+    expect(popPostLoginRedirect(request, ROLE_STANDARD, '/work-items')).toBe(
+      '/work-items/123/assign'
+    )
+  })
+
+  // Reviewer-flagged regression: a signed-out visitor to a role-scoped GET
+  // (e.g. GET /backend-status requires support-readonly) who then signs in
+  // as the *other* role must land on '/work-items', not get bounced
+  // straight into a 403 by replaying a stash their session can't access.
+  test('falls back when the login role does not match the stashed required role', () => {
+    const yar = fakeYar()
+    yar.set('postLoginRedirect', {
+      target: '/backend-status',
+      nonce: 'n1',
+      role: ROLE_SUPPORT_READONLY
+    })
+    const request = { yar }
+    expect(popPostLoginRedirect(request, ROLE_STANDARD, '/work-items')).toBe(
+      '/work-items'
+    )
     expect(yar.get('postLoginRedirect')).toBeUndefined()
   })
 
   test('returns the fallback when nothing was stashed', () => {
     const request = { yar: fakeYar() }
-    expect(popPostLoginRedirect(request, '/work-items')).toBe('/work-items')
+    expect(popPostLoginRedirect(request, ROLE_STANDARD, '/work-items')).toBe(
+      '/work-items'
+    )
   })
 
   test('returns the fallback for a protocol-relative stashed value (open-redirect guard)', () => {
     const yar = fakeYar()
-    yar.set('postLoginRedirect', { target: '//evil.example', nonce: 'n1' })
+    yar.set('postLoginRedirect', {
+      target: '//evil.example',
+      nonce: 'n1',
+      role: null
+    })
     const request = { yar }
-    expect(popPostLoginRedirect(request, '/work-items')).toBe('/work-items')
+    expect(popPostLoginRedirect(request, ROLE_STANDARD, '/work-items')).toBe(
+      '/work-items'
+    )
   })
 })
 
@@ -287,5 +390,116 @@ describe('post-login redirect (end-to-end)', () => {
     })
 
     expect(stubLogin.headers.location).toBe('/work-items')
+  })
+})
+
+// The suite above runs under isTest's 'test-bypass' auth scheme, which
+// authenticates every request — it can never produce a genuine 401 on a
+// scope-guarded route, so it can't exercise the role-mismatch fallback.
+// This suite forces isTest: false so stubAuthPlugin registers the real
+// yar-session scheme instead (still stub-login, but with real cookie-based
+// session and scope checks — same technique used in controller.test.js's
+// "session revocation (real yar-session scheme)" suite), and hits the
+// actual GET /backend-status route (requireSupportReadonly).
+describe('post-login redirect (end-to-end, real yar-session scheme)', () => {
+  let server
+  const originalConfigGet = config.get.bind(config)
+
+  beforeAll(async () => {
+    vi.spyOn(config, 'get').mockImplementation((key) => {
+      if (key === 'isTest') return false
+      return originalConfigGet(key)
+    })
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+    vi.restoreAllMocks()
+  })
+
+  function extractCookies(headers) {
+    const cookies = {}
+    for (const header of headers['set-cookie'] ?? []) {
+      const [pair] = header.split(';')
+      const [key, value] = pair.split('=')
+      cookies[key] = value
+    }
+    return cookies
+  }
+
+  function cookieHeader(cookies) {
+    return Object.entries(cookies)
+      .map(([key, value]) => `${key}=${value}`)
+      .join('; ')
+  }
+
+  // Reviewer-flagged regression: GET /backend-status requires
+  // support-readonly; a signed-out visitor to it who then signs in as a
+  // *standard* caseworker must land on '/work-items', not get bounced into
+  // a 403 by replaying a stash their new session can't access.
+  test('does not replay a support-readonly-scoped stash into a standard login', async () => {
+    const loginRedirect = await server.inject({
+      method: 'GET',
+      url: '/backend-status'
+    })
+    expect(loginRedirect.statusCode).toBe(statusCodes.redirect)
+    expect(loginRedirect.headers.location).toMatch(
+      /^\/auth\/regulator\/login\?rt=/
+    )
+    const cookies = extractCookies(loginRedirect.headers)
+
+    const loginPage = await server.inject({
+      method: 'GET',
+      url: loginRedirect.headers.location.replace(
+        '/auth/regulator/login',
+        '/auth/stub/login'
+      ),
+      headers: { cookie: cookieHeader(cookies) }
+    })
+    const mergedCookies = { ...cookies, ...extractCookies(loginPage.headers) }
+    const crumb = loginPage.result.match(/name="crumb" value="([^"]+)"/)[1]
+
+    // Logging in as a standard caseworker (the default POST payload — no
+    // loginAs=support) must not resume the support-readonly-scoped target.
+    const stubLogin = await server.inject({
+      method: 'POST',
+      url: '/auth/stub/login',
+      headers: { cookie: cookieHeader(mergedCookies) },
+      payload: { nation: '', crumb }
+    })
+
+    expect(stubLogin.statusCode).toBe(statusCodes.redirect)
+    expect(stubLogin.headers.location).toBe('/work-items')
+  })
+
+  test('does replay a support-readonly-scoped stash into a support-readonly login', async () => {
+    const loginRedirect = await server.inject({
+      method: 'GET',
+      url: '/backend-status'
+    })
+    const cookies = extractCookies(loginRedirect.headers)
+
+    const loginPage = await server.inject({
+      method: 'GET',
+      url: loginRedirect.headers.location.replace(
+        '/auth/regulator/login',
+        '/auth/stub/login'
+      ),
+      headers: { cookie: cookieHeader(cookies) }
+    })
+    const mergedCookies = { ...cookies, ...extractCookies(loginPage.headers) }
+    const crumb = loginPage.result.match(/name="crumb" value="([^"]+)"/)[1]
+
+    const stubLogin = await server.inject({
+      method: 'POST',
+      url: '/auth/stub/login',
+      headers: { cookie: cookieHeader(mergedCookies) },
+      payload: { nation: '', loginAs: 'support', crumb }
+    })
+
+    expect(stubLogin.statusCode).toBe(statusCodes.redirect)
+    expect(stubLogin.headers.location).toBe('/backend-status')
   })
 })
