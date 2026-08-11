@@ -186,7 +186,6 @@ describe('GET the duly-making page', () => {
     getWorkItem.mockResolvedValue(
       okWorkItem({
         stateId: 'updated',
-        isTaskWaypoint: true,
         taskStateId: 'submitted'
       })
     )
@@ -202,7 +201,6 @@ describe('GET the duly-making page', () => {
     getWorkItem.mockResolvedValue(
       okWorkItem({
         stateId: 'updated',
-        isTaskWaypoint: true,
         taskStateId: 'assessment-in-progress'
       })
     )
@@ -439,7 +437,6 @@ describe('the Duly make CTA on the application summary', () => {
     const { result } = await renderDetail({
       stateId: 'updated',
       stateDisplayName: 'Updated',
-      isTaskWaypoint: true,
       taskStateId: 'submitted'
     })
     expect(result).toContain('data-testid="duly-make-cta"')
@@ -451,7 +448,6 @@ describe('the Duly make CTA on the application summary', () => {
     const { result } = await renderDetail({
       stateId: 'updated',
       stateDisplayName: 'Updated',
-      isTaskWaypoint: true,
       taskStateId: 'assessment-in-progress',
       tasks: [
         {

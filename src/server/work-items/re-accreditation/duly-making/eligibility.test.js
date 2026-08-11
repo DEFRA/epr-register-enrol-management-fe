@@ -97,13 +97,44 @@ describe('evaluateDulyMakeEligibility', () => {
       ).toBe(false)
     })
 
-    test('refuses when the item is not flagged as a waypoint', () => {
+    /**
+     * ⚠ THE REGRESSION GUARD. `isTaskWaypoint` is NOT a wire field — the
+     * detail controller DERIVES it when building the view model — but
+     * this helper is handed the RAW backend DTO, which therefore never
+     * carries it. An earlier version of the gate required
+     * `isTaskWaypoint === true` and so refused every waypoint item in
+     * production while passing its unit tests, because the fixtures set
+     * the flag by hand. These two cases pin the raw shape.
+     */
+    test('allows on a raw DTO that carries no isTaskWaypoint flag', () => {
+      const raw = {
+        id: 'wi-1',
+        typeId: 're-accreditation',
+        stateId: 'updated',
+        taskStateId: 'submitted'
+      }
+      expect('isTaskWaypoint' in raw).toBe(false)
+      expect(evaluateDulyMakeEligibility(raw)).toEqual({ allowed: true })
+    })
+
+    test('ignores isTaskWaypoint entirely — taskStateId is the rule', () => {
+      // Even an explicitly false flag must not override the real signal,
+      // so nobody can "fix" this by re-adding the derived check.
       expect(
         evaluateDulyMakeEligibility(
           aWorkItem({
             stateId: 'updated',
             isTaskWaypoint: false,
             taskStateId: 'submitted'
+          })
+        ).allowed
+      ).toBe(true)
+      expect(
+        evaluateDulyMakeEligibility(
+          aWorkItem({
+            stateId: 'updated',
+            isTaskWaypoint: true,
+            taskStateId: 'assessment-in-progress'
           })
         ).allowed
       ).toBe(false)

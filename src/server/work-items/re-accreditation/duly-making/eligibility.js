@@ -109,9 +109,9 @@ export function evaluateDulyMakeEligibility(workItem) {
   // rather than two that can drift.
   //
   // Comparing against the transition's own `fromStateId` keeps the
-  // `submitted` literal in `module.js`, and testing `isTaskWaypoint`
-  // rather than `stateId === 'updated'` keeps the `updated` literal there
-  // too — the same discipline `canContinueReview` follows.
+  // `submitted` literal in `module.js`, and never naming `updated` keeps
+  // that literal there too — the same discipline `canContinueReview`
+  // follows.
   //
   // An item queried from assessment or decision reports a different
   // `taskStateId` and is correctly refused: offering Duly make there
@@ -123,10 +123,24 @@ export function evaluateDulyMakeEligibility(workItem) {
   // permissive default: the backend answers 409 for exactly those items,
   // so a CTA here would be a button that always fails. The strict
   // equality below rejects null by construction.
-  if (
-    workItem?.isTaskWaypoint === true &&
-    workItem?.taskStateId === transition.fromStateId
-  ) {
+  //
+  // ⚠ DELIBERATELY KEYED ON `taskStateId` ALONE — do NOT reintroduce an
+  // `isTaskWaypoint` check here, however naturally it reads. That flag is
+  // NOT a wire field: `work-items/detail.controller.js#decorate` DERIVES
+  // it (`taskStateId != null && taskStateId !== stateId`) when building
+  // the view model. This helper is called with the RAW backend DTO — by
+  // the detail controller against `source`, and by the duly-making
+  // controller against the `getWorkItem` result — so the flag is
+  // `undefined` in both, and gating on it silently refused every waypoint
+  // item while the unit tests passed against fixtures that set it by
+  // hand. That is precisely the class of bug the raw-DTO test below
+  // exists to catch.
+  //
+  // No behaviour is lost: this branch is only reached when
+  // `fromStateId !== stateId`, so `taskStateId === fromStateId` already
+  // implies `taskStateId !== stateId` — i.e. it IS a waypoint. The
+  // equality is strictly the stronger check.
+  if (workItem?.taskStateId === transition.fromStateId) {
     return { allowed: true }
   }
 
