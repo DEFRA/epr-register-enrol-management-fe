@@ -7,6 +7,10 @@ import {
   ROLE_STANDARD,
   ROLE_SUPPORT_READONLY
 } from '#/server/common/helpers/auth/auth-scopes.js'
+import {
+  confirmPostLoginRedirect,
+  popPostLoginRedirect
+} from '#/server/common/helpers/auth/auth-redirect.js'
 
 /**
  * Static directory of stub assignable users. Exported for the assignee-
@@ -54,12 +58,17 @@ function viewData(overrides = {}) {
   }
 }
 
-export function stubLoginGetController(_request, h) {
+export function stubLoginGetController(request, h) {
+  confirmPostLoginRedirect(request)
+
   const entraIdConfigured = !!(
     config.get('auth.azureEntraId.clientId') &&
     config.get('auth.azureEntraId.tenantId')
   )
-  return h.view('auth/stub/login', viewData({ entraIdConfigured }))
+  return h.view(
+    'auth/stub/login',
+    viewData({ entraIdConfigured, rt: request.query.rt ?? '' })
+  )
 }
 
 // RA-335. Fixed stub identity for the read-only support user path — there's
@@ -73,6 +82,9 @@ const STUB_SUPPORT_USER = {
 
 export function stubLoginPostController(request, h) {
   const { nation, loginAs } = request.payload ?? {}
+  const role = loginAs === 'support' ? ROLE_SUPPORT_READONLY : ROLE_STANDARD
+
+  const redirectTo = popPostLoginRedirect(request, role, '/work-items')
 
   // RA-299 AC10/14: mirror the real OAuth callback's yar.reset() so a stub
   // (re-)login also drops any session-persisted filters (e.g. the
@@ -87,7 +99,7 @@ export function stubLoginPostController(request, h) {
       scope: [ROLE_SUPPORT_READONLY]
     }
     request.yar.set('user', user)
-    return h.redirect('/work-items')
+    return h.redirect(redirectTo)
   }
 
   const nationOption = NATION_OPTIONS.find((n) => n.value === (nation ?? ''))
@@ -111,5 +123,5 @@ export function stubLoginPostController(request, h) {
   }
 
   request.yar.set('user', user)
-  return h.redirect('/work-items')
+  return h.redirect(redirectTo)
 }

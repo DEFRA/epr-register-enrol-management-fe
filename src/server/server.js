@@ -72,8 +72,18 @@ export async function createServer() {
     metrics,
     secureContext,
     pulse,
-    sessionCache,
+    // authToRegister must register before sessionCache so redirectToLogin's
+    // onPreResponse (which stashes the post-login redirect target, RA-403)
+    // runs ahead of yar's own onPreResponse commit handler — hapi runs
+    // onPreResponse extensions in registration order, and the stash is only
+    // persisted if it lands before yar flushes the session. request.yar is
+    // still available during authentication despite this ordering: yar's
+    // decoration of `request` happens at plugin-registration time
+    // (order-independent), and its onPreAuth initializer completes before
+    // hapi enters the authentication phase, regardless of which plugin
+    // registered first.
     authToRegister,
+    sessionCache,
     nunjucksConfig,
     Scooter,
     contentSecurityPolicy,

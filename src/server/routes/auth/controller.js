@@ -8,6 +8,10 @@ import {
   ROLE_STANDARD,
   ROLE_SUPPORT_READONLY
 } from '#/server/common/helpers/auth/auth-scopes.js'
+import {
+  confirmPostLoginRedirect,
+  popPostLoginRedirect
+} from '#/server/common/helpers/auth/auth-redirect.js'
 
 const LOGIN_PATH = '/auth/regulator/login'
 
@@ -44,6 +48,8 @@ export function createAuthControllers({
   getProviderConfig = () => getAzureEntraIdConfig(config)
 } = {}) {
   function regulatorLoginController(request, h) {
+    confirmPostLoginRedirect(request)
+
     const provider = getProviderConfig()
     const state = randomToken()
     const nonce = randomToken()
@@ -198,12 +204,18 @@ export function createAuthControllers({
       roles: [internalRole]
     }
 
+    const redirectTo = popPostLoginRedirect(
+      request,
+      internalRole,
+      '/work-items'
+    )
+
     // Reset the session before storing the authenticated user to defeat
     // session-fixation: any pre-login session id (which an attacker might
     // know) is discarded, and a fresh session id is bound to the user.
     request.yar.reset()
     request.yar.set('user', user)
-    return h.redirect('/work-items')
+    return h.redirect(redirectTo)
   }
 
   function logoutController(request, h) {
