@@ -24,7 +24,12 @@ export const authRoutes = {
           method: 'GET',
           path: '/auth/regulator/login',
           options: { auth: false },
-          handler: (_request, h) => h.redirect('/auth/stub/login')
+          handler: (request, h) => {
+            const rt = request.query.rt
+            return h.redirect(
+              `/auth/stub/login${rt ? `?rt=${encodeURIComponent(rt)}` : ''}`
+            )
+          }
         })
 
         if (

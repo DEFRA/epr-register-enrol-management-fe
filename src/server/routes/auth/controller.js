@@ -8,7 +8,10 @@ import {
   ROLE_STANDARD,
   ROLE_SUPPORT_READONLY
 } from '#/server/common/helpers/auth/auth-scopes.js'
-import { popPostLoginRedirect } from '#/server/common/helpers/auth/auth-redirect.js'
+import {
+  confirmPostLoginRedirect,
+  popPostLoginRedirect
+} from '#/server/common/helpers/auth/auth-redirect.js'
 
 const LOGIN_PATH = '/auth/regulator/login'
 
@@ -45,6 +48,8 @@ export function createAuthControllers({
   getProviderConfig = () => getAzureEntraIdConfig(config)
 } = {}) {
   function regulatorLoginController(request, h) {
+    confirmPostLoginRedirect(request)
+
     const provider = getProviderConfig()
     const state = randomToken()
     const nonce = randomToken()

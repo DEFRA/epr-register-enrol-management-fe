@@ -7,7 +7,10 @@ import {
   ROLE_STANDARD,
   ROLE_SUPPORT_READONLY
 } from '#/server/common/helpers/auth/auth-scopes.js'
-import { popPostLoginRedirect } from '#/server/common/helpers/auth/auth-redirect.js'
+import {
+  confirmPostLoginRedirect,
+  popPostLoginRedirect
+} from '#/server/common/helpers/auth/auth-redirect.js'
 
 /**
  * Static directory of stub assignable users. Exported for the assignee-
@@ -55,12 +58,17 @@ function viewData(overrides = {}) {
   }
 }
 
-export function stubLoginGetController(_request, h) {
+export function stubLoginGetController(request, h) {
+  confirmPostLoginRedirect(request)
+
   const entraIdConfigured = !!(
     config.get('auth.azureEntraId.clientId') &&
     config.get('auth.azureEntraId.tenantId')
   )
-  return h.view('auth/stub/login', viewData({ entraIdConfigured }))
+  return h.view(
+    'auth/stub/login',
+    viewData({ entraIdConfigured, rt: request.query.rt ?? '' })
+  )
 }
 
 // RA-335. Fixed stub identity for the read-only support user path — there's
