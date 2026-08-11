@@ -73,6 +73,20 @@ function okWorkItem(overrides) {
   return { ok: true, workItem: aWorkItem(overrides) }
 }
 
+/**
+ * Read the text of a specific summary-list cell.
+ *
+ * Page-wide `toContain` is not good enough for these two values: the
+ * application reference also appears in the caption and breadcrumb, so
+ * asserting the whole page contains it passes even when the payment
+ * reference cell says something entirely different. That is how a
+ * false-positive assertion survives a behaviour change.
+ */
+function cellText(html, testId) {
+  const match = new RegExp(`data-testid="${testId}"[^>]*>([^<]*)<`).exec(html)
+  return match ? match[1].trim() : null
+}
+
 let server
 
 beforeAll(async () => {
@@ -101,10 +115,14 @@ describe('GET the duly-making page', () => {
     expect(result).toContain('Duly make the application')
     // AC02 — charge and reference, pre-populated and read-only.
     expect(result).toContain('Payment details')
-    expect(result).toContain('data-testid="duly-making-charge-amount"')
-    expect(result).toContain('£3,276')
-    expect(result).toContain('data-testid="duly-making-payment-reference"')
-    expect(result).toContain(REF)
+    expect(cellText(result, 'duly-making-charge-amount')).toBe('£3,276')
+    // No `paymentReference` in the fixture, and there is NO fallback to
+    // the application reference — so this cell is "Not provided" even
+    // though REF appears elsewhere on the page. Asserted on the CELL for
+    // exactly that reason.
+    expect(cellText(result, 'duly-making-payment-reference')).toBe(
+      'Not provided'
+    )
     // AC02 — a day/month/year input, and no note field.
     expect(result).toContain('name="payment-date-day"')
     expect(result).toContain('name="payment-date-month"')
@@ -156,13 +174,15 @@ describe('GET the duly-making page', () => {
       method: 'GET',
       url: DULY_MAKE_HREF
     })
-    expect(result).toContain('£3,276')
+    expect(cellText(result, 'duly-making-charge-amount')).toBe('£3,276')
+    expect(cellText(result, 'duly-making-payment-reference')).toBe(
+      'A27ER1230040001GR'
+    )
     expect(result).not.toContain('£9,999')
-    expect(result).toContain('A27ER1230040001GR')
     expect(result).not.toContain('TOP-LEVEL-WRONG')
   })
 
-  test('an explicit paymentReference overrides the application reference', async () => {
+  test('renders an explicit payload.paymentReference', async () => {
     getWorkItem.mockResolvedValue(
       okWorkItem({ payload: { paymentReference: 'A27ER1230040001GR' } })
     )
@@ -170,7 +190,9 @@ describe('GET the duly-making page', () => {
       method: 'GET',
       url: DULY_MAKE_HREF
     })
-    expect(result).toContain('A27ER1230040001GR')
+    expect(cellText(result, 'duly-making-payment-reference')).toBe(
+      'A27ER1230040001GR'
+    )
   })
 
   test('degrades when the payload has no charge amount', async () => {
@@ -183,7 +205,7 @@ describe('GET the duly-making page', () => {
     })
     // Must render, not crash — older work items predate the field.
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toContain('Not provided')
+    expect(cellText(result, 'duly-making-charge-amount')).toBe('Not provided')
     expect(result).toContain('Complete duly making')
   })
 
@@ -195,22 +217,29 @@ describe('GET the duly-making page', () => {
       method: 'GET',
       url: DULY_MAKE_HREF
     })
-    expect(result).toContain('£0')
+    expect(cellText(result, 'duly-making-charge-amount')).toBe('£0')
   })
 
-  test('degrades when no reference exists at either level', async () => {
+  test('shows a MISSING payment reference rather than substituting one', async () => {
+    // The product decision this pins: `paymentReference` is structurally
+    // absent on initial submission, so this is what almost every real
+    // work item renders. The application reference is present and is
+    // deliberately NOT used — a populated-looking field on a payment
+    // reconciliation screen would hide a broken upstream feed.
     getWorkItem.mockResolvedValue(
-      okWorkItem({
-        applicationReference: undefined,
-        payload: { applicationReference: undefined }
-      })
+      okWorkItem({ payload: { paymentReference: undefined } })
     )
     const { statusCode, result } = await server.inject({
       method: 'GET',
       url: DULY_MAKE_HREF
     })
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toContain('Not provided')
+    expect(cellText(result, 'duly-making-payment-reference')).toBe(
+      'Not provided'
+    )
+    // The application reference IS available — proving the omission is a
+    // choice, not an absence of data.
+    expect(result).toContain(REF)
   })
 
   test('redirects with a banner when the item is not duly-makeable', async () => {
@@ -335,14 +364,21 @@ describe('POST the duly-making form', () => {
   })
 
   test('the payment details survive a validation error', async () => {
-    getWorkItem.mockResolvedValue(okWorkItem())
+    getWorkItem.mockResolvedValue(
+      okWorkItem({ payload: { paymentReference: 'A27ER1230040001GR' } })
+    )
     const { result } = await submit({
       'payment-date-day': '',
       'payment-date-month': '',
       'payment-date-year': ''
     })
-    expect(result).toContain('£3,276')
-    expect(result).toContain(REF)
+    // Asserted on the cells, not page-wide: the re-render path builds the
+    // payment details separately from the GET path, so it needs its own
+    // real check rather than one that any occurrence anywhere satisfies.
+    expect(cellText(result, 'duly-making-charge-amount')).toBe('£3,276')
+    expect(cellText(result, 'duly-making-payment-reference')).toBe(
+      'A27ER1230040001GR'
+    )
   })
 
   test('the entered values are echoed back so nothing is retyped', async () => {

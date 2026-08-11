@@ -93,7 +93,10 @@ export function buildPaymentDetails(workItem) {
   const charge = formatChargeAmount(payload.chargeAmountPence)
   return {
     chargeAmount: charge ?? NOT_PROVIDED,
-    paymentReference: resolvePaymentReference(workItem) ?? NOT_PROVIDED
+    // No fallback to `applicationReference` — see `resolvePaymentReference`.
+    // Almost every work item renders "Not provided" here today, and that
+    // visibility is the point.
+    paymentReference: resolvePaymentReference(payload) ?? NOT_PROVIDED
   }
 }
 

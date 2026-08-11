@@ -202,43 +202,34 @@ export function formatChargeAmount(pence) {
 /**
  * Resolve the payment reference to display.
  *
- * In this system the accreditation/application reference IS the payment
- * reference by design: the operator journey renders
- * `application.accreditationReference` under a "Payment reference" label
- * on its own payment-details page, and that is the string the operator is
- * instructed to quote on the bank transfer. So falling back to
- * `applicationReference` shows the regulator the reference that is
- * genuinely on the payment, not a different identifier wearing its label.
+ * ⚠ THERE IS DELIBERATELY NO FALLBACK, AND ONE MUST NOT BE ADDED.
  *
- * ⚠ THE FALLBACK IS THE PRIMARY PATH, not an edge case, and must not be
- * "tidied away" by someone who reads it as one. `paymentReference` is
- * structurally absent on a real submission — the operator backend has no
- * payment reference at submission time — so the overwhelming majority of
- * work items in production AND in every seeded environment resolve
- * through `applicationReference`. management-be seeds it on exactly one
- * of ten items (`full-payload-verification`) precisely to keep the
- * override path exercised; the other nine render an `RA-#########`.
- * Deleting the fallback would blank the payment reference on almost every
- * application.
+ * `payload.paymentReference` is the only source. When it is absent the
+ * page shows "Not provided" — and today that is what almost every work
+ * item will show, because legacy-be assigns the reference only after its
+ * adapter call fires, so it is structurally absent on initial submission.
+ * That mass of "Not provided" is the intended outcome, not a regression
+ * to be papered over.
  *
- * @returns {string|null} `null` only when neither exists.
+ * The tempting fallback is `applicationReference`, and it is tempting for
+ * a real reason: the operator journey renders that same value under a
+ * "Payment reference" label, and it is the string the operator is told to
+ * quote on the bank transfer. It was in fact used here until this was
+ * reversed by an explicit product decision.
+ *
+ * The reason it is gone: this is a payment RECONCILIATION screen, and a
+ * populated-looking field is indistinguishable from a working one. If the
+ * upstream feed that supplies `paymentReference` silently breaks, a
+ * fallback keeps every page looking correct and nobody finds out; a
+ * visible gap surfaces the breakage the first time a regulator opens the
+ * page. A gap you can see beats a plausible value that hides a broken
+ * feed — the same reasoning that keeps `0` distinguishable from absent
+ * for the charge amount.
+ *
+ * @param {object} [payload] The work item's `payload` object.
+ * @returns {string|null} `null` when `paymentReference` is absent or blank.
  */
-export function resolvePaymentReference(workItem) {
-  const payload = workItem?.payload ?? {}
-
-  const explicit = textOf(payload.paymentReference)
-  if (explicit !== '') return explicit
-
-  // Prefer the TOP-LEVEL `applicationReference`. Both exist and carry the
-  // same value, but the top-level one is a framework-guaranteed DTO field,
-  // whereas everything under `payload` is passed through verbatim from
-  // MongoDB and is NOT re-cased by the response serialiser — its casing is
-  // owned by legacy-be. The payload copy is kept only as a last resort.
-  const topLevel = textOf(workItem?.applicationReference)
-  if (topLevel !== '') return topLevel
-
-  const nested = textOf(payload.applicationReference)
-  if (nested !== '') return nested
-
-  return null
+export function resolvePaymentReference(payload) {
+  const explicit = textOf(payload?.paymentReference)
+  return explicit === '' ? null : explicit
 }

@@ -244,65 +244,50 @@ describe('formatChargeAmount', () => {
 })
 
 /**
- * Takes the WHOLE work item, not the payload. `applicationReference`
- * exists both top level and inside `payload`; `paymentReference` exists
- * only inside `payload`. That asymmetry is the reason for the signature.
+ * Takes the work item's `payload`. There is deliberately NO fallback to
+ * `applicationReference` — a populated-looking payment reference is
+ * indistinguishable from a working one, so a silently broken upstream
+ * feed would never surface. These tests exist mainly to stop the fallback
+ * being reinstated by someone who reads the mass of "Not provided" as a
+ * bug.
  */
 describe('resolvePaymentReference', () => {
-  test('prefers an explicit payload.paymentReference', () => {
+  test('returns an explicit payload.paymentReference', () => {
     expect(
-      resolvePaymentReference({
-        applicationReference: 'RA-2026-00004',
-        payload: {
-          paymentReference: 'A27ER1230040001GR',
-          applicationReference: 'RA-2026-00004'
-        }
-      })
+      resolvePaymentReference({ paymentReference: 'A27ER1230040001GR' })
     ).toBe('A27ER1230040001GR')
   })
 
-  test('falls back to the TOP-LEVEL applicationReference', () => {
-    // In this system the application reference IS the payment reference:
-    // the operator is instructed to quote it on the bank transfer.
+  test('does NOT fall back to applicationReference', () => {
+    // The reversal that matters. `applicationReference` IS the string the
+    // operator quotes on the bank transfer, which is exactly why this is
+    // tempting — and exactly why its absence must stay visible instead.
     expect(
-      resolvePaymentReference({
-        applicationReference: 'RA-2026-00004',
-        payload: {}
-      })
-    ).toBe('RA-2026-00004')
+      resolvePaymentReference({ applicationReference: 'RA-2026-00004' })
+    ).toBeNull()
   })
 
-  test('prefers the top-level copy over the payload copy', () => {
-    // Both carry the same value, but the top-level field is a
-    // framework-guaranteed DTO property, whereas `payload` is passed
-    // through verbatim from MongoDB and its casing is owned by legacy-be.
+  test('does not fall back even when both references are present', () => {
     expect(
       resolvePaymentReference({
-        applicationReference: 'RA-TOP-LEVEL',
-        payload: { applicationReference: 'RA-PAYLOAD' }
+        paymentReference: '',
+        applicationReference: 'RA-2026-00004'
       })
-    ).toBe('RA-TOP-LEVEL')
+    ).toBeNull()
   })
 
-  test('still finds the payload copy if the top-level one is missing', () => {
-    expect(
-      resolvePaymentReference({
-        payload: { applicationReference: 'RA-2026-00004' }
-      })
-    ).toBe('RA-2026-00004')
+  test('treats a blank or whitespace reference as absent', () => {
+    expect(resolvePaymentReference({ paymentReference: '' })).toBeNull()
+    expect(resolvePaymentReference({ paymentReference: '   ' })).toBeNull()
   })
 
-  test('falls back when payload.paymentReference is empty or whitespace', () => {
-    expect(
-      resolvePaymentReference({
-        applicationReference: 'RA-2026-00004',
-        payload: { paymentReference: '   ' }
-      })
-    ).toBe('RA-2026-00004')
+  test('trims a real reference', () => {
+    expect(resolvePaymentReference({ paymentReference: '  PAY-001  ' })).toBe(
+      'PAY-001'
+    )
   })
 
-  test('returns null only when no reference exists anywhere', () => {
-    expect(resolvePaymentReference({ payload: {} })).toBeNull()
+  test('returns null for an absent or missing payload', () => {
     expect(resolvePaymentReference({})).toBeNull()
     expect(resolvePaymentReference(undefined)).toBeNull()
   })
