@@ -45,7 +45,10 @@ function renderForm(
           postcode: site.postcode ?? ''
         },
         material: values.material ?? '',
-        tonnageBand: values.tonnageBand ?? ''
+        tonnageBand: values.tonnageBand ?? '',
+        // RA-316 passthrough. Echoed back on re-render so a validation
+        // error elsewhere on the form does not silently discard it.
+        chargeAmountPence: values.chargeAmountPence ?? ''
       },
       fieldErrors,
       errorSummary,
@@ -63,7 +66,11 @@ const FIELD_ORDER = [
   'siteAddress.town',
   'siteAddress.postcode',
   'material',
-  'tonnageBand'
+  'tonnageBand',
+  // RA-316 passthrough fields, last so they do not reorder the existing
+  // error summary.
+  'chargeAmountPence',
+  'paymentReference'
 ]
 
 function buildErrorSummary(fieldErrors) {
@@ -98,6 +105,22 @@ const DEMO_VALUES = {
   },
   material: 'plastic',
   tonnageBand: '500-5000'
+  // RA-316. `chargeAmountPence` is deliberately NOT prefilled here, and
+  // adding a figure would be a regression rather than a convenience.
+  //
+  // Any constant put here would be a fee amount hardcoded into a third
+  // repo, while epr-s8k0 is open to collapse the two that already exist
+  // (the legacy frontend's `paymentDetails.js` and the legacy backend's
+  // `AccreditationChargeCalculator`). It would also contradict the reason
+  // we refused a server-side default: an item created through this
+  // five-field form genuinely HAS no charge to populate from, so "Not
+  // provided" on the duly-making page is the system telling the truth,
+  // not a gap to be filled. Inventing a figure to make a demo screen look
+  // populated is the same mistake in miniature.
+  //
+  // The value is supplied by whoever creates the item — mgmt-tests passes
+  // a different real band value per spec, which is what keeps a
+  // pence/pounds slip visible.
 }
 
 export function makeCreateWorkItemController({

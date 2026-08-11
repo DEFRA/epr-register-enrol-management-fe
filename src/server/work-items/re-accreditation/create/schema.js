@@ -112,7 +112,55 @@ export const createReAccreditationSchema = Joi.object({
       'any.required': 'Select a tonnage band',
       'string.empty': 'Select a tonnage band',
       'any.only': 'Select a tonnage band from the list'
-    })
+    }),
+  // RA-316. OPTIONAL PASSTHROUGH — plumbing, not logic.
+  //
+  // Exists here solely so `stripUnknown: true` stops discarding it; the
+  // value is forwarded to the backend unchanged. The form can CARRY a
+  // charge that someone else decides; it never computes one.
+  //
+  // ⚠ NO `.default()`, NO PREFILL, AND NO VALUE DERIVED FROM
+  // `tonnageBand`. Empty is the normal case, not an omission to fix.
+  //
+  // A `.default()` here would fire for EVERY caller of this schema, and
+  // `POST /work-items` is the REAL submission path — legacy-be posts
+  // every genuine operator application to it, so the backend cannot tell
+  // this form from production traffic.
+  //
+  // That matters because ABSENT IS A LEGITIMATE STATE. legacy-be drops
+  // `chargeAmountPence` entirely when the tonnage band is unset, by
+  // design. Defaulting on absence would put a confident, plausible,
+  // FABRICATED figure in front of a regulator on the one screen whose
+  // purpose is confirming money, indistinguishable from a real charge.
+  // The duly-making page renders "Not provided" instead, deliberately.
+  //
+  // Deriving from `tonnageBand` is separately wrong: the fee table
+  // already exists twice — the legacy frontend's `paymentDetails.js` and
+  // the legacy backend's `AccreditationChargeCalculator` — with epr-s8k0
+  // open to collapse those to one. A third copy would make case
+  // management an authority on what an operator is charged, which it is
+  // not, and would drift the moment fees are repriced.
+  //
+  // Integer PENCE, matching the wire contract — £3,276 is 327600.
+  //
+  // ⚠ `Joi.number()` IS LOAD-BEARING, not decoration. An HTML input always
+  // posts a STRING, so without the service's `convert: true` coercion this
+  // field would reach the backend as `"327600"`, land in the payload as a
+  // string, and the duly-making page's formatter would return null and
+  // render "Not provided" — indistinguishable from absent, with nothing
+  // throwing anywhere. management-be does not validate this field (it is
+  // passthrough by design), so this schema is the ONLY thing turning the
+  // form's string into the integer the wire contract requires.
+  chargeAmountPence: Joi.number().integer().min(0).optional().messages({
+    'number.base': 'Charge amount must be a whole number of pence',
+    'number.integer': 'Charge amount must be a whole number of pence',
+    'number.min': 'Charge amount cannot be negative'
+  })
+  // RA-316. `paymentReference` is deliberately NOT an inbound field. The
+  // duly-making page falls back to `applicationReference`, which is the
+  // reference the operator quotes on the bank transfer and the path
+  // nine-in-ten work items take, so an override field here would be
+  // surface with no consumer and no test behind it.
 })
 
 /**
