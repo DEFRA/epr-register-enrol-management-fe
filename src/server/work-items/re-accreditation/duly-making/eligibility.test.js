@@ -62,12 +62,12 @@ describe('evaluateDulyMakeEligibility', () => {
    * that removing the task-driven flow would otherwise introduce.
    */
   describe('the updated waypoint', () => {
+    // Deliberately does NOT set `isTaskWaypoint`: it is derived by the
+    // view-model layer and never appears on the raw DTO this helper is
+    // given. Putting it here would be a fixture asserting an assumption
+    // instead of the wire — which is exactly how the earlier bug hid.
     function aWaypointItem(taskStateId) {
-      return aWorkItem({
-        stateId: 'updated',
-        isTaskWaypoint: true,
-        taskStateId
-      })
+      return aWorkItem({ stateId: 'updated', taskStateId })
     }
 
     test('allows duly making when the query was raised during duly making', () => {
@@ -87,8 +87,27 @@ describe('evaluateDulyMakeEligibility', () => {
       }
     )
 
-    test('refuses when taskStateId is null (unresolvable pre-v8 origin)', () => {
-      // The backend answers 409 for these, so a CTA would always fail.
+    /**
+     * The real unresolvable-origin shape, verified by management-be
+     * against actual serialised responses. `taskStateId` is ALWAYS
+     * present and non-null on the wire — when no redirect applies it
+     * falls back to the item's own `stateId`. So an `updated` item with
+     * no resume history reports `taskStateId: 'updated'`, and is refused
+     * because it fails the equality rather than because of any null
+     * check. The backend answers 409 for these, so a CTA would always
+     * fail.
+     */
+    test('refuses an updated item with no resume history (taskStateId echoes stateId)', () => {
+      expect(evaluateDulyMakeEligibility(aWaypointItem('updated'))).toEqual({
+        allowed: false,
+        reason: 'invalid-transition'
+      })
+    })
+
+    test('refuses a null or absent taskStateId without a special case', () => {
+      // Not a shape the backend emits — asserted only to show the strict
+      // equality handles it, so nobody adds a null-guard for a case that
+      // cannot occur.
       expect(evaluateDulyMakeEligibility(aWaypointItem(null)).allowed).toBe(
         false
       )

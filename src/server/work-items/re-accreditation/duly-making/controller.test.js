@@ -32,14 +32,29 @@ const REF = 'RA-2026-00004'
 const DETAIL_HREF = `/work-items/${ID}`
 const DULY_MAKE_HREF = `/work-items/re-accreditation/${ID}/duly-make`
 
+/**
+ * Mirrors the REAL serialised envelope, verified by management-be against
+ * actual response bodies rather than C# property names:
+ *  - `applicationReference` exists BOTH top level and inside `payload`;
+ *  - `chargeAmountPence` / `paymentReference` exist ONLY inside `payload`;
+ *  - `taskStateId` is always present and non-null, echoing `stateId`
+ *    unless a module redirect applies.
+ * Getting any of these nestings wrong makes the template read `undefined`
+ * and render blank while the test still passes, so the shape matters as
+ * much as the values.
+ */
 function aWorkItem(overrides = {}) {
   const { payload, ...rest } = overrides
+  const stateId = rest.stateId ?? 'submitted'
   return {
     id: ID,
     typeId: 're-accreditation',
     templateVersion: 'v11',
-    stateId: 'submitted',
+    stateId,
+    // Wire default: echoes `stateId`. Never null.
+    taskStateId: stateId,
     stateDisplayName: 'Not started',
+    applicationReference: REF,
     submittedAt: '2026-04-27T10:00:00Z',
     lastModifiedAt: '2026-04-27T10:05:00Z',
     availableActions: [],
@@ -122,6 +137,31 @@ describe('GET the duly-making page', () => {
     expect(result).not.toContain('name="cancel"')
   })
 
+  test('reads the charge and reference from payload, NOT the top level', async () => {
+    // Both live inside `payload`. If the nesting were wrong the template
+    // would read undefined and render blank while a presence-only
+    // assertion still passed, so these pin the level explicitly by making
+    // the two levels disagree.
+    getWorkItem.mockResolvedValue(
+      okWorkItem({
+        chargeAmountPence: 999900,
+        paymentReference: 'TOP-LEVEL-WRONG',
+        payload: {
+          chargeAmountPence: 327600,
+          paymentReference: 'A27ER1230040001GR'
+        }
+      })
+    )
+    const { result } = await server.inject({
+      method: 'GET',
+      url: DULY_MAKE_HREF
+    })
+    expect(result).toContain('£3,276')
+    expect(result).not.toContain('£9,999')
+    expect(result).toContain('A27ER1230040001GR')
+    expect(result).not.toContain('TOP-LEVEL-WRONG')
+  })
+
   test('an explicit paymentReference overrides the application reference', async () => {
     getWorkItem.mockResolvedValue(
       okWorkItem({ payload: { paymentReference: 'A27ER1230040001GR' } })
@@ -158,9 +198,12 @@ describe('GET the duly-making page', () => {
     expect(result).toContain('£0')
   })
 
-  test('degrades when the payload has neither reference', async () => {
+  test('degrades when no reference exists at either level', async () => {
     getWorkItem.mockResolvedValue(
-      okWorkItem({ payload: { applicationReference: undefined } })
+      okWorkItem({
+        applicationReference: undefined,
+        payload: { applicationReference: undefined }
+      })
     )
     const { statusCode, result } = await server.inject({
       method: 'GET',

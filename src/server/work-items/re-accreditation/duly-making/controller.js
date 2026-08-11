@@ -80,6 +80,12 @@ function flashBanner(request, banner) {
  * never block the page or the submission.
  */
 export function buildPaymentDetails(workItem) {
+  // Both fields live INSIDE `payload`, not at the top level. `payload` is
+  // passed through verbatim from MongoDB and is not re-cased by the
+  // backend's response serialiser, so these two keys' casing is owned by
+  // legacy-be — a mis-cased key throws nowhere and simply renders blank,
+  // which is why the tests assert on rendered VALUES rather than on the
+  // element being present.
   const payload = workItem?.payload ?? {}
   // `formatChargeAmount` returns null for absent/non-integer only. A
   // legitimate 0 formats as "£0" and must NOT collapse to "Not provided" —
@@ -87,8 +93,23 @@ export function buildPaymentDetails(workItem) {
   const charge = formatChargeAmount(payload.chargeAmountPence)
   return {
     chargeAmount: charge ?? NOT_PROVIDED,
-    paymentReference: resolvePaymentReference(payload) ?? NOT_PROVIDED
+    paymentReference: resolvePaymentReference(workItem) ?? NOT_PROVIDED
   }
+}
+
+/**
+ * The application reference for the caption and breadcrumb.
+ *
+ * Prefers the TOP-LEVEL field, which the framework guarantees, over the
+ * duplicate inside `payload` — same value, but the payload copy comes
+ * straight from Mongo without the serialiser's casing guarantees.
+ */
+function applicationRefOf(workItem) {
+  return (
+    workItem?.applicationReference ??
+    workItem?.payload?.applicationReference ??
+    null
+  )
 }
 
 function renderForm(
@@ -184,7 +205,7 @@ export function makeShowDulyMakingController() {
 
       return renderForm(h, {
         id,
-        applicationRef: workItem.payload?.applicationReference ?? null,
+        applicationRef: applicationRefOf(workItem),
         paymentDetails: buildPaymentDetails(workItem)
       })
     }
@@ -274,9 +295,7 @@ async function renderInvalid(h, { request, id, user, values, errorCode }) {
   const item = await getWorkItem({ workItemId: id, user })
   return renderForm(h, {
     id,
-    applicationRef: item.ok
-      ? (item.workItem.payload?.applicationReference ?? null)
-      : null,
+    applicationRef: item.ok ? applicationRefOf(item.workItem) : null,
     paymentDetails: item.ok
       ? buildPaymentDetails(item.workItem)
       : { chargeAmount: NOT_PROVIDED, paymentReference: NOT_PROVIDED },

@@ -118,11 +118,19 @@ export function evaluateDulyMakeEligibility(workItem) {
   // would invite a caseworker to send an application backwards past
   // assessment.
   //
-  // `taskStateId` is nullable — it is null for a pre-v8 snapshot whose
-  // origin genuinely cannot be resolved. Null must NOT fall through to a
-  // permissive default: the backend answers 409 for exactly those items,
-  // so a CTA here would be a button that always fails. The strict
-  // equality below rejects null by construction.
+  // `taskStateId` is ALWAYS PRESENT AND NON-NULL on the wire — verified
+  // by management-be against real serialised responses, not inferred from
+  // the DTO's nullability. When no redirect applies it falls back to the
+  // item's own `stateId`. So an `updated` item with no resume history
+  // reports `taskStateId: 'updated'`, NOT null, and is refused here
+  // because it fails the equality — which is the correct outcome (the
+  // backend answers 409 for those), just by a different route than a
+  // null-check would take.
+  //
+  // Do NOT add a null-guard or a `?? stateId` fallback: both would be
+  // dead code implying a wire shape that cannot occur. The strict
+  // equality already handles null, absent and self-referential values
+  // correctly without asserting anything about which of them happen.
   //
   // ⚠ DELIBERATELY KEYED ON `taskStateId` ALONE — do NOT reintroduce an
   // `isTaskWaypoint` check here, however naturally it reads. That flag is

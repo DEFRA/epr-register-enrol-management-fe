@@ -217,10 +217,22 @@ export function formatChargeAmount(pence) {
  *
  * @returns {string|null} `null` only when neither exists.
  */
-export function resolvePaymentReference(payload) {
-  const explicit = textOf(payload?.paymentReference)
+export function resolvePaymentReference(workItem) {
+  const payload = workItem?.payload ?? {}
+
+  const explicit = textOf(payload.paymentReference)
   if (explicit !== '') return explicit
-  const applicationReference = textOf(payload?.applicationReference)
-  if (applicationReference !== '') return applicationReference
+
+  // Prefer the TOP-LEVEL `applicationReference`. Both exist and carry the
+  // same value, but the top-level one is a framework-guaranteed DTO field,
+  // whereas everything under `payload` is passed through verbatim from
+  // MongoDB and is NOT re-cased by the response serialiser — its casing is
+  // owned by legacy-be. The payload copy is kept only as a last resort.
+  const topLevel = textOf(workItem?.applicationReference)
+  if (topLevel !== '') return topLevel
+
+  const nested = textOf(payload.applicationReference)
+  if (nested !== '') return nested
+
   return null
 }
