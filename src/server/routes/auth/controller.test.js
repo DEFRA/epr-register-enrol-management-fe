@@ -471,3 +471,51 @@ describe('regulatorCallbackController', () => {
     expect(fetchImpl.mock.calls[0][0]).toBe(provider.tokenUrl)
   })
 })
+
+// RA-306.
+describe('logoutController', () => {
+  test('destroys the whole session, not just the user key (AC01/AC02)', () => {
+    const { request, yar } = makeRequest({
+      session: {
+        user: { id: 'oid', roles: ['standard'] },
+        workItemsFilters: { status: 'open' }
+      }
+    })
+    const { logoutController } = buildOk()
+
+    logoutController(request, h)
+
+    expect(yar.reset).toHaveBeenCalledTimes(1)
+    // clear('user') would have left the rest of the session (and the
+    // session id) intact — that is the bug this replaced.
+    expect(yar.clear).not.toHaveBeenCalled()
+    expect(yar._store).toEqual({})
+  })
+
+  test('redirects to the sign-in page (AC01)', () => {
+    const { request } = makeRequest({ session: { user: { id: 'oid' } } })
+    const { logoutController } = buildOk()
+
+    logoutController(request, h)
+
+    expect(h.redirect).toHaveBeenCalledWith('/auth/regulator/login')
+  })
+
+  test('resets the session before redirecting', () => {
+    const { request, order } = makeRequest({ session: { user: { id: 'a' } } })
+    const { logoutController } = buildOk()
+
+    logoutController(request, h)
+
+    expect(order).toEqual([['reset']])
+  })
+
+  test('is safe to call when there is no session to destroy', () => {
+    const { request, yar } = makeRequest()
+    const { logoutController } = buildOk()
+
+    expect(() => logoutController(request, h)).not.toThrow()
+    expect(yar.reset).toHaveBeenCalledTimes(1)
+    expect(h.redirect).toHaveBeenCalledWith('/auth/regulator/login')
+  })
+})
