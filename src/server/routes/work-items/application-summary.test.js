@@ -299,8 +299,12 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     expect(bes.sites[0]).not.toHaveProperty('siteAddress')
 
     const ors = row(rows, 'ors')
-    expect(ors.sites[0].addressLines).toEqual(['1 Overseas Lane, Rotterdam'])
-    expect(ors.sites[0].country).toBe('Netherlands')
+    // The country is the last part of the address now, not a field of its
+    // own — it used to sit on the site-name line in parentheses.
+    expect(ors.sites[0].addressLines).toEqual([
+      '1 Overseas Lane, Rotterdam',
+      'Netherlands'
+    ])
   })
 
   test('describes the type using the registry display name alone', () => {
@@ -470,8 +474,8 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     })
     expect(row(rows, 'ors').sites[0]).toMatchObject({
       siteName: EM_DASH,
-      country: null,
       isNew: false,
+      addressLines: [],
       details: [],
       interimSite: null
     })
@@ -803,7 +807,8 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
     expect(addressLines).toEqual([
       '1 Havenstraat',
       'Europoort Industrial Park',
-      'Rotterdam'
+      'Rotterdam',
+      'Netherlands'
     ])
     expect(details.map((detail) => [detail.key, detail.values])).toEqual([
       ['ors-id', ['ORS-2026-0292']],
@@ -851,7 +856,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
       country: 'Spain'
     })
     expect(site.details.map((detail) => detail.key)).toEqual(['ors-id'])
-    expect(site.addressLines).toEqual(['Calle Uno, Bilbao'])
+    expect(site.addressLines).toEqual(['Calle Uno, Bilbao', 'Spain'])
     expect(site.isNew).toBe(false)
     expect(site.interimSite).toBeNull()
   })
@@ -859,7 +864,6 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
   test('names an unnamed site with an em dash and leaves country null', () => {
     expect(buildOverseasSite({})).toEqual({
       siteName: EM_DASH,
-      country: null,
       isNew: false,
       addressLines: [],
       details: [],
@@ -919,6 +923,33 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
         townOrCity: 'Bilbao'
       })
       expect(site.addressLines).toEqual(['Calle Uno,  BILBAO'])
+    })
+
+    // The country is appended through the SAME segment-wise de-duplication as
+    // everything else. A legacy flat `siteAddress` routinely already ends with
+    // the country, and "…, Netherlands, Netherlands" is exactly the kind of
+    // duplication nobody notices in review.
+    test('does not repeat a country the flat address already ends with', () => {
+      const site = buildOverseasSite({
+        siteAddress: '1 Havenstraat, Rotterdam, Netherlands',
+        country: 'Netherlands'
+      })
+      expect(site.addressLines).toEqual([
+        '1 Havenstraat, Rotterdam, Netherlands'
+      ])
+    })
+
+    test('appends the country when the address does not already carry it', () => {
+      const site = buildOverseasSite({
+        addressLine1: '1 Havenstraat',
+        townOrCity: 'Rotterdam',
+        country: 'Netherlands'
+      })
+      expect(site.addressLines).toEqual([
+        '1 Havenstraat',
+        'Rotterdam',
+        'Netherlands'
+      ])
     })
 
     test('falls back to the structured parts when there is no flat string', () => {
@@ -991,10 +1022,17 @@ describe('#buildInterimSite (RA-292 AC02 + AC04)', () => {
   test('AC04: surfaces the interim detail, with the address as one block', () => {
     const site = buildInterimSite(INTERIM)
     expect(site.siteName).toBe('Antwerp Interim Holding Site')
-    expect(site.country).toBe('Belgium')
+    // Country is the last part of the address, matching the ORS ordering.
+    expect(site.addressLines).toEqual([
+      '4 Scheldelaan',
+      'Dock 7',
+      'Antwerp',
+      'Flanders',
+      '2030',
+      'Belgium'
+    ])
     expect(site.details.map((detail) => [detail.key, detail.values])).toEqual([
       ['site-number', ['INT-001']],
-      ['address', ['4 Scheldelaan', 'Dock 7', 'Antwerp', 'Flanders', '2030']],
       ['contact-name', ['Marieke Peeters']],
       ['contact-email', ['marieke@example.com']],
       ['contact-phone', ['+32 3 555 0100']]
@@ -1004,9 +1042,13 @@ describe('#buildInterimSite (RA-292 AC02 + AC04)', () => {
   test('skips an address line the interim site does not carry', () => {
     // The seed's site[1] interim site has no addressLine2.
     const site = buildInterimSite({ ...INTERIM, addressLine2: null })
-    expect(
-      site.details.find((detail) => detail.key === 'address').values
-    ).toEqual(['4 Scheldelaan', 'Antwerp', 'Flanders', '2030'])
+    expect(site.addressLines).toEqual([
+      '4 Scheldelaan',
+      'Antwerp',
+      'Flanders',
+      '2030',
+      'Belgium'
+    ])
   })
 
   // The producer omits the key entirely rather than sending null (its
@@ -1024,8 +1066,8 @@ describe('#buildInterimSite (RA-292 AC02 + AC04)', () => {
   test('names an unnamed interim site with an em dash', () => {
     expect(buildInterimSite({})).toEqual({
       siteName: EM_DASH,
-      country: null,
       isNew: false,
+      addressLines: [],
       details: []
     })
   })
@@ -1131,6 +1173,7 @@ describe('RA-292 producer contract (verbatim captured payload)', () => {
     const site = buildOverseasSite(SPARSE_SITE)
 
     expect(site.siteName).toBe('Sparse Site')
+    expect(site.addressLines).toEqual([])
     // A site with no stored newness arrives UNflagged. `isNewSite` used to
     // default to true on the producer's model, which meant a site carrying no
     // newness at all — a legacy work item, say — rendered as new. That is the
@@ -1139,7 +1182,6 @@ describe('RA-292 producer contract (verbatim captured payload)', () => {
     // notice it has stopped meaning anything. Now server-derived and
     // defaulting to false, so the failure direction is a MISSING badge.
     expect(site.isNew).toBe(false)
-    expect(site.country).toBeNull()
     expect(site.interimSite).toBeNull()
 
     // Exactly the fields that are PRESENT — and all three false booleans are
@@ -1214,6 +1256,9 @@ describe('RA-292 backwards compatibility (pre-story work items)', () => {
     expect(site.siteName).toBe('Rotterdam Reprocessing')
     expect(site.isNew).toBe(false)
     expect(site.interimSite).toBeNull()
-    expect(site.addressLines).toEqual(['1 Overseas Lane, Rotterdam'])
+    expect(site.addressLines).toEqual([
+      '1 Overseas Lane, Rotterdam',
+      'Netherlands'
+    ])
   })
 })

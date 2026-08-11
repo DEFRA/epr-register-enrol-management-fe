@@ -4054,10 +4054,11 @@ describe('RA-295 individual work item page', () => {
 
     // Scoped per site name, so the prefix is proved to belong to the site
     // that declared itself new rather than merely to be somewhere on the page.
+    // No parenthesised country: the design puts it at the end of the address.
     expect(lineTexts(ors, 'overseas-site-name')).toEqual([
-      'NEW: Rotterdam New Reprocessing Site (Netherlands)',
-      'Hamburg Established Reprocessing Site (Germany)',
-      'Bilbao Legacy Reprocessing Site (Spain)'
+      'NEW: Rotterdam New Reprocessing Site',
+      'Hamburg Established Reprocessing Site',
+      'Bilbao Legacy Reprocessing Site'
     ])
   })
 
@@ -4065,20 +4066,34 @@ describe('RA-295 individual work item page', () => {
     const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
     const [name] = lineTexts(ors, 'overseas-site-name')
 
-    expect(name).toBe('NEW: Rotterdam New Reprocessing Site (Netherlands)')
+    expect(name).toBe('NEW: Rotterdam New Reprocessing Site')
 
     // The separator is an ASCII space, never U+00A0. A non-breaking space
     // renders identically and would silently break every downstream string
     // assertion — including the e2e suite's — while looking perfect.
     expect(name).not.toContain('\u00a0')
     expect(ors).toContain(
-      '<span data-testid="overseas-site-new-tag">NEW:</span> '
+      '<span class="app-new-flag" data-testid="overseas-site-new-tag">NEW:</span> '
     )
 
     // Literal text, not styling: the design's affordance IS the word, so it
     // has to reach assistive technology and survive copy-paste. This also
     // pins that the superseded blue tag does not come back.
     expect(ors).not.toContain('govuk-tag--blue')
+  })
+
+  // The colour is ADDITIVE. `name` above is the rendered TEXT with all markup
+  // stripped, and it already reads "NEW: ..." — so this test proves the word
+  // survives without any styling at all, which is what makes colouring it
+  // safe for a colour-blind or screen-reader user. If someone ever swaps the
+  // text for a ::before or an icon, the assertion above fails, not this one.
+  test('RA-292 AC01: the colour is carried by a class, never by inline style', async () => {
+    const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
+
+    expect(ors).toContain('class="app-new-flag"')
+    // Inline styles would be blocked by the deny-all CSP anyway, so a colour
+    // that only ever appeared inline would silently not render at all.
+    expect(ors).not.toMatch(/data-testid="overseas-site-new-tag"[^>]*style=/)
   })
 
   test.each([
@@ -4118,8 +4133,8 @@ describe('RA-295 individual work item page', () => {
     expect(ors.match(/data-testid="interim-site-new-tag"/g)).toHaveLength(1)
 
     expect(lineTexts(ors, 'interim-site-name')).toEqual([
-      'NEW: Antwerp Interim Holding Site (Belgium)',
-      'Bremen Interim Holding Site (Germany)'
+      'NEW: Antwerp Interim Holding Site',
+      'Bremen Interim Holding Site'
     ])
   })
 
@@ -4138,10 +4153,10 @@ describe('RA-295 individual work item page', () => {
     )
 
     expect(lineTexts(ors, 'overseas-site-name')).toEqual([
-      'Hamburg Established Reprocessing Site (Germany)'
+      'Hamburg Established Reprocessing Site'
     ])
     expect(lineTexts(ors, 'interim-site-name')).toEqual([
-      'NEW: Bremen Interim Holding Site (Germany)'
+      'NEW: Bremen Interim Holding Site'
     ])
     // The parent block's text DOES carry the child's prefix. This is the
     // assertion that would mislead if it were the only one.
@@ -4223,7 +4238,7 @@ describe('RA-295 individual work item page', () => {
     )
 
     expect(authority).toContain(
-      '<span data-testid="authority-to-issue-new-tag">NEW:</span> <span data-testid="authority-to-issue-contact-name">Grace Adeyemi</span>'
+      '<span class="app-new-flag" data-testid="authority-to-issue-new-tag">NEW:</span> <span data-testid="authority-to-issue-contact-name">Grace Adeyemi</span>'
     )
   })
 
@@ -4276,24 +4291,31 @@ describe('RA-295 individual work item page', () => {
     }
 
     // The address is no longer a labelled detail row: the design puts it on
-    // its own unlabelled lines directly beneath the site name, one <p> per
-    // line. It keeps the `overseas-site-address` testid in that position.
-    expect(ors.match(/data-testid="overseas-site-address"/g)).toHaveLength(3)
+    // ONE flowing comma-separated line directly beneath the site name. One
+    // element, not one per part — a per-part rendering let a `toContain`
+    // assertion pass while silently dropping addressLine2.
+    expect(ors.match(/data-testid="overseas-site-address"/g)).toHaveLength(1)
+    expect(lineTexts(ors, 'overseas-site-address')).toEqual([
+      '1 Havenstraat, Europoort Industrial Park, Rotterdam, Netherlands'
+    ])
     const nameIdx = ors.indexOf('data-testid="overseas-site-name"')
     const addressIdx = ors.indexOf('data-testid="overseas-site-address"')
     const detailIdx = ors.indexOf('data-testid="overseas-site-ors-id"')
     expect(addressIdx).toBeGreaterThan(nameIdx)
     expect(addressIdx).toBeLessThan(detailIdx)
-    expect(ors).toContain('Europoort Industrial Park')
     expect(ors).toContain('Basel/OECD codes')
   })
 
   test('RA-292 AC04: renders every interim site detail field with its own hook', async () => {
     const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
 
+    // One flowing line, country last, exactly as for the ORS.
+    expect(lineTexts(ors, 'interim-site-address')).toEqual([
+      '4 Scheldelaan, Antwerp, Flanders, 2030, Belgium'
+    ])
+
     for (const [testId, value] of [
       ['interim-site-site-number', 'INT-001'],
-      ['interim-site-address', '4 Scheldelaan'],
       ['interim-site-contact-name', 'Marieke Peeters'],
       ['interim-site-contact-email', 'marieke@example.com'],
       ['interim-site-contact-phone', '+32 3 555 0100']
@@ -4306,11 +4328,8 @@ describe('RA-295 individual work item page', () => {
       expect(ors.slice(idx, idx + 400)).toContain(value)
     }
 
-    // Country sits on the name line rather than repeating as a detail row.
-    const nameIdx = ors.indexOf('data-testid="interim-site-name"')
-    expect(ors.slice(nameIdx, nameIdx + 300)).toContain('Belgium')
-    expect(ors).toContain('Flanders')
-    expect(ors).toContain('2030')
+    // Country is the LAST part of the address, not a parenthetical on the
+    // name line — pinned by the full-string assertion above.
   })
 
   test('RA-292 AC04: omits the fields a near-minimal site does not carry', async () => {

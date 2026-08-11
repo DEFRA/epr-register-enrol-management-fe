@@ -40,19 +40,26 @@
 
 {# RA-292. The "NEW: " prefix.                                              #}
 {#                                                                          #}
-{# DESIGN NOTE: a design was supplied for RA-292 and this follows it. The    #}
-{# mock-ups show newness as a literal `NEW: ` prefix on the value itself —   #}
-{# `NEW: Bharat Recycling` — not as a badge beside it. An earlier revision   #}
-{# used a `govuk-tag--blue` reading "New", which was correct while no design #}
-{# existed (GDS is this service's default in that case) and is superseded    #}
-{# now that one does. Do not revert it to a tag.                             #}
+{# DESIGN NOTE: the design is RATIFIED. The mock-ups show newness as a       #}
+{# literal `NEW: ` prefix on the value itself — `NEW: Bharat Recycling` —    #}
+{# not as a badge beside it, and the BA confirmed that on the ticket thread  #}
+{# and asked for it in colour to make it prominent. Settled, not             #}
+{# provisional. An earlier revision used a `govuk-tag--blue` reading "New",  #}
+{# which was correct while no design existed (GDS is this service's default  #}
+{# in that case) and is superseded now that one does. Do not revert it to a  #}
+{# tag.                                                                      #}
 {#                                                                          #}
 {# The prefix is LITERAL TEXT, deliberately. It must not become a CSS        #}
 {# ::before, a background image or anything else that conveys it by styling  #}
-{# alone — losing the tag's visual affordance is only acceptable because the #}
-{# replacement is real text that reaches assistive technology and copies     #}
-{# with the value. Bolding it is within the design; giving it a colour or a  #}
-{# pseudo-element is not.                                                    #}
+{# alone. The colour on `.app-new-flag` is ADDITIVE ONLY: strip the CSS and  #}
+{# the word "NEW:" is still there for a colour-blind user, a screen-reader   #}
+{# user, and anyone copying the value out. That is precisely what makes      #}
+{# colouring it safe. The contrast working — measured against this page's    #}
+{# GREY background, not white — is in `_work-items.scss`.                    #}
+{#                                                                          #}
+{# An icon was raised and deferred by the requester ("bigger fish to fry").  #}
+{# If one is ever added it belongs inside this macro, beside the text and    #}
+{# never replacing it. Do not build one speculatively.                       #}
 {#                                                                          #}
 {# The space after the colon is an ordinary ASCII space, NOT `&nbsp;`. A     #}
 {# non-breaking space renders identically and would silently break every     #}
@@ -62,7 +69,7 @@
 {# Rendered ONLY when the flag is strictly true (the view model resolves     #}
 {# that, not this macro), so a caller's `{% if %}` guard is the whole story: #}
 {# absent means absent from the DOM, never merely hidden.                    #}
-{% macro newPrefix(testId) %}<span data-testid="{{ testId }}">NEW:</span> {% endmacro %}
+{% macro newPrefix(testId) %}<span class="app-new-flag" data-testid="{{ testId }}">NEW:</span> {% endmacro %}
 
 {# RA-292 AC04. A site's detail fields as a nested borderless summary list. #}
 {#                                                                          #}
@@ -326,23 +333,41 @@
                     {# satisfied by a nested interim site's prefix.           #}
                     <p class="govuk-body govuk-!-margin-bottom-1"
                        data-testid="overseas-site-name">
-                      <strong>{% if site.isNew %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>{% if site.country %} ({{ site.country }}){% endif %}
+                      <strong>{% if site.isNew %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>
                     </p>
-                    {% for line in site.addressLines %}
+                    {# One flowing comma-separated line, per the design — and #}
+                    {# ONE element, so an e2e assertion reads the whole       #}
+                    {# address rather than silently matching its first part.  #}
+                    {# The parts stay an array until here precisely so the    #}
+                    {# de-duplication can work segment-wise; see              #}
+                    {# `appendUnseen` in application-summary.js.              #}
+                    {% if site.addressLines.length %}
                       <p class="govuk-body govuk-!-margin-bottom-1"
-                         data-testid="overseas-site-address">{{ line }}</p>
-                    {% endfor %}
+                         data-testid="overseas-site-address">{{ site.addressLines | join(', ') }}</p>
+                    {% endif %}
                     {{ siteDetails(site.details, 'overseas-site') }}
                     {% if site.interimSite %}
                       <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-0"
                            data-testid="interim-site">
-                        {# Sub-label per the design. Plural as specified,     #}
-                        {# even though an ORS carries at most one.            #}
+                        {# Sub-label per the design, on its own line above  #}
+                        {# the site name. The PLURAL is deliberate and        #}
+                        {# matches the mockup, confirmed with Tom, even       #}
+                        {# though the data model allows at most one interim   #}
+                        {# site per ORS and it reads slightly oddly with a    #}
+                        {# single child. Do not "correct" it to singular.     #}
+                        {# It carries no testid: the e2e suite reads          #}
+                        {# `interim-site-name` for the name line, and putting #}
+                        {# the label inside that element would push `NEW: `   #}
+                        {# off position 0 and break its prefix check.         #}
                         <p class="govuk-body govuk-!-margin-bottom-1"><strong>Interim sites</strong></p>
                         <p class="govuk-body govuk-!-margin-bottom-1"
                            data-testid="interim-site-name">
-                          <strong>{% if site.interimSite.isNew %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ site.interimSite.siteName }}</strong>{% if site.interimSite.country %} ({{ site.interimSite.country }}){% endif %}
+                          <strong>{% if site.interimSite.isNew %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ site.interimSite.siteName }}</strong>
                         </p>
+                        {% if site.interimSite.addressLines.length %}
+                          <p class="govuk-body govuk-!-margin-bottom-1"
+                             data-testid="interim-site-address">{{ site.interimSite.addressLines | join(', ') }}</p>
+                        {% endif %}
                         {{ siteDetails(site.interimSite.details, 'interim-site') }}
                       </div>
                     {% endif %}
