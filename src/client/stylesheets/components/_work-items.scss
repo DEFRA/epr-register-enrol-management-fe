@@ -229,3 +229,37 @@
   padding: govuk-spacing(2) govuk-spacing(3);
   border-left: 5px solid $govuk-error-colour;
 }
+
+// "NEW:" flag prefix (RA-292)
+//
+// Newness is conveyed by the literal text "NEW: " that this class colours —
+// the colour is ADDITIVE and never the sole signal. A colour-blind user, a
+// screen-reader user, and anyone copying the text out all still get the word,
+// which is why colouring it is safe at all. Never replace the text with a
+// ::before, a background image or an icon; the design deliberately moved away
+// from the govuk-tag component to plain text, and the e2e suite asserts on
+// the exact string.
+//
+// COLOUR CHOICE — measured, not assumed. This page renders on
+// $app-background-grey (#f5f5f5), not white, so contrast has to be checked
+// against the grey. That is not a pedantic distinction:
+//
+//   govuk-colour("red")  ->  4.45:1 on #f5f5f5  FAILS WCAG 2.2 AA
+//                        ->  4.86:1 on white    passes
+//
+// Red is the intuitive choice for "attention" and it is the one that fails
+// here — while looking fine in any checker pointed at a white background.
+//
+// blue shade-25 (#16548a) gives 7.22:1 on #f5f5f5: clears AA (4.5:1) with
+// headroom, and clears AAA (7:1) too. Blue keeps lineage with the superseded
+// blue tag the team had already seen and approved. shade-25 rather than the
+// blue primary (#1d70b8) because that IS the GOV.UK link colour — bold blue
+// text against a site name would read as clickable.
+//
+// Bold is set here rather than left to the surrounding markup because the
+// prefix sits inside a <strong> on the site blocks but not on the
+// authority-to-issue contact lines, and the flag must look identical in both.
+.app-new-flag {
+  color: govuk-colour("blue", $variant: "shade-25");
+  font-weight: bold;
+}
