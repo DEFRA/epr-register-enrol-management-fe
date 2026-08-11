@@ -143,10 +143,22 @@ export function makeCreateWorkItemController({
  * nested object the service / Joi schema expects. Keeps the form HTML
  * compatible with Hapi's default `application/x-www-form-urlencoded`
  * parser (which does not understand bracket-notation keys).
+ *
+ * ⚠ THIS FUNCTION IS AN ALLOW-LIST, and that is the trap. A field absent
+ * from here is dropped BEFORE Joi ever sees it, so adding one to the
+ * schema and the template is not enough: that pair validates and renders
+ * perfectly while the value never leaves the browser, and every
+ * unit test still passes because they call the schema directly with a
+ * value this function never delivered. RA-316 shipped exactly that bug
+ * and only a real form POST caught it.
+ *
+ * ANY NEW FORM FIELD MUST BE ADDED IN THREE PLACES: the template, the
+ * schema, and here — with an integration test in `form-post.test.js`
+ * asserting the OUTBOUND payload, not the view model.
  */
 function reshapeFormPayload(payload) {
   const p = payload ?? {}
-  return {
+  const shaped = {
     operatorEmail: p.operatorEmail,
     organisationName: p.organisationName,
     siteAddress: {
@@ -158,6 +170,21 @@ function reshapeFormPayload(payload) {
     material: p.material,
     tonnageBand: p.tonnageBand
   }
+
+  // An empty box posts `''`, which `Joi.number()` would reject. Empty is
+  // the NORMAL case for this optional field, so "not supplied" must mean
+  // the key is ABSENT rather than present-and-undefined — the latter
+  // survives Joi and reaches the backend client, where only
+  // `JSON.stringify` dropping it saves us. Omitting it outright is what
+  // the contract actually means.
+  //
+  // `0` is a real amount and must survive, hence the explicit `''` test
+  // rather than a falsy check.
+  if (p.chargeAmountPence !== '' && p.chargeAmountPence != null) {
+    shaped.chargeAmountPence = p.chargeAmountPence
+  }
+
+  return shaped
 }
 
 /**
