@@ -397,6 +397,94 @@ describe('POST the duly-making form', () => {
   })
 })
 
+/**
+ * AC01, rendered rather than inferred.
+ *
+ * The eligibility unit tests prove WHEN the CTA should show; these prove
+ * the template is actually wired to that answer and that the hooks reach
+ * the DOM. Worth having on its own merits, but specifically because the
+ * mgmt-tests journey suite selects on `duly-make-cta` and `data-state-id`
+ * and could not execute against a real stack — a broken block override
+ * here would otherwise surface for the first time in CI.
+ */
+describe('the Duly make CTA on the application summary', () => {
+  async function renderDetail(overrides) {
+    getWorkItem.mockResolvedValue(okWorkItem(overrides))
+    return server.inject({ method: 'GET', url: DETAIL_HREF })
+  }
+
+  test('renders the CTA in submitted, linking to the duly-making page', async () => {
+    const { statusCode, result } = await renderDetail()
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('data-testid="duly-make-cta"')
+    expect(result).toContain(DULY_MAKE_HREF)
+    expect(result).toContain('Duly make')
+  })
+
+  test('exposes the raw state id, which the visible label cannot give', async () => {
+    // `assessment-in-progress` and `updated` both display as "Updated"
+    // (RA-324), so the id is the only way to tell them apart in the DOM.
+    const { result } = await renderDetail()
+    expect(result).toContain('data-state-id="submitted"')
+  })
+
+  test('suppresses the tasks panel where duly making is the next action', async () => {
+    const { result } = await renderDetail()
+    expect(result).not.toContain('data-testid="tasks-panel"')
+    expect(result).not.toContain('data-testid="work-item-no-tasks"')
+    expect(result).not.toContain('data-testid="work-item-tasks-link"')
+  })
+
+  test('renders the CTA for an updated item queried during duly making', async () => {
+    const { result } = await renderDetail({
+      stateId: 'updated',
+      stateDisplayName: 'Updated',
+      isTaskWaypoint: true,
+      taskStateId: 'submitted'
+    })
+    expect(result).toContain('data-testid="duly-make-cta"')
+    expect(result).toContain('data-state-id="updated"')
+    expect(result).not.toContain('data-testid="tasks-panel"')
+  })
+
+  test('no CTA for an updated item queried from assessment, and tasks stay', async () => {
+    const { result } = await renderDetail({
+      stateId: 'updated',
+      stateDisplayName: 'Updated',
+      isTaskWaypoint: true,
+      taskStateId: 'assessment-in-progress',
+      tasks: [
+        {
+          taskId: 'review-compliance-history',
+          displayName: 'Review compliance history',
+          status: 'Pending'
+        }
+      ]
+    })
+    expect(result).not.toContain('data-testid="duly-make-cta"')
+    // The distinction the journey suite needs: same visible label as the
+    // case above, different state id, different affordances.
+    expect(result).toContain('data-state-id="updated"')
+    expect(result).toContain('data-testid="tasks-panel"')
+  })
+
+  test.each(['duly-made', 'assessment-in-progress', 'awaiting-decision'])(
+    'no CTA in %s',
+    async (stateId) => {
+      const { result } = await renderDetail({ stateId })
+      expect(result).not.toContain('data-testid="duly-make-cta"')
+    }
+  )
+
+  test('no CTA on a terminal item', async () => {
+    const { result } = await renderDetail({
+      stateId: 'withdrawn',
+      stateDisplayName: 'Withdrawn'
+    })
+    expect(result).not.toContain('data-testid="duly-make-cta"')
+  })
+})
+
 describe('AC04 — Cancel changes nothing', () => {
   test('there is no POST route that Cancel could reach', async () => {
     // Cancel is an ordinary link to the detail page. Following it must not
