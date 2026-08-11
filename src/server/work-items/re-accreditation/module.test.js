@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v10')
+    expect(reAccreditationType.templateVersion).toBe('v11')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -169,7 +169,7 @@ describe('reAccreditationModule', () => {
   // mismatch: dropping the flag from any of the eight would make the
   // mirror advertise a set of same-from-state transitions as caller-
   // choosable, i.e. as if the user could pick the destination state.
-  test('flags exactly the eight server-resolved transitions the backend does', () => {
+  test('flags exactly the nine server-resolved transitions the backend does', () => {
     const serverResolved = reAccreditationType.transitions
       .filter((t) => t.callerInvocable === false)
       .map((t) => t.actionId)
@@ -180,6 +180,11 @@ describe('reAccreditationModule', () => {
       'continue-review-during-decision',
       'continue-review-during-duly-made',
       'continue-review-during-duly-making',
+      // RA-316. Server-resolved for a different reason from the others:
+      // not because the caller could pick the wrong target, but because
+      // duly making carries a payment date that the generic
+      // `/actions/{actionId}` route has nowhere to put.
+      'duly-make',
       'resume-during-assessment',
       'resume-during-decision',
       'resume-during-duly-made',
@@ -228,6 +233,7 @@ describe('reAccreditationModule', () => {
       'continue-review-during-decision',
       'continue-review-during-duly-made',
       'continue-review-during-duly-making',
+      'duly-make',
       'payment-received',
       'query-during-assessment',
       'query-during-decision',
@@ -250,10 +256,13 @@ describe('reAccreditationModule', () => {
   })
 
   test.each([
-    [
-      'submitted',
-      ['verify-organisation-details', 'confirm-application-completeness']
-    ],
+    // RA-316. `submitted` owns NO tasks. Both of its former tasks, and the
+    // backend hook that auto-transitioned to `duly-made` once they were
+    // ticked, were deleted when the Duly make CTA + payment-date page
+    // replaced that mechanism. Re-adding them here would not restore the
+    // old behaviour — the auto-transition is gone — it would only show a
+    // regulator a checklist that does nothing.
+    ['submitted', []],
     ['duly-made', ['confirm-registration-fee-paid']],
     [
       'assessment-in-progress',
@@ -367,10 +376,10 @@ describe('reAccreditationModule', () => {
       config.set(flagKey, true)
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
-      // Approval routes (RA-132) and continue-review routes (RA-372) are
-      // always mounted; create routes (RA-127) are only mounted when the
-      // flag is on.
-      expect(server.route).toHaveBeenCalledTimes(3)
+      // Approval (RA-132), continue-review (RA-372) and duly-making
+      // (RA-316) routes are always mounted; create routes (RA-127) are
+      // only mounted when the flag is on.
+      expect(server.route).toHaveBeenCalledTimes(4)
       const createCall = server.route.mock.calls.find(([routes]) =>
         routes.some((r) => r.path === '/work-items/re-accreditation/new')
       )
@@ -405,9 +414,9 @@ describe('reAccreditationModule', () => {
       config.set(flagKey, false)
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
-      // Only the always-on approval (RA-132) and continue-review (RA-372)
-      // routes are mounted.
-      expect(server.route).toHaveBeenCalledTimes(2)
+      // Only the always-on approval (RA-132), continue-review (RA-372) and
+      // duly-making (RA-316) routes are mounted.
+      expect(server.route).toHaveBeenCalledTimes(3)
       expect(
         server.route.mock.calls.every(([routes]) =>
           routes.every((r) => r.path !== '/work-items/re-accreditation/new')

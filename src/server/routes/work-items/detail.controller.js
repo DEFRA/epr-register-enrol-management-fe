@@ -13,6 +13,7 @@ import {
   evaluateApproveEligibility,
   RE_ACCREDITATION_TYPE_ID
 } from '#/server/work-items/re-accreditation/approve-eligibility.js'
+import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { isTaskComplete } from '#/server/work-items/core/task-status.js'
 import { isCallerInvocable } from '#/server/work-items/core/engine.js'
@@ -580,6 +581,13 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
   // merged into the view model below.
   const canApproveDirectly = evaluateApproveEligibility(source).allowed
 
+  // RA-316. Same discipline as the approve gate: evaluated against
+  // `source` (the raw backend DTO), and through the SAME helper the
+  // duly-making route guards itself with, so the CTA and the URL cannot
+  // disagree. The `submitted` state rule lives in the module's `duly-make`
+  // transition declaration, not here.
+  const canDulyMake = evaluateDulyMakeEligibility(source).allowed
+
   // RA-372. Derived from the generic waypoint flag, so the `updated`
   // literal lives only in `re-accreditation/module.js` — for a
   // re-accreditation, "its tasks belong to a different state" IS the
@@ -603,6 +611,8 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     ...workItem,
     canApproveDirectly,
     approveHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/approve`,
+    canDulyMake,
+    dulyMakeHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/duly-make`,
     canContinueReview,
     continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
     isReadOnlyState,

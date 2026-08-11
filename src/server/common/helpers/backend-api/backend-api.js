@@ -650,6 +650,75 @@ export async function continueReviewReAccreditation({
 }
 
 /**
+ * Duly make a re-accreditation work item (RA-316).
+ *
+ * Wraps `POST /work-items/re-accreditation/{id}/duly-make`.
+ * Body: `{ paymentDate }` — a plain `YYYY-MM-DD` string and nothing else.
+ * The backend parses with an exact `yyyy-MM-dd` invariant-culture format
+ * and REJECTS a full ISO timestamp, so never widen this to a Date or an
+ * `toISOString()`. Charge amount and payment reference are display-only
+ * and are ignored if sent.
+ *
+ * ⚠ UNLIKE THE OTHER CLIENTS HERE, this one surfaces `errorCode` from the
+ * ProblemDetails body. The backend distinguishes a user's bad payment date
+ * (400 + `errorCode: 'payment-date-*'` + `field: 'paymentDate'`) from a
+ * structural failure (404 / 409 / a wrong work item type), and the UI has
+ * to tell them apart: the first renders as a GOV.UK error summary bound to
+ * the date input, the second as a page-level banner. Collapsing both to
+ * `message` — which is what `continueReviewReAccreditation` does, because
+ * it has no field to bind to — would make that impossible.
+ *
+ * `message` still carries the backend's developer-facing `detail` for
+ * LOGGING. It is never rendered to the user; the frontend owns the copy.
+ */
+export async function dulyMakeReAccreditation({
+  workItemId,
+  paymentDate,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/duly-make`
+
+  const result = await postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    body: { paymentDate },
+    label: 'dulyMakeReAccreditation'
+  })
+
+  if (result.ok) {
+    return { ok: true, workItem: result.workItem }
+  }
+
+  // `postJson` reports transport failures without a status.
+  if (result.status == null) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: result.error ?? 'Request failed'
+    }
+  }
+
+  return {
+    ok: false,
+    reason: REASON_BY_STATUS[result.status] ?? 'server',
+    status: result.status,
+    errorCode:
+      typeof result.problem?.errorCode === 'string'
+        ? result.problem.errorCode
+        : null,
+    message:
+      result.problem?.detail ??
+      result.problem?.title ??
+      `Backend returned ${result.status}`
+  }
+}
+
+/**
  * Extend the SLA clock on a work item (RA-131).
  *
  * Wraps `POST /work-items/{id}/sla/extend`.

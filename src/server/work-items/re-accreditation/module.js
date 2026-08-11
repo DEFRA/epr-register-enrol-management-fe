@@ -3,6 +3,7 @@ import { registerModuleDetailTemplates } from '../core/templates.js'
 import { buildApprovalRoutes } from './approval/routes.js'
 import { buildContinueReviewRoutes } from './continue-review/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
+import { buildDulyMakingRoutes } from './duly-making/routes.js'
 
 /**
  * Re-accreditation work item module (RA-98).
@@ -50,6 +51,34 @@ const STATES = [
 ]
 
 const TRANSITIONS = [
+  // RA-316. The first step of the lifecycle: a regulator records the date
+  // the payment was received and the application becomes duly made. It
+  // STAYS in `duly-made` — nothing in RA-316 moves it on.
+  //
+  // `callerInvocable: false` mirrors the backend's `CallerInvocable: false`
+  // and is load-bearing in two directions. It keeps `projectWorkItem` from
+  // offering `duly-make` in `availableActions`, which matters because the
+  // generic `POST /work-items/{id}/actions/{actionId}` route has nowhere
+  // to put the payment date — a generic button would post an actionless
+  // request the backend would reject. And it is why the CTA cannot be
+  // gated through `core/engine.js#canApplyAction`, which refuses any
+  // transition declared this way: see `duly-making/eligibility.js`, which
+  // reads THIS declaration's `fromStateId` so the `submitted` literal
+  // lives here and only here.
+  //
+  // `requiresAllTasksComplete: false` is correct rather than incidental —
+  // `submitted` has no tasks at all any more (see TASKS_BY_STATE), and
+  // `true` would make the engine's all-complete check the gate on an empty
+  // list, which is vacuously satisfied today but would silently block
+  // duly making the moment anyone added a `submitted` task.
+  {
+    actionId: 'duly-make',
+    displayName: 'Duly make',
+    fromStateId: 'submitted',
+    toStateId: 'duly-made',
+    requiresAllTasksComplete: false,
+    callerInvocable: false
+  },
   {
     actionId: 'payment-received',
     displayName: 'Payment received',
@@ -269,16 +298,20 @@ const TRANSITIONS = [
 ]
 
 const TASKS_BY_STATE = {
-  submitted: [
-    {
-      id: 'verify-organisation-details',
-      displayName: 'Verify organisation details'
-    },
-    {
-      id: 'confirm-application-completeness',
-      displayName: 'Confirm application is duly made'
-    }
-  ],
+  // RA-316. `submitted` deliberately has NO entry and must not regain one.
+  // Duly making used to be driven by ticking `verify-organisation-details`
+  // and `confirm-application-completeness`, with a backend hook that
+  // auto-transitioned to `duly-made` once both were complete. That whole
+  // mechanism is gone: the backend deleted both tasks and the hook, and
+  // the "Duly make" CTA + payment-date page replaced it, because duly
+  // making needs a payment date that a task checkbox has nowhere to put.
+  //
+  // Re-adding tasks here would not restore the old behaviour — the
+  // auto-transition no longer exists — it would just show a regulator a
+  // checklist that does nothing.
+  //
+  // Other states keep their tasks; removing the tasks feature more
+  // broadly is RA-410, not this story.
   'duly-made': [
     {
       id: 'confirm-registration-fee-paid',
@@ -321,7 +354,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v10',
+  templateVersion: 'v11',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS,
@@ -344,6 +377,18 @@ export const reAccreditationModule = {
     //     plus continue-review-during-* transitions out of it
     // v9: RA-252 withdraw-during-query transition out of 'queried'
     // v10: RA-252 withdraw-during-updated transition out of 'updated'
+    // v11: RA-316 duly-make transition out of 'submitted', and the two
+    //      'submitted' tasks removed (the auto-transition they drove is
+    //      gone from the backend too)
+    //
+    // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
+    // release. The backend's snapshot migration restamps live items to v11
+    // but runs at startup and is fault-tolerant — a failure logs a warning
+    // and retries next boot — so there is a window in which live items are
+    // still stamped v10, and an unregistered v10 would drop every one of
+    // them onto the GENERIC detail template (losing this type's actions
+    // panel and the Duly make CTA) with nothing logged. Confirmed with
+    // management-be.
     //
     // RA-372 deliberately did NOT bump the version (confirmed with the
     // backend). Showing the originating state's tasks while an item is in
@@ -372,7 +417,8 @@ export const reAccreditationModule = {
       v7: 're-accreditation/detail-v1',
       v8: 're-accreditation/detail-v1',
       v9: 're-accreditation/detail-v1',
-      v10: 're-accreditation/detail-v1'
+      v10: 're-accreditation/detail-v1',
+      v11: 're-accreditation/detail-v1'
     })
 
     // RA-132. Approve-determination flow: confirmation interstitial + POST
@@ -388,6 +434,15 @@ export const reAccreditationModule = {
     // see the TRANSITIONS comment above. Always mounted; the CTA only
     // renders for a work item actually in `updated`.
     server.route(buildContinueReviewRoutes())
+
+    // RA-316. Duly-making flow: the payment-date page and its POST
+    // handler. Hits the type-specific backend endpoint because
+    // `duly-make` is declared non-caller-invocable and carries a payment
+    // date the generic action route cannot express — see the TRANSITIONS
+    // comment above. Always mounted; the CTA only renders for a work item
+    // actually in `submitted`, and both the CTA and the GET handler go
+    // through the same `evaluateDulyMakeEligibility` gate.
+    server.route(buildDulyMakingRoutes())
 
     // RA-127. The create-work-item demo form is feature-flagged so it
     // can be hidden in production. When the flag is off the routes are
