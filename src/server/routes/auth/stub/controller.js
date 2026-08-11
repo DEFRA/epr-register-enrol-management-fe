@@ -7,6 +7,7 @@ import {
   ROLE_STANDARD,
   ROLE_SUPPORT_READONLY
 } from '#/server/common/helpers/auth/auth-scopes.js'
+import { popPostLoginRedirect } from '#/server/common/helpers/auth/auth-redirect.js'
 
 /**
  * Static directory of stub assignable users. Exported for the assignee-
@@ -74,6 +75,8 @@ const STUB_SUPPORT_USER = {
 export function stubLoginPostController(request, h) {
   const { nation, loginAs } = request.payload ?? {}
 
+  const redirectTo = popPostLoginRedirect(request, '/work-items')
+
   // RA-299 AC10/14: mirror the real OAuth callback's yar.reset() so a stub
   // (re-)login also drops any session-persisted filters (e.g. the
   // work-items list's last-applied query, RA-299) — a new session must
@@ -87,7 +90,7 @@ export function stubLoginPostController(request, h) {
       scope: [ROLE_SUPPORT_READONLY]
     }
     request.yar.set('user', user)
-    return h.redirect('/work-items')
+    return h.redirect(redirectTo)
   }
 
   const nationOption = NATION_OPTIONS.find((n) => n.value === (nation ?? ''))
@@ -111,5 +114,5 @@ export function stubLoginPostController(request, h) {
   }
 
   request.yar.set('user', user)
-  return h.redirect('/work-items')
+  return h.redirect(redirectTo)
 }
