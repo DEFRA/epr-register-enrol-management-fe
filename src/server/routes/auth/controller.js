@@ -207,7 +207,13 @@ export function createAuthControllers({
   }
 
   function logoutController(request, h) {
-    request.yar.clear('user')
+    // RA-306 (AC01/AC02): destroy the whole session rather than clearing
+    // the `user` key alone. Anything else the session accumulated while
+    // signed in (RA-299 work-items filters, in-flight OAuth state) must go
+    // with it, and the session id itself is discarded so a copy of the
+    // cookie is worthless afterwards. Mirrors the yar.reset() in the OAuth
+    // callback above and in the stub login controller.
+    request.yar.reset()
     return h.redirect(LOGIN_PATH)
   }
 

@@ -193,6 +193,91 @@ describe('auth', () => {
   })
 })
 
+// RA-306 (AC03). The browser must not be able to redraw a case management
+// page from its back/forward cache after sign out — it has to refetch, so
+// that the destroyed session bounces it to sign-in.
+describe('no-store on authenticated responses', () => {
+  let server
+
+  beforeAll(async () => {
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  test('an authenticated page response is marked no-store', async () => {
+    const { statusCode, headers } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(headers['cache-control']).toBe('no-store')
+    expect(headers.pragma).toBe('no-cache')
+    expect(headers.expires).toBe('0')
+  })
+
+  test('an authenticated redirect is marked no-store', async () => {
+    const { statusCode, headers } = await server.inject({
+      method: 'GET',
+      url: '/'
+    })
+
+    expect(statusCode).toBe(302)
+    expect(headers['cache-control']).toBe('no-store')
+  })
+
+  test('an authenticated error page is marked no-store', async () => {
+    // A 403 on a real (authenticated) route: the Boom goes through
+    // catchAll, which swaps it for a rendered view. Proves the extension
+    // ordering in server.js still covers the final response.
+    const { statusCode, headers } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: '/work-items/some-id/self-assign',
+      headers: { 'x-test-user-role': 'support-readonly' },
+      payload: {}
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
+    expect(headers['cache-control']).toBe('no-store')
+  })
+
+  test('a 404 for an unrouted URL is left alone (auth never ran)', async () => {
+    // No route matched, so there is no authenticated user and no user
+    // data in the response — nothing to protect from the cache.
+    const { statusCode, headers } = await server.inject({
+      method: 'GET',
+      url: '/definitely-not-a-route'
+    })
+
+    expect(statusCode).toBe(statusCodes.notFound)
+    expect(headers['cache-control']).not.toBe('no-store')
+  })
+
+  test('static assets stay cacheable', async () => {
+    const { headers } = await server.inject({
+      method: 'GET',
+      url: '/favicon.ico'
+    })
+
+    expect(headers['cache-control']).not.toBe('no-store')
+    expect(headers.pragma).toBeUndefined()
+  })
+
+  test('the sign-in page is not forced to no-store', async () => {
+    const { statusCode, headers } = await server.inject({
+      method: 'GET',
+      url: '/auth/stub/login'
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(headers['cache-control']).not.toBe('no-store')
+  })
+})
+
 describe('Entra ID button visibility', () => {
   let entraServer
 

@@ -6,6 +6,7 @@ import { router } from './plugins/router.js'
 import { config } from '#/config/config.js'
 import { pulse } from './plugins/pulse.js'
 import { catchAll } from './common/helpers/errors.js'
+import { noStoreAuthenticatedResponses } from './common/helpers/no-store-cache.js'
 import { nunjucksConfig } from '#/config/nunjucks/nunjucks.js'
 import {
   setupProxyEnv,
@@ -89,6 +90,11 @@ export async function createServer() {
   installProxyDispatcher()
 
   server.ext('onPreResponse', catchAll)
+
+  // RA-306 (AC03). Must come after catchAll so the no-store headers land
+  // on the final response, including the GDS error page catchAll renders
+  // in place of a Boom error.
+  server.ext('onPreResponse', noStoreAuthenticatedResponses)
 
   return server
 }
