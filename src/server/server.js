@@ -21,6 +21,7 @@ import { contentSecurityPolicy } from './plugins/content-security-policy.js'
 import { csrfProtection } from './plugins/csrf.js'
 import { metrics } from '@defra/cdp-metrics'
 import { selectAuthPlugin } from './plugins/select-auth-plugin.js'
+import { basicAuthPlugin } from './common/helpers/auth/basic-auth-plugin.js'
 import { authRoutes } from './routes/auth/index.js'
 
 export async function createServer() {
@@ -84,6 +85,7 @@ export async function createServer() {
     // registered first.
     authToRegister,
     sessionCache,
+    basicAuthPlugin,
     nunjucksConfig,
     Scooter,
     contentSecurityPolicy,

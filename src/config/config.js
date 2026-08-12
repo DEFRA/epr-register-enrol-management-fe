@@ -336,6 +336,25 @@ export const config = convict({
       default: process.env.ENVIRONMENT !== 'prod',
       env: 'AUTH_STUB_ENABLED'
     },
+    basicEnabled: {
+      doc: 'Enable HTTP basic authentication. Defaults to false. Requires BASIC_USER and BASIC_PASSWD to be set — server will refuse to start if either is empty when this is enabled.',
+      format: Boolean,
+      default: false,
+      env: 'AUTH_BASIC_ENABLED'
+    },
+    basicUsr: {
+      doc: 'The username for HTTP basic authentication. Must be non-empty when AUTH_BASIC_ENABLED is true.',
+      format: String,
+      default: '',
+      env: 'BASIC_USER'
+    },
+    basicPasswd: {
+      doc: 'The password for HTTP basic authentication. Must be non-empty when AUTH_BASIC_ENABLED is true.',
+      format: String,
+      default: '',
+      env: 'BASIC_PASSWD',
+      sensitive: true
+    },
     callbackBaseUrl: {
       doc: 'Base URL for OAuth callback URLs (e.g. https://myapp.example.com)',
       format: String,
