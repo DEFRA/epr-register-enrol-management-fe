@@ -226,9 +226,16 @@ export function makeSubmitDecisionController({
       // keeps its own identical guard as a backstop for non-form callers, but
       // its failure result is a banner-and-redirect — which for an over-long
       // note would bounce the user to the detail page and discard the
-      // rationale they had just written. `govukCharacterCount`'s live counter
-      // is progressive enhancement and cannot be relied on: with no browser
-      // JS (RA-94) it degrades to a plain textarea that submits happily.
+      // rationale they had just written.
+      //
+      // ⚠ This is the ONLY thing enforcing the limit, in every browser — not
+      // just the no-JS case RA-94 mandates. `govukCharacterCount` passes
+      // `maxlength` to `data-maxlength` and deliberately never sets the HTML
+      // `maxlength` attribute (see govuk-frontend's own
+      // `character-count/template.njk`), so the textarea accepts unlimited
+      // input regardless. With JS the counter turns red and says how far over
+      // you are; it does not block submission. Verified against the installed
+      // govuk-frontend by mgmt-tests, which asserts this path end-to-end.
       if (decisionNote.trim().length > DECISION_NOTE_MAX_LENGTH) {
         fieldErrors.decisionNote = NOTE_TOO_LONG_MESSAGE
         errorItems.push({
