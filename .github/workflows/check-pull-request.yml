@@ -79,6 +79,27 @@ jobs:
           docker build -t defradigital/epr-register-enrol-management-be:$SHA .
           echo "tag=$SHA" >> "$GITHUB_OUTPUT"
 
+      # Diagnostic only — never fails the job. A cross-repo story lands as
+      # three branches sharing one name, and when a sibling's branch is not
+      # pushed yet the run silently substitutes something else: an unmatched
+      # management-be leaves `build-be.outputs.tag` EMPTY, and compose's
+      # `${MANAGEMENT_BE:-latest}` substitutes on empty as well as unset, so
+      # the stack comes up on the last PUBLISHED image — not this repo's
+      # branch, and not management-be main either. A run skewed that way fails
+      # in ways that look like product defects, so say plainly which build
+      # each service came from before the specs run.
+      - name: Report resolved e2e stack
+        run: |
+          BE_TAG="${{ steps.build-be.outputs.tag }}"
+          echo "management-fe : ${{ github.sha }} (this PR)"
+          echo "mgmt-tests    : ${{ steps.e2e-branch.outputs.ref }}"
+          if [ -n "$BE_TAG" ]; then
+            echo "management-be : $BE_TAG (branch ${{ github.head_ref }})"
+          else
+            echo "management-be : latest (published image)"
+            echo "::warning title=Skewed e2e stack::No management-be branch named '${{ github.head_ref }}', so the stack runs on the published 'latest' image. If this PR depends on unreleased management-be changes, failures below are expected and are NOT evidence of a defect in this repo."
+          fi
+
       - name: Run e2e tests on ${{ steps.e2e-branch.outputs.ref }}
         uses: DEFRA/epr-register-enrol-mgmt-tests/run-journey-tests@main
         with:
