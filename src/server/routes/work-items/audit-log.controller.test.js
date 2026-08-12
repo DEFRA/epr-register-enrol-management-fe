@@ -39,7 +39,6 @@ function aWorkItem(overrides = {}) {
       applicantName: 'Acme',
       applicationReference: 'RA-000000001'
     },
-    tasks: [],
     availableActions: [],
     auditLog: [],
     ...overrides
@@ -84,11 +83,10 @@ describe('#workItemAuditLogController', () => {
         auditLog: [
           {
             id: 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-            action: 'task-completed',
-            actionDisplayName: 'Task completed',
+            action: 'note-added',
+            actionDisplayName: 'Note added',
             details: {
-              taskId: 'check-eligibility',
-              taskDisplayName: 'Check eligibility'
+              noteText: 'Checked eligibility'
             },
             createdAt: '2026-04-27T09:00:00Z',
             createdBy: 'alice-1',
@@ -128,8 +126,8 @@ describe('#workItemAuditLogController', () => {
     expect(result).toEqual(
       expect.stringContaining('data-testid="tab-application-history"')
     )
-    expect(result).toEqual(expect.stringContaining('Task completed'))
-    expect(result).toEqual(expect.stringContaining('Check eligibility'))
+    expect(result).toEqual(expect.stringContaining('Note added'))
+    expect(result).toEqual(expect.stringContaining('Checked eligibility'))
     expect(result).toEqual(expect.stringContaining('Action applied'))
     expect(result).toEqual(
       expect.stringContaining('Approve (submitted → approved)')
@@ -141,7 +139,7 @@ describe('#workItemAuditLogController', () => {
     expect(result).toEqual(expect.stringContaining('27 April 2026 at 10:00am'))
     // Chronological (oldest-first) ordering: the earlier entry appears
     // before the later one in the rendered HTML.
-    expect(result.indexOf('Task completed')).toBeLessThan(
+    expect(result.indexOf('Note added')).toBeLessThan(
       result.indexOf('Action applied')
     )
     // Provides a way back to the detail page.
@@ -240,49 +238,6 @@ describe('#workItemAuditLogController', () => {
       expect.stringContaining('Second &lt;script&gt;evil&lt;/script&gt;')
     )
     expect(result).not.toEqual(expect.stringContaining('<script>evil</script>'))
-  })
-
-  test('Surfaces the from/to status on a task-status-changed entry inside a "Show details" disclosure', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        auditLog: [
-          {
-            id: 'dddd4444-dddd-dddd-dddd-dddddddddddd',
-            action: 'task-status-changed',
-            actionDisplayName: 'Task status changed',
-            details: {
-              taskId: 'check-eligibility',
-              taskDisplayName: 'Check eligibility',
-              stateId: 'submitted',
-              fromStatus: 'NotStarted',
-              toStatus: 'InProgress'
-            },
-            createdAt: '2026-04-27T09:00:00Z',
-            createdBy: 'alice-1',
-            createdByName: 'Alice Example'
-          }
-        ]
-      })
-    })
-
-    const { statusCode, result } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}/audit-log`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(
-      expect.stringContaining('data-testid="work-item-audit-entry-details"')
-    )
-    expect(result).toEqual(expect.stringContaining('Show details'))
-    expect(result).toEqual(expect.stringContaining('Task'))
-    expect(result).toEqual(expect.stringContaining('Check eligibility'))
-    expect(result).toEqual(expect.stringContaining('Previous status'))
-    expect(result).toEqual(expect.stringContaining('NotStarted'))
-    expect(result).toEqual(expect.stringContaining('New status'))
-    expect(result).toEqual(expect.stringContaining('InProgress'))
   })
 
   test('Shows snapshot context rows even for unknown action entries with no action-specific detail rows', async () => {

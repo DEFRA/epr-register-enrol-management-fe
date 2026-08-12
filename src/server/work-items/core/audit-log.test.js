@@ -7,27 +7,6 @@ import {
 } from './audit-log.js'
 
 describe('summariseAuditEntry', () => {
-  test('returns task display name for a task-completed entry', () => {
-    expect(
-      summariseAuditEntry({
-        action: 'task-completed',
-        details: {
-          taskId: 'check-eligibility',
-          taskDisplayName: 'Check eligibility'
-        }
-      })
-    ).toBe('Check eligibility')
-  })
-
-  test('falls back to task id when display name is missing', () => {
-    expect(
-      summariseAuditEntry({
-        action: 'task-completed',
-        details: { taskId: 'check-eligibility' }
-      })
-    ).toBe('check-eligibility')
-  })
-
   test('renders an action-applied entry as "Action (from -> to)"', () => {
     expect(
       summariseAuditEntry({
@@ -271,25 +250,6 @@ describe('detailRowsForAuditEntry', () => {
     ).toEqual([])
   })
 
-  test('projects task, state and actor for a task-completed entry', () => {
-    expect(
-      detailRowsForAuditEntry({
-        action: 'task-completed',
-        createdBy: 'alice-1',
-        createdByName: 'Alice Anderson',
-        details: {
-          taskId: 'check-eligibility',
-          taskDisplayName: 'Check eligibility',
-          stateId: 'submitted'
-        }
-      })
-    ).toEqual([
-      { key: 'Task', value: 'Check eligibility' },
-      { key: 'State', value: 'submitted' },
-      { key: 'Completed by', value: 'Alice Anderson' }
-    ])
-  })
-
   test('projects action, from/to state and actor for an action-applied entry', () => {
     expect(
       detailRowsForAuditEntry({
@@ -308,44 +268,6 @@ describe('detailRowsForAuditEntry', () => {
       { key: 'Previous state', value: 'submitted' },
       { key: 'New state', value: 'approved' },
       { key: 'Applied by', value: 'Alice Anderson' }
-    ])
-  })
-
-  test('projects task, state, from/to status and actor for a task-status-changed entry', () => {
-    expect(
-      detailRowsForAuditEntry({
-        action: 'task-status-changed',
-        createdBy: 'alice-1',
-        createdByName: 'Alice Anderson',
-        details: {
-          taskId: 'check-eligibility',
-          taskDisplayName: 'Check eligibility',
-          stateId: 'submitted',
-          fromStatus: 'NotStarted',
-          toStatus: 'InProgress'
-        }
-      })
-    ).toEqual([
-      { key: 'Task', value: 'Check eligibility' },
-      { key: 'State', value: 'submitted' },
-      { key: 'Previous status', value: 'NotStarted' },
-      { key: 'New status', value: 'InProgress' },
-      { key: 'Changed by', value: 'Alice Anderson' }
-    ])
-  })
-
-  test('falls back to task id when display name is missing for task-status-changed', () => {
-    expect(
-      detailRowsForAuditEntry({
-        action: 'task-status-changed',
-        details: {
-          taskId: 'check-eligibility',
-          toStatus: 'Completed'
-        }
-      })
-    ).toEqual([
-      { key: 'Task', value: 'check-eligibility' },
-      { key: 'New status', value: 'Completed' }
     ])
   })
 
@@ -558,9 +480,9 @@ describe('decorateAuditLog (RA-129)', () => {
 
   test('falls back to the lookup when backend actionDisplayName is missing', () => {
     const [decorated] = decorateAuditLog([
-      { action: 'task-status-changed', details: {} }
+      { action: 'notification-sent', details: {} }
     ])
-    expect(decorated.actionDisplayName).toBe('Task status changed')
+    expect(decorated.actionDisplayName).toBe('Notification sent')
   })
 
   test('falls back to the action id when there is no lookup entry', () => {
@@ -570,9 +492,9 @@ describe('decorateAuditLog (RA-129)', () => {
 
   test('treats blank backend actionDisplayName as missing', () => {
     const [decorated] = decorateAuditLog([
-      { action: 'task-status-changed', actionDisplayName: '   ', details: {} }
+      { action: 'notification-sent', actionDisplayName: '   ', details: {} }
     ])
-    expect(decorated.actionDisplayName).toBe('Task status changed')
+    expect(decorated.actionDisplayName).toBe('Notification sent')
   })
 
   test('falls back to empty string when both backend label and action are missing', () => {

@@ -10,13 +10,15 @@ import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import { findAssignableUser } from '#/server/work-items/core/assignees.js'
 import {
-  evaluateApproveEligibility,
+  evaluateLogDecisionEligibility,
   RE_ACCREDITATION_TYPE_ID
-} from '#/server/work-items/re-accreditation/approve-eligibility.js'
+} from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { isTaskComplete } from '#/server/work-items/core/task-status.js'
-import { isCallerInvocable } from '#/server/work-items/core/engine.js'
+import {
+  isCallerInvocable,
+  resolveSelfAssignTransition
+} from '#/server/work-items/core/engine.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { config } from '#/config/config.js'
@@ -39,8 +41,8 @@ const UNAVAILABLE_VIEW = 'work-items/detail-error'
  * Render a single work item.
  *
  * The backend's `WorkItemResponse` already carries the engine projection
- * (tasks + available actions) and the `templateVersion` the item was
- * assessed against, so we:
+ * (available actions) and the `templateVersion` the item was assessed
+ * against, so we:
  *   1. Fetch it via the backend client.
  *   2. Pick the detail template registered for `(typeId, templateVersion)`,
  *      falling back to the generic core template, so historical items keep
@@ -55,73 +57,6 @@ const UNAVAILABLE_VIEW = 'work-items/detail-error'
 export const workItemDetailController = {
   async handler(request, h) {
     return renderDetail({ request, h })
-  }
-}
-
-export function makeCompleteTaskController({
-  service = createWorkItemActionsService()
-} = {}) {
-  return {
-    async handler(request, h) {
-      const { id, taskId } = request.params
-      const result = await service.completeTask({
-        workItemId: id,
-        taskId,
-        user: getUser(request)
-      })
-
-      if (result.ok) {
-        // PRG: redirect-after-post so refresh is harmless and the URL stays
-        // clean of one-shot state.
-        return h.redirect(successRedirect(request, id))
-      }
-      return renderDetailFromResult({
-        request,
-        h,
-        id,
-        result,
-        actionLabel: `mark task "${taskId}" complete`
-      })
-    }
-  }
-}
-
-/**
- * Move a task through the richer `WorkItemTaskStatus` lifecycle (epr-gl6).
- *
- * The form posts a single `status` field (e.g. `InProgress`); the service
- * validates it against the canonical set and forwards the change to the
- * backend's `PUT /tasks/{taskId}/status` endpoint. PRG-redirects on
- * success; engine rejections (unknown task, invalid value) and transport
- * failures surface inline via the same notification banner used by the
- * other action handlers.
- */
-export function makeSetTaskStatusController({
-  service = createWorkItemActionsService()
-} = {}) {
-  return {
-    async handler(request, h) {
-      const { id, taskId } = request.params
-      const payload = request.payload ?? {}
-      const status = typeof payload.status === 'string' ? payload.status : ''
-      const result = await service.setTaskStatus({
-        workItemId: id,
-        taskId,
-        status,
-        user: getUser(request)
-      })
-
-      if (result.ok) {
-        return h.redirect(successRedirect(request, id))
-      }
-      return renderDetailFromResult({
-        request,
-        h,
-        id,
-        result,
-        actionLabel: `update task "${taskId}" status`
-      })
-    }
   }
 }
 
@@ -220,6 +155,34 @@ export function makeAssignController({
  * picker. Distinct from `makeAssignController` since the handler derives
  * the assignee from the authenticated session, so the form carries no
  * `assigneeId` / `assigneeName` payload at all.
+ *
+ * RA-410. The button says "Assign to yourself and start", and now the
+ * handler actually starts something: after a successful assignment it
+ * applies whichever transition the work item's type marks
+ * `startsOnSelfAssign` for the item's CURRENT state. For a re-accreditation
+ * that is `payment-received`, moving `duly-made` into assessment. The
+ * separate "Payment received" button is gone.
+ *
+ * ⚠ The state check is the load-bearing part. RA-295 renders the assignment
+ * panel in EVERY state, so this handler is reached for `queried`,
+ * `awaiting-decision` and the rest. `resolveSelfAssignTransition` returns
+ * `null` for all of them and self-assign stays a plain assignment with no
+ * state change. Do not hoist the transition out of that guard.
+ *
+ * Partial failure is deliberately NOT silent and deliberately NOT rolled
+ * back. The two calls cannot be made atomic from here (management-be offers
+ * no combined endpoint, by design — it reserved that for the decision hop,
+ * where a half-finished write would lose a terminal decision). So:
+ *
+ *  - assign fails            -> nothing happened; render the error in place.
+ *  - assign ok, transition fails -> the assignment STANDS, and the user is
+ *    told exactly that. Rolling the assignment back would need a third call
+ *    that can itself fail, and would throw away a correct, useful result.
+ *    The item is left assigned to the caller and still not started, which is
+ *    a state they can act on: `canSelfAssign` keeps the button rendering
+ *    while a `startsOnSelfAssign` transition is still pending, and both
+ *    halves are idempotent, so pressing it again retries just the missing
+ *    half.
  */
 export function makeSelfAssignController({
   service = createWorkItemActionsService()
@@ -242,6 +205,27 @@ export function makeSelfAssignController({
         })
       }
 
+      // Read the item BEFORE assigning: the transition to apply depends on
+      // the state, and after a successful assign we would be reading a
+      // response we did not ask for. A failure here is not fatal — the
+      // assignment is still worth doing — so it degrades to "assign only"
+      // rather than blocking, and the missing transition is recoverable via
+      // the same button.
+      const current = await getWorkItem({ workItemId: id, user })
+      const startTransition = current?.ok
+        ? resolveSelfAssignTransition(
+            getWorkItemType(current.workItem?.typeId),
+            current.workItem
+          )
+        : null
+
+      if (!current?.ok) {
+        logger.warn(
+          { workItemId: id, status: current?.status },
+          'Could not read work item before self-assign; assigning without starting'
+        )
+      }
+
       const result = await service.assign({
         workItemId: id,
         assigneeId: user.id,
@@ -249,16 +233,55 @@ export function makeSelfAssignController({
         user
       })
 
-      if (result.ok) {
+      if (!result.ok) {
+        return renderDetailFromResult({
+          request,
+          h,
+          id,
+          result,
+          actionLabel: 'self-assign work item'
+        })
+      }
+
+      if (startTransition == null) {
         return h.redirect(`/work-items/${encodeURIComponent(id)}`)
       }
-      return renderDetailFromResult({
-        request,
-        h,
-        id,
-        result,
-        actionLabel: 'self-assign work item'
+
+      const transitionResult = await service.applyAction({
+        workItemId: id,
+        actionId: startTransition.actionId,
+        user
       })
+
+      if (!transitionResult.ok) {
+        logger.warn(
+          {
+            workItemId: id,
+            actionId: startTransition.actionId,
+            reason: transitionResult.reason,
+            status: transitionResult.status
+          },
+          'Self-assign succeeded but the start transition failed'
+        )
+        // Render in place rather than redirecting, so the banner sits on the
+        // page showing the (now assigned, still not started) work item. The
+        // message names BOTH halves — the user must not read this as "the
+        // assignment failed" and go looking for it, nor as a generic error
+        // that leaves them unsure what landed.
+        return renderDetailFromResult({
+          request,
+          h,
+          id,
+          result: {
+            ...transitionResult,
+            message:
+              'This application has been assigned to you, but it could not be started. Select "Assign to yourself and start" again to retry.'
+          },
+          actionLabel: 'start work item'
+        })
+      }
+
+      return h.redirect(`/work-items/${encodeURIComponent(id)}`)
     }
   }
 }
@@ -328,15 +351,16 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   // backend is still the source of truth for authorisation — this only
   // controls which affordances render.
   //
-  // RA-346. `source` is the RAW backend DTO, deliberately not `decorated`.
-  // The approve gate must see exactly what the approve ROUTE sees
-  // (`approval/controller.js` evaluates the untouched `getWorkItem`
-  // result), or the button and the URL can disagree — the item renders an
-  // Approve CTA that the route then refuses. `decorate` is a view-layer
-  // normaliser: it coerces a missing `tasks` to `[]` and rewrites each
-  // task's `status`, both of which would silently change the gate's answer.
-  // Eligibility is a domain question; it must not be asked of view-model
-  // output.
+  // RA-346 / RA-410. `source` is the RAW backend DTO, deliberately not
+  // `decorated`. Every eligibility gate must see exactly what the
+  // corresponding ROUTE sees (each type-specific controller evaluates the
+  // untouched `getWorkItem` result), or the button and the URL can disagree
+  // — the item renders a CTA that the route then refuses. Eligibility is a
+  // domain question; it must not be asked of view-model output. The tasks
+  // normalisation that originally motivated this rule is gone, but the rule
+  // is not: `decorate` still rewrites and drops fields, and
+  // `duly-making/eligibility.js` reads `originStateId`, which only exists on
+  // the raw DTO.
   const enriched = applyReAccreditationViewModel({
     workItem: decorated,
     source: result.workItem
@@ -507,7 +531,20 @@ function buildAssignmentViewModel({ workItem, user }) {
     // `canSelfAssign` because the template needs to distinguish "no button
     // because you already hold it" from "no controls because it is closed".
     isClosed,
-    canSelfAssign: user?.id != null && !callerIsAssignee && !isClosed
+    // RA-410. The `|| selfAssignStartsWork` clause is the recovery path, not
+    // a loosening. "Assign to yourself and start" is two operations, and if
+    // the assign lands but the transition does not, `callerIsAssignee`
+    // flips to true and the ONLY control that performs the transition would
+    // disappear — leaving the caller holding an item they cannot start, with
+    // the old "Payment received" button now filtered out of the actions
+    // list. Keeping the button while the item still sits in a
+    // `startsOnSelfAssign` state makes the retry reachable. Both halves are
+    // idempotent (management-be: re-assigning the same user is a no-op that
+    // writes no audit entry), so pressing it again is safe.
+    canSelfAssign:
+      user?.id != null &&
+      !isClosed &&
+      (!callerIsAssignee || workItem.selfAssignStartsWork === true)
     // RA-295 removed `isUnassigned`, `canUnassign` and `assignableUsers`
     // from this model: the reassign / unassign links are unconditional
     // WITHIN the active lifecycle (AC03, as narrowed by RA-358 above) and
@@ -523,29 +560,29 @@ function buildAssignmentViewModel({ workItem, user }) {
 // in three things on top of an already-decorated work item, only when its
 // `typeId` is `re-accreditation`:
 //
-//  - `canApproveDirectly` — whether the primary "Approve" CTA should
-//    render. RA-323: any caseworker may approve, so this is purely an
+//  - `canLogDecision` — whether the primary "Log decision" CTA should
+//    render. RA-323: any caseworker may decide, so this is purely an
 //    eligibility check. The backend remains authoritative; a forged POST is
 //    still rejected there.
 //
-//    RA-346: this used to test `stateId === 'awaiting-decision'` and nothing
-//    else, so the CTA was offered while the `record-decision-rationale` task
-//    was still pending — `approve` is not a generic engine action, so the
-//    task-completion filter that gates every other action never applied to
-//    it. It now defers to `evaluateApproveEligibility`, which asks the
-//    engine about the module's DECLARED `approve` transition
-//    (`requiresAllTasksComplete: true`). The approve route guards itself
-//    with the same helper, so the button and the URL cannot disagree.
-//  - `approveHref` — link target for the CTA.
+//    RA-410: replaced `canApproveDirectly`. One CTA now covers both
+//    outcomes, and it renders from `assessment-in-progress` as well as
+//    `awaiting-decision` — see `decision/eligibility.js` for why both entry
+//    states are allowed. The decision route guards itself with the same
+//    helper, so the button and the URL cannot disagree.
+//  - `logDecisionHref` — link target for the CTA.
 //  - `canContinueReview` + `continueReviewHref` (RA-372) — whether the
-//    "Continue review" CTA should render, and where it posts. Reads the
-//    GENERIC `isTaskWaypoint` flag (see `decorate`) rather than testing
-//    for `updated` itself, so the only re-accreditation knowledge here is
-//    the route. The endpoint is protected by plain authentication — no
-//    `assign` role, no assigned-officer check — and is NOT gated on task
-//    completion (all four underlying `continue-review-during-*`
-//    transitions are `RequiresAllTasksComplete: false`). The backend
-//    remains authoritative.
+//    "Continue review" CTA should render, and where it posts. The endpoint
+//    is protected by plain authentication — no `assign` role, no
+//    assigned-officer check. The backend remains authoritative.
+//
+//    RA-410: this used to read the generic `isTaskWaypoint` flag, which
+//    `decorate` derived from `taskStateId`. Both are gone. It now reads the
+//    `continue-review-during-*` transitions' own `fromStateId` from the
+//    module declaration, so the `updated` literal STILL lives only in
+//    `re-accreditation/module.js` and a change there moves the CTA with it.
+//    This is not a task feature and must keep working — it is the only path
+//    out of `updated`.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
 //    a terminal state (approved / rejected / withdrawn), the template
 //    suppresses the generic action panel and shows a status tag.
@@ -564,12 +601,40 @@ function buildAssignmentViewModel({ workItem, user }) {
 // this constant rather than adding another list.
 //
 // RA-346 note for anyone tempted to add a terminal-state check to the
-// approve gate below: there is deliberately none. `canApproveDirectly` is
-// answered by `evaluateApproveEligibility`, which asks the engine about the
-// DECLARED `approve` transition (`fromStateId: 'awaiting-decision'`), so a
-// closed case fails it as an invalid transition without consulting this
-// list. The two rules are independent and both must hold.
+// decision gate below: there is deliberately none. `canLogDecision` is
+// answered by `evaluateLogDecisionEligibility`, which checks the type's own
+// `isTerminal` flag before anything else, so a closed case fails it without
+// consulting this list. The two rules are independent and both must hold.
 const TERMINAL_STATE_IDS = new Set(['approved', 'rejected', 'withdrawn'])
+
+/**
+ * Is `stateId` the state the `continue-review-during-*` transitions leave
+ * from? (RA-410.)
+ *
+ * Derived from the module declaration rather than comparing against a
+ * `'updated'` literal, so that literal stays in `re-accreditation/module.js`
+ * and a change to it moves this predicate — and therefore the CTA — with it.
+ * All four `continue-review-during-*` entries share one `fromStateId`, which
+ * is the whole reason they are non-caller-invocable, so any one of them
+ * answers the question.
+ *
+ * Returns `false` when the type is not registered or declares no such
+ * transition: failing CLOSED here hides a CTA rather than offering one the
+ * route would refuse.
+ */
+function isContinueReviewState(stateId) {
+  if (stateId == null) {
+    return false
+  }
+  const type = getWorkItemType(RE_ACCREDITATION_TYPE_ID)
+  return (type?.transitions ?? []).some(
+    (t) =>
+      t.actionId?.startsWith(CONTINUE_REVIEW_ACTION_PREFIX) &&
+      t.fromStateId === stateId
+  )
+}
+
+const CONTINUE_REVIEW_ACTION_PREFIX = 'continue-review-during-'
 
 function applyReAccreditationViewModel({ workItem, source = workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
@@ -579,7 +644,7 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
   // Gate on `source` (the raw backend DTO), never on `workItem` (the
   // decorated view model) — see the call site for why. The flag is then
   // merged into the view model below.
-  const canApproveDirectly = evaluateApproveEligibility(source).allowed
+  const canLogDecision = evaluateLogDecisionEligibility(source).allowed
 
   // RA-316. Same discipline as the approve gate: evaluated against
   // `source` (the raw backend DTO), and through the SAME helper the
@@ -588,17 +653,15 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
   // transition declaration, not here.
   const canDulyMake = evaluateDulyMakeEligibility(source).allowed
 
-  // RA-372. Derived from the generic waypoint flag, so the `updated`
-  // literal lives only in `re-accreditation/module.js` — for a
-  // re-accreditation, "its tasks belong to a different state" IS the
-  // updated state, and the backend is the one that decides that.
+  // RA-372 / RA-410. Read off the module's own `continue-review-during-*`
+  // declarations rather than testing for `'updated'` here, so that literal
+  // stays in `re-accreditation/module.js`. All four share
+  // `fromStateId: 'updated'`, so "is this item in the state those
+  // transitions leave from" is exactly "should Continue review render".
   //
-  // Deliberately NOT `&& allTasksComplete`: the waypoint shows the
-  // originating state's tasks, and the whole point of continuing the
-  // review is to get back to that state so the outstanding ones can be
-  // finished there. Gating on completion would recreate the dead end this
-  // ticket exists to remove.
-  const canContinueReview = workItem.isTaskWaypoint === true
+  // Replaces the old `isTaskWaypoint` derivation, which read `taskStateId`
+  // — a field RA-410 removed. The CTA itself is unchanged.
+  const canContinueReview = isContinueReviewState(source?.stateId)
 
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
@@ -609,8 +672,8 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
 
   return {
     ...workItem,
-    canApproveDirectly,
-    approveHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/approve`,
+    canLogDecision,
+    logDecisionHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/decision`,
     canDulyMake,
     dulyMakeHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/duly-make`,
     canContinueReview,
@@ -708,6 +771,28 @@ function renderDetailFromResult({ request, h, id, result, actionLabel }) {
 // and suppress the "No actions are currently available" message.
 const SLA_EXTEND_ACTION_ID = 'sla-extend'
 
+// RA-410. The same treatment for the transition "Assign to yourself and
+// start" now applies (re-accreditation's `payment-received`). It used to
+// render as its own "Payment received" button in the actions list, gated on
+// a task; the task is gone and the button with it, because the assignment
+// panel's primary button now performs it.
+//
+// Filtered here rather than skipped in the template for the reason spelled
+// out above `SLA_EXTEND_ACTION_ID`: `availableActions.length` has to stay
+// honest or a `duly-made` item could render an empty actions panel with no
+// empty-state message.
+//
+// Read off the type DECLARATION, not off the projected action: the marker is
+// a frontend-only convention (management-be has no such field), so the
+// registry is the only place it exists.
+function selfAssignActionIds(type) {
+  return new Set(
+    (type?.transitions ?? [])
+      .filter((t) => t.startsOnSelfAssign === true)
+      .map((t) => t.actionId)
+  )
+}
+
 function decorate(workItem) {
   const type = getWorkItemType(workItem.typeId)
   const stateDisplayName =
@@ -732,13 +817,24 @@ function decorate(workItem) {
   const projectedActions = (
     Array.isArray(workItem.availableActions) ? workItem.availableActions : []
   ).filter(isCallerInvocable)
+  const selfAssignActions = selfAssignActionIds(type)
   return {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
     availableActions: projectedActions.filter(
-      (action) => action?.actionId !== SLA_EXTEND_ACTION_ID
+      (action) =>
+        action?.actionId !== SLA_EXTEND_ACTION_ID &&
+        !selfAssignActions.has(action?.actionId)
     ),
+    // RA-410. True when self-assigning would ALSO move the item on — i.e.
+    // the item is in the state a `startsOnSelfAssign` transition leaves
+    // from. Read by `buildAssignmentViewModel` so the primary button keeps
+    // rendering for a caller who already holds a not-yet-started item, which
+    // is the recovery path when the assign half succeeded and the transition
+    // half did not. Generic: the marker and the state both come from the
+    // module declaration.
+    selfAssignStartsWork: resolveSelfAssignTransition(type, workItem) != null,
     // RA-295. Gates BOTH due-date links in the assignment panel. The backend
     // is NOT a backstop here: SlaService.ExtendAsync validates the actor,
     // reason, duration bounds and the existence of the item and its clock,
@@ -765,106 +861,19 @@ function decorate(workItem) {
     workItemLabel:
       workItem.payload?.applicationReference ?? workItem.id ?? null,
     assigneeDisplayName:
-      workItem.assignedToName ?? workItem.assignedToId ?? null,
+      workItem.assignedToName ?? workItem.assignedToId ?? null
     // RA-295 removed `registrationId`, `siteAddressFormatted` and
     // `sitePostcode` from here. Their only consumers were the envelope
     // summary and the re-accreditation payload block, both of which are
     // gone; the operator registration id is now a reference-block row and
     // RA-245's address normalisation lives in `buildSiteAddressLines`.
-    // RA-372. `taskStateId` is the state whose checklist `tasks` actually
-    // holds. It is normally identical to `stateId`; when the two DIFFER
-    // the item is parked in a "waypoint" state and is being worked
-    // against another state's checklist — exactly the situation a
-    // re-accreditation is in while `updated`, showing the tasks of the
-    // state its query was raised from.
     //
-    // Deliberately this generic comparison rather than a state-id
-    // literal. The backend went to real trouble to keep its core ignorant
-    // that `updated` exists; hardcoding `'updated'` here would just
-    // relocate that coupling into the frontend's type-agnostic layer. The
-    // generic layer detects the waypoint; the module supplies whatever
-    // CTA leaves it.
-    isTaskWaypoint:
-      workItem.taskStateId != null && workItem.taskStateId !== workItem.stateId,
-    tasks: Array.isArray(workItem.tasks)
-      ? workItem.tasks.map(decorateTask)
-      : [],
-    taskProgress: computeTaskProgress(workItem.tasks)
+    // RA-410 removed `isTaskWaypoint`, `tasks` and `taskProgress`. The
+    // waypoint FLAG is gone, but the waypoint CONCEPT is not: management-be
+    // still reports the state a parked item will return to, renamed
+    // `taskStateId` -> `originStateId`. It is read straight off the raw DTO
+    // by `duly-making/eligibility.js`, which needs it undecorated, so it is
+    // deliberately not re-exposed here. See `canContinueReview` below for
+    // how the `updated` CTA survived losing the flag.
   }
-}
-
-function computeTaskProgress(tasks) {
-  const list = Array.isArray(tasks) ? tasks : []
-  const total = list.length
-  const completed = list.filter((task) => isTaskComplete(task)).length
-  return { total, completed }
-}
-
-/**
- * Project a backend task into the richer view model the detail template
- * expects (epr-gl6). Falls back to the legacy `isComplete` boolean when an
- * older backend payload is rendered, so historical fixtures and any pre
- * epr-gl6 work item snapshots still display sensibly.
- */
-function decorateTask(task) {
-  const rawStatus = typeof task?.status === 'string' ? task.status : null
-  const fallback = task?.isComplete ? 'Completed' : 'NotStarted'
-  const canonical = TASK_STATUS_VIEW[rawStatus] ?? TASK_STATUS_VIEW[fallback]
-  return {
-    ...task,
-    status: canonical.id,
-    statusLabel: canonical.label,
-    statusTagClass: canonical.tagClass,
-    statusOptions: TASK_STATUS_OPTIONS.map((option) => ({
-      ...option,
-      selected: option.value === canonical.id
-    }))
-  }
-}
-
-const TASK_STATUS_VIEW = {
-  NotStarted: {
-    id: 'NotStarted',
-    label: 'Not started',
-    tagClass: 'govuk-tag--grey'
-  },
-  InProgress: {
-    id: 'InProgress',
-    label: 'In progress',
-    tagClass: 'govuk-tag--blue'
-  },
-  Blocked: {
-    id: 'Blocked',
-    label: 'Blocked',
-    tagClass: 'govuk-tag--red'
-  },
-  Completed: {
-    id: 'Completed',
-    label: 'Completed',
-    tagClass: 'govuk-tag--green'
-  }
-}
-
-const TASK_STATUS_OPTIONS = [
-  { value: 'NotStarted', text: 'Not started' },
-  { value: 'InProgress', text: 'In progress' },
-  { value: 'Blocked', text: 'Blocked' },
-  { value: 'Completed', text: 'Completed' }
-]
-
-/**
- * Resolve the success redirect target for a task-level POST. The tasks
- * page (RA-129) passes a hidden `returnTo` field on every form so the
- * status / quick-complete actions PRG-redirect back to the tasks page
- * the user submitted from. We only honour same-origin paths under
- * `/work-items/{id}` so a malicious form cannot use the field as an
- * open-redirect.
- */
-function successRedirect(request, id) {
-  const detail = `/work-items/${encodeURIComponent(id)}`
-  const tasks = `${detail}/tasks`
-  const payload = request.payload ?? {}
-  const candidate = typeof payload.returnTo === 'string' ? payload.returnTo : ''
-  if (candidate === tasks) return tasks
-  return detail
 }

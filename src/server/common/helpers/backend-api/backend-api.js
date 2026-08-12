@@ -302,7 +302,7 @@ function parseWorkItemsBody(body) {
  *
  * Returns the backend's `WorkItemResponse` shape so the caller can render
  * the full envelope (id, type, state, payload, templateVersion) plus engine
- * projection (tasks, availableActions). Result shape:
+ * projection (availableActions). Result shape:
  *  - { ok: true, workItem }                  on success
  *  - { ok: false, status: 404 }              when no work item exists
  *  - { ok: false, status, error }            on other 4xx/5xx
@@ -350,66 +350,8 @@ export async function getWorkItem({
 }
 
 /**
- * Mark a task as complete on a work item.
- *
- * The backend's task & state engine validates the call and replies with the
- * updated `WorkItemResponse` (including refreshed `tasks` and
- * `availableActions`). Failure shapes:
- *  - { ok: false, status: 404, ... } when the work item does not exist
- *  - { ok: false, status, problem } when the engine rejects the call
- *  - { ok: false, error } on transport errors
- */
-export async function completeWorkItemTask({
-  workItemId,
-  taskId,
-  user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
-  fetchImpl = fetch
-}) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/tasks/${encodeURIComponent(taskId)}/complete`
-  return postJson({
-    url,
-    timeoutMs,
-    fetchImpl,
-    user,
-    label: 'completeWorkItemTask'
-  })
-}
-
-/**
- * Set a task's lifecycle status (epr-gl6) on a work item.
- *
- * `status` is the `WorkItemTaskStatus` name (`NotStarted` | `InProgress` |
- * `Blocked` | `Completed`); the backend binds case-insensitively. Same
- * response shape as {@link completeWorkItemTask}: `{ ok: true, workItem }`
- * on success, `{ ok: false, status, problem }` for engine rejections, and
- * `{ ok: false, error }` on transport errors.
- */
-export async function setWorkItemTaskStatus({
-  workItemId,
-  taskId,
-  status,
-  user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
-  fetchImpl = fetch
-}) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/tasks/${encodeURIComponent(taskId)}/status`
-  return postJson({
-    url,
-    method: 'PUT',
-    timeoutMs,
-    fetchImpl,
-    user,
-    label: 'setWorkItemTaskStatus',
-    body: { status }
-  })
-}
-
-/**
  * Invoke a named action (e.g. "approve", "reject") against a work item.
- * Same response shape as {@link completeWorkItemTask}.
+ * Same response shape as {@link applyWorkItemAction}.
  */
 export async function applyWorkItemAction({
   workItemId,
@@ -434,7 +376,7 @@ export async function applyWorkItemAction({
  * allowed to assign what) is this BFF's responsibility, not the backend's
  * — this client just forwards the request and the acting user's identity.
  *
- * Same response shape as {@link completeWorkItemTask}, with the addition
+ * Same response shape as {@link applyWorkItemAction}, with the addition
  * that a 403 reaches the caller as `{ ok: false, status: 403, problem }` —
  * the caller's service layer maps that to a `not-authorized` reason.
  */
@@ -479,7 +421,7 @@ export async function unassignWorkItem({
  * Append a free-text note to a work item (RA-96). The backend snapshots
  * the acting user's id and name (forwarded via the standard user-* headers)
  * onto the note for an immutable audit narrative. Same response shape as
- * {@link completeWorkItemTask} — the updated `WorkItemResponse`, including
+ * {@link applyWorkItemAction} — the updated `WorkItemResponse`, including
  * the freshly-appended note projected newest-first under `notes`.
  *
  * Used by the withdraw and re-accreditation approval flows to capture the
@@ -688,6 +630,77 @@ export async function dulyMakeReAccreditation({
     user,
     body: { paymentDate },
     label: 'dulyMakeReAccreditation'
+  })
+
+  if (result.ok) {
+    return { ok: true, workItem: result.workItem }
+  }
+
+  // `postJson` reports transport failures without a status.
+  if (result.status == null) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: result.error ?? 'Request failed'
+    }
+  }
+
+  return {
+    ok: false,
+    reason: REASON_BY_STATUS[result.status] ?? 'server',
+    status: result.status,
+    errorCode:
+      typeof result.problem?.errorCode === 'string'
+        ? result.problem.errorCode
+        : null,
+    message:
+      result.problem?.detail ??
+      result.problem?.title ??
+      `Backend returned ${result.status}`
+  }
+}
+
+/**
+ * Record a re-accreditation decision (RA-410).
+ *
+ * Wraps `POST /work-items/re-accreditation/{id}/decision`.
+ * Body: `{ outcome }`, where `outcome` is `'approved'` or `'rejected'`.
+ *
+ * ONE call for both outcomes, and deliberately one call rather than two.
+ * The backend applies BOTH hops server-side in a single atomic write —
+ * `assessment-in-progress` -> `awaiting-decision` -> terminal — so a failure
+ * cannot strand an application half-decided. Do not "helpfully" split this
+ * into a `submit-for-decision` action followed by a decision: that is the
+ * exact failure mode the combined endpoint exists to remove, and neither
+ * underlying transition is caller-invocable any more in any case.
+ *
+ * `awaiting-decision` is also accepted as an entry state, so replaying this
+ * call after a failure completes rather than conflicting. The backend
+ * answers an already-decided item with 200 + `x-idempotent-replay: true`
+ * when the requested outcome matches, and 409 when it does not — we do not
+ * read the header, we just do not treat a repeat as an error.
+ *
+ * Same result shape as {@link dulyMakeReAccreditation}, including the
+ * `errorCode` extension member, so the controller can bind a 400 to the
+ * radio group and treat a 409 as a page-level banner.
+ */
+export async function recordReAccreditationDecision({
+  workItemId,
+  outcome,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/decision`
+
+  const result = await postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    body: { outcome },
+    label: 'recordReAccreditationDecision'
   })
 
   if (result.ok) {
@@ -1109,7 +1122,7 @@ async function postJson({
 
     if (!response.ok) {
       // Try to surface a problem-details body so callers can render the
-      // engine's reason (e.g. "Action not allowed: tasks outstanding").
+      // engine's reason (e.g. "Action not allowed from state 'queried'").
       let problem
       try {
         problem = await response.json()

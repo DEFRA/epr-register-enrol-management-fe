@@ -7,7 +7,6 @@ import {
   approveReAccreditation,
   assertSafeHeaderValue,
   assignWorkItem,
-  completeWorkItemTask,
   continueReviewReAccreditation,
   createWorkItem,
   extendWorkItemSla,
@@ -16,7 +15,6 @@ import {
   getWorkItems,
   overrideWorkItemSla,
   raiseWorkItemQuery,
-  setWorkItemTaskStatus,
   unassignWorkItem
 } from './backend-api.js'
 
@@ -325,141 +323,6 @@ describe('#getWorkItems', () => {
 
     const calledUrl = fetchImpl.mock.calls[0][0]
     expect(calledUrl).not.toContain('includeArchived')
-  })
-})
-
-describe('#completeWorkItemTask', () => {
-  test('POSTs to the engine endpoint and returns the updated work item', async () => {
-    const workItem = {
-      id: 'abc',
-      stateId: 'submitted',
-      tasks: [],
-      availableActions: []
-    }
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve(workItem)
-    })
-
-    const result = await completeWorkItemTask({
-      workItemId: 'abc',
-      taskId: 'check-eligibility',
-      baseUrl: 'http://backend:8085/',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(fetchImpl).toHaveBeenCalledWith(
-      'http://backend:8085/work-items/abc/tasks/check-eligibility/complete',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ accept: 'application/json' })
-      })
-    )
-    expect(result).toEqual({ ok: true, workItem })
-  })
-
-  test('Returns ok=false with the problem body on a 4xx response', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: () =>
-        Promise.resolve({
-          title: 'Invalid action',
-          detail: 'Task not applicable'
-        })
-    })
-
-    const result = await completeWorkItemTask({
-      workItemId: 'abc',
-      taskId: 'unknown',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(result.ok).toBe(false)
-    expect(result.status).toBe(400)
-    expect(result.problem.detail).toBe('Task not applicable')
-  })
-
-  test('URL-encodes the task id', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({})
-    })
-
-    await completeWorkItemTask({
-      workItemId: 'abc',
-      taskId: 'a/b c',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(fetchImpl.mock.calls[0][0]).toBe(
-      'http://backend:8085/work-items/abc/tasks/a%2Fb%20c/complete'
-    )
-  })
-})
-
-describe('#setWorkItemTaskStatus', () => {
-  test('PUTs the status JSON body to the status endpoint', async () => {
-    const workItem = { id: 'abc', stateId: 'submitted' }
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve(workItem)
-    })
-
-    const result = await setWorkItemTaskStatus({
-      workItemId: 'abc',
-      taskId: 'check-eligibility',
-      status: 'InProgress',
-      baseUrl: 'http://backend:8085/',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(fetchImpl).toHaveBeenCalledWith(
-      'http://backend:8085/work-items/abc/tasks/check-eligibility/status',
-      expect.objectContaining({
-        method: 'PUT',
-        body: JSON.stringify({ status: 'InProgress' }),
-        headers: expect.objectContaining({
-          accept: 'application/json',
-          'content-type': 'application/json'
-        })
-      })
-    )
-    expect(result).toEqual({ ok: true, workItem })
-  })
-
-  test('Returns the problem body on a 400 response', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: () =>
-        Promise.resolve({
-          title: 'Invalid status',
-          detail: 'Unknown status value'
-        })
-    })
-
-    const result = await setWorkItemTaskStatus({
-      workItemId: 'abc',
-      taskId: 'check-eligibility',
-      status: 'bogus',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(result.ok).toBe(false)
-    expect(result.status).toBe(400)
-    expect(result.problem.detail).toBe('Unknown status value')
   })
 })
 
