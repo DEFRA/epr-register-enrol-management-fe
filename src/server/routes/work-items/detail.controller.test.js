@@ -1112,6 +1112,11 @@ describe('#workItemDetailController', () => {
     })
 
     // Partial filtering: the invocable entries must survive untouched.
+    // RA-410. These use NEUTRAL synthetic action ids rather than borrowing
+    // real ones like `reject`. This suite tests the generic `callerInvocable`
+    // flag; re-accreditation now declares `reject` / `submit-for-decision`
+    // non-invocable in `module.js`, so the declaration-side filter would hide
+    // them here and the suite would be asserting the wrong mechanism.
     test('a mixed list renders exactly the invocable actions', async () => {
       registerReaccreditation()
       getWorkItem.mockResolvedValue({
@@ -1124,8 +1129,8 @@ describe('#workItemDetailController', () => {
               callerInvocable: false
             },
             {
-              actionId: 'reject',
-              displayName: 'Reject',
+              actionId: 'visible-one',
+              displayName: 'Visible one',
               callerInvocable: true
             },
             {
@@ -1134,8 +1139,8 @@ describe('#workItemDetailController', () => {
               callerInvocable: false
             },
             {
-              actionId: 'submit-for-decision',
-              displayName: 'Submit for decision'
+              actionId: 'visible-two',
+              displayName: 'Visible two'
             }
           ]
         })
@@ -1145,8 +1150,8 @@ describe('#workItemDetailController', () => {
 
       expect(statusCode).toBe(statusCodes.ok)
       expect(actionTestIds(result)).toEqual([
-        'action-reject',
-        'action-submit-for-decision'
+        'action-visible-one',
+        'action-visible-two'
       ])
       expect(result).toContain('data-testid="work-item-actions"')
       expect(result).not.toContain('data-testid="work-item-no-actions"')
@@ -1167,8 +1172,8 @@ describe('#workItemDetailController', () => {
           ok: true,
           workItem: aWorkItem({
             availableActions: [
-              { actionId: 'approve', displayName: 'Approve', ...flag },
-              { actionId: 'reject', displayName: 'Reject', ...flag }
+              { actionId: 'visible-one', displayName: 'Visible one', ...flag },
+              { actionId: 'visible-two', displayName: 'Visible two', ...flag }
             ]
           })
         })
@@ -1177,8 +1182,8 @@ describe('#workItemDetailController', () => {
 
         expect(statusCode).toBe(statusCodes.ok)
         expect(actionTestIds(result)).toEqual([
-          'action-approve',
-          'action-reject'
+          'action-visible-one',
+          'action-visible-two'
         ])
         expect(result).not.toContain('data-testid="work-item-no-actions"')
       }
@@ -1258,7 +1263,7 @@ describe('#workItemDetailController', () => {
         workItem: aWorkItem({
           availableActions: [
             ...RESUME_ACTIONS,
-            { actionId: 'reject', displayName: 'Reject' }
+            { actionId: 'visible-one', displayName: 'Visible one' }
           ]
         })
       })
@@ -1267,7 +1272,7 @@ describe('#workItemDetailController', () => {
 
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).toContain('data-testid="re-accreditation-detail"')
-      expect(actionTestIds(result)).toEqual(['action-reject'])
+      expect(actionTestIds(result)).toEqual(['action-visible-one'])
       expect(actionsPanel(result)).not.toContain('Resume')
     })
 
@@ -2448,54 +2453,48 @@ describe('#workItemDetailController', () => {
     })
 
     // ------------------------------------------------------------------
-    // RA-346 AC1 — `submit-for-decision`.
+    // RA-410 supersedes RA-346 AC1 for `submit-for-decision`.
     //
-    // What is ACTUALLY true, corrected after PR review: on the rendered
-    // detail page this gate is BACKEND-ONLY. `decorate` copies
-    // `availableActions` through verbatim (filtering just `sla-extend`); it
-    // never calls `projectWorkItem`, so there is no frontend
-    // `requiresAllTasksComplete` check on this path. An earlier version of
-    // these tests omitted `submit-for-decision` from the fixture's
-    // `availableActions` and then asserted it was absent — which could not
-    // fail, and wrongly implied a frontend gate existed.
+    // RA-346's arrangement was backend-only: `decorate` copied
+    // `availableActions` through verbatim, so the page rendered exactly what
+    // the backend projected, in both directions. That is no longer the
+    // intended behaviour for this action.
     //
-    // That backend-only arrangement is correct and deliberate: the backend
-    // is authoritative, and `docs/work-items.md` requires the engine be a
-    // mirror rather than a re-implementation. `approve` is gated in the
-    // frontend ONLY because it is absent from `availableActions` entirely,
-    // so no backend-derived signal exists to render from.
+    // `submit-for-decision` is declared `callerInvocable: false` in v12
+    // because both hops of a decision are applied server-side by the
+    // `/decision` endpoint. A button that moved an item to
+    // `awaiting-decision` and stopped would strand it, since the Log
+    // decision CTA renders from `assessment-in-progress`. So the frontend
+    // now suppresses it from its OWN declaration, and — critically — does so
+    // even when the backend projects it as invocable, which is exactly what
+    // a pre-v12 backend does during the deployment window.
     //
-    // So what is worth pinning here is the pass-through itself: the page
-    // renders exactly what the backend projected, in both directions. A
-    // regression that started rendering an action the backend withheld
-    // would fail the first case.
+    // The pass-through property RA-346 pinned still holds for every action
+    // the declaration does not mark non-invocable; the RA-364 suite above
+    // covers that with neutral synthetic ids.
     // ------------------------------------------------------------------
     const assessmentAction = {
       actionId: 'submit-for-decision',
       displayName: 'Submit for decision',
       fromStateId: 'assessment-in-progress',
-      toStateId: 'awaiting-decision',
-      requiresAllTasksComplete: true
+      toStateId: 'awaiting-decision'
     }
 
     test.each([
-      ['withholds it (tasks pending)', [], false],
-      ['projects it', [assessmentAction], true]
+      ['withholds it', []],
+      ['projects it', [assessmentAction]],
+      [
+        'projects it as explicitly caller-invocable (a pre-v12 backend)',
+        [{ ...assessmentAction, callerInvocable: true }]
+      ]
     ])(
-      'RA-346 AC1: renders submit-for-decision iff the backend %s',
-      async (_label, availableActions, expected) => {
+      'never renders submit-for-decision, even when the backend %s',
+      async (_label, availableActions) => {
         registerReaccreditationWithDetailV1()
         getWorkItem.mockResolvedValue({
           ok: true,
           workItem: aWorkItem({
             stateId: 'assessment-in-progress',
-            tasks: [
-              {
-                taskId: 'assess-technical-capacity',
-                displayName: 'Assess technical capacity',
-                status: expected ? 'Completed' : 'InProgress'
-              }
-            ],
             availableActions
           })
         })
@@ -2506,9 +2505,124 @@ describe('#workItemDetailController', () => {
         })
 
         expect(statusCode).toBe(statusCodes.ok)
-        expect(result.includes('submit-for-decision')).toBe(expected)
+        expect(result).not.toEqual(
+          expect.stringContaining('data-testid="action-submit-for-decision"')
+        )
+        // Guards against a vacuous pass: the page really did render, and the
+        // Log decision CTA is what stands in that action's place.
+        expect(result).toEqual(
+          expect.stringContaining('data-testid="log-decision-cta"')
+        )
       }
     )
+  })
+
+  // RA-410. The stale-backend window. `isCallerInvocable` reads the flag off
+  // the PROJECTED action, so a backend that predates v12 — which sends no
+  // flag, or sends `true` — would slip `submit-for-decision` and `reject`
+  // through and render a bare Reject button beside the Log decision CTA. The
+  // module declaration is the second side of that guard.
+  describe('RA-410: declaration-side filter for a stale backend', () => {
+    test.each([['reject'], ['submit-for-decision']])(
+      'hides %s even when the backend projects it as caller-invocable',
+      async (actionId) => {
+        registerReaccreditation()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId: 'awaiting-decision',
+            availableActions: [
+              {
+                actionId,
+                displayName: 'Stale',
+                fromStateId: 'awaiting-decision',
+                toStateId: 'rejected',
+                // What a pre-v12 backend sends.
+                callerInvocable: true
+              }
+            ]
+          })
+        })
+
+        const { statusCode, result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).not.toEqual(
+          expect.stringContaining(`data-testid="action-${actionId}"`)
+        )
+      }
+    )
+
+    test('hides a declared-non-invocable action when the backend omits the flag entirely', async () => {
+      // The oldest payload shape: no `callerInvocable` key at all, which
+      // `isCallerInvocable` correctly reads as invocable for forward-compat.
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          availableActions: [
+            {
+              actionId: 'reject',
+              displayName: 'Reject',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'rejected'
+            }
+          ]
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-reject"')
+      )
+    })
+
+    test('still renders actions the declaration does NOT mark non-invocable', async () => {
+      // Guards against the filter over-reaching into a vacuous pass: the
+      // withdraw link must survive alongside the suppressed decision actions.
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          availableActions: [
+            {
+              actionId: 'reject',
+              displayName: 'Reject',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'rejected',
+              callerInvocable: true
+            },
+            {
+              actionId: 'withdraw-during-decision',
+              displayName: 'Withdraw',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'withdrawn'
+            }
+          ]
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-withdraw-during-decision"')
+      )
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-reject"')
+      )
+    })
   })
 
   // RA-372 -----------------------------------------------------------------

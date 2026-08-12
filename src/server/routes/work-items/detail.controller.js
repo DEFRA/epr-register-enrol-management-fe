@@ -793,6 +793,37 @@ function selfAssignActionIds(type) {
   )
 }
 
+// RA-410. Actions the MODULE DECLARATION says the caller may not invoke.
+//
+// `isCallerInvocable` (core/engine.js) covers the same ground by reading the
+// `callerInvocable` flag off the PROJECTED action, and its own docstring says
+// the case it defends is a stale backend — a frontend deployed ahead of one.
+// It cannot actually defend that case: a stale backend does not send the flag
+// at all, and a missing flag means invocable (correctly, for forward-compat
+// with older payloads). So the guard is silently absent in precisely the
+// window it was written for.
+//
+// That window is live for this ticket. A backend that predates v12 still
+// projects `submit-for-decision` and `reject` as caller-invocable, so between
+// deploying this frontend and deploying that backend the actions panel would
+// render a bare "Reject" button beside the Log decision CTA — and the generic
+// `/actions/reject` route would accept it, letting a case worker refuse an
+// application without ever seeing the decision page. Exactly the two-door
+// decision the radio exists to collapse.
+//
+// Reading our own declaration closes it. Where the two disagree we HIDE:
+// failing closed costs at worst an affordance the backend would have allowed,
+// and the alternative costs a state change the UI was redesigned to prevent.
+// The backend stays authoritative for whether an action SUCCEEDS — this only
+// decides what to draw.
+function nonInvocableActionIds(type) {
+  return new Set(
+    (type?.transitions ?? [])
+      .filter((t) => t.callerInvocable === false)
+      .map((t) => t.actionId)
+  )
+}
+
 function decorate(workItem) {
   const type = getWorkItemType(workItem.typeId)
   const stateDisplayName =
@@ -818,6 +849,7 @@ function decorate(workItem) {
     Array.isArray(workItem.availableActions) ? workItem.availableActions : []
   ).filter(isCallerInvocable)
   const selfAssignActions = selfAssignActionIds(type)
+  const declaredNonInvocable = nonInvocableActionIds(type)
   return {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
@@ -825,7 +857,8 @@ function decorate(workItem) {
     availableActions: projectedActions.filter(
       (action) =>
         action?.actionId !== SLA_EXTEND_ACTION_ID &&
-        !selfAssignActions.has(action?.actionId)
+        !selfAssignActions.has(action?.actionId) &&
+        !declaredNonInvocable.has(action?.actionId)
     ),
     // RA-410. True when self-assigning would ALSO move the item on — i.e.
     // the item is in the state a `startsOnSelfAssign` transition leaves
