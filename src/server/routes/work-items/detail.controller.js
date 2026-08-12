@@ -60,6 +60,32 @@ export const workItemDetailController = {
   }
 }
 
+/**
+ * Apply a named action. Forwards straight to the backend.
+ *
+ * ⚠ THIS HANDLER DELIBERATELY DOES NOT CHECK WHETHER THE ACTION IS ALLOWED,
+ * and adding such a check here would be a real regression. Reading this in
+ * isolation the omission looks like an oversight, so:
+ *
+ * The backend is authoritative for state changes (`docs/work-items.md`), and
+ * it applies its own guard against the work item's frozen template snapshot.
+ * That guard is the ONLY thing standing between a forged POST and a state
+ * change — it protects every caller, not just this UI.
+ *
+ * The plausible wrong fix, which RA-410 makes tempting. `decorate` now hides
+ * actions our own declaration marks `callerInvocable: false` (see
+ * `nonInvocableActionIds`), so `reject` and `submit-for-decision` render
+ * nowhere. Someone reasoning from that — or from an e2e spec asserting
+ * `POST /actions/submit-for-decision` is refused — may conclude the frontend
+ * is the tier that knows about invocability and add `canApplyAction` here.
+ * It would make that spec pass while moving an authorisation decision into
+ * the wrong tier: the route stays open to every non-browser caller, and the
+ * real gate (the backend's) stops being the thing under test. If that spec
+ * ever returns 200, the missing guard is management-be's.
+ *
+ * `core/engine.js#canApplyAction` says the same from the other side — it is
+ * a mirror for inspecting a work item, never a control on this path.
+ */
 export function makeApplyActionController({
   service = createWorkItemActionsService()
 } = {}) {
