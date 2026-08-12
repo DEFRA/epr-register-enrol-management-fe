@@ -27,7 +27,7 @@ import {
   evaluateLogDecisionEligibility,
   isValidDecisionOutcome
 } from './eligibility.js'
-import { createDecisionService } from './service.js'
+import { createDecisionService, DECISION_NOTE_MAX_LENGTH } from './service.js'
 
 const VIEW_PATH = 're-accreditation/decision/index'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -148,7 +148,8 @@ export function makeShowDecisionController() {
         workItem: { ...workItem, applicationRef },
         formAction: decisionHref(id),
         cancelHref: detailHref(id),
-        values: { decision: null },
+        values: { decision: null, decisionNote: '' },
+        decisionNoteMaxLength: DECISION_NOTE_MAX_LENGTH,
         errorSummary: null,
         fieldErrors: {}
       })
@@ -169,6 +170,8 @@ export function makeSubmitDecisionController({
       const user = getUser(request)
       const payload = request.payload ?? {}
       const decision = payload.decision
+      const decisionNote =
+        typeof payload.decisionNote === 'string' ? payload.decisionNote : ''
 
       // Re-read the work item before doing anything else. Needed for BOTH
       // the validation re-render (the page shows the application reference)
@@ -205,10 +208,14 @@ export function makeSubmitDecisionController({
             workItem: { ...workItem, applicationRef },
             formAction: decisionHref(id),
             cancelHref: detailHref(id),
-            // Deliberately not echoed back: an invalid value is either a
-            // missing choice (nothing to echo) or a forged one (must not be
-            // reflected into the page). Either way the radios render unset.
-            values: { decision: null },
+            decisionNoteMaxLength: DECISION_NOTE_MAX_LENGTH,
+            // The decision itself is deliberately NOT echoed back: an invalid
+            // value is either a missing choice (nothing to echo) or a forged
+            // one (must not be reflected into the page), so the radios render
+            // unset. The NOTE is echoed — it is the user's own prose and
+            // making them retype it because they missed a radio would be
+            // gratuitous. Nunjucks auto-escapes it on the way out.
+            values: { decision: null, decisionNote },
             errorSummary: {
               titleText: 'There is a problem',
               items: [
@@ -239,6 +246,7 @@ export function makeSubmitDecisionController({
       const result = await service.recordWorkItemDecision({
         workItemId: id,
         outcome: decision,
+        decisionNote,
         user
       })
 
@@ -285,6 +293,18 @@ function successBannerFor(decision) {
 }
 
 function bannerForFailure(result) {
+  // RA-203. Distinct copy because the user's next step differs: nothing was
+  // decided, and the reason is their note rather than the case. Saying "try
+  // again" alone would leave them unsure whether the decision landed.
+  if (result.outcome === 'note-failed') {
+    return {
+      type: 'error',
+      title: 'Could not save the decision note',
+      text:
+        result.message ??
+        'Your decision note could not be saved, so the decision was not recorded. Try again.'
+    }
+  }
   if (result.outcome === 'conflict') {
     return {
       type: 'error',

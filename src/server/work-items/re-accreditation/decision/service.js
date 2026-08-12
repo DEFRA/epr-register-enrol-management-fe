@@ -40,13 +40,23 @@
 import { toOutcome } from '../../core/backend-outcome.js'
 import { isValidDecisionOutcome } from './eligibility.js'
 
+const NOTE_MAX_LENGTH = 2000
+
+export const DECISION_NOTE_MAX_LENGTH = NOTE_MAX_LENGTH
+
 async function defaultRecordDecision(args) {
   const mod = await import('#/server/common/helpers/backend-api/backend-api.js')
   return mod.recordReAccreditationDecision(args)
 }
 
+async function defaultAddNote(args) {
+  const mod = await import('#/server/common/helpers/backend-api/backend-api.js')
+  return mod.addWorkItemNote(args)
+}
+
 export function createDecisionService({
-  recordDecision = defaultRecordDecision
+  recordDecision = defaultRecordDecision,
+  addNote = defaultAddNote
 } = {}) {
   return {
     /**
@@ -58,8 +68,15 @@ export function createDecisionService({
      *   value — never the display label. "Refused" is what the radio says;
      *   `rejected` is what goes over the wire and what the backend's
      *   unchanged `reject` transition and notification templates key on.
+     * @param {string} [args.decisionNote] Optional rationale. Posted to the
+     *   notes endpoint BEFORE the decision — see below.
      */
-    async recordWorkItemDecision({ workItemId, outcome, user = null }) {
+    async recordWorkItemDecision({
+      workItemId,
+      outcome,
+      decisionNote = '',
+      user = null
+    }) {
       if (typeof workItemId !== 'string' || workItemId.trim() === '') {
         throw new Error('workItemId must be a non-empty string')
       }
@@ -74,6 +91,58 @@ export function createDecisionService({
           outcome: 'invalid',
           errorCode: 'invalid-outcome',
           message: 'Select the decision for this application.'
+        }
+      }
+
+      const trimmedNote =
+        typeof decisionNote === 'string' ? decisionNote.trim() : ''
+
+      if (trimmedNote.length > NOTE_MAX_LENGTH) {
+        return {
+          ok: false,
+          outcome: 'invalid',
+          errorCode: 'decision-note-too-long',
+          message: `Decision note must be ${NOTE_MAX_LENGTH} characters or fewer.`
+        }
+      }
+
+      // RA-203. The note is posted FIRST, and the ordering is the whole
+      // mechanism — not incidental sequencing.
+      //
+      // management-be's Decision notification reads `decision_notes` from
+      // `LatestWorkItemNoteText`, i.e. the most recent work-item note by
+      // `CreatedAt`. Posting after the decision would race the notification
+      // hook, which fires during the decision write, and the operator's email
+      // would carry the PREVIOUS note (or nothing) instead of this rationale.
+      //
+      // RA-410 note: this is the same ordering the RA-132 approval service
+      // used. It was momentarily lost when the approve interstitial was
+      // retired, which left `decision_notes` resolving to empty on every
+      // decision — the placeholder still rendered, so nothing failed loudly.
+      // Do not "simplify" by folding the note into the `/decision` payload:
+      // that endpoint has no note field, and adding one would duplicate a
+      // notes API that already exists and already audits.
+      if (trimmedNote !== '') {
+        const noteResult = await addNote({
+          workItemId,
+          text: trimmedNote,
+          user
+        })
+        if (!noteResult.ok) {
+          // Deliberately do NOT proceed to the decision. The note is part of
+          // the auditable rationale for a regulatory decision; recording the
+          // outcome without it would produce a decision whose stated reason
+          // silently went missing, and the decision cannot be un-made.
+          return {
+            ok: false,
+            outcome: 'note-failed',
+            status: noteResult.status,
+            errorCode: null,
+            message:
+              noteResult.problem?.detail ??
+              noteResult.error ??
+              'Could not save the decision note. The decision was not recorded.'
+          }
         }
       }
 

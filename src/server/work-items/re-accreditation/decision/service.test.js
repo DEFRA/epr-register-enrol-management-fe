@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 
-import { createDecisionService } from './service.js'
+import { createDecisionService, DECISION_NOTE_MAX_LENGTH } from './service.js'
 
 /**
  * RA-410. One call, both outcomes. The service's job is to validate the
@@ -11,6 +11,129 @@ import { createDecisionService } from './service.js'
 function okReply(workItem = { id: 'wi-1', stateId: 'approved' }) {
   return { ok: true, workItem }
 }
+
+// RA-203. The decision note reaches the operator's email through
+// management-be's `decision_notes` placeholder, which resolves to the LATEST
+// work-item note. That makes ordering load-bearing, so it is asserted
+// directly rather than left implied.
+describe('createDecisionService — decision note (RA-203)', () => {
+  test('posts the note BEFORE the decision', async () => {
+    const calls = []
+    const addNote = vi.fn(async () => {
+      calls.push('note')
+      return { ok: true }
+    })
+    const recordDecision = vi.fn(async () => {
+      calls.push('decision')
+      return okReply()
+    })
+    const service = createDecisionService({ recordDecision, addNote })
+
+    await service.recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      decisionNote: 'Rationale'
+    })
+
+    // Reversed, the notification hook (which fires during the decision write)
+    // would read the PREVIOUS note and the operator's email would carry the
+    // wrong rationale — or none.
+    expect(calls).toEqual(['note', 'decision'])
+    expect(addNote).toHaveBeenCalledWith({
+      workItemId: 'wi-1',
+      text: 'Rationale',
+      user: null
+    })
+  })
+
+  test.each([[''], ['   '], [undefined]])(
+    'skips the notes call entirely for a blank note (%s)',
+    async (decisionNote) => {
+      const addNote = vi.fn()
+      const recordDecision = vi.fn().mockResolvedValue(okReply())
+      const service = createDecisionService({ recordDecision, addNote })
+
+      const result = await service.recordWorkItemDecision({
+        workItemId: 'wi-1',
+        outcome: 'approved',
+        decisionNote
+      })
+
+      expect(addNote).not.toHaveBeenCalled()
+      expect(result.ok).toBe(true)
+    }
+  )
+
+  test('trims the note before posting it', async () => {
+    const addNote = vi.fn().mockResolvedValue({ ok: true })
+    const recordDecision = vi.fn().mockResolvedValue(okReply())
+    const service = createDecisionService({ recordDecision, addNote })
+
+    await service.recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      decisionNote: '  Rationale  '
+    })
+
+    expect(addNote).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Rationale' })
+    )
+  })
+
+  test('does NOT record the decision when the note fails to save', async () => {
+    // The note is part of the auditable rationale for a regulatory decision,
+    // and the decision cannot be un-made. Recording the outcome without it
+    // would produce a decision whose stated reason silently went missing.
+    const addNote = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 502, error: 'boom' })
+    const recordDecision = vi.fn()
+    const service = createDecisionService({ recordDecision, addNote })
+
+    const result = await service.recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      decisionNote: 'Rationale'
+    })
+
+    expect(recordDecision).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ ok: false, outcome: 'note-failed' })
+  })
+
+  test('rejects an over-long note without calling either endpoint', async () => {
+    const addNote = vi.fn()
+    const recordDecision = vi.fn()
+    const service = createDecisionService({ recordDecision, addNote })
+
+    const result = await service.recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      decisionNote: 'x'.repeat(DECISION_NOTE_MAX_LENGTH + 1)
+    })
+
+    expect(addNote).not.toHaveBeenCalled()
+    expect(recordDecision).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      ok: false,
+      outcome: 'invalid',
+      errorCode: 'decision-note-too-long'
+    })
+  })
+
+  test('accepts a note exactly at the limit', async () => {
+    const addNote = vi.fn().mockResolvedValue({ ok: true })
+    const recordDecision = vi.fn().mockResolvedValue(okReply())
+    const service = createDecisionService({ recordDecision, addNote })
+
+    const result = await service.recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      decisionNote: 'x'.repeat(DECISION_NOTE_MAX_LENGTH)
+    })
+
+    expect(result.ok).toBe(true)
+  })
+})
 
 describe('createDecisionService#recordWorkItemDecision', () => {
   test('posts the approved outcome and returns the updated work item', async () => {

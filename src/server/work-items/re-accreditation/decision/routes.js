@@ -44,7 +44,13 @@ export function buildDecisionRoutes() {
         payload: {
           parse: true,
           allow: 'application/x-www-form-urlencoded',
-          maxBytes: 10 * 1024
+          // RA-203. Sized for the 2000-character decision note, not for the
+          // radio. 10 KiB (what the approve interstitial used) is enough for
+          // 2000 ASCII characters but NOT for 2000 multi-byte ones: UTF-8
+          // plus percent-encoding can reach ~12 bytes per character, so a
+          // legitimate note in a non-Latin script would 413. 32 KiB clears
+          // the worst case with room to spare.
+          maxBytes: 32 * 1024
         }
       },
       ...makeSubmitDecisionController()

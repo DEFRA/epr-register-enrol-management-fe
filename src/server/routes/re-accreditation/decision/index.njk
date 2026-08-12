@@ -2,6 +2,7 @@
 
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/radios/macro.njk" import govukRadios %}
+{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
 {% from "govuk/components/warning-text/macro.njk" import govukWarningText %}
 {% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
 
@@ -87,6 +88,29 @@
             }
           ],
           errorMessage: { text: fieldErrors["decision"], attributes: { "data-testid": "decision-error" } } if fieldErrors["decision"] else null
+        }) }}
+
+        {# RA-203. The decision rationale. Optional, but NOT decorative: the  #}
+        {# backend's Decision notification reads `decision_notes` from the    #}
+        {# latest work-item note, so whatever is typed here is what reaches   #}
+        {# the operator's email. Leaving it out (as the first cut of RA-410   #}
+        {# did, when the approve interstitial that used to carry it was       #}
+        {# retired) makes that placeholder resolve to empty on every          #}
+        {# decision — silently, because the template still renders.           #}
+        {{ govukCharacterCount({
+          id: "field-decisionNote",
+          name: "decisionNote",
+          maxlength: decisionNoteMaxLength,
+          label: {
+            text: "Decision note (optional)",
+            classes: "govuk-label--s"
+          },
+          hint: {
+            text: "This is recorded in the audit log and included in the email sent to the applicant."
+          },
+          value: values.decisionNote,
+          errorMessage: { text: fieldErrors["decisionNote"] } if fieldErrors["decisionNote"] else null,
+          attributes: { "data-testid": "log-decision-note" }
         }) }}
 
         <div class="govuk-button-group">

@@ -86,7 +86,7 @@ describe('makeShowDecisionController', () => {
       expect.objectContaining({
         formAction: DECISION_HREF,
         cancelHref: DETAIL_HREF,
-        values: { decision: null },
+        values: { decision: null, decisionNote: '' },
         errorSummary: null
       })
     )
@@ -165,6 +165,7 @@ describe('makeSubmitDecisionController', () => {
     expect(recordWorkItemDecision).toHaveBeenCalledWith({
       workItemId: 'wi-1',
       outcome: 'approved',
+      decisionNote: '',
       user: { id: 'u-1', name: 'Alice' }
     })
     expect(request.yar.flash).toHaveBeenCalledWith(
@@ -196,6 +197,72 @@ describe('makeSubmitDecisionController', () => {
     expect(request.yar.flash).toHaveBeenCalledWith(
       'flashBanner',
       expect.objectContaining({ title: 'Decision logged: Refused' })
+    )
+  })
+
+  // RA-203. The note is the rationale that reaches the operator's email via
+  // the backend's `decision_notes` placeholder.
+  test('forwards a decision note to the service', async () => {
+    mockDecidable()
+    const recordWorkItemDecision = vi
+      .fn()
+      .mockResolvedValue({ ok: true, workItem: { id: 'wi-1' } })
+
+    await makeSubmitDecisionController({
+      service: { recordWorkItemDecision }
+    }).handler(
+      makeRequest({ decision: 'rejected', decisionNote: 'Capacity unproven' }),
+      makeToolkit()
+    )
+
+    expect(recordWorkItemDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ decisionNote: 'Capacity unproven' })
+    )
+  })
+
+  test('echoes the typed note back when the radio was missed', async () => {
+    // The note is the user's own prose — making them retype it because they
+    // missed a radio would be gratuitous. The decision itself is still not
+    // echoed (see the forged-value test above).
+    mockDecidable()
+    const h = makeToolkit()
+
+    await makeSubmitDecisionController({
+      service: { recordWorkItemDecision: vi.fn() }
+    }).handler(makeRequest({ decisionNote: 'Half-written rationale' }), h)
+
+    expect(h.view).toHaveBeenCalledWith(
+      're-accreditation/decision/index',
+      expect.objectContaining({
+        values: { decision: null, decisionNote: 'Half-written rationale' }
+      })
+    )
+  })
+
+  test('surfaces a failed note with copy saying the decision was NOT recorded', async () => {
+    mockDecidable()
+    const recordWorkItemDecision = vi.fn().mockResolvedValue({
+      ok: false,
+      outcome: 'note-failed',
+      status: 502,
+      message:
+        'Could not save the decision note. The decision was not recorded.'
+    })
+    const request = makeRequest({
+      decision: 'approved',
+      decisionNote: 'Rationale'
+    })
+
+    await makeSubmitDecisionController({
+      service: { recordWorkItemDecision }
+    }).handler(request, makeToolkit())
+
+    expect(request.yar.flash).toHaveBeenCalledWith(
+      'flashBanner',
+      expect.objectContaining({
+        type: 'error',
+        title: 'Could not save the decision note'
+      })
     )
   })
 
@@ -255,7 +322,9 @@ describe('makeSubmitDecisionController', () => {
 
     expect(h.view).toHaveBeenCalledWith(
       're-accreditation/decision/index',
-      expect.objectContaining({ values: { decision: null } })
+      expect.objectContaining({
+        values: { decision: null, decisionNote: '' }
+      })
     )
   })
 

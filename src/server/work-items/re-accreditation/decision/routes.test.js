@@ -32,7 +32,11 @@ describe('buildDecisionRoutes', () => {
   test('the POST accepts only form-encoded bodies, with a size cap', () => {
     const post = routes.find((r) => r.method === 'POST')
     expect(post.options.payload.allow).toBe('application/x-www-form-urlencoded')
-    expect(post.options.payload.maxBytes).toBeLessThanOrEqual(10 * 1024)
+    // RA-203. Sized for the 2000-character decision note. 10 KiB would 413 a
+    // legitimate note written in a multi-byte script once percent-encoding is
+    // applied, so the floor matters as much as the ceiling here.
+    expect(post.options.payload.maxBytes).toBeGreaterThanOrEqual(32 * 1024)
+    expect(post.options.payload.maxBytes).toBeLessThanOrEqual(64 * 1024)
   })
 
   test('every route has a handler', () => {
