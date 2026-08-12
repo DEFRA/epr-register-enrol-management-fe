@@ -29,6 +29,92 @@ describe('#createReAccreditationSchema (RA-127, RA-219)', () => {
     expect(value.siteAddress.line2).toBe('')
   })
 
+  /**
+   * RA-316. Optional passthrough so the create form can CARRY a charge
+   * someone else decides. The coercion is the load-bearing part: an HTML
+   * input always posts a string, management-be does not validate this
+   * field (passthrough by design), and the duly-making page's formatter
+   * returns null for a non-integer — so without `convert: true` the page
+   * would render "Not provided" for a charge that was actually supplied,
+   * with nothing throwing anywhere.
+   */
+  describe('RA-316 chargeAmountPence passthrough', () => {
+    const validateWith = (form) =>
+      createReAccreditationSchema.validate(form, {
+        abortEarly: false,
+        stripUnknown: true,
+        convert: true
+      })
+
+    test('coerces the form STRING into an integer', () => {
+      const { error, value } = validateWith({
+        ...validForm(),
+        chargeAmountPence: '327600'
+      })
+      expect(error).toBeUndefined()
+      expect(value.chargeAmountPence).toBe(327600)
+      expect(typeof value.chargeAmountPence).toBe('number')
+      expect(Number.isInteger(value.chargeAmountPence)).toBe(true)
+    })
+
+    test('survives stripUnknown rather than being silently discarded', () => {
+      const { value } = validateWith({
+        ...validForm(),
+        chargeAmountPence: '54600'
+      })
+      expect(value).toHaveProperty('chargeAmountPence', 54600)
+    })
+
+    test('is optional — omitting it is valid and forwards nothing', () => {
+      // Absent is a legitimate state: legacy-be drops the field entirely
+      // when the tonnage band is unset.
+      const { error, value } = validateWith(validForm())
+      expect(error).toBeUndefined()
+      expect(value).not.toHaveProperty('chargeAmountPence')
+    })
+
+    test('accepts a zero charge as a real amount', () => {
+      const { error, value } = validateWith({
+        ...validForm(),
+        chargeAmountPence: '0'
+      })
+      expect(error).toBeUndefined()
+      expect(value.chargeAmountPence).toBe(0)
+    })
+
+    test.each([
+      ['non-numeric', 'not-a-number'],
+      ['fractional pence', '327600.5'],
+      ['negative', '-100']
+    ])('rejects a %s charge', (_label, chargeAmountPence) => {
+      const { error } = validateWith({ ...validForm(), chargeAmountPence })
+      expect(error).toBeDefined()
+    })
+
+    test.each([54600, 218400, 327600, 396500, 360400])(
+      'accepts the real band value %i',
+      (pence) => {
+        const { error, value } = validateWith({
+          ...validForm(),
+          chargeAmountPence: String(pence)
+        })
+        expect(error).toBeUndefined()
+        expect(value.chargeAmountPence).toBe(pence)
+      }
+    )
+
+    test('paymentReference is NOT an inbound field and is stripped', () => {
+      // Deliberately dropped: the applicationReference fallback is the
+      // primary path, so an override field with no consumer would be
+      // surface maintained for nothing.
+      const { value } = validateWith({
+        ...validForm(),
+        paymentReference: 'PAY-001'
+      })
+      expect(value).not.toHaveProperty('paymentReference')
+    })
+  })
+
   test('RA-219: is no longer an inbound field and is stripped from input', () => {
     const form = { ...validForm(), applicationReference: 'RA-123456789' }
     const { error, value } = createReAccreditationSchema.validate(form, {

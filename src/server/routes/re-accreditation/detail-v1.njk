@@ -30,8 +30,18 @@
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "action-link/macro.njk" import appActionLink %}
 
+{# RA-316. `data-state-id` carries the RAW state id, which is otherwise    #}
+{# absent from the DOM — the case header renders only                     #}
+{# `stateDisplayName`. That is a problem because RA-324 deliberately gives #}
+{# `assessment-in-progress` and `updated` the SAME display name,          #}
+{# "Updated", so a journey test asserting on the visible status cannot     #}
+{# tell the two apart and would happily pass against the wrong item. The   #}
+{# duly-making CTA is offered in one of those states and must never appear #}
+{# in the other, which makes the distinction load-bearing rather than      #}
+{# cosmetic. Consumed by the mgmt-tests journey suite — treat as contract. #}
 {% block content %}
-  <div data-testid="re-accreditation-detail">
+  <div data-testid="re-accreditation-detail"
+       data-state-id="{{ workItem.stateId }}">
     {{ super() }}
   </div>
 {% endblock %}
@@ -39,6 +49,29 @@
 {# RA-156. Approve CTA lives in the actionsPanel button group so it      #}
 {# renders alongside Reject and Withdraw.                                #}
 {% block primaryActions %}{% endblock %}
+
+{# RA-316. Duly-making states own no tasks any more — the backend deleted #}
+{# both `submitted` tasks along with the hook that auto-transitioned to   #}
+{# `duly-made` when they were ticked. Rendering the generic panel there   #}
+{# would show "No tasks are required..." plus a link to an empty tasks    #}
+{# page, right beside the Duly make CTA that is the actual thing to do —  #}
+{# an active dead end rather than a neutral empty state.                  #}
+{#                                                                        #}
+{# Gated on `canDulyMake` rather than on `stateId == 'submitted'`, which  #}
+{# is what this originally said. The two are NOT equivalent: an item      #}
+{# queried during duly making and then resubmitted sits in `updated` and  #}
+{# is projected the ORIGINATING state's tasks — i.e. `submitted`'s, which #}
+{# are now empty — so a state-literal check would leave the dead-end      #}
+{# panel showing on exactly the second entry point into duly making.      #}
+{# "The next action here is duly making" is the real condition, and it is #}
+{# precisely what `canDulyMake` already answers.                          #}
+{#                                                                        #}
+{# Every state where duly making is NOT the next action keeps its tasks   #}
+{# panel untouched — including `updated` arrived at from assessment or    #}
+{# decision. Removing the tasks feature more broadly is RA-410.           #}
+{% block tasksPanel %}
+  {% if not workItem.canDulyMake %}{{ super() }}{% endif %}
+{% endblock %}
 
 {% block approveAction %}
   {% if workItem.canApproveDirectly %}
@@ -86,6 +119,33 @@
       }) }}
     </p>
   {% else %}
+    {# RA-316. "Duly make" — the first step of the lifecycle, replacing    #}
+    {# the task-driven duly making that used to live on the tasks page.    #}
+    {# Like Continue review it cannot ride on the generic action loop in   #}
+    {# `super()`: the backend declares `duly-make` non-caller-invocable so #}
+    {# it never appears in `availableActions`, and it carries a payment    #}
+    {# date the generic `/actions/{actionId}` route has nowhere to put.    #}
+    {#                                                                     #}
+    {# Rendered here rather than inside the generic loop for a second      #}
+    {# reason: that loop is wrapped in an `availableActions.length > 0`    #}
+    {# check, so a state projecting no generic actions would swallow the   #}
+    {# CTA entirely.                                                       #}
+    {#                                                                     #}
+    {# A LINK, not a posting button — it opens the payment-date page, so   #}
+    {# clicking it changes nothing. Gated by `workItem.canDulyMake`, which #}
+    {# goes through the same helper that guards the route itself.          #}
+    {% if workItem.canDulyMake %}
+      <div data-testid="re-accreditation-duly-make-cta">
+        {{ appActionLink({
+          text: "Duly make",
+          href: workItem.dulyMakeHref,
+          variant: "button",
+          classes: "app-case-panel__primary-action",
+          disabled: user.isReadOnly,
+          testId: "duly-make-cta"
+        }) }}
+      </div>
+    {% endif %}
     {% if workItem.canContinueReview %}
       <div data-testid="re-accreditation-continue-review-cta">
         <form method="post" action="{{ workItem.continueReviewHref }}" novalidate>

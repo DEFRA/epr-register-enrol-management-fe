@@ -1,0 +1,129 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/date-input/macro.njk" import govukDateInput %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+{% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
+
+{# ------------------------------------------------------------------- #}
+{# Duly make the application (RA-316).                                  #}
+{#                                                                      #}
+{# Reached from the "Duly make" CTA on the re-accreditation detail      #}
+{# page. Posts back to its own URL and PRG-redirects to the detail page #}
+{# on success.                                                          #}
+{#                                                                      #}
+{# No browser JavaScript (RA-94): the date input is three plain text    #}
+{# boxes, all validation is server-side, and Cancel is an ordinary link #}
+{# rather than a form control — with no handler behind it there is no   #}
+{# code path that could change state (AC04).                            #}
+{#                                                                      #}
+{# Charge and payment reference are READ-ONLY and rendered as a summary #}
+{# list, not as disabled inputs: they are not being edited, and         #}
+{# disabled inputs post nothing while still looking editable. The       #}
+{# backend ignores them if sent — the only field on the wire is the     #}
+{# payment date.                                                        #}
+{#                                                                      #}
+{# `data-testid` hooks here are an EXTERNAL CONTRACT consumed by the    #}
+{# mgmt-tests journey suite; renaming one breaks those specs. They are  #}
+{# deliberately prefixed `duly-making-*` so none can collide with the   #}
+{# detail page's `work-item-task-*` prefix match (see the RA-372 note   #}
+{# in `work-items/detail.njk`).                                         #}
+{# ------------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: ("Application " + workItem.applicationRef) if workItem.applicationRef else null
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "duly-making-error-summary" }
+        }) }}
+      {% endif %}
+
+      <p class="govuk-body" data-testid="duly-making-lead">
+        Add the date the payment was received to duly make this application.
+      </p>
+
+      <h2 class="govuk-heading-m">Payment details</h2>
+
+      {{ govukSummaryList({
+        attributes: { "data-testid": "duly-making-payment-details" },
+        rows: [
+          {
+            key: { text: "Charge" },
+            value: {
+              html: '<span data-testid="duly-making-charge-amount">'
+                    + (paymentDetails.chargeAmount | escape) + '</span>'
+            }
+          },
+          {
+            key: { text: "Payment reference" },
+            value: {
+              html: '<span data-testid="duly-making-payment-reference">'
+                    + (paymentDetails.paymentReference | escape) + '</span>'
+            }
+          }
+        ]
+      }) }}
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="duly-making-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {# The three boxes are named `payment-date-day|month|year`, which  #}
+        {# is what the controller reads. The error summary anchors to      #}
+        {# `#payment-date-day` so focus lands on the first box.            #}
+        {{ govukDateInput({
+          id: dateInputId,
+          namePrefix: dateInputId,
+          fieldset: {
+            legend: {
+              text: "Payment date",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          hint: { text: "For example, 27 3 2026" },
+          items: [
+            {
+              name: "day",
+              classes: "govuk-input--width-2" + (" govuk-input--error" if errorMessage else ""),
+              value: values.day
+            },
+            {
+              name: "month",
+              classes: "govuk-input--width-2" + (" govuk-input--error" if errorMessage else ""),
+              value: values.month
+            },
+            {
+              name: "year",
+              classes: "govuk-input--width-4" + (" govuk-input--error" if errorMessage else ""),
+              value: values.year
+            }
+          ],
+          errorMessage: { text: errorMessage } if errorMessage else null,
+          attributes: { "data-testid": "duly-making-payment-date" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Complete duly making",
+            disabled: user.isReadOnly,
+            attributes: { "data-testid": "duly-making-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="duly-making-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

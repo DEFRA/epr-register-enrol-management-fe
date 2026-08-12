@@ -119,6 +119,37 @@
           errorMessage: { text: fieldErrors["tonnageBand"] } if fieldErrors["tonnageBand"] else null
         }) }}
 
+        {# RA-316. Optional passthrough. A REAL input rather than a hidden #}
+        {# one: this form is the tool people use to build test cases, and  #}
+        {# a charge you cannot see or change is a worse tool. It is also   #}
+        {# the only shape a browser-driven suite can reach — schema-only   #}
+        {# passthrough would be silently discarded by `stripUnknown` with  #}
+        {# no error, which is the worst available failure shape.           #}
+        {#                                                                  #}
+        {# The value is carried to the backend unchanged; nothing in this  #}
+        {# repo computes or defaults a charge (see the schema and          #}
+        {# DEMO_VALUES comments for why). LEAVING IT EMPTY IS THE NORMAL   #}
+        {# CASE, not a mistake — it produces "Not provided" on the         #}
+        {# duly-making page, which is the honest rendering both of a       #}
+        {# hand-made demo item and of a real application whose charge      #}
+        {# legacy-be never sent.                                           #}
+        {#                                                                  #}
+        {# `data-testid` is an EXTERNAL CONTRACT consumed by the           #}
+        {# mgmt-tests journey suite, which varies the charge per spec so a #}
+        {# pence/pounds slip stays visible. Do not rename it.              #}
+        {{ govukInput({
+          id: "field-chargeAmountPence",
+          name: "chargeAmountPence",
+          value: values.chargeAmountPence,
+          inputmode: "numeric",
+          spellcheck: false,
+          classes: "govuk-input--width-10",
+          label: { text: "Charge amount (pence, optional)", classes: "govuk-label--s" },
+          hint: { text: "Whole pence — 327600 renders as £3,276. Leave blank for an application with no charge." },
+          errorMessage: { text: fieldErrors["chargeAmountPence"] } if fieldErrors["chargeAmountPence"] else null,
+          attributes: { "data-testid": "create-work-item-charge-amount" }
+        }) }}
+
         <div class="govuk-button-group">
           {{ govukButton({
             text: "Create work item",

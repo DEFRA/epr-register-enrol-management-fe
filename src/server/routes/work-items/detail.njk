@@ -651,6 +651,10 @@
       {# `work-item-tasks-*` prefix (as `work-item-tasks-link` below does)   #}
       {# for anything that is about the task COLLECTION rather than an       #}
       {# individual task.                                                    #}
+      {# Wrapped in an override-able block so a type-specific template can  #}
+      {# suppress the whole panel for states that own no tasks — used by    #}
+      {# RA-316 for re-accreditation's `submitted` state.                   #}
+      {% block tasksPanel %}
       <div class="app-case-panel" data-testid="tasks-panel">
         <h2 class="govuk-heading-m">Tasks</h2>
         {% if workItem.taskProgress.total > 0 %}
@@ -673,6 +677,7 @@
           </p>
         {% endif %}
       </div>
+      {% endblock %}
     </div>
   </div>
 

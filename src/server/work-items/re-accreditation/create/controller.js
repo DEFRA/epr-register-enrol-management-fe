@@ -45,7 +45,10 @@ function renderForm(
           postcode: site.postcode ?? ''
         },
         material: values.material ?? '',
-        tonnageBand: values.tonnageBand ?? ''
+        tonnageBand: values.tonnageBand ?? '',
+        // RA-316 passthrough. Echoed back on re-render so a validation
+        // error elsewhere on the form does not silently discard it.
+        chargeAmountPence: values.chargeAmountPence ?? ''
       },
       fieldErrors,
       errorSummary,
@@ -63,7 +66,11 @@ const FIELD_ORDER = [
   'siteAddress.town',
   'siteAddress.postcode',
   'material',
-  'tonnageBand'
+  'tonnageBand',
+  // RA-316 passthrough fields, last so they do not reorder the existing
+  // error summary.
+  'chargeAmountPence',
+  'paymentReference'
 ]
 
 function buildErrorSummary(fieldErrors) {
@@ -98,6 +105,22 @@ const DEMO_VALUES = {
   },
   material: 'plastic',
   tonnageBand: '500-5000'
+  // RA-316. `chargeAmountPence` is deliberately NOT prefilled here, and
+  // adding a figure would be a regression rather than a convenience.
+  //
+  // Any constant put here would be a fee amount hardcoded into a third
+  // repo, while epr-s8k0 is open to collapse the two that already exist
+  // (the legacy frontend's `paymentDetails.js` and the legacy backend's
+  // `AccreditationChargeCalculator`). It would also contradict the reason
+  // we refused a server-side default: an item created through this
+  // five-field form genuinely HAS no charge to populate from, so "Not
+  // provided" on the duly-making page is the system telling the truth,
+  // not a gap to be filled. Inventing a figure to make a demo screen look
+  // populated is the same mistake in miniature.
+  //
+  // The value is supplied by whoever creates the item — mgmt-tests passes
+  // a different real band value per spec, which is what keeps a
+  // pence/pounds slip visible.
 }
 
 export function makeCreateWorkItemController({
@@ -120,10 +143,22 @@ export function makeCreateWorkItemController({
  * nested object the service / Joi schema expects. Keeps the form HTML
  * compatible with Hapi's default `application/x-www-form-urlencoded`
  * parser (which does not understand bracket-notation keys).
+ *
+ * ⚠ THIS FUNCTION IS AN ALLOW-LIST, and that is the trap. A field absent
+ * from here is dropped BEFORE Joi ever sees it, so adding one to the
+ * schema and the template is not enough: that pair validates and renders
+ * perfectly while the value never leaves the browser, and every
+ * unit test still passes because they call the schema directly with a
+ * value this function never delivered. RA-316 shipped exactly that bug
+ * and only a real form POST caught it.
+ *
+ * ANY NEW FORM FIELD MUST BE ADDED IN THREE PLACES: the template, the
+ * schema, and here — with an integration test in `form-post.test.js`
+ * asserting the OUTBOUND payload, not the view model.
  */
 function reshapeFormPayload(payload) {
   const p = payload ?? {}
-  return {
+  const shaped = {
     operatorEmail: p.operatorEmail,
     organisationName: p.organisationName,
     siteAddress: {
@@ -135,6 +170,21 @@ function reshapeFormPayload(payload) {
     material: p.material,
     tonnageBand: p.tonnageBand
   }
+
+  // An empty box posts `''`, which `Joi.number()` would reject. Empty is
+  // the NORMAL case for this optional field, so "not supplied" must mean
+  // the key is ABSENT rather than present-and-undefined — the latter
+  // survives Joi and reaches the backend client, where only
+  // `JSON.stringify` dropping it saves us. Omitting it outright is what
+  // the contract actually means.
+  //
+  // `0` is a real amount and must survive, hence the explicit `''` test
+  // rather than a falsy check.
+  if (p.chargeAmountPence !== '' && p.chargeAmountPence != null) {
+    shaped.chargeAmountPence = p.chargeAmountPence
+  }
+
+  return shaped
 }
 
 /**
