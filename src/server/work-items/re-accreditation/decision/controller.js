@@ -41,6 +41,11 @@ const PAGE_TITLE = 'Log the decision for this application'
 const DECISION_FIELD_ANCHOR = '#decision-approved'
 const MISSING_DECISION_MESSAGE = 'Select the decision for this application'
 
+// RA-203. The note's own anchor. `govukCharacterCount` renders its textarea
+// with this id, and mgmt-tests selects on it too — treat it as contract.
+const NOTE_FIELD_ANCHOR = '#field-decisionNote'
+const NOTE_TOO_LONG_MESSAGE = `Decision note must be ${DECISION_NOTE_MAX_LENGTH} characters or fewer`
+
 const logger = createLogger()
 
 /**
@@ -197,9 +202,44 @@ export function makeSubmitDecisionController({
       const workItem = current.workItem
       const applicationRef = workItem.payload?.applicationReference
 
-      // No choice made (or a forged value). Render in place — a redirect
-      // would lose the form and the user would have to find their way back.
+      // Validate EVERY field before rendering, then show all the errors at
+      // once. Returning on the first failure would make a user who missed the
+      // radio AND over-ran the note fix one, resubmit, and be told about the
+      // other — the pattern GDS error summaries exist to avoid.
+      //
+      // Summary items are pushed in the order the fields appear on the page,
+      // because the summary's links are a navigation aid: listing them out of
+      // visual order sends the user backwards up the form.
+      const fieldErrors = {}
+      const errorItems = []
+
       if (!isValidDecisionOutcome(decision)) {
+        fieldErrors.decision = MISSING_DECISION_MESSAGE
+        errorItems.push({
+          text: MISSING_DECISION_MESSAGE,
+          href: DECISION_FIELD_ANCHOR
+        })
+      }
+
+      // RA-203. Checked HERE, not left to the service, because this is a form
+      // error and needs to render in place against the field. The service
+      // keeps its own identical guard as a backstop for non-form callers, but
+      // its failure result is a banner-and-redirect — which for an over-long
+      // note would bounce the user to the detail page and discard the
+      // rationale they had just written. `govukCharacterCount`'s live counter
+      // is progressive enhancement and cannot be relied on: with no browser
+      // JS (RA-94) it degrades to a plain textarea that submits happily.
+      if (decisionNote.trim().length > DECISION_NOTE_MAX_LENGTH) {
+        fieldErrors.decisionNote = NOTE_TOO_LONG_MESSAGE
+        errorItems.push({
+          text: NOTE_TOO_LONG_MESSAGE,
+          href: NOTE_FIELD_ANCHOR
+        })
+      }
+
+      // Render in place — a redirect would lose the form and the user would
+      // have to find their way back.
+      if (errorItems.length > 0) {
         return h
           .view(VIEW_PATH, {
             pageTitle: `Error: ${PAGE_TITLE}`,
@@ -212,20 +252,19 @@ export function makeSubmitDecisionController({
             // The decision itself is deliberately NOT echoed back: an invalid
             // value is either a missing choice (nothing to echo) or a forged
             // one (must not be reflected into the page), so the radios render
-            // unset. The NOTE is echoed — it is the user's own prose and
-            // making them retype it because they missed a radio would be
-            // gratuitous. Nunjucks auto-escapes it on the way out.
-            values: { decision: null, decisionNote },
+            // unset. The NOTE is echoed — it is the user's own prose, and
+            // discarding it because they missed a radio, or because it ran
+            // long, would destroy the very thing they need to edit. Nunjucks
+            // auto-escapes it on the way out.
+            values: {
+              decision: isValidDecisionOutcome(decision) ? decision : null,
+              decisionNote
+            },
             errorSummary: {
               titleText: 'There is a problem',
-              items: [
-                {
-                  text: MISSING_DECISION_MESSAGE,
-                  href: DECISION_FIELD_ANCHOR
-                }
-              ]
+              items: errorItems
             },
-            fieldErrors: { decision: MISSING_DECISION_MESSAGE }
+            fieldErrors
           })
           .code(400)
       }

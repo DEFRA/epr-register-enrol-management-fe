@@ -239,6 +239,81 @@ describe('makeSubmitDecisionController', () => {
     )
   })
 
+  // RA-203. The counter is progressive enhancement; with no browser JS the
+  // textarea submits happily, so the server has to catch this — and catch it
+  // as a FORM error. Letting it fall through to the service would bounce the
+  // user to the detail page with a generic banner and discard the rationale
+  // they had just written.
+  test('renders an over-long note in place, keeping the text, without calling the service', async () => {
+    mockDecidable()
+    const recordWorkItemDecision = vi.fn()
+    const longNote = 'x'.repeat(2001)
+    const h = makeToolkit()
+
+    await makeSubmitDecisionController({
+      service: { recordWorkItemDecision }
+    }).handler(makeRequest({ decision: 'approved', decisionNote: longNote }), h)
+
+    expect(recordWorkItemDecision).not.toHaveBeenCalled()
+    expect(h.redirect).not.toHaveBeenCalled()
+    expect(h.view).toHaveBeenCalledWith(
+      're-accreditation/decision/index',
+      expect.objectContaining({
+        // The note must come back — it is the thing they need to shorten.
+        values: { decision: 'approved', decisionNote: longNote },
+        errorSummary: {
+          titleText: 'There is a problem',
+          items: [
+            {
+              text: 'Decision note must be 2000 characters or fewer',
+              href: '#field-decisionNote'
+            }
+          ]
+        },
+        fieldErrors: {
+          decisionNote: 'Decision note must be 2000 characters or fewer'
+        }
+      })
+    )
+  })
+
+  test('reports BOTH a missing radio and an over-long note, in field order', async () => {
+    // Reporting only the first would make the user fix one, resubmit, and be
+    // told about the other.
+    mockDecidable()
+    const h = makeToolkit()
+
+    await makeSubmitDecisionController({
+      service: { recordWorkItemDecision: vi.fn() }
+    }).handler(makeRequest({ decisionNote: 'x'.repeat(2001) }), h)
+
+    const view = h.view.mock.calls.at(-1)[1]
+    expect(view.errorSummary.items.map((i) => i.href)).toEqual([
+      '#decision-approved',
+      '#field-decisionNote'
+    ])
+    expect(Object.keys(view.fieldErrors).sort()).toEqual([
+      'decision',
+      'decisionNote'
+    ])
+  })
+
+  test('accepts a note exactly at the limit', async () => {
+    mockDecidable()
+    const recordWorkItemDecision = vi
+      .fn()
+      .mockResolvedValue({ ok: true, workItem: { id: 'wi-1' } })
+
+    await makeSubmitDecisionController({
+      service: { recordWorkItemDecision }
+    }).handler(
+      makeRequest({ decision: 'approved', decisionNote: 'x'.repeat(2000) }),
+      makeToolkit()
+    )
+
+    expect(recordWorkItemDecision).toHaveBeenCalled()
+  })
+
   test('surfaces a failed note with copy saying the decision was NOT recorded', async () => {
     mockDecidable()
     const recordWorkItemDecision = vi.fn().mockResolvedValue({

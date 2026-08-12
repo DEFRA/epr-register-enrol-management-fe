@@ -97,6 +97,13 @@
         {# did, when the approve interstitial that used to carry it was       #}
         {# retired) makes that placeholder resolve to empty on every          #}
         {# decision — silently, because the template still renders.           #}
+        {# ⚠ `id` is CONTRACT, not incidental. Three things select on it: the #}
+        {# error summary's `#field-decisionNote` anchor, the `<label for>`    #}
+        {# govuk-frontend generates, and the mgmt-tests page object — which   #}
+        {# reads the VALUE through this id rather than the testid, because    #}
+        {# govukCharacterCount wraps its textarea and reading the wrapper     #}
+        {# returns '' (a silent false pass on the note-survives-validation    #}
+        {# assertion). Renaming it breaks all three, two of them silently.    #}
         {{ govukCharacterCount({
           id: "field-decisionNote",
           name: "decisionNote",
