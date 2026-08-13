@@ -32,9 +32,9 @@ export const EM_DASH = '—'
 
 const TONNAGE_BAND_LABELS = {
   UpTo500: 'Up to 500 tonnes',
-  UpTo1000: 'Up to 1,000 tonnes',
+  UpTo5000: 'Up to 5,000 tonnes',
   UpTo10000: 'Up to 10,000 tonnes',
-  Over10000: 'Over 10,000 tonnes'
+  Over10000: 'More than 10,000 tonnes'
 }
 
 const BUSINESS_PLAN_CATEGORIES = [
