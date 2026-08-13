@@ -136,8 +136,7 @@ describe('auth', () => {
   // enforces it at request time (runtime) — the two are not the same
   // guarantee, and this is the regression the fix exists to prevent.
   test.each([
-    ['complete task', '/work-items/some-id/tasks/some-task/complete'],
-    ['set task status', '/work-items/some-id/tasks/some-task/status'],
+    ['self-assign', '/work-items/some-id/self-assign'],
     ['apply action', '/work-items/some-id/actions/some-action'],
     ['withdraw confirm', '/work-items/some-id/actions/withdraw/confirm']
   ])(

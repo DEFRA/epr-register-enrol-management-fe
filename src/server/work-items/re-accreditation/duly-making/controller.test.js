@@ -37,7 +37,7 @@ const DULY_MAKE_HREF = `/work-items/re-accreditation/${ID}/duly-make`
  * actual response bodies rather than C# property names:
  *  - `applicationReference` exists BOTH top level and inside `payload`;
  *  - `chargeAmountPence` / `paymentReference` exist ONLY inside `payload`;
- *  - `taskStateId` is always present and non-null, echoing `stateId`
+ *  - `originStateId` is always present and non-null, echoing `stateId`
  *    unless a module redirect applies.
  * Getting any of these nestings wrong makes the template read `undefined`
  * and render blank while the test still passes, so the shape matters as
@@ -52,7 +52,7 @@ function aWorkItem(overrides = {}) {
     templateVersion: 'v11',
     stateId,
     // Wire default: echoes `stateId`. Never null.
-    taskStateId: stateId,
+    originStateId: stateId,
     stateDisplayName: 'Not started',
     applicationReference: REF,
     submittedAt: '2026-04-27T10:00:00Z',
@@ -258,7 +258,7 @@ describe('GET the duly-making page', () => {
     getWorkItem.mockResolvedValue(
       okWorkItem({
         stateId: 'updated',
-        taskStateId: 'submitted'
+        originStateId: 'submitted'
       })
     )
     const { statusCode, result } = await server.inject({
@@ -273,7 +273,7 @@ describe('GET the duly-making page', () => {
     getWorkItem.mockResolvedValue(
       okWorkItem({
         stateId: 'updated',
-        taskStateId: 'assessment-in-progress'
+        originStateId: 'assessment-in-progress'
       })
     )
     const { statusCode } = await server.inject({
@@ -516,31 +516,28 @@ describe('the Duly make CTA on the application summary', () => {
     const { result } = await renderDetail({
       stateId: 'updated',
       stateDisplayName: 'Updated',
-      taskStateId: 'submitted'
+      originStateId: 'submitted'
     })
     expect(result).toContain('data-testid="duly-make-cta"')
     expect(result).toContain('data-state-id="updated"')
     expect(result).not.toContain('data-testid="tasks-panel"')
   })
 
-  test('no CTA for an updated item queried from assessment, and tasks stay', async () => {
+  test('no CTA for an updated item queried from assessment', async () => {
     const { result } = await renderDetail({
       stateId: 'updated',
       stateDisplayName: 'Updated',
-      taskStateId: 'assessment-in-progress',
-      tasks: [
-        {
-          taskId: 'review-compliance-history',
-          displayName: 'Review compliance history',
-          status: 'Pending'
-        }
-      ]
+      originStateId: 'assessment-in-progress'
     })
     expect(result).not.toContain('data-testid="duly-make-cta"')
     // The distinction the journey suite needs: same visible label as the
-    // case above, different state id, different affordances.
+    // case above ("Updated" is the display name of BOTH
+    // `assessment-in-progress` and `updated`), different state id.
     expect(result).toContain('data-state-id="updated"')
-    expect(result).toContain('data-testid="tasks-panel"')
+    // RA-410. The tasks panel that used to be asserted here is gone. The
+    // Continue review CTA is what an `updated` item offers now, and it must
+    // still render — it is the only path out of that state.
+    expect(result).toContain('data-testid="action-continue-review"')
   })
 
   test.each(['duly-made', 'assessment-in-progress', 'awaiting-decision'])(

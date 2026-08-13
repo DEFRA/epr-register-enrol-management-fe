@@ -66,8 +66,8 @@ describe('evaluateDulyMakeEligibility', () => {
     // view-model layer and never appears on the raw DTO this helper is
     // given. Putting it here would be a fixture asserting an assumption
     // instead of the wire — which is exactly how the earlier bug hid.
-    function aWaypointItem(taskStateId) {
-      return aWorkItem({ stateId: 'updated', taskStateId })
+    function aWaypointItem(originStateId) {
+      return aWorkItem({ stateId: 'updated', originStateId })
     }
 
     test('allows duly making when the query was raised during duly making', () => {
@@ -78,33 +78,33 @@ describe('evaluateDulyMakeEligibility', () => {
 
     test.each(['assessment-in-progress', 'awaiting-decision', 'duly-made'])(
       'refuses when the query was raised from %s',
-      (taskStateId) => {
+      (originStateId) => {
         // Offering Duly make here would invite a caseworker to send an
         // application backwards past assessment.
-        expect(evaluateDulyMakeEligibility(aWaypointItem(taskStateId))).toEqual(
-          { allowed: false, reason: 'invalid-transition' }
-        )
+        expect(
+          evaluateDulyMakeEligibility(aWaypointItem(originStateId))
+        ).toEqual({ allowed: false, reason: 'invalid-transition' })
       }
     )
 
     /**
      * The real unresolvable-origin shape, verified by management-be
-     * against actual serialised responses. `taskStateId` is ALWAYS
+     * against actual serialised responses. `originStateId` is ALWAYS
      * present and non-null on the wire — when no redirect applies it
      * falls back to the item's own `stateId`. So an `updated` item with
-     * no resume history reports `taskStateId: 'updated'`, and is refused
+     * no resume history reports `originStateId: 'updated'`, and is refused
      * because it fails the equality rather than because of any null
      * check. The backend answers 409 for these, so a CTA would always
      * fail.
      */
-    test('refuses an updated item with no resume history (taskStateId echoes stateId)', () => {
+    test('refuses an updated item with no resume history (originStateId echoes stateId)', () => {
       expect(evaluateDulyMakeEligibility(aWaypointItem('updated'))).toEqual({
         allowed: false,
         reason: 'invalid-transition'
       })
     })
 
-    test('refuses a null or absent taskStateId without a special case', () => {
+    test('refuses a null or absent originStateId without a special case', () => {
       // Not a shape the backend emits — asserted only to show the strict
       // equality handles it, so nobody adds a null-guard for a case that
       // cannot occur.
@@ -130,13 +130,13 @@ describe('evaluateDulyMakeEligibility', () => {
         id: 'wi-1',
         typeId: 're-accreditation',
         stateId: 'updated',
-        taskStateId: 'submitted'
+        originStateId: 'submitted'
       }
       expect('isTaskWaypoint' in raw).toBe(false)
       expect(evaluateDulyMakeEligibility(raw)).toEqual({ allowed: true })
     })
 
-    test('ignores isTaskWaypoint entirely — taskStateId is the rule', () => {
+    test('ignores isTaskWaypoint entirely — originStateId is the rule', () => {
       // Even an explicitly false flag must not override the real signal,
       // so nobody can "fix" this by re-adding the derived check.
       expect(
@@ -144,7 +144,7 @@ describe('evaluateDulyMakeEligibility', () => {
           aWorkItem({
             stateId: 'updated',
             isTaskWaypoint: false,
-            taskStateId: 'submitted'
+            originStateId: 'submitted'
           })
         ).allowed
       ).toBe(true)
@@ -153,7 +153,7 @@ describe('evaluateDulyMakeEligibility', () => {
           aWorkItem({
             stateId: 'updated',
             isTaskWaypoint: true,
-            taskStateId: 'assessment-in-progress'
+            originStateId: 'assessment-in-progress'
           })
         ).allowed
       ).toBe(false)

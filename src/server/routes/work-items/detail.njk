@@ -575,7 +575,6 @@
         {# changes on the click.                                              #}
         {% if workItem.availableActions and workItem.availableActions.length > 0 %}
           <div data-testid="work-item-actions">
-            {% block approveAction %}{% endblock %}
             {# `sla-extend` is filtered out of `availableActions` by the     #}
             {# controller (it renders as "Change the due date" in the        #}
             {# assignment panel), so it never reaches this loop and the      #}
@@ -635,49 +634,6 @@
         {% endblock %}
       </div>
 
-      {# ------------------------------ Tasks ------------------------------ #}
-      {# RA-129. Task progression lives on a dedicated /tasks page so the   #}
-      {# summary stays focused on the application data. The panel keeps a   #}
-      {# read-only progress indicator + a deep link.                        #}
-      {#                                                                     #}
-      {# ⚠ RA-372. `work-item-task-progress` shares a prefix with the        #}
-      {# per-task `work-item-task-<taskId>` hooks on the tasks page, and     #}
-      {# the mgmt-tests page object selects those with a PREFIX match        #}
-      {# (`li[data-testid^="work-item-task-"]`). It gets away with it        #}
-      {# because this one is a `<p>` on a different page — so do NOT add     #}
-      {# another `work-item-task-*` hook here or on the tasks page, and      #}
-      {# never make this one an `<li>`. Either would silently fold a         #}
-      {# non-task element into that suite's task list. Use the              #}
-      {# `work-item-tasks-*` prefix (as `work-item-tasks-link` below does)   #}
-      {# for anything that is about the task COLLECTION rather than an       #}
-      {# individual task.                                                    #}
-      {# Wrapped in an override-able block so a type-specific template can  #}
-      {# suppress the whole panel for states that own no tasks — used by    #}
-      {# RA-316 for re-accreditation's `submitted` state.                   #}
-      {% block tasksPanel %}
-      <div class="app-case-panel" data-testid="tasks-panel">
-        <h2 class="govuk-heading-m">Tasks</h2>
-        {% if workItem.taskProgress.total > 0 %}
-          <p class="govuk-body" data-testid="work-item-task-progress">
-            {{ workItem.taskProgress.completed }} of {{ workItem.taskProgress.total }} tasks complete.
-          </p>
-          <p class="govuk-body govuk-!-margin-bottom-0">
-            <a class="govuk-link"
-               data-testid="work-item-tasks-link"
-               href="/work-items/{{ workItem.id }}/tasks">Tasks ({{ workItem.taskProgress.total }})</a>
-          </p>
-        {% else %}
-          <p class="govuk-body" data-testid="work-item-no-tasks">
-            No tasks are required for this work item in its current state.
-          </p>
-          <p class="govuk-body govuk-!-margin-bottom-0">
-            <a class="govuk-link"
-               data-testid="work-item-tasks-link"
-               href="/work-items/{{ workItem.id }}/tasks">Tasks</a>
-          </p>
-        {% endif %}
-      </div>
-      {% endblock %}
     </div>
   </div>
 

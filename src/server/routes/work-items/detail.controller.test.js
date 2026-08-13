@@ -122,9 +122,63 @@ function registerReaccreditation() {
     initialState: { id: 'submitted', displayName: 'Submitted' },
     states: [
       { id: 'submitted', displayName: 'Submitted' },
-      { id: 'approved', displayName: 'Approved', isTerminal: true }
+      { id: 'duly-made', displayName: 'Duly made' },
+      {
+        id: 'assessment-in-progress',
+        displayName: 'Assessment in progress'
+      },
+      { id: 'awaiting-decision', displayName: 'Awaiting decision' },
+      { id: 'queried', displayName: 'Queried' },
+      { id: 'updated', displayName: 'Updated' },
+      { id: 'approved', displayName: 'Approved', isTerminal: true },
+      { id: 'rejected', displayName: 'Refused', isTerminal: true },
+      { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
     ],
-    getTasksForState: () => []
+    // RA-410. The synthetic type now has to carry the transitions the new
+    // declarative lookups read, because those replaced flags that used to
+    // arrive on the wire: `resolveSelfAssignTransition` (the marker behind
+    // "Assign to yourself and start"), `isContinueReviewState` (which
+    // replaced the removed `taskStateId`-derived waypoint flag) and
+    // `evaluateLogDecisionEligibility` all resolve against the registry.
+    // A type declaring no transitions would silently answer "no" to all
+    // three and every CTA assertion here would pass vacuously.
+    transitions: [
+      {
+        actionId: 'payment-received',
+        displayName: 'Payment received',
+        fromStateId: 'duly-made',
+        toStateId: 'assessment-in-progress',
+        startsOnSelfAssign: true
+      },
+      {
+        actionId: 'submit-for-decision',
+        displayName: 'Submit for decision',
+        fromStateId: 'assessment-in-progress',
+        toStateId: 'awaiting-decision',
+        callerInvocable: false
+      },
+      {
+        actionId: 'approve',
+        displayName: 'Approve',
+        fromStateId: 'awaiting-decision',
+        toStateId: 'approved',
+        callerInvocable: false
+      },
+      {
+        actionId: 'reject',
+        displayName: 'Reject',
+        fromStateId: 'awaiting-decision',
+        toStateId: 'rejected',
+        callerInvocable: false
+      },
+      {
+        actionId: 'continue-review-during-assessment',
+        displayName: 'Continue review',
+        fromStateId: 'updated',
+        toStateId: 'assessment-in-progress',
+        callerInvocable: false
+      }
+    ]
   })
 }
 
@@ -152,7 +206,7 @@ describe('#workItemDetailController', () => {
     clearDetailTemplateRegistry()
   })
 
-  test('Renders the work item with summary, tasks and a link to the audit log', async () => {
+  test('Renders the work item with summary and a link to the audit log', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
@@ -169,11 +223,12 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(expect.stringContaining('Work item RA-000000001'))
     expect(result).toEqual(expect.stringContaining('Re-accreditation'))
     expect(result).toEqual(expect.stringContaining('Submitted'))
-    // RA-129. Detail page is now a read-only progress summary; the task
-    // list, status select and quick-complete button moved to the tasks page.
-    expect(result).toEqual(expect.stringContaining('0 of 1 tasks complete'))
-    expect(result).toEqual(expect.stringContaining('Tasks (1)'))
-    expect(result).toEqual(expect.stringContaining(`/work-items/${ID}/tasks`))
+    // RA-410. The tasks page and the progress summary that linked to it are
+    // gone. Assert the absence rather than dropping the check — a stray link
+    // to a now-404 route is exactly the regression AC01/AC03 care about.
+    expect(result).not.toEqual(
+      expect.stringContaining(`/work-items/${ID}/tasks`)
+    )
     expect(result).not.toEqual(expect.stringContaining('Update status'))
     // RA-186. Payload pre block and Template version row no longer
     // render on the detail page — the payload lives with the submitted
@@ -233,7 +288,11 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(expect.stringContaining('RA-987654321'))
     // Internal id must not appear as the caption text but still drives routes.
     expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
-    expect(result).toEqual(expect.stringContaining(`/work-items/${ID}/tasks`))
+    // RA-410. The tasks route is gone; the audit log is the surviving
+    // id-driven sub-route this test is really about.
+    expect(result).not.toEqual(
+      expect.stringContaining(`/work-items/${ID}/tasks`)
+    )
     expect(result).toEqual(
       expect.stringContaining(`/work-items/${ID}/audit-log`)
     )
@@ -382,46 +441,6 @@ describe('#workItemDetailController', () => {
     expect(row.match(/LS1 1AB/g)).toHaveLength(1)
   })
 
-  test('Renders task as complete (no mark-complete button) when task isComplete', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        tasks: [
-          {
-            taskId: 'check-eligibility',
-            displayName: 'Check eligibility',
-            isComplete: true
-          }
-        ],
-        availableActions: [
-          {
-            actionId: 'approve',
-            displayName: 'Approve',
-            fromStateId: 'submitted',
-            toStateId: 'approved',
-            requiresAllTasksComplete: true
-          }
-        ]
-      })
-    })
-
-    const { result, statusCode } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    // RA-129. Per-task forms moved to the tasks page; the summary just
-    // shows the progress count + an Approve action when available.
-    expect(result).toEqual(expect.stringContaining('1 of 1 tasks complete'))
-    expect(result).not.toEqual(expect.stringContaining('Update status'))
-    expect(result).toEqual(expect.stringContaining('Approve'))
-    expect(result).toEqual(
-      expect.stringContaining(`/work-items/${ID}/actions/approve`)
-    )
-  })
-
   test('Picks the module-registered template for the matching version', async () => {
     registerReaccreditation()
     // Register two templates; the work item's templateVersion picks v2.
@@ -532,175 +551,6 @@ describe('#workItemDetailController', () => {
     expect(statusCode).toBe(statusCodes.badGateway)
     expect(result).not.toContain(malicious)
     expect(result).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
-  })
-
-  test('POST complete-task redirects to the detail page on success', async () => {
-    completeWorkItemTask.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        tasks: [
-          {
-            taskId: 'check-eligibility',
-            displayName: 'Check eligibility',
-            isComplete: true
-          }
-        ]
-      })
-    })
-
-    const { statusCode, headers } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/tasks/check-eligibility/complete`
-    })
-
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}`)
-    expect(completeWorkItemTask).toHaveBeenCalledWith({
-      workItemId: ID,
-      taskId: 'check-eligibility',
-      user: expect.objectContaining({ id: expect.any(String) })
-    })
-  })
-
-  test('POST complete-task re-renders detail with engine error inline', async () => {
-    registerReaccreditation()
-    completeWorkItemTask.mockResolvedValue({
-      ok: false,
-      status: 400,
-      problem: { detail: 'Task "x" is not required' }
-    })
-    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-
-    const { statusCode, result } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/tasks/x/complete`
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining('Could not'))
-    expect(result).toEqual(expect.stringContaining('is not required'))
-  })
-
-  test('POST set-task-status forwards the canonical status to the API and redirects on success', async () => {
-    setWorkItemTaskStatus.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        tasks: [
-          {
-            taskId: 'check-eligibility',
-            displayName: 'Check eligibility',
-            isComplete: false,
-            status: 'InProgress'
-          }
-        ]
-      })
-    })
-
-    const { statusCode, headers } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/tasks/check-eligibility/status`,
-      payload: { status: 'InProgress' }
-    })
-
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}`)
-    expect(setWorkItemTaskStatus).toHaveBeenCalledWith({
-      workItemId: ID,
-      taskId: 'check-eligibility',
-      status: 'InProgress',
-      user: expect.objectContaining({ id: expect.any(String) })
-    })
-  })
-
-  test('POST set-task-status rejects an unknown status without calling the backend', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-
-    const { statusCode, result } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/tasks/check-eligibility/status`,
-      payload: { status: 'bogus' }
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining('Could not'))
-    expect(setWorkItemTaskStatus).not.toHaveBeenCalled()
-  })
-
-  test('POST set-task-status surfaces a 409 inline when the engine refuses', async () => {
-    registerReaccreditation()
-    setWorkItemTaskStatus.mockResolvedValue({
-      ok: false,
-      status: 409,
-      problem: { detail: 'Task does not apply to this state' }
-    })
-    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
-
-    const { statusCode, result } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/tasks/check-eligibility/status`,
-      payload: { status: 'Blocked' }
-    })
-
-    expect(statusCode).toBe(statusCodes.conflict)
-    expect(result).toEqual(
-      expect.stringContaining('Task does not apply to this state')
-    )
-  })
-
-  test('Summary page no longer renders per-task status select even for in-progress tasks (RA-129)', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        tasks: [
-          {
-            taskId: 'check-eligibility',
-            displayName: 'Check eligibility',
-            isComplete: false,
-            status: 'InProgress'
-          }
-        ]
-      })
-    })
-
-    const { statusCode, result } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).not.toEqual(
-      expect.stringContaining('task-status-select-check-eligibility')
-    )
-    expect(result).not.toEqual(expect.stringContaining('Update status'))
-    expect(result).toEqual(expect.stringContaining('Tasks (1)'))
-  })
-
-  test('Summary page does not render the per-task UI for a Blocked task (RA-129)', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        tasks: [
-          {
-            taskId: 'check-eligibility',
-            displayName: 'Check eligibility',
-            isComplete: false,
-            status: 'Blocked'
-          }
-        ]
-      })
-    })
-
-    const { statusCode, result } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).not.toEqual(expect.stringContaining('govuk-tag--red'))
-    expect(result).not.toEqual(expect.stringContaining('govuk-tag--blue'))
   })
 
   test('POST action redirects to the detail page on success', async () => {
@@ -854,30 +704,6 @@ describe('#workItemDetailController', () => {
       expect.stringContaining(
         'This work item cannot be unassigned in its current state.'
       )
-    )
-  })
-
-  test('Summary page shows the read-only progress count and link to the tasks page (RA-129)', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem()
-    })
-
-    const { statusCode, result } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(
-      expect.stringContaining('data-testid="work-item-task-progress"')
-    )
-    expect(result).toEqual(
-      expect.stringContaining('data-testid="work-item-tasks-link"')
-    )
-    expect(result).toEqual(
-      expect.stringContaining(`href="/work-items/${ID}/tasks"`)
     )
   })
 
@@ -1149,7 +975,15 @@ describe('#workItemDetailController', () => {
           'No actions panel in the rendered page — a scoped assertion against it would pass vacuously.'
         )
       }
-      const end = html.indexOf('data-testid="tasks-panel"', start)
+      // RA-410. The tasks panel used to bound this slice; it is gone, so the
+      // reference footer (the next thing after the right-hand panels) is the
+      // boundary now. Keeping a real boundary rather than slicing to the end
+      // of the document matters — an unbounded slice would silently widen the
+      // assertion to the whole page.
+      const end = html.indexOf(
+        'data-testid="work-item-application-ref-footer"',
+        start
+      )
       return html.slice(start, end === -1 ? undefined : end)
     }
 
@@ -1278,6 +1112,11 @@ describe('#workItemDetailController', () => {
     })
 
     // Partial filtering: the invocable entries must survive untouched.
+    // RA-410. These use NEUTRAL synthetic action ids rather than borrowing
+    // real ones like `reject`. This suite tests the generic `callerInvocable`
+    // flag; re-accreditation now declares `reject` / `submit-for-decision`
+    // non-invocable in `module.js`, so the declaration-side filter would hide
+    // them here and the suite would be asserting the wrong mechanism.
     test('a mixed list renders exactly the invocable actions', async () => {
       registerReaccreditation()
       getWorkItem.mockResolvedValue({
@@ -1290,8 +1129,8 @@ describe('#workItemDetailController', () => {
               callerInvocable: false
             },
             {
-              actionId: 'reject',
-              displayName: 'Reject',
+              actionId: 'visible-one',
+              displayName: 'Visible one',
               callerInvocable: true
             },
             {
@@ -1300,8 +1139,8 @@ describe('#workItemDetailController', () => {
               callerInvocable: false
             },
             {
-              actionId: 'submit-for-decision',
-              displayName: 'Submit for decision'
+              actionId: 'visible-two',
+              displayName: 'Visible two'
             }
           ]
         })
@@ -1311,8 +1150,8 @@ describe('#workItemDetailController', () => {
 
       expect(statusCode).toBe(statusCodes.ok)
       expect(actionTestIds(result)).toEqual([
-        'action-reject',
-        'action-submit-for-decision'
+        'action-visible-one',
+        'action-visible-two'
       ])
       expect(result).toContain('data-testid="work-item-actions"')
       expect(result).not.toContain('data-testid="work-item-no-actions"')
@@ -1333,8 +1172,8 @@ describe('#workItemDetailController', () => {
           ok: true,
           workItem: aWorkItem({
             availableActions: [
-              { actionId: 'approve', displayName: 'Approve', ...flag },
-              { actionId: 'reject', displayName: 'Reject', ...flag }
+              { actionId: 'visible-one', displayName: 'Visible one', ...flag },
+              { actionId: 'visible-two', displayName: 'Visible two', ...flag }
             ]
           })
         })
@@ -1343,8 +1182,8 @@ describe('#workItemDetailController', () => {
 
         expect(statusCode).toBe(statusCodes.ok)
         expect(actionTestIds(result)).toEqual([
-          'action-approve',
-          'action-reject'
+          'action-visible-one',
+          'action-visible-two'
         ])
         expect(result).not.toContain('data-testid="work-item-no-actions"')
       }
@@ -1424,7 +1263,7 @@ describe('#workItemDetailController', () => {
         workItem: aWorkItem({
           availableActions: [
             ...RESUME_ACTIONS,
-            { actionId: 'reject', displayName: 'Reject' }
+            { actionId: 'visible-one', displayName: 'Visible one' }
           ]
         })
       })
@@ -1433,7 +1272,7 @@ describe('#workItemDetailController', () => {
 
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).toContain('data-testid="re-accreditation-detail"')
-      expect(actionTestIds(result)).toEqual(['action-reject'])
+      expect(actionTestIds(result)).toEqual(['action-visible-one'])
       expect(actionsPanel(result)).not.toContain('Resume')
     })
 
@@ -2427,7 +2266,7 @@ describe('#workItemDetailController', () => {
       expect(statusCode).toBe(statusCodes.ok)
       // RA-346 half: the gate read the RAW DTO, found a complete task set
       // and a declared `approve` transition out of `awaiting-decision`.
-      expect(result).toContain('data-testid="action-approve"')
+      expect(result).toContain('data-testid="log-decision-cta"')
       // RA-358 half: not terminal, so nothing is suppressed.
       expect(result).toContain('data-testid="case-assignment-panel"')
       expect(result).not.toContain('data-testid="assignment-closed"')
@@ -2477,12 +2316,12 @@ describe('#workItemDetailController', () => {
         // dressed up as proof of the controller gate: on a terminal state
         // detail-v1's `actionsPanel` override does not call `super()`, and
         // `approveAction` is nested INSIDE that block, so the CTA cannot
-        // render here whatever `canApproveDirectly` says. The controller
+        // render here whatever `canLogDecision` says. The controller
         // -level proof that a terminal item is refused lives in
         // approve-eligibility.test.js ('blocks approval from a terminal
         // state'). What this pins is the composed OUTCOME the user sees —
         // a closed case never offers approval by either route.
-        expect(result).not.toContain('data-testid="action-approve"')
+        expect(result).not.toContain('data-testid="log-decision-cta"')
         expect(result).toContain(
           'data-testid="re-accreditation-readonly-actions"'
         )
@@ -2490,7 +2329,7 @@ describe('#workItemDetailController', () => {
     )
   })
 
-  describe('RA-133 approve CTA eligibility (canApproveDirectly)', () => {
+  describe('RA-410 log-decision CTA eligibility (canLogDecision)', () => {
     // RA-346. Register the REAL module type rather than the trimmed-down
     // stub the other blocks use. The Approve CTA is now gated by the
     // module's DECLARED `approve` transition (`requiresAllTasksComplete:
@@ -2512,14 +2351,6 @@ describe('#workItemDetailController', () => {
         taskId: 'record-decision-rationale',
         displayName: 'Record decision rationale',
         status: 'Completed'
-      }
-    ]
-
-    const decisionTasksPending = [
-      {
-        taskId: 'record-decision-rationale',
-        displayName: 'Record decision rationale',
-        status: 'InProgress'
       }
     ]
 
@@ -2557,10 +2388,12 @@ describe('#workItemDetailController', () => {
 
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).toEqual(
-        expect.stringContaining('data-testid="action-approve"')
+        expect.stringContaining('data-testid="log-decision-cta"')
       )
       expect(result).toEqual(
-        expect.stringContaining('data-testid="re-accreditation-approve-cta"')
+        expect.stringContaining(
+          'data-testid="re-accreditation-log-decision-cta"'
+        )
       )
       // The Approve CTA is a govukButton styled as a link (href-based),
       // not a plain <a> — it must carry the same role/data-module/
@@ -2570,7 +2403,7 @@ describe('#workItemDetailController', () => {
       // read-only support user. See action-link/macro.njk's `variant:
       // 'button'` path.
       expect(result).toMatch(
-        /<a(?=[^>]*data-testid="action-approve")(?=[^>]*role="button")(?=[^>]*draggable="false")(?=[^>]*data-module="govuk-button")[^>]*>/
+        /<a(?=[^>]*data-testid="log-decision-cta")(?=[^>]*role="button")(?=[^>]*draggable="false")(?=[^>]*data-module="govuk-button")[^>]*>/
       )
     })
 
@@ -2597,7 +2430,7 @@ describe('#workItemDetailController', () => {
       })
 
       expect(result).toMatch(
-        /<span(?=[^>]*data-testid="action-approve")(?=[^>]*class="govuk-button[^"]*app-action-link--disabled)/
+        /<span(?=[^>]*data-testid="log-decision-cta")(?=[^>]*class="govuk-button[^"]*app-action-link--disabled)/
       )
     })
 
@@ -2615,163 +2448,53 @@ describe('#workItemDetailController', () => {
 
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).not.toEqual(
-        expect.stringContaining('data-testid="action-approve"')
+        expect.stringContaining('data-testid="log-decision-cta"')
       )
     })
 
     // ------------------------------------------------------------------
-    // RA-346 AC2. THE regression. `approve` is not a generic engine action,
-    // so it never appears in the backend's `availableActions` and the
-    // task-completion filter that gates every other action never applied to
-    // it — the CTA was offered (and approval succeeded) with
-    // `record-decision-rationale` still pending.
-    // ------------------------------------------------------------------
-    test('RA-346: does not render the Approve CTA while an awaiting-decision task is pending', async () => {
-      registerReaccreditationWithDetailV1()
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({
-          stateId: 'awaiting-decision',
-          tasks: decisionTasksPending,
-          availableActions: withdrawDuringDecision
-        })
-      })
-
-      const { result, statusCode } = await server.inject({
-        method: 'GET',
-        url: `/work-items/${ID}`
-      })
-
-      expect(statusCode).toBe(statusCodes.ok)
-      expect(result).not.toEqual(
-        expect.stringContaining('data-testid="action-approve"')
-      )
-      expect(result).not.toEqual(
-        expect.stringContaining('data-testid="re-accreditation-approve-cta"')
-      )
-      // The page must still render normally — gating the CTA is not an error.
-      expect(result).toEqual(
-        expect.stringContaining('data-testid="re-accreditation-detail"')
-      )
-    })
-
-    test('RA-346: does not render the Approve CTA when the task is merely NotStarted', async () => {
-      registerReaccreditationWithDetailV1()
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({
-          stateId: 'awaiting-decision',
-          tasks: [
-            {
-              taskId: 'record-decision-rationale',
-              displayName: 'Record decision rationale',
-              status: 'NotStarted'
-            }
-          ],
-          availableActions: withdrawDuringDecision
-        })
-      })
-
-      const { result } = await server.inject({
-        method: 'GET',
-        url: `/work-items/${ID}`
-      })
-
-      expect(result).not.toEqual(
-        expect.stringContaining('data-testid="action-approve"')
-      )
-    })
-
-    // The legacy `isComplete` fallback is owned and pinned by
-    // `isTaskComplete` (`core/task-status.js`, exercised in
-    // `core/engine.test.js`) — deliberately not re-pinned at this layer.
-
-    // RA-346 review finding 1. The CTA gate and the approve ROUTE guard must
-    // answer identically for the same work item, or the page renders a
-    // button the route then refuses. They previously diverged: the route
-    // evaluated the raw backend DTO while the CTA evaluated `decorate`'s
-    // output, which coerces a missing `tasks` to `[]` and rewrites each
-    // task's `status`. With the empty-array fail-open in `allTasksComplete`,
-    // that combination rendered an Approve CTA on an item the route blocks.
-    test.each([
-      ['a missing tasks array', undefined],
-      ['an empty tasks array', []]
-    ])(
-      'RA-346: does not render the Approve CTA for %s (agrees with the route guard)',
-      async (_label, tasks) => {
-        registerReaccreditationWithDetailV1()
-        const workItem = aWorkItem({
-          stateId: 'awaiting-decision',
-          availableActions: withdrawDuringDecision
-        })
-        if (tasks === undefined) {
-          delete workItem.tasks
-        } else {
-          workItem.tasks = tasks
-        }
-        getWorkItem.mockResolvedValue({ ok: true, workItem })
-
-        const { result, statusCode } = await server.inject({
-          method: 'GET',
-          url: `/work-items/${ID}`
-        })
-
-        expect(statusCode).toBe(statusCodes.ok)
-        expect(result).not.toEqual(
-          expect.stringContaining('data-testid="action-approve"')
-        )
-      }
-    )
-
-    // ------------------------------------------------------------------
-    // RA-346 AC1 — `submit-for-decision`.
+    // RA-410 supersedes RA-346 AC1 for `submit-for-decision`.
     //
-    // What is ACTUALLY true, corrected after PR review: on the rendered
-    // detail page this gate is BACKEND-ONLY. `decorate` copies
-    // `availableActions` through verbatim (filtering just `sla-extend`); it
-    // never calls `projectWorkItem`, so there is no frontend
-    // `requiresAllTasksComplete` check on this path. An earlier version of
-    // these tests omitted `submit-for-decision` from the fixture's
-    // `availableActions` and then asserted it was absent — which could not
-    // fail, and wrongly implied a frontend gate existed.
+    // RA-346's arrangement was backend-only: `decorate` copied
+    // `availableActions` through verbatim, so the page rendered exactly what
+    // the backend projected, in both directions. That is no longer the
+    // intended behaviour for this action.
     //
-    // That backend-only arrangement is correct and deliberate: the backend
-    // is authoritative, and `docs/work-items.md` requires the engine be a
-    // mirror rather than a re-implementation. `approve` is gated in the
-    // frontend ONLY because it is absent from `availableActions` entirely,
-    // so no backend-derived signal exists to render from.
+    // `submit-for-decision` is declared `callerInvocable: false` in v12
+    // because both hops of a decision are applied server-side by the
+    // `/decision` endpoint. A button that moved an item to
+    // `awaiting-decision` and stopped would strand it, since the Log
+    // decision CTA renders from `assessment-in-progress`. So the frontend
+    // now suppresses it from its OWN declaration, and — critically — does so
+    // even when the backend projects it as invocable, which is exactly what
+    // a pre-v12 backend does during the deployment window.
     //
-    // So what is worth pinning here is the pass-through itself: the page
-    // renders exactly what the backend projected, in both directions. A
-    // regression that started rendering an action the backend withheld
-    // would fail the first case.
+    // The pass-through property RA-346 pinned still holds for every action
+    // the declaration does not mark non-invocable; the RA-364 suite above
+    // covers that with neutral synthetic ids.
     // ------------------------------------------------------------------
     const assessmentAction = {
       actionId: 'submit-for-decision',
       displayName: 'Submit for decision',
       fromStateId: 'assessment-in-progress',
-      toStateId: 'awaiting-decision',
-      requiresAllTasksComplete: true
+      toStateId: 'awaiting-decision'
     }
 
     test.each([
-      ['withholds it (tasks pending)', [], false],
-      ['projects it (tasks complete)', [assessmentAction], true]
+      ['withholds it', []],
+      ['projects it', [assessmentAction]],
+      [
+        'projects it as explicitly caller-invocable (a pre-v12 backend)',
+        [{ ...assessmentAction, callerInvocable: true }]
+      ]
     ])(
-      'RA-346 AC1: renders submit-for-decision iff the backend %s',
-      async (_label, availableActions, expected) => {
+      'never renders submit-for-decision, even when the backend %s',
+      async (_label, availableActions) => {
         registerReaccreditationWithDetailV1()
         getWorkItem.mockResolvedValue({
           ok: true,
           workItem: aWorkItem({
             stateId: 'assessment-in-progress',
-            tasks: [
-              {
-                taskId: 'assess-technical-capacity',
-                displayName: 'Assess technical capacity',
-                status: expected ? 'Completed' : 'InProgress'
-              }
-            ],
             availableActions
           })
         })
@@ -2782,9 +2505,124 @@ describe('#workItemDetailController', () => {
         })
 
         expect(statusCode).toBe(statusCodes.ok)
-        expect(result.includes('submit-for-decision')).toBe(expected)
+        expect(result).not.toEqual(
+          expect.stringContaining('data-testid="action-submit-for-decision"')
+        )
+        // Guards against a vacuous pass: the page really did render, and the
+        // Log decision CTA is what stands in that action's place.
+        expect(result).toEqual(
+          expect.stringContaining('data-testid="log-decision-cta"')
+        )
       }
     )
+  })
+
+  // RA-410. The stale-backend window. `isCallerInvocable` reads the flag off
+  // the PROJECTED action, so a backend that predates v12 — which sends no
+  // flag, or sends `true` — would slip `submit-for-decision` and `reject`
+  // through and render a bare Reject button beside the Log decision CTA. The
+  // module declaration is the second side of that guard.
+  describe('RA-410: declaration-side filter for a stale backend', () => {
+    test.each([['reject'], ['submit-for-decision']])(
+      'hides %s even when the backend projects it as caller-invocable',
+      async (actionId) => {
+        registerReaccreditation()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId: 'awaiting-decision',
+            availableActions: [
+              {
+                actionId,
+                displayName: 'Stale',
+                fromStateId: 'awaiting-decision',
+                toStateId: 'rejected',
+                // What a pre-v12 backend sends.
+                callerInvocable: true
+              }
+            ]
+          })
+        })
+
+        const { statusCode, result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).not.toEqual(
+          expect.stringContaining(`data-testid="action-${actionId}"`)
+        )
+      }
+    )
+
+    test('hides a declared-non-invocable action when the backend omits the flag entirely', async () => {
+      // The oldest payload shape: no `callerInvocable` key at all, which
+      // `isCallerInvocable` correctly reads as invocable for forward-compat.
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          availableActions: [
+            {
+              actionId: 'reject',
+              displayName: 'Reject',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'rejected'
+            }
+          ]
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-reject"')
+      )
+    })
+
+    test('still renders actions the declaration does NOT mark non-invocable', async () => {
+      // Guards against the filter over-reaching into a vacuous pass: the
+      // withdraw link must survive alongside the suppressed decision actions.
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'awaiting-decision',
+          availableActions: [
+            {
+              actionId: 'reject',
+              displayName: 'Reject',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'rejected',
+              callerInvocable: true
+            },
+            {
+              actionId: 'withdraw-during-decision',
+              displayName: 'Withdraw',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'withdrawn'
+            }
+          ]
+        })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-withdraw-during-decision"')
+      )
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-reject"')
+      )
+    })
   })
 
   // RA-372 -----------------------------------------------------------------
@@ -2809,11 +2647,10 @@ describe('#workItemDetailController', () => {
     const updatedWorkItem = (overrides = {}) =>
       aWorkItem({
         stateId: 'updated',
-        // RA-372. The backend stamps `taskStateId` with the state whose
-        // checklist `tasks` actually holds. Differing from `stateId` is
-        // what marks this item as parked in a waypoint — it is the signal
-        // the CTA keys off, NOT the literal state id.
-        taskStateId: 'assessment-in-progress',
+        // RA-410. `taskStateId` is gone from the wire; management-be renamed
+        // the surviving waypoint-origin field to `originStateId`. The
+        // Continue review CTA no longer reads either — it keys off the state.
+        originStateId: 'assessment-in-progress',
         assignedToId: 'someone-else',
         // What the backend actually returns for an item in `updated`: the
         // ORIGINATING state's tasks, with the pre-query completion intact.
@@ -2874,7 +2711,7 @@ describe('#workItemDetailController', () => {
 
     // The whole point of the ticket: the outstanding tasks must be
     // reachable, so the CTA cannot be gated on completing them first.
-    test('renders the CTA even though tasks are outstanding', async () => {
+    test('renders the CTA regardless of any legacy task data on the item', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
 
@@ -2885,7 +2722,6 @@ describe('#workItemDetailController', () => {
 
       // Guards against a vacuous pass: the fixture really does have an
       // incomplete task.
-      expect(result).toEqual(expect.stringContaining('1 of 2 tasks complete'))
       expect(result).toEqual(
         expect.stringContaining('data-testid="action-continue-review"')
       )
@@ -2894,21 +2730,6 @@ describe('#workItemDetailController', () => {
     // AC1 / AC2 through the real template: the projected originating-state
     // tasks and their pre-query progress render through the existing
     // markup, and the "no tasks" message is gone.
-    test('shows the projected originating-state tasks and prior progress', async () => {
-      registerReaccreditationWithDetailV1()
-      getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
-
-      const { result } = await server.inject({
-        method: 'GET',
-        url: `/work-items/${ID}`
-      })
-
-      expect(result).toEqual(expect.stringContaining('1 of 2 tasks complete'))
-      expect(result).toEqual(expect.stringContaining('Tasks (2)'))
-      expect(result).not.toEqual(
-        expect.stringContaining('data-testid="work-item-no-tasks"')
-      )
-    })
 
     test('renders the CTA alongside the Withdraw link rather than replacing it', async () => {
       registerReaccreditationWithDetailV1()
@@ -3005,30 +2826,41 @@ describe('#workItemDetailController', () => {
     // RA-372. The waypoint signal itself, isolated from any state id. The
     // CTA must key off "tasks belong to a different state", which is what
     // the backend actually tells us, and nothing else.
-    test('does not render the CTA when the tasks belong to the current state', async () => {
-      registerReaccreditationWithDetailV1()
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: updatedWorkItem({ taskStateId: 'updated' })
-      })
+    // RA-410. These used to be keyed on `taskStateId` — "the tasks belong to
+    // the current state" and "the envelope omits taskStateId". That field is
+    // gone, and the CTA is now driven by the item's state alone, so the only
+    // negative left is a state that the `continue-review-during-*`
+    // transitions do not leave from.
+    test.each(['submitted', 'duly-made', 'assessment-in-progress', 'queried'])(
+      'does not render the CTA in %s',
+      async (stateId) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: updatedWorkItem({ stateId })
+        })
 
-      const { result } = await server.inject({
-        method: 'GET',
-        url: `/work-items/${ID}`
-      })
+        const { statusCode, result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
 
-      expect(result).not.toEqual(
-        expect.stringContaining('data-testid="action-continue-review"')
-      )
-    })
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).not.toEqual(
+          expect.stringContaining('data-testid="action-continue-review"')
+        )
+      }
+    )
 
     // Backwards compatibility: an envelope from a backend that predates
     // `taskStateId` must not blow up or render a CTA whose POST the
     // backend would reject. It degrades to "no waypoint".
-    test('does not render the CTA when the envelope omits taskStateId', async () => {
+    // RA-410. The CTA must survive the removal of every task field — it is
+    // the only path out of `updated` and it is NOT a task feature.
+    test('still renders the CTA for an item carrying no task fields at all', async () => {
       registerReaccreditationWithDetailV1()
       const workItem = updatedWorkItem()
-      delete workItem.taskStateId
+      delete workItem.tasks
       getWorkItem.mockResolvedValue({ ok: true, workItem })
 
       const { statusCode, result } = await server.inject({
@@ -3037,7 +2869,7 @@ describe('#workItemDetailController', () => {
       })
 
       expect(statusCode).toBe(statusCodes.ok)
-      expect(result).not.toEqual(
+      expect(result).toEqual(
         expect.stringContaining('data-testid="action-continue-review"')
       )
     })
@@ -3076,7 +2908,7 @@ describe('#workItemDetailController', () => {
   // RA-372 x RA-346. Merging `main` brought two independent gates onto the
   // same page, both feeding decision affordances:
   //
-  //   - RA-346's `canApproveDirectly`, answered by
+  //   - RA-346's `canLogDecision`, answered by
   //     `evaluateApproveEligibility` against the DECLARED `approve`
   //     transition (`fromStateId: 'awaiting-decision'`,
   //     `requiresAllTasksComplete: true`), read from the RAW backend DTO.
@@ -3144,7 +2976,7 @@ describe('#workItemDetailController', () => {
       // Complete tasks are NOT enough — the declared `approve` transition
       // is out of `awaiting-decision`, and this item is in `updated`.
       expect(result).not.toEqual(
-        expect.stringContaining('data-testid="action-approve"')
+        expect.stringContaining('data-testid="log-decision-cta"')
       )
     })
 
@@ -3176,7 +3008,7 @@ describe('#workItemDetailController', () => {
       })
 
       expect(result).toEqual(
-        expect.stringContaining('data-testid="action-approve"')
+        expect.stringContaining('data-testid="log-decision-cta"')
       )
       expect(result).not.toEqual(
         expect.stringContaining('data-testid="action-continue-review"')
@@ -3225,7 +3057,7 @@ describe('#workItemDetailController', () => {
         expect.stringContaining('data-testid="action-continue-review"')
       )
       expect(result).not.toEqual(
-        expect.stringContaining('data-testid="action-approve"')
+        expect.stringContaining('data-testid="log-decision-cta"')
       )
     })
   })
