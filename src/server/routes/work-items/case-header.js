@@ -65,7 +65,9 @@ export function buildCaseHeader({ workItem, assignment = null }) {
       {
         key: 'material',
         label: 'Material',
-        value: payload.material ? materialLabel(payload.material) : EM_DASH
+        value: payload.material
+          ? materialLabel(payload.material, payload.glassRecyclingProcess)
+          : EM_DASH
       },
       {
         key: 'status',

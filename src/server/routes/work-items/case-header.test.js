@@ -64,6 +64,20 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(header, 'registration-number')).toBe('EPR-100999')
   })
 
+  test('appends the glass recycling type suffix to the material meta entry', () => {
+    const header = buildCaseHeader({
+      workItem: {
+        ...workItem,
+        payload: {
+          ...workItem.payload,
+          material: 'glass',
+          glassRecyclingProcess: 'glass_other'
+        }
+      }
+    })
+    expect(metaValue(header, 'material')).toBe('Glass - Other')
+  })
+
   test('keeps the shared state-badge colour on the status entry', () => {
     const header = buildCaseHeader({ workItem })
     const status = header.meta.find((entry) => entry.key === 'status')
