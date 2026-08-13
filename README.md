@@ -108,13 +108,16 @@ when running in environments that require it.
 Configuration is managed via [`convict`](https://github.com/mozilla/node-convict).
 Notable environment variables for local integration:
 
-| Variable                 | Default                 | Description                               |
-| ------------------------ | ----------------------- | ----------------------------------------- |
-| `PORT`                   | `3000`                  | Frontend HTTP port                        |
-| `BACKEND_API_URL`        | `http://localhost:8085` | Base URL of the case management backend   |
-| `BACKEND_API_TIMEOUT_MS` | `5000`                  | Backend request timeout                   |
-| `SESSION_CACHE_ENGINE`   | `memory` (dev)          | `memory` or `redis`. Memory is ephemeral. |
-| `REDIS_HOST`             | `127.0.0.1`             | Used when `SESSION_CACHE_ENGINE=redis`    |
+| Variable                 | Default                 | Description                                                                                                                                                                |
+| ------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                   | `3000`                  | Frontend HTTP port                                                                                                                                                         |
+| `BACKEND_API_URL`        | `http://localhost:8085` | Base URL of the case management backend                                                                                                                                    |
+| `BACKEND_API_TIMEOUT_MS` | `5000`                  | Backend request timeout                                                                                                                                                    |
+| `SESSION_CACHE_ENGINE`   | `memory` (dev)          | `memory` or `redis`. Memory is ephemeral.                                                                                                                                  |
+| `REDIS_HOST`             | `127.0.0.1`             | Used when `SESSION_CACHE_ENGINE=redis`                                                                                                                                     |
+| `AUTH_BASIC_ENABLED`     | `false`                 | Gate the whole app behind HTTP basic auth (e.g. for a preview environment). Requires `BASIC_USER` and `BASIC_PASSWD` — boot fails loudly if either is empty while enabled. |
+| `BASIC_USER`             | _(none)_                | Username for HTTP basic auth                                                                                                                                               |
+| `BASIC_PASSWD`           | _(none)_                | Password for HTTP basic auth                                                                                                                                               |
 
 > Session storage uses CatboxMemory by default in development; Redis is
 > only required for production-style local runs (e.g. via Compose). Both
@@ -130,6 +133,14 @@ Notable environment variables for local integration:
 > every request and bypasses real OAuth, so boot fails loudly if stub auth is
 > enabled in that environment. It may be set to `true` in other deployed
 > environments (e.g. `dev`, `test`) while real OAuth is being wired up.
+
+> **HTTP basic auth.** When `AUTH_BASIC_ENABLED=true`, every request must
+> carry an `Authorization: Basic` header matching `BASIC_USER`/`BASIC_PASSWD`,
+> except `/health`, `/favicon.ico`, `/public/**` and the OAuth callback route
+> — see [`basic-auth-plugin.js`](src/server/common/helpers/auth/basic-auth-plugin.js)
+> for the exact exclusion list. This sits in front of, and is independent
+> from, the app's own OAuth/stub auth — it's intended for gating access to a
+> whole preview environment rather than replacing user sign-in.
 
 See [`src/config/config.js`](src/config/config.js) for the full schema.
 
