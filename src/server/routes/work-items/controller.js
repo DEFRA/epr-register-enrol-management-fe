@@ -574,7 +574,12 @@ function decorate(item) {
 
   // RA-324 phase-2. `slaState` is non-null exactly when the work item carries
   // an SLA clock, and it gates "Due on" alone.
-  const slaStarted = Boolean(item.slaState)
+  //
+  // RA-359 part 2. A terminal/withdrawn item now reports the new `Cancelled`
+  // SLA state (management-be) while keeping its `slaDueDate`. `Cancelled` is a
+  // STOPPED clock, not a running one, so it must not surface a live "Due on" —
+  // treat it exactly like "no active SLA". OnTrack/AtRisk/Breached unchanged.
+  const slaStarted = Boolean(item.slaState) && item.slaState !== 'Cancelled'
 
   return {
     ...item,

@@ -3728,6 +3728,32 @@ describe('RA-295 individual work item page', () => {
     expect(result).toContain('data-testid="case-header-due-on"')
   })
 
+  // RA-359 part 2. A withdrawn/terminal item reports the new `Cancelled` SLA
+  // state (management-be) while KEEPING its `slaDueDate`. The header's "Due on"
+  // must not present that frozen date as a live deadline: the cell still
+  // renders (so the layout is stable) but its value degrades to the em dash,
+  // exactly as for a work item whose clock never started. This does NOT
+  // reintroduce the RA-295-removed SLA badge — asserted above.
+  test('suppresses the header Due on date for a Cancelled SLA (withdrawn item)', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        stateId: 'withdrawn',
+        slaState: 'Cancelled',
+        slaDueDate: '2026-08-24T09:00:00Z'
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    // The cell is still present (stable layout) but shows no live date.
+    expect(result).toContain('data-testid="case-header-due-on"')
+    expect(result).not.toContain('24 August 2026')
+  })
+
   // AC05 -------------------------------------------------------------
   test('AC05: the body uses the responsive two-thirds / one-third grid', async () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })

@@ -64,6 +64,24 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(header, 'registration-number')).toBe('EPR-100999')
   })
 
+  // RA-359 part 2. management-be keeps `slaDueDate` on a terminal/withdrawn
+  // item but reports the new `slaState: 'Cancelled'`. A stopped clock must not
+  // read as a live deadline, so "Due on" degrades to the em dash — exactly as
+  // it does for a work item whose clock never started.
+  test('suppresses the Due on date for a Cancelled SLA (RA-359 part 2)', () => {
+    const header = buildCaseHeader({
+      workItem: { ...workItem, slaState: 'Cancelled' }
+    })
+    expect(metaValue(header, 'due-on')).toBe(EM_DASH)
+  })
+
+  test('keeps the Due on date for a running SLA (OnTrack) unchanged', () => {
+    const header = buildCaseHeader({
+      workItem: { ...workItem, slaState: 'OnTrack' }
+    })
+    expect(metaValue(header, 'due-on')).toBe('24 August 2026')
+  })
+
   test('keeps the shared state-badge colour on the status entry', () => {
     const header = buildCaseHeader({ workItem })
     const status = header.meta.find((entry) => entry.key === 'status')

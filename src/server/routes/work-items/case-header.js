@@ -90,7 +90,15 @@ export function buildCaseHeader({ workItem, assignment = null }) {
       {
         key: 'due-on',
         label: 'Due on',
-        value: formatDueOn(workItem?.slaDueDate)
+        // RA-359 part 2. A `Cancelled` SLA (terminal/withdrawn item) is a
+        // stopped clock: management-be keeps `slaDueDate`, but showing it here
+        // would imply a live deadline the caseworker must still meet. Suppress
+        // it to the em dash, matching a work item whose clock never started.
+        // OnTrack/AtRisk/Breached keep the date.
+        value:
+          workItem?.slaState === 'Cancelled'
+            ? EM_DASH
+            : formatDueOn(workItem?.slaDueDate)
       },
       {
         key: 'registration-number',
