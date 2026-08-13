@@ -689,7 +689,13 @@ export async function recordReAccreditationDecision({
   outcome,
   user = null,
   baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  // NOT the shared backendApi.timeoutMs. The backend gates this atomic
+  // decision on an operator-journey push it retries up to 5 times (~28s
+  // worst case) before committing anything, so this call has its own,
+  // much longer budget. Aborting before the backend finishes turns its
+  // clean 500 into a client cancellation and re-opens the RA-410
+  // stranding bug — see config `backendApi.decisionTimeoutMs`.
+  timeoutMs = config.get('backendApi.decisionTimeoutMs'),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/decision`

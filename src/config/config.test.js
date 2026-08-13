@@ -351,3 +351,55 @@ describe('config production hardening', () => {
     })
   })
 })
+
+// RA-410. The re-accreditation decision call has its OWN timeout because
+// management-be gates the atomic decision on an operator-journey push it
+// retries up to 5 times (~28s worst case) before committing anything. fe
+// must not abort before be finishes and returns its clean HTTP 500 — a
+// premature abort re-opens the stranding bug. See
+// `backendApi.decisionTimeoutMs` and `recordReAccreditationDecision`.
+describe('config backend API decision timeout (RA-410)', () => {
+  const originalEnv = process.env
+
+  // be's worst-case OJ-push retry budget, in ms. The default decision
+  // timeout MUST clear this with margin.
+  const BE_WORST_CASE_RETRY_BUDGET_MS = 28000
+
+  beforeEach(() => {
+    vi.resetModules()
+    process.env = { ...originalEnv }
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
+  test('defaults decisionTimeoutMs to 60000', async () => {
+    delete process.env.BACKEND_API_DECISION_TIMEOUT_MS
+    const mod = await import('./config.js')
+    expect(mod.config.get('backendApi.decisionTimeoutMs')).toBe(60000)
+  })
+
+  test('default clears be worst-case retry budget with comfortable margin', async () => {
+    delete process.env.BACKEND_API_DECISION_TIMEOUT_MS
+    const mod = await import('./config.js')
+    expect(mod.config.get('backendApi.decisionTimeoutMs')).toBeGreaterThan(
+      BE_WORST_CASE_RETRY_BUDGET_MS
+    )
+  })
+
+  test('default decision timeout is longer than the shared backend timeout', async () => {
+    delete process.env.BACKEND_API_DECISION_TIMEOUT_MS
+    delete process.env.BACKEND_API_TIMEOUT_MS
+    const mod = await import('./config.js')
+    expect(mod.config.get('backendApi.decisionTimeoutMs')).toBeGreaterThan(
+      mod.config.get('backendApi.timeoutMs')
+    )
+  })
+
+  test('BACKEND_API_DECISION_TIMEOUT_MS overrides the default', async () => {
+    process.env.BACKEND_API_DECISION_TIMEOUT_MS = '90000'
+    const mod = await import('./config.js')
+    expect(mod.config.get('backendApi.decisionTimeoutMs')).toBe(90000)
+  })
+})
