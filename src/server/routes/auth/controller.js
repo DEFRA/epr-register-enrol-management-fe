@@ -12,6 +12,7 @@ import {
   confirmPostLoginRedirect,
   popPostLoginRedirect
 } from '#/server/common/helpers/auth/auth-redirect.js'
+import { statusCodes } from '#/server/common/constants/status-codes.js'
 
 const LOGIN_PATH = '/auth/regulator/login'
 
@@ -194,7 +195,18 @@ export function createAuthControllers({
           supportUserRole
         }
       )
-      return h.redirect(LOGIN_PATH)
+      // RA-428: a caller with neither role must see an explicit
+      // access-denied page rather than being silently bounced back to
+      // login, which looked indistinguishable from a transient sign-in
+      // failure.
+      return h
+        .view('error/index', {
+          pageTitle: 'You do not have access to this service',
+          heading: 'You do not have access to this service',
+          message:
+            'Your Microsoft Entra ID account is not set up with the regulator or support user role needed to use this service. Contact your administrator if you believe this is a mistake.'
+        })
+        .code(statusCodes.forbidden)
     }
 
     const user = {
