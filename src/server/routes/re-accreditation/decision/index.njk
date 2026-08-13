@@ -1,0 +1,136 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/radios/macro.njk" import govukRadios %}
+{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
+{% from "govuk/components/warning-text/macro.njk" import govukWarningText %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+
+{# ----------------------------------------------------------------- #}
+{# Log-decision page (RA-410).                                        #}
+{#                                                                    #}
+{# Reached from the primary "Log decision" button on the              #}
+{# re-accreditation detail page. Posts back to its own URL; the       #}
+{# controller makes a SINGLE call to the type-specific `/decision`    #}
+{# endpoint, which applies both lifecycle hops server-side, then      #}
+{# redirects back to the detail page with a flash banner.             #}
+{#                                                                    #}
+{# Replaced RA-132's approve interstitial. That page had one outcome  #}
+{# and a warning; this one has both outcomes behind a radio, so the   #}
+{# decision is made here rather than implied by which button was      #}
+{# clicked on the previous page.                                      #}
+{#                                                                    #}
+{# ⚠ "Refused" is a LABEL ONLY. The posted value is `rejected`, which #}
+{# is the backend's unchanged wire value, state id and notification   #}
+{# key. Do not "tidy" the value to match the label — see              #}
+{# `decision/eligibility.js#DECISION_OUTCOMES`.                       #}
+{#                                                                    #}
+{# `data-testid` hooks here are an EXTERNAL CONTRACT consumed by the  #}
+{# mgmt-tests journey suite; renaming one breaks those specs.         #}
+{# ----------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: "Work item " + workItem.applicationRef
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "log-decision-error-summary" }
+        }) }}
+      {% endif %}
+
+      {{ govukWarningText({
+        text: "This records the final decision and notifies the applicant. It cannot be undone.",
+        iconFallbackText: "Warning",
+        attributes: { "data-testid": "log-decision-warning" }
+      }) }}
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="log-decision-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {# The `id` on the first item is what the error summary anchors to    #}
+        {# (`#decision-approved` — see DECISION_FIELD_ANCHOR in the           #}
+        {# controller). govuk-frontend would otherwise derive it from `name`, #}
+        {# giving `decision`; pinning both ids keeps the summary link and the #}
+        {# radio in step and makes the testids stable for mgmt-tests.         #}
+        {{ govukRadios({
+          name: "decision",
+          fieldset: {
+            legend: {
+              text: "What is the decision for this application?",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          items: [
+            {
+              id: "decision-approved",
+              value: "approved",
+              text: "Approved",
+              checked: values.decision == "approved",
+              attributes: { "data-testid": "decision-approved" }
+            },
+            {
+              id: "decision-refused",
+              value: "rejected",
+              text: "Refused",
+              checked: values.decision == "rejected",
+              attributes: { "data-testid": "decision-refused" }
+            }
+          ],
+          errorMessage: { text: fieldErrors["decision"], attributes: { "data-testid": "decision-error" } } if fieldErrors["decision"] else null
+        }) }}
+
+        {# RA-203. The decision rationale. Optional, but NOT decorative: the  #}
+        {# backend's Decision notification reads `decision_notes` from the    #}
+        {# latest work-item note, so whatever is typed here is what reaches   #}
+        {# the operator's email. Leaving it out (as the first cut of RA-410   #}
+        {# did, when the approve interstitial that used to carry it was       #}
+        {# retired) makes that placeholder resolve to empty on every          #}
+        {# decision — silently, because the template still renders.           #}
+        {# ⚠ `id` is CONTRACT, not incidental. Three things select on it: the #}
+        {# error summary's `#field-decisionNote` anchor, the `<label for>`    #}
+        {# govuk-frontend generates, and the mgmt-tests page object — which   #}
+        {# reads the VALUE through this id rather than the testid, because    #}
+        {# govukCharacterCount wraps its textarea and reading the wrapper     #}
+        {# returns '' (a silent false pass on the note-survives-validation    #}
+        {# assertion). Renaming it breaks all three, two of them silently.    #}
+        {{ govukCharacterCount({
+          id: "field-decisionNote",
+          name: "decisionNote",
+          maxlength: decisionNoteMaxLength,
+          label: {
+            text: "Decision note (optional)",
+            classes: "govuk-label--s"
+          },
+          hint: {
+            text: "This is recorded in the audit log and included in the email sent to the applicant."
+          },
+          value: values.decisionNote,
+          errorMessage: { text: fieldErrors["decisionNote"] } if fieldErrors["decisionNote"] else null,
+          attributes: { "data-testid": "log-decision-note" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Log decision",
+            disabled: user.isReadOnly,
+            attributes: { "data-testid": "log-decision-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="log-decision-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

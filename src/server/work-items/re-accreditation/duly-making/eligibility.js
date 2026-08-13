@@ -101,12 +101,20 @@ export function evaluateDulyMakeEligibility(workItem) {
   // strand, which is the regression the task-driven flow's removal would
   // otherwise introduce.
   //
-  // The discriminator is `taskStateId`: the id of the state whose
-  // checklist the projected `tasks` belong to. For a waypoint item the
-  // backend resolves it from the work item's own audit history using the
-  // SAME helper its duly-make endpoint uses to decide whether to accept
-  // the item, so this gate and the backend's acceptance rule are one rule
+  // The discriminator is `originStateId`: the state this work item will
+  // return to when its waypoint discharges. For a waypoint item the backend
+  // resolves it from the work item's own audit history using the SAME
+  // helper its duly-make endpoint uses to decide whether to accept the
+  // item, so this gate and the backend's acceptance rule are one rule
   // rather than two that can drift.
+  //
+  // RA-410 renamed this field from `taskStateId`. Only the NAME changed —
+  // same value, same resolution rule, same guarantees below. It was renamed
+  // rather than deleted with the rest of the tasks feature because the
+  // waypoint-origin meaning is not a task concept: it is audit-history
+  // knowledge only the backend has, and this branch is the only thing
+  // standing between a queried-during-duly-making application and a dead
+  // end. Confirmed with management-be.
   //
   // Comparing against the transition's own `fromStateId` keeps the
   // `submitted` literal in `module.js`, and never naming `updated` keeps
@@ -114,15 +122,15 @@ export function evaluateDulyMakeEligibility(workItem) {
   // follows.
   //
   // An item queried from assessment or decision reports a different
-  // `taskStateId` and is correctly refused: offering Duly make there
+  // `originStateId` and is correctly refused: offering Duly make there
   // would invite a caseworker to send an application backwards past
   // assessment.
   //
-  // `taskStateId` is ALWAYS PRESENT AND NON-NULL on the wire — verified
+  // `originStateId` is ALWAYS PRESENT AND NON-NULL on the wire — verified
   // by management-be against real serialised responses, not inferred from
   // the DTO's nullability. When no redirect applies it falls back to the
   // item's own `stateId`. So an `updated` item with no resume history
-  // reports `taskStateId: 'updated'`, NOT null, and is refused here
+  // reports `originStateId: 'updated'`, NOT null, and is refused here
   // because it fails the equality — which is the correct outcome (the
   // backend answers 409 for those), just by a different route than a
   // null-check would take.
@@ -132,23 +140,23 @@ export function evaluateDulyMakeEligibility(workItem) {
   // equality already handles null, absent and self-referential values
   // correctly without asserting anything about which of them happen.
   //
-  // ⚠ DELIBERATELY KEYED ON `taskStateId` ALONE — do NOT reintroduce an
-  // `isTaskWaypoint` check here, however naturally it reads. That flag is
-  // NOT a wire field: `work-items/detail.controller.js#decorate` DERIVES
-  // it (`taskStateId != null && taskStateId !== stateId`) when building
-  // the view model. This helper is called with the RAW backend DTO — by
-  // the detail controller against `source`, and by the duly-making
-  // controller against the `getWorkItem` result — so the flag is
-  // `undefined` in both, and gating on it silently refused every waypoint
-  // item while the unit tests passed against fixtures that set it by
-  // hand. That is precisely the class of bug the raw-DTO test below
-  // exists to catch.
+  // ⚠ DELIBERATELY KEYED ON `originStateId` ALONE — do NOT reintroduce a
+  // derived waypoint flag here, however naturally it would read. RA-410
+  // deleted the old `isTaskWaypoint`, but the lesson that flag taught is
+  // worth keeping: it was NOT a wire field, it was derived by
+  // `work-items/detail.controller.js#decorate` when building the view
+  // model. This helper is called with the RAW backend DTO — by the detail
+  // controller against `source`, and by the duly-making controller against
+  // the `getWorkItem` result — so any view-model-only field is `undefined`
+  // in both, and gating on one silently refused every waypoint item while
+  // the unit tests passed against fixtures that set it by hand. That is
+  // precisely the class of bug the raw-DTO test below exists to catch.
   //
   // No behaviour is lost: this branch is only reached when
-  // `fromStateId !== stateId`, so `taskStateId === fromStateId` already
-  // implies `taskStateId !== stateId` — i.e. it IS a waypoint. The
+  // `fromStateId !== stateId`, so `originStateId === fromStateId` already
+  // implies `originStateId !== stateId` — i.e. it IS a waypoint. The
   // equality is strictly the stronger check.
-  if (workItem?.taskStateId === transition.fromStateId) {
+  if (workItem?.originStateId === transition.fromStateId) {
     return { allowed: true }
   }
 

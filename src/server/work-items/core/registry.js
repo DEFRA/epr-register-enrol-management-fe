@@ -11,7 +11,7 @@ const types = new Map()
 
 /**
  * Register a work item type. A type must have a unique, non-blank `id`.
- * @param {{ id: string, displayName: string, initialState: { id: string, displayName: string }, states: Array<{ id: string, displayName: string, isTerminal?: boolean }>, getTasksForState: (stateId: string) => Array<{ id: string, displayName: string }> }} type
+ * @param {{ id: string, displayName: string, initialState: { id: string, displayName: string }, states: Array<{ id: string, displayName: string, isTerminal?: boolean }>}} type
  */
 export function registerWorkItemType(type) {
   if (!type || typeof type.id !== 'string' || type.id.trim() === '') {

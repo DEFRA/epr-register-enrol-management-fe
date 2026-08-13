@@ -138,9 +138,7 @@ export function assertValidWorkItemModule(mod) {
     actionIds.add(transition.actionId)
   }
 
-  if (typeof type.getTasksForState !== 'function') {
-    throw new Error(
-      `Work item type "${typeId}" must declare a \`getTasksForState\` function`
-    )
-  }
+  // RA-410. A type no longer declares `getTasksForState`. The member was
+  // removed from the contract along with the tasks feature, so requiring it
+  // here would reject every module at boot.
 }

@@ -19,7 +19,6 @@ const validType = (overrides = {}) => ({
       toStateId: 'done'
     }
   ],
-  getTasksForState: () => [],
   ...overrides
 })
 
@@ -286,19 +285,7 @@ describe('assertValidWorkItemModule', () => {
     ).toThrow(/duplicate transition `actionId` "finish"/)
   })
 
-  test('rejects a missing `getTasksForState` function', () => {
-    expect(() =>
-      assertValidWorkItemModule(
-        validModule({ type: { getTasksForState: undefined } })
-      )
-    ).toThrow(/must declare a `getTasksForState` function/)
-  })
-
-  test('rejects a non-function `getTasksForState`', () => {
-    expect(() =>
-      assertValidWorkItemModule(
-        validModule({ type: { getTasksForState: 'nope' } })
-      )
-    ).toThrow(/must declare a `getTasksForState` function/)
-  })
+  // RA-410. `getTasksForState` is no longer part of the type contract, so
+  // there is nothing left to validate — the two suites that asserted the
+  // validator rejected a missing / non-function member went with it.
 })

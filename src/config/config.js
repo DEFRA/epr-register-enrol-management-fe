@@ -267,6 +267,12 @@ export const config = convict({
       default: 5000,
       env: 'BACKEND_API_TIMEOUT_MS'
     },
+    decisionTimeoutMs: {
+      doc: 'Per-call timeout in milliseconds for the re-accreditation decision call (POST /work-items/re-accreditation/{id}/decision). This endpoint is deliberately slow: management-be gates the atomic decision on an operator-journey (OJ) push it retries up to 5 times before giving up, and only on OJ success does it commit any state change (RA-410). Its worst-case budget is ~28s (6 attempts x 3s + 5 x 2s backoff) plus a sub-second local tail. This timeout MUST comfortably exceed that budget: if fe aborts the request before be finishes its retries, be receives a client cancellation instead of returning its clean HTTP 500, which would re-open the original stranding bug. Default 60000ms per be worst-case + margin; separate from backendApi.timeoutMs so raising it does not slow down every other backend call.',
+      format: Number,
+      default: 60000,
+      env: 'BACKEND_API_DECISION_TIMEOUT_MS'
+    },
     clientId: {
       doc: 'CDP client id sent on outbound calls to the backend (x-cdp-client-id header). Empty string disables the header.',
       format: String,
