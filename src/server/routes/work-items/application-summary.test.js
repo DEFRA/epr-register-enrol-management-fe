@@ -214,7 +214,7 @@ describe('#isExporterApplication (RA-412: real wasteProcessingType field)', () =
     expect(isExporterApplication(EXPORTER)).toBe(true)
   })
 
-  test('is case-insensitive, matching management-be\'s own comparison', () => {
+  test("is case-insensitive, matching management-be's own comparison", () => {
     expect(
       isExporterApplication({ payload: { wasteProcessingType: 'Exporter' } })
     ).toBe(true)
