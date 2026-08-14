@@ -49,55 +49,30 @@ const BUSINESS_PLAN_CATEGORIES = [
 /**
  * AC02 items 9 and 10 (BES and ORS) render for exporter applications only.
  *
- * TODO(RA-295): this is a PROXY for "the application type is Exporter", not
- * a type check — management-be carries no reprocessor/exporter discriminator
- * at all today (confirmed with the management-be owner on this story). The
- * upstream source of truth is ReEx's `wasteProcessingType`
- * ("reprocessor" | "exporter"), which the operator backend already turns into
- * `AccreditationApplicationModel.IsExporter` to gate its own BES / overseas
- * sites journey — but `HttpCaseWorkingApiAdapter.BuildPayload` never writes it
- * into the work item payload, and `typeId` is hard-coded `re-accreditation`
- * for both operator types. So there is no `payload.applicationType` /
- * `operatorType` / exporter `typeId` to read; reading one would silently never
- * match while looking like a working type check.
+ * RA-412: this used to read `payload.overseasSites.length > 0` as a PROXY for
+ * "the application type is Exporter", because management-be carried no
+ * reprocessor/exporter discriminator on a work item. That proxy was wrong in
+ * both directions — an Exporter who had not yet added a site was misread as
+ * a Reprocessor (hiding BES/ORS that AC02 requires), and a Reprocessor
+ * carrying overseas sites was misread as an Exporter (showing BES/ORS that
+ * AC02 forbids).
  *
- * The only signal that exists is whether the operator actually declared any
- * overseas reprocessing sites. `payload.overseasSites` itself is emitted
- * unconditionally (it degrades to `{ sites: [] }` for reprocessors), so the
- * test has to be on the site list being NON-EMPTY.
+ * RA-314 closed the upstream gap: the operator backend now writes
+ * `wasteProcessingType` ("reprocessor" | "exporter") into every submitted
+ * work-item payload, and management-be forwards it untouched (the payload is
+ * a schema-less BsonDocument), so this reads it directly instead of
+ * inferring from site data.
  *
- * THE PROXY IS WRONG IN BOTH DIRECTIONS. It is not merely imprecise:
- *
- *   - False negative — an Exporter who has NOT YET added an overseas site is
- *     indistinguishable from a Reprocessor, so BES/ORS are hidden from them,
- *     which is precisely what AC02 items 9-10 require to be shown.
- *   - False positive — a Reprocessor that DOES carry `overseasSites` gets
- *     both sections shown, which AC02 forbids.
- *
- * Hiding for a reprocessor with no sites is the common case and the required
- * default, which is why this ships — but do not read that as "correct for
- * every reprocessor".
- *
- * Replace this with the real discriminator once the payload carries one — see
- * epr-ow16 (add `isExporter` to `BuildPayload` in the operator backend plus a
- * matching property in management-be).
- *
- * When you do, the regression suite needs THREE fixtures, not one, because
- * each direction above fails independently:
- *
- *   1. Exporter WITH overseas sites      -> true positive
- *   2. Exporter WITHOUT overseas sites   -> catches the false negative
- *   3. Reprocessor WITH overseas sites   -> catches the false positive
- *
- * Fixture 2 is the one that looks redundant next to fixture 1 and will be
- * dropped by someone tidying up. Do not drop it: it is the ONLY fixture that
- * fails if a future reader decides this proxy is good enough to keep.
- *
- * Note: do NOT reach for `siteType` on an overseas site — that distinguishes
- * "ors" from "interim" sites, and is not an operator-type field.
+ * A work item submitted before RA-314 carries no `wasteProcessingType` at
+ * all, and is treated as a reprocessor (`false`) — matching how every such
+ * item already rendered.
  */
 export function isExporterApplication(workItem) {
-  return overseasSitesOf(workItem).length > 0
+  const wasteProcessingType = workItem?.payload?.wasteProcessingType
+  return (
+    typeof wasteProcessingType === 'string' &&
+    wasteProcessingType.toLowerCase() === 'exporter'
+  )
 }
 
 export function buildSiteAddressLines(payload) {
@@ -438,9 +413,8 @@ const ORS_DETAIL_FIELDS = [
   // A pre-formatted string ("48.8566,2.3522"), NOT a {lat,long} pair —
   // confirmed against a captured payload by the producer, who pins it with an
   // exact-JSON test. An earlier revision also handled the object shape; it was
-  // removed once confirmed dead, for the reason spelled out on
-  // `isExporterApplication` above — a branch that can never fire still reads
-  // as a working feature to the next person.
+  // removed once confirmed dead — an unreachable branch still reads as a
+  // working feature to the next person.
   ['coordinates', 'Coordinates', (site) => toDisplayLines(site.coordinates)],
   ['contact-name', 'Contact name', (site) => toDisplayLines(site.contactName)],
   [
@@ -617,13 +591,10 @@ export function buildApplicationSummary({ workItem }) {
       // into this generic route.
       //
       // Deliberately NOT prefixed with an applicant kind ("Reprocessor" /
-      // "Exporter"). The `overseasSites` proxy below is only safe in one
-      // direction: hiding BES/ORS when the signal is missing is a
-      // conservative default, whereas PRINTING "Reprocessor" is a positive
-      // factual claim — and by that proxy's own logic an exporter who has
-      // not yet added a site would be labelled a Reprocessor on a
-      // regulator's case screen. Restore the prefix only once a real
-      // discriminator reaches the payload (epr-ow16).
+      // "Exporter"). RA-412 added a real `payload.wasteProcessingType` field
+      // (see `isExporterApplication` above, and the work-items list card,
+      // which now reads it) — but AC02 never asked for that prefix on this
+      // row, so it stays as the registry's plain display name.
       value: workItem?.typeDisplayName || workItem?.typeId || EM_DASH
     },
     {

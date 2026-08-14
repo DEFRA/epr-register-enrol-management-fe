@@ -64,10 +64,20 @@ const ASSIGNEE_FILTER_USER = 'user'
 
 // RA-324 phase-2 (RA-299: relabelled "Applicant type" in the UI to
 // disambiguate from the new "Application type" filter below — the underlying
-// param name/values are unchanged). Frontend-only mapping (the backend has no
-// reprocessor/exporter field): Reprocessor -> the real `re-accreditation`
-// typeId (filters all current data); Exporter -> a not-yet-existing typeId,
-// so selecting it correctly returns zero results.
+// param name/values are unchanged). Frontend-only mapping, STILL a stub:
+// Reprocessor -> the real `re-accreditation` typeId (filters all current
+// data); Exporter -> a not-yet-existing typeId, so selecting it correctly
+// returns zero results.
+//
+// RA-412 gave the CARD LABEL and the applicant-kind derivation a real
+// `payload.wasteProcessingType` field to read (see decorate() below and
+// isExporterApplication() in application-summary.js), but this FILTER is a
+// separate mechanism — it constrains the backend's `typeIds` query param,
+// which has no `wasteProcessingType` counterpart yet. Wiring Exporter up to
+// a real filter needs a management-be change (a `WasteProcessingTypes`
+// param on `WorkItemQuery`, mirroring the existing `Nations` filter) that
+// has not shipped; until it has, this stub is the correct behaviour, not a
+// regression.
 const TYPE_FILTER_OPTIONS = [
   { value: 're-accreditation', text: 'Reprocessor reaccreditation' },
   { value: 'exporter', text: 'Exporter reaccreditation' }
@@ -572,6 +582,18 @@ function decorate(item) {
   const archivedAtRaw = item.payload?.archivedAt
   const archivedAt = formatArchivedAt(archivedAtRaw)
 
+  // RA-412. `payload.wasteProcessingType` is the real reprocessor/exporter
+  // discriminator: the operator backend has written it into every submitted
+  // work-item payload since RA-314, and management-be forwards it untouched
+  // (the payload is a schema-less BsonDocument). A work item submitted
+  // before RA-314 carries no such field, so it falls back to "Reprocessor" —
+  // the value every card showed before this fix, preserving on-screen
+  // behaviour for old data.
+  const isExporter = isExporterWasteProcessingType(
+    item.payload?.wasteProcessingType
+  )
+  const applicantType = isExporter ? 'Exporter' : 'Reprocessor'
+
   // RA-324 phase-2. `slaState` is non-null exactly when the work item carries
   // an SLA clock, and it gates "Due on" alone.
   //
@@ -602,6 +624,9 @@ function decorate(item) {
     // "Fibre-based composite material"), matching the filter checkboxes,
     // active-filter chips and summary — never the raw lowercase token.
     material: materialLabel(item.payload?.material),
+    // RA-412. The card's applicant-type label — see the comment above.
+    applicantType,
+    isExporter,
     // The two card dates are gated INDEPENDENTLY — see the block comment above
     // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
     // neither render.
@@ -615,6 +640,13 @@ function decorate(item) {
     dueOn: unwrapMongoDate(item.slaDueDate),
     submittedOn: unwrapMongoDate(item.submittedAt)
   }
+}
+
+// RA-412. Case-insensitive match on the wire value, mirroring the equivalent
+// comparisons already made in management-be (e.g.
+// `ApplicationReferenceGenerator.ResolveRegulatorPostcode`).
+function isExporterWasteProcessingType(value) {
+  return typeof value === 'string' && value.toLowerCase() === 'exporter'
 }
 
 /**

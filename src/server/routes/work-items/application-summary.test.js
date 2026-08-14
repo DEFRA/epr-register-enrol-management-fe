@@ -87,6 +87,7 @@ const EXPORTER = {
   ...REPROCESSOR,
   payload: {
     ...REPROCESSOR.payload,
+    wasteProcessingType: 'exporter',
     overseasSites: {
       sites: [
         {
@@ -204,63 +205,65 @@ describe('#buildBusinessPlanPairs', () => {
   })
 })
 
-describe('#isExporterApplication (RA-295 AC02 items 9 & 10)', () => {
-  test('is false for a reprocessor — no overseas sites declared', () => {
+describe('#isExporterApplication (RA-412: real wasteProcessingType field)', () => {
+  test('is false for a reprocessor', () => {
     expect(isExporterApplication(REPROCESSOR)).toBe(false)
   })
 
-  test('is false when the payload carries an empty overseasSites list', () => {
-    // The operator backend emits `overseasSites` unconditionally, degrading
-    // to `{ sites: [] }` for reprocessors — so its mere presence must not
-    // flip the conditional.
-    expect(
-      isExporterApplication({ payload: { overseasSites: { sites: [] } } })
-    ).toBe(false)
-  })
-
-  test('is true once at least one overseas reprocessing site is declared', () => {
+  test('is true for an exporter', () => {
     expect(isExporterApplication(EXPORTER)).toBe(true)
   })
 
-  // KNOWN LIMITATION, pinned deliberately (epr-ow16).
-  //
-  // These two assert the proxy's WRONG answers, not desired behaviour, so
-  // the limitation is executable rather than only a comment. Both should
-  // FAIL the moment a real `isExporter` discriminator lands — that failure
-  // is the point: it forces whoever implements epr-ow16 to confront both
-  // directions instead of fixing the one they happened to think of.
-  test('KNOWN WRONG: an Exporter with no sites yet is misread as not-exporter', () => {
+  test('is case-insensitive, matching management-be\'s own comparison', () => {
+    expect(
+      isExporterApplication({ payload: { wasteProcessingType: 'Exporter' } })
+    ).toBe(true)
+    expect(
+      isExporterApplication({ payload: { wasteProcessingType: 'EXPORTER' } })
+    ).toBe(true)
+  })
+
+  // RA-412 fixed both directions of the old `overseasSites`-based proxy's
+  // wrong answers — pinned here so neither regresses.
+  test('is true for an Exporter with no overseas sites declared yet', () => {
     // AC02 items 9-10 require BES/ORS to be shown for this application; the
-    // proxy hides them, because "declared an overseas site" is not the same
-    // question as "is an Exporter".
+    // old proxy hid them, because "declared an overseas site" is not the
+    // same question as "is an Exporter".
     const exporterBeforeAddingSites = {
       typeId: 're-accreditation',
       payload: {
         organisationName: 'Exporter Ltd',
+        wasteProcessingType: 'exporter',
         overseasSites: { sites: [] }
       }
     }
-    expect(isExporterApplication(exporterBeforeAddingSites)).toBe(false)
+    expect(isExporterApplication(exporterBeforeAddingSites)).toBe(true)
   })
 
-  test('KNOWN WRONG: a Reprocessor carrying overseas sites is misread as exporter', () => {
-    // The mirror-image defect: AC02 forbids showing BES/ORS here.
+  test('is false for a Reprocessor that happens to carry overseas sites', () => {
+    // The mirror-image case: AC02 forbids showing BES/ORS here.
     const reprocessorWithSites = {
       typeId: 're-accreditation',
       payload: {
         organisationName: 'Reprocessor Ltd',
+        wasteProcessingType: 'reprocessor',
         overseasSites: { sites: [{ siteName: 'X' }] }
       }
     }
-    expect(isExporterApplication(reprocessorWithSites)).toBe(true)
+    expect(isExporterApplication(reprocessorWithSites)).toBe(false)
   })
 
+  // Pre-RA-314 work items carry no `wasteProcessingType` at all — treated as
+  // a reprocessor, matching how every such item already rendered.
   test('is false for absent / malformed payloads rather than throwing', () => {
     expect(isExporterApplication(undefined)).toBe(false)
     expect(isExporterApplication({})).toBe(false)
     expect(isExporterApplication({ payload: {} })).toBe(false)
     expect(
-      isExporterApplication({ payload: { overseasSites: { sites: 'nope' } } })
+      isExporterApplication({ payload: { wasteProcessingType: null } })
+    ).toBe(false)
+    expect(
+      isExporterApplication({ payload: { wasteProcessingType: 123 } })
     ).toBe(false)
   })
 })
@@ -470,7 +473,12 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
 
   test('names an overseas site with an em dash when it has none', () => {
     const { rows } = buildApplicationSummary({
-      workItem: { payload: { overseasSites: { sites: [{}] } } }
+      workItem: {
+        payload: {
+          wasteProcessingType: 'exporter',
+          overseasSites: { sites: [{}] }
+        }
+      }
     })
     expect(row(rows, 'ors').sites[0]).toMatchObject({
       siteName: EM_DASH,
@@ -628,7 +636,8 @@ describe('real operator submission payload contract', () => {
     // BES/ORS stay hidden because the site list is empty — not because the key
     // is missing from the fixture. Pinned so the distinction cannot rot.
     expect(workItem.payload.overseasSites).toEqual({ sites: [] })
-    expect(isExporterApplication(workItem.payload)).toBe(false)
+    expect(workItem.payload.wasteProcessingType).toBe('reprocessor')
+    expect(isExporterApplication(workItem)).toBe(false)
     expect(rows.map((r) => r.key)).not.toContain('bes')
     expect(rows.map((r) => r.key)).not.toContain('ors')
   })
@@ -1125,6 +1134,7 @@ describe('#buildInterimSite (RA-292 AC02 + AC04)', () => {
     const { rows } = buildApplicationSummary({
       workItem: {
         payload: {
+          wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [{ siteName: 'Rotterdam', interimSite: INTERIM }]
           }

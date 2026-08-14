@@ -329,6 +329,92 @@ describe('#workItemListController', () => {
     )
   })
 
+  // RA-412. The applicant-type label is read from the real
+  // `payload.wasteProcessingType` field (added upstream by RA-314), not the
+  // literal "Reprocessor" every card previously showed regardless of data.
+  test('RA-412: renders "Exporter" for a work item whose payload is flagged exporter', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {
+              material: 'plastic',
+              organisationName: 'Global Glass Exports',
+              wasteProcessingType: 'exporter'
+            }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="applicant-type">Exporter</span>')
+    expect(result).not.toContain('data-testid="applicant-type">Reprocessor</span>')
+  })
+
+  test('RA-412: matches wasteProcessingType case-insensitively', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: { wasteProcessingType: 'Exporter' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="applicant-type">Exporter</span>')
+  })
+
+  test('RA-412: falls back to "Reprocessor" for a pre-RA-314 work item with no wasteProcessingType', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: { material: 'plastic' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
+  })
+
   // RA-295 AC06. The registration number is part of the data displayed on
   // the Applications list. Note this is `registrationNumber` (EPR-xxxxxx) —
   // NOT the confusingly-similar `operatorRegistrationId` (reg-xxx).

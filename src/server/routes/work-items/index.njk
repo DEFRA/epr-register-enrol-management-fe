@@ -292,14 +292,12 @@
                   </p>
 
                   {# RA-370. Material type then applicant type, in that order.   #}
-                  {# Applicant type is hard-coded "Reprocessor" BY DESIGN: this  #}
-                  {# service is reprocessor-only for now — the backend has no    #}
-                  {# reprocessor/exporter type distinction on a work item yet, so #}
-                  {# there is no per-item value to read. When the backend models  #}
-                  {# that distinction (see follow-up bead) this must switch to a  #}
-                  {# real field, otherwise a second type would be mislabelled.    #}
+                  {# RA-412. Applicant type is set by decorate() from the real   #}
+                  {# `payload.wasteProcessingType` field, falling back to        #}
+                  {# "Reprocessor" for work items submitted before that field    #}
+                  {# existed (RA-314).                                          #}
                   <p class="govuk-body app-application-card__title" data-testid="application-card-title">
-                    <span data-testid="material">{{ item.material or "—" }}</span> reaccreditation (<span data-testid="applicant-type">Reprocessor</span>)
+                    <span data-testid="material">{{ item.material or "—" }}</span> reaccreditation (<span data-testid="applicant-type">{{ item.applicantType }}</span>)
                   </p>
 
                   {# RA-370. The footer always renders, because "Assigned to" is #}

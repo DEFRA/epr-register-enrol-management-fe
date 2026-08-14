@@ -28,6 +28,9 @@ export function realOperatorSubmissionPayload() {
     materialsHandled: ['plastic'],
     glassRecyclingProcess: null,
     material: 'plastic',
+    // RA-314. The reprocessor/exporter discriminator, written into every
+    // submitted work-item payload. This fixture is a reprocessor submission.
+    wasteProcessingType: 'reprocessor',
     accreditationYear: 2026,
     previousAccreditationYear: 2025,
     complianceIssuesReported: 0,

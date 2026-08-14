@@ -3470,6 +3470,7 @@ describe('RA-295 individual work item page', () => {
       ok: true,
       workItem: fullPayloadWorkItem({
         payload: {
+          wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [
               {
@@ -3511,10 +3512,10 @@ describe('RA-295 individual work item page', () => {
       'data-testid="overseas-site-address"'
     )
     expect(result).toContain('1 Overseas Lane, Rotterdam')
-    // Even on an exporter the Type row must not claim "Exporter": the
-    // overseasSites signal gates the BES/ORS SECTIONS, it is not evidence of
-    // an applicant type. Positive assertion first, so the negative below is
-    // scoped to a row that demonstrably exists.
+    // Even on an exporter the Type row must not claim "Exporter" — AC02 never
+    // asked for that prefix on this row (see the comment on it in
+    // application-summary.js). Positive assertion first, so the negative
+    // below is scoped to a row that demonstrably exists.
     expect(detailRow(result, 'type')).toContain('Re-accreditation')
     expect(detailRow(result, 'type')).not.toContain('Exporter')
   })
@@ -3524,6 +3525,7 @@ describe('RA-295 individual work item page', () => {
       ok: true,
       workItem: fullPayloadWorkItem({
         payload: {
+          wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [
               {
@@ -3889,7 +3891,15 @@ describe('RA-295 individual work item page', () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: fullPayloadWorkItem({
-        payload: { overseasSites: { sites }, ...payload }
+        // RA-412: every caller of this helper is exercising ORS/BES
+        // rendering, which now gates on the real `wasteProcessingType`
+        // field rather than the presence of `overseasSites` — default it to
+        // 'exporter' here so callers don't each have to repeat it.
+        payload: {
+          wasteProcessingType: 'exporter',
+          overseasSites: { sites },
+          ...payload
+        }
       })
     })
     const { result } = await server.inject({
