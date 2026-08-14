@@ -86,15 +86,19 @@ export const workItemDetailController = {
  * `core/engine.js#canApplyAction` says the same from the other side — it is
  * a mirror for inspecting a work item, never a control on this path.
  */
-// RA-317. Withdraw is an OPERATOR action. Case Management must never apply
-// it, in any state — so unlike every OTHER action id (which this route
-// deliberately forwards to the backend as authoritative, see the docstring
-// below), a `withdraw`/`withdraw-*` id is rejected here before the backend is
-// ever called. This is not moving an authorisation decision into the wrong
-// tier: the whole ACTION CATEGORY is absent from CM, so refusing it at the
-// route is the correct place. Kept as a local helper (rather than importing
-// the now-deleted withdraw.service.js) so the CM withdraw journey leaves no
-// dead code behind.
+// RA-317. Withdraw is an OPERATOR action; Case Management must never show it
+// or apply it, in any state. This helper backs both halves of that:
+//   1. `decorate` strips `withdraw`/`withdraw-*` from `availableActions`, so
+//      no withdraw affordance ever renders (and a withdraw-only state falls
+//      through to the honest "No actions available" empty state).
+//   2. `makeApplyActionController` rejects the same ids before the backend is
+//      called, so a crafted POST that bypasses the UI cannot withdraw.
+// Unlike every OTHER action id (which the apply-action route deliberately
+// forwards to the backend as authoritative — see its docstring below), this
+// is not moving an authorisation decision into the wrong tier: the whole
+// ACTION CATEGORY is absent from CM, so refusing it here is the correct place.
+// Kept as a local helper rather than importing the now-deleted
+// withdraw.service.js, so the removed CM withdraw journey leaves no dead code.
 const WITHDRAW_ACTION_PREFIX = 'withdraw'
 
 function isWithdrawActionId(actionId) {
@@ -918,9 +922,17 @@ function decorate(workItem) {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
     stateDisplayName,
+    // RA-317. Drop withdraw here too, at the SAME source the RA-364
+    // non-invocable / sla-extend filtering runs, so it is gone BEFORE the
+    // template's `availableActions.length > 0` check. Filtering withdraw only
+    // in the template loops would reintroduce the exact RA-364 anti-pattern:
+    // a state whose ONLY action was withdraw would render an empty
+    // `work-item-actions` container instead of the "No actions" empty state.
+    // Withdraw is an operator action, never a CM affordance in any state.
     availableActions: projectedActions.filter(
       (action) =>
         action?.actionId !== SLA_EXTEND_ACTION_ID &&
+        !isWithdrawActionId(action?.actionId) &&
         !selfAssignActions.has(action?.actionId) &&
         !declaredNonInvocable.has(action?.actionId)
     ),

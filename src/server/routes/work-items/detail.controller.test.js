@@ -1087,6 +1087,10 @@ describe('#workItemDetailController', () => {
       expect(actionTestIds(result)).toEqual([])
       expect(actionsPanel(result)).not.toContain('Resume')
       expect(result).not.toContain('action-withdraw-during-query')
+      // RA-317 + RA-364. Withdraw is filtered in the controller BEFORE the
+      // template's length check, so a state whose only action was withdraw
+      // renders the empty-state notice, not an empty `work-item-actions` div.
+      expect(result).toContain('data-testid="work-item-no-actions"')
       for (const action of RESUME_ACTIONS) {
         expect(result).not.toContain(action.actionId)
       }
@@ -1112,6 +1116,10 @@ describe('#workItemDetailController', () => {
       expect(actionTestIds(result)).toEqual([])
       expect(actionsPanel(result)).not.toContain('Continue review')
       expect(result).not.toContain('action-withdraw-during-updated')
+      // RA-317 + RA-364. Same invariant: withdraw is stripped in the
+      // controller, so the empty-state notice renders rather than an empty
+      // `work-item-actions` container.
+      expect(result).toContain('data-testid="work-item-no-actions"')
       for (const action of CONTINUE_REVIEW_ACTIONS) {
         expect(result).not.toContain(action.actionId)
       }
@@ -1279,6 +1287,9 @@ describe('#workItemDetailController', () => {
       expect(actionTestIds(result)).toEqual([])
       expect(result).not.toContain('data-testid="action-query"')
       expect(result).not.toContain('action-withdraw-during-query')
+      // RA-317 + RA-364. Both actions stripped in the controller, so the
+      // honest empty-state notice renders rather than an empty container.
+      expect(result).toContain('data-testid="work-item-no-actions"')
     })
 
     // The filter is applied at the SOURCE, so it also covers a
