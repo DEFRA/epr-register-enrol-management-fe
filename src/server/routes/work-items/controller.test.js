@@ -486,6 +486,44 @@ describe('#workItemListController', () => {
     )
   })
 
+  // RA-359 part 2. A withdrawn/terminal item reports the new `Cancelled` SLA
+  // state (management-be) while KEEPING its `slaDueDate`. The stopped clock
+  // must NOT surface a live "Due on" — it is gated off exactly like a
+  // not-started clock, while the rest of the footer (Assigned to) still shows.
+  test('Hides Due on for a Cancelled SLA (withdrawn item) but keeps the footer', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+            typeId: 'unknown-type',
+            stateId: 'withdrawn',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: 'frontend',
+            assignedToName: 'Olga Officer',
+            slaState: 'Cancelled',
+            // Retained by management-be, but the clock is stopped: must not show.
+            slaDueDate: '2026-02-10T00:00:00Z',
+            payload: { operatorOrganisationId: 'ORG-4242' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="application-card-footer"')
+    expect(result).toContain('data-testid="assigned-to">Olga Officer</span>')
+    // The stopped clock is gated off just like a not-started one.
+    expect(result).not.toContain('data-testid="due-on"')
+    expect(result).not.toContain('10 February 2026')
+  })
+
   // RA-370 AC04. The assignee's display name shows when the case is held by an
   // officer, on a card whose SLA clock has NOT started — the case that used to
   // render nothing at all.
