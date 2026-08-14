@@ -7,14 +7,11 @@ import {
 import {
   makeApplyActionController,
   makeAssignController,
-  makeCompleteTaskController,
   makeSelfAssignController,
-  makeSetTaskStatusController,
   makeUnassignController,
   workItemDetailController
 } from './detail.controller.js'
 import { workItemAuditLogController } from './audit-log.controller.js'
-import { workItemTasksController } from './tasks.controller.js'
 import {
   makeShowExtendController,
   makeSubmitExtendController,
@@ -96,29 +93,16 @@ export const workItems = {
           path: '/work-items/{id}/audit-log',
           ...workItemAuditLogController
         },
-        {
-          // RA-129. Dedicated tasks page; type-agnostic.
-          method: 'GET',
-          path: '/work-items/{id}/tasks',
-          ...workItemTasksController
-        },
-        {
-          method: 'POST',
-          path: '/work-items/{id}/tasks/{taskId}/complete',
-          options: requireStandard,
-          ...makeCompleteTaskController()
-        },
-        {
-          // epr-gl6: richer task lifecycle. The form posts a `status` field
-          // matching the backend's `WorkItemTaskStatus` enum names
-          // (`NotStarted` | `InProgress` | `Blocked` | `Completed`). The
-          // controller forwards to `PUT /tasks/{taskId}/status` via the
-          // service object.
-          method: 'POST',
-          path: '/work-items/{id}/tasks/{taskId}/status',
-          options: requireStandard,
-          ...makeSetTaskStatusController()
-        },
+        // RA-410. The tasks page and the two task-mutation POSTs
+        // (`/tasks/{taskId}/complete`, `/tasks/{taskId}/status`) used to sit
+        // here. They were deleted outright rather than kept as redirects. A
+        // redirect is right for a page whose CONTENT moved (see
+        // `/application-details` above); tasks did not move, the feature was
+        // withdrawn — progress is now driven by the Duly make / Assign to
+        // yourself and start / Log decision CTAs. Redirecting the two POSTs
+        // would be actively wrong: a crafted request must fail, not silently
+        // land on the detail page looking like it worked. All three now 404,
+        // which is what AC03 asks for.
         {
           method: 'POST',
           path: '/work-items/{id}/actions/{actionId}',

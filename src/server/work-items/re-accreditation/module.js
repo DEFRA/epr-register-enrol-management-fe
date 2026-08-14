@@ -1,8 +1,8 @@
 import { config } from '#/config/config.js'
 import { registerModuleDetailTemplates } from '../core/templates.js'
-import { buildApprovalRoutes } from './approval/routes.js'
 import { buildContinueReviewRoutes } from './continue-review/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
+import { buildDecisionRoutes } from './decision/routes.js'
 import { buildDulyMakingRoutes } from './duly-making/routes.js'
 
 /**
@@ -65,40 +65,63 @@ const TRANSITIONS = [
   // transition declared this way: see `duly-making/eligibility.js`, which
   // reads THIS declaration's `fromStateId` so the `submitted` literal
   // lives here and only here.
-  //
-  // `requiresAllTasksComplete: false` is correct rather than incidental —
-  // `submitted` has no tasks at all any more (see TASKS_BY_STATE), and
-  // `true` would make the engine's all-complete check the gate on an empty
-  // list, which is vacuously satisfied today but would silently block
-  // duly making the moment anyone added a `submitted` task.
   {
     actionId: 'duly-make',
     displayName: 'Duly make',
     fromStateId: 'submitted',
     toStateId: 'duly-made',
-    requiresAllTasksComplete: false,
     callerInvocable: false
   },
+  // RA-410. `startsOnSelfAssign: true` is what makes "Assign to yourself and
+  // start" actually start anything. The generic self-assign handler reads
+  // this marker via `core/engine.js#resolveSelfAssignTransition` and applies
+  // the transition after the assignment, so the second half of that button's
+  // label stops being a lie without the generic layer learning what a
+  // re-accreditation is.
+  //
+  // The marker is paired with `fromStateId` by the resolver, which is
+  // load-bearing: the assignment panel renders in EVERY state (RA-295), so
+  // self-assigning a `queried` or `awaiting-decision` item must remain a
+  // plain assignment with no state change. Only `duly-made` transitions.
+  //
+  // Still caller-invocable, deliberately — but the separate "Payment
+  // received" button it used to render is gone from the UI. Leaving the
+  // transition invocable keeps the generic action route working as the
+  // backend's own contract describes it, and keeps the recovery path open
+  // if the assign half succeeds and this half does not.
   {
     actionId: 'payment-received',
     displayName: 'Payment received',
     fromStateId: 'duly-made',
     toStateId: 'assessment-in-progress',
-    requiresAllTasksComplete: true
+    startsOnSelfAssign: true
   },
   {
     actionId: 'sla-extend',
     displayName: 'Extend SLA',
     fromStateId: 'assessment-in-progress',
-    toStateId: 'assessment-in-progress',
-    requiresAllTasksComplete: false
+    toStateId: 'assessment-in-progress'
   },
+  // RA-410. `submit-for-decision` and `reject` (below) both became
+  // NON-caller-invocable in v12, mirroring management-be. Neither is a
+  // button any more: both hops are applied server-side by the single
+  // `POST /work-items/re-accreditation/{id}/decision` call behind the "Log
+  // decision" CTA, so `awaiting-decision` is now an internal staging post
+  // rather than somewhere a case worker parks an application.
+  //
+  // The flag is what stops the generic action loop rendering them. That
+  // matters most for `submit-for-decision`: a button that moved an item to
+  // `awaiting-decision` and stopped would strand it, because the Log
+  // decision CTA renders from `assessment-in-progress`. (It also renders
+  // from `awaiting-decision` — see `decision/eligibility.js` — precisely so
+  // items already parked there when this shipped are still resolvable, but
+  // that is a rescue path, not an invitation to create more.)
   {
     actionId: 'submit-for-decision',
     displayName: 'Submit for decision',
     fromStateId: 'assessment-in-progress',
     toStateId: 'awaiting-decision',
-    requiresAllTasksComplete: true
+    callerInvocable: false
   },
   // ⚠ RA-346. This entry is FRONTEND-ONLY. Unlike every other transition
   // here, the backend deliberately does NOT register `approve` as a
@@ -111,65 +134,78 @@ const TRANSITIONS = [
   // there is nothing upstream to diff it against, so a drift between this
   // declaration and `ReAccreditationApprovalService`'s own rules will not
   // show up as a mismatch. Second, this entry is not decorative — it is
-  // what `approve-eligibility.js` reads to gate BOTH the Approve CTA and
-  // the approve route. Removing it, or dropping `requiresAllTasksComplete`,
-  // silently re-opens the RA-346 bug. `approve-eligibility.test.js` runs
-  // against this real declaration to catch exactly that.
+  // what `decision/eligibility.js` reads to resolve the terminal state each
+  // radio choice lands on, so the `approved` / `rejected` literals live here
+  // and only here.
+  //
+  // RA-410. The `requiresAllTasksComplete: true` that used to sit on both
+  // this and `reject` is gone — management-be deleted the property from
+  // `WorkItemTransition` entirely. It was the RA-346 fix (the Approve CTA
+  // was offered while `record-decision-rationale` was pending); that gate is
+  // now moot because the task it waited on no longer exists.
+  //
+  // Both are declared `callerInvocable: false`: neither is reachable through
+  // the generic `/actions/{actionId}` route, only through
+  // `POST /work-items/re-accreditation/{id}/decision`. `approve` was already
+  // effectively so (the backend never registered it as a transition at all);
+  // `reject` joins it in v12.
   {
     actionId: 'approve',
     displayName: 'Approve',
     fromStateId: 'awaiting-decision',
     toStateId: 'approved',
-    requiresAllTasksComplete: true
+    callerInvocable: false
   },
+  // RA-410. `displayName` stays "Reject" deliberately. The user-visible
+  // relabel to "Refused" is a LABEL change only and lives in the decision
+  // page's radio, not here: this declaration mirrors the backend's
+  // `WorkItemTransition`, where the action id, the `rejected` state id and
+  // the notification templates are all unchanged. Renaming it here would
+  // desynchronise the mirror to cosmetic effect. The one place a user reads
+  // a state name — the terminal Outcome tag — already says "Refused", from
+  // the `rejected` STATE's `displayName` in STATES above (RA-324).
   {
     actionId: 'reject',
     displayName: 'Reject',
     fromStateId: 'awaiting-decision',
     toStateId: 'rejected',
-    requiresAllTasksComplete: true
+    callerInvocable: false
   },
   {
     actionId: 'withdraw',
     displayName: 'Withdraw',
     fromStateId: 'submitted',
-    toStateId: 'withdrawn',
-    requiresAllTasksComplete: false
+    toStateId: 'withdrawn'
   },
   {
     actionId: 'withdraw-during-duly-made',
     displayName: 'Withdraw',
     fromStateId: 'duly-made',
-    toStateId: 'withdrawn',
-    requiresAllTasksComplete: false
+    toStateId: 'withdrawn'
   },
   {
     actionId: 'withdraw-during-assessment',
     displayName: 'Withdraw',
     fromStateId: 'assessment-in-progress',
-    toStateId: 'withdrawn',
-    requiresAllTasksComplete: false
+    toStateId: 'withdrawn'
   },
   {
     actionId: 'withdraw-during-decision',
     displayName: 'Withdraw',
     fromStateId: 'awaiting-decision',
-    toStateId: 'withdrawn',
-    requiresAllTasksComplete: false
+    toStateId: 'withdrawn'
   },
   {
     actionId: 'withdraw-during-query',
     displayName: 'Withdraw',
     fromStateId: 'queried',
-    toStateId: 'withdrawn',
-    requiresAllTasksComplete: false
+    toStateId: 'withdrawn'
   },
   {
     actionId: 'withdraw-during-updated',
     displayName: 'Withdraw',
     fromStateId: 'updated',
-    toStateId: 'withdrawn',
-    requiresAllTasksComplete: false
+    toStateId: 'withdrawn'
   },
   // RA-291 / RA-211. A case worker can query an application from any
   // pre-decision state. Caller-invocable: each has a distinct
@@ -181,29 +217,25 @@ const TRANSITIONS = [
     actionId: 'query-during-duly-making',
     displayName: 'Query',
     fromStateId: 'submitted',
-    toStateId: 'queried',
-    requiresAllTasksComplete: false
+    toStateId: 'queried'
   },
   {
     actionId: 'query-during-duly-made',
     displayName: 'Query',
     fromStateId: 'duly-made',
-    toStateId: 'queried',
-    requiresAllTasksComplete: false
+    toStateId: 'queried'
   },
   {
     actionId: 'query-during-assessment',
     displayName: 'Query',
     fromStateId: 'assessment-in-progress',
-    toStateId: 'queried',
-    requiresAllTasksComplete: false
+    toStateId: 'queried'
   },
   {
     actionId: 'query-during-decision',
     displayName: 'Query',
     fromStateId: 'awaiting-decision',
-    toStateId: 'queried',
-    requiresAllTasksComplete: false
+    toStateId: 'queried'
   },
   // RA-311/MBE-1. The inverse of the four `query-during-*` above: an
   // operator's resubmission moves the application out of `queried` and
@@ -218,7 +250,6 @@ const TRANSITIONS = [
     displayName: 'Resume',
     fromStateId: 'queried',
     toStateId: 'updated',
-    requiresAllTasksComplete: false,
     callerInvocable: false
   },
   {
@@ -226,7 +257,6 @@ const TRANSITIONS = [
     displayName: 'Resume',
     fromStateId: 'queried',
     toStateId: 'updated',
-    requiresAllTasksComplete: false,
     callerInvocable: false
   },
   {
@@ -234,7 +264,6 @@ const TRANSITIONS = [
     displayName: 'Resume',
     fromStateId: 'queried',
     toStateId: 'updated',
-    requiresAllTasksComplete: false,
     callerInvocable: false
   },
   {
@@ -242,7 +271,6 @@ const TRANSITIONS = [
     displayName: 'Resume',
     fromStateId: 'queried',
     toStateId: 'updated',
-    requiresAllTasksComplete: false,
     callerInvocable: false
   },
   // RA-372. The four onward transitions out of `updated`, one per state a
@@ -268,7 +296,6 @@ const TRANSITIONS = [
     displayName: 'Continue review',
     fromStateId: 'updated',
     toStateId: 'submitted',
-    requiresAllTasksComplete: false,
     callerInvocable: false
   },
   {
@@ -276,7 +303,6 @@ const TRANSITIONS = [
     displayName: 'Continue review',
     fromStateId: 'updated',
     toStateId: 'duly-made',
-    requiresAllTasksComplete: false,
     callerInvocable: false
   },
   {
@@ -284,7 +310,6 @@ const TRANSITIONS = [
     displayName: 'Continue review',
     fromStateId: 'updated',
     toStateId: 'assessment-in-progress',
-    requiresAllTasksComplete: false,
     callerInvocable: false
   },
   {
@@ -292,61 +317,9 @@ const TRANSITIONS = [
     displayName: 'Continue review',
     fromStateId: 'updated',
     toStateId: 'awaiting-decision',
-    requiresAllTasksComplete: false,
     callerInvocable: false
   }
 ]
-
-const TASKS_BY_STATE = {
-  // RA-316. `submitted` deliberately has NO entry and must not regain one.
-  // Duly making used to be driven by ticking `verify-organisation-details`
-  // and `confirm-application-completeness`, with a backend hook that
-  // auto-transitioned to `duly-made` once both were complete. That whole
-  // mechanism is gone: the backend deleted both tasks and the hook, and
-  // the "Duly make" CTA + payment-date page replaced it, because duly
-  // making needs a payment date that a task checkbox has nowhere to put.
-  //
-  // Re-adding tasks here would not restore the old behaviour — the
-  // auto-transition no longer exists — it would just show a regulator a
-  // checklist that does nothing.
-  //
-  // Other states keep their tasks; removing the tasks feature more
-  // broadly is RA-410, not this story.
-  'duly-made': [
-    {
-      id: 'confirm-registration-fee-paid',
-      displayName: 'Confirm registration fee paid'
-    }
-  ],
-  'assessment-in-progress': [
-    {
-      id: 'review-compliance-history',
-      displayName: 'Review compliance history'
-    },
-    {
-      id: 'assess-technical-capacity',
-      displayName: 'Assess technical capacity'
-    },
-    {
-      id: 'assess-financial-capacity',
-      displayName: 'Assess financial capacity'
-    }
-  ],
-  'awaiting-decision': [
-    {
-      id: 'record-decision-rationale',
-      displayName: 'Record decision rationale'
-    }
-  ]
-  // RA-372. There is deliberately NO `updated` entry, and adding one would
-  // be wrong. `updated` owns no tasks of its own; while an item sits there
-  // the backend projects the tasks of the state the query was raised from,
-  // resolved per work item from its audit history and carrying that
-  // state's existing completion status. That is a property of the
-  // individual work item, not of the state, so it cannot be expressed in
-  // this static map — the detail and tasks pages read `workItem.tasks`
-  // off the API response and render whatever the backend projected.
-}
 
 export const reAccreditationType = {
   id: 're-accreditation',
@@ -354,13 +327,14 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v11',
+  templateVersion: 'v12',
   initialState: STATES[0],
   states: STATES,
-  transitions: TRANSITIONS,
-  getTasksForState(stateId) {
-    return TASKS_BY_STATE[stateId] ?? []
-  }
+  transitions: TRANSITIONS
+  // RA-410. `getTasksForState` and the `TASKS_BY_STATE` map it read are
+  // gone. The framework no longer asks a type for tasks — `IWorkItemType`
+  // lost the member backend-side and `core/engine.js#projectWorkItem` no
+  // longer calls it. Do not re-add it to reintroduce a checklist.
 }
 
 export const reAccreditationModule = {
@@ -380,6 +354,11 @@ export const reAccreditationModule = {
     // v11: RA-316 duly-make transition out of 'submitted', and the two
     //      'submitted' tasks removed (the auto-transition they drove is
     //      gone from the backend too)
+    // v12: RA-410 tasks removed entirely — `getTasksForState` and every
+    //      `requiresAllTasksComplete` gate deleted, and
+    //      `submit-for-decision` / `reject` made non-caller-invocable
+    //      (both hops now applied server-side by the `/decision` endpoint
+    //      behind the Log decision CTA)
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11
@@ -418,14 +397,9 @@ export const reAccreditationModule = {
       v8: 're-accreditation/detail-v1',
       v9: 're-accreditation/detail-v1',
       v10: 're-accreditation/detail-v1',
-      v11: 're-accreditation/detail-v1'
+      v11: 're-accreditation/detail-v1',
+      v12: 're-accreditation/detail-v1'
     })
-
-    // RA-132. Approve-determination flow: confirmation interstitial + POST
-    // handler that hits the type-specific backend endpoint. Always mounted
-    // — the FE button only renders when the work item is eligible, and
-    // the backend is the source of truth for authorisation.
-    server.route(buildApprovalRoutes())
 
     // RA-372. Continue-review flow: the onward path out of `updated` once
     // a case worker has reviewed an operator's response to a query. Hits
@@ -443,6 +417,19 @@ export const reAccreditationModule = {
     // actually in `submitted`, and both the CTA and the GET handler go
     // through the same `evaluateDulyMakeEligibility` gate.
     server.route(buildDulyMakingRoutes())
+
+    // RA-410. Log-decision flow: the Approved / Refused radio page and its
+    // POST handler, replacing the task-gated approve interstitial as the
+    // way a case worker records an outcome. Hits the type-specific
+    // `/decision` endpoint, which applies BOTH hops
+    // (`assessment-in-progress` -> `awaiting-decision` -> terminal) in one
+    // server-side write — deliberately not two calls from here, because a
+    // failure between them would leave a terminal decision unrecorded with
+    // the item parked in a state the new UI no longer offers a button for.
+    //
+    // Always mounted; the CTA and the GET handler share one eligibility
+    // gate so the button and the URL cannot disagree.
+    server.route(buildDecisionRoutes())
 
     // RA-127. The create-work-item demo form is feature-flagged so it
     // can be hidden in production. When the flag is off the routes are

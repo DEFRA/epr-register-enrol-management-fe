@@ -32,7 +32,15 @@ function makeRequest({ query = {}, session = {} } = {}) {
 }
 
 const h = {
-  redirect: vi.fn((target) => ({ redirected: target }))
+  redirect: vi.fn((target) => ({ redirected: target })),
+  view: vi.fn((path, ctx) => {
+    const sealed = { viewPath: path, viewCtx: ctx, statusCode: undefined }
+    sealed.code = (status) => {
+      sealed.statusCode = status
+      return sealed
+    }
+    return sealed
+  })
 }
 
 const provider = {
@@ -53,6 +61,7 @@ beforeEach(() => {
   counter = 0
   randomToken.mockClear()
   h.redirect.mockClear()
+  h.view.mockClear()
 })
 
 afterEach(() => {
@@ -332,7 +341,8 @@ describe('regulatorCallbackController', () => {
 
     const result = await regulatorCallbackController(request, h)
 
-    expect(result.redirected).toBe('/auth/regulator/login')
+    expect(result.viewPath).toBe('error/index')
+    expect(result.statusCode).toBe(403)
     expect(yar.set).not.toHaveBeenCalledWith('user', expect.anything())
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -408,7 +418,8 @@ describe('regulatorCallbackController', () => {
 
     const result = await regulatorCallbackController(request, h)
 
-    expect(result.redirected).toBe('/auth/regulator/login')
+    expect(result.viewPath).toBe('error/index')
+    expect(result.statusCode).toBe(403)
     expect(yar.set).not.toHaveBeenCalledWith('user', expect.anything())
   })
 

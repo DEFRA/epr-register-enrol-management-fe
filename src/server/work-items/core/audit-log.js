@@ -4,7 +4,7 @@ import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
  * Audit log helpers (RA-97).
  *
  * The backend appends one `auditLog` entry to a work item for every
- * successful state-changing engine call (task completion, action
+ * successful state-changing engine call (action
  * application, assignment / unassignment, note added). Entries arrive
  * already sorted chronologically (oldest-first). The detail template
  * renders them as a top-to-bottom timeline; this helper produces a short
@@ -79,8 +79,6 @@ function buildSnapshotRows(snapshot) {
  */
 const ACTION_DISPLAY_NAMES = {
   'work-item-submitted': 'Work item submitted',
-  'task-completed': 'Task completed',
-  'task-status-changed': 'Task status changed',
   'action-applied': 'Action applied',
   assigned: 'Assigned',
   unassigned: 'Unassigned',
@@ -165,8 +163,6 @@ export function summariseAuditEntry(entry) {
   }
   const details = entry.details ?? {}
   switch (entry.action) {
-    case 'task-completed':
-      return details.taskDisplayName ?? details.taskId ?? ''
     case 'action-applied': {
       const action = details.actionDisplayName ?? details.actionId ?? ''
       const from = details.fromStateId
@@ -237,15 +233,6 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       }
       return rows
     }
-    case 'task-completed': {
-      const rows = []
-      const task = details.taskDisplayName ?? details.taskId
-      if (task) rows.push({ key: 'Task', value: task })
-      if (details.stateId) rows.push({ key: 'State', value: details.stateId })
-      const actor = entry.createdByName ?? entry.createdBy
-      if (actor) rows.push({ key: 'Completed by', value: actor })
-      return rows
-    }
     case 'action-applied': {
       const rows = []
       const action = details.actionDisplayName ?? details.actionId
@@ -258,21 +245,6 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       }
       const actor = entry.createdByName ?? entry.createdBy
       if (actor) rows.push({ key: 'Applied by', value: actor })
-      return rows
-    }
-    case 'task-status-changed': {
-      const rows = []
-      const task = details.taskDisplayName ?? details.taskId
-      if (task) rows.push({ key: 'Task', value: task })
-      if (details.stateId) rows.push({ key: 'State', value: details.stateId })
-      if (details.fromStatus) {
-        rows.push({ key: 'Previous status', value: details.fromStatus })
-      }
-      if (details.toStatus) {
-        rows.push({ key: 'New status', value: details.toStatus })
-      }
-      const actor = entry.createdByName ?? entry.createdBy
-      if (actor) rows.push({ key: 'Changed by', value: actor })
       return rows
     }
     case 'assigned': {
