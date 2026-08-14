@@ -86,12 +86,50 @@ export const workItemDetailController = {
  * `core/engine.js#canApplyAction` says the same from the other side — it is
  * a mirror for inspecting a work item, never a control on this path.
  */
+// RA-317. Withdraw is an OPERATOR action. Case Management must never apply
+// it, in any state — so unlike every OTHER action id (which this route
+// deliberately forwards to the backend as authoritative, see the docstring
+// below), a `withdraw`/`withdraw-*` id is rejected here before the backend is
+// ever called. This is not moving an authorisation decision into the wrong
+// tier: the whole ACTION CATEGORY is absent from CM, so refusing it at the
+// route is the correct place. Kept as a local helper (rather than importing
+// the now-deleted withdraw.service.js) so the CM withdraw journey leaves no
+// dead code behind.
+const WITHDRAW_ACTION_PREFIX = 'withdraw'
+
+function isWithdrawActionId(actionId) {
+  return (
+    typeof actionId === 'string' &&
+    (actionId === WITHDRAW_ACTION_PREFIX ||
+      actionId.startsWith(`${WITHDRAW_ACTION_PREFIX}-`))
+  )
+}
+
 export function makeApplyActionController({
   service = createWorkItemActionsService()
 } = {}) {
   return {
     async handler(request, h) {
       const { id, actionId } = request.params
+
+      // RA-317. Reject withdraw ids up front — the action is not available in
+      // Case Management, so a crafted POST that bypasses the (now removed) UI
+      // control gets the same "action not available" rendering the app gives
+      // any unavailable action, and the backend is never asked to withdraw.
+      if (isWithdrawActionId(actionId)) {
+        return renderDetailFromResult({
+          request,
+          h,
+          id,
+          result: {
+            ok: false,
+            reason: 'not-allowed',
+            message: 'This action is not available.'
+          },
+          actionLabel: actionId
+        })
+      }
+
       const result = await service.applyAction({
         workItemId: id,
         actionId,

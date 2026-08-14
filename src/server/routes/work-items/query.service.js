@@ -3,8 +3,9 @@
  *
  * Owns the single backend call behind the query form and translates the
  * client's `reason` vocabulary into controller-facing `outcome`s, so the
- * controller switches on intent rather than parsing HTTP status codes.
- * Mirrors `withdraw.service.js`.
+ * controller switches on intent rather than parsing HTTP status codes,
+ * following the same result-object pattern as the other work-item form
+ * services.
  *
  * The backend resolves the state transition itself — we never send an
  * action id — and it is authoritative for both authorisation and whether
