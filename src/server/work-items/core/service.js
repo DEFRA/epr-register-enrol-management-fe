@@ -2,18 +2,14 @@ import {
   addWorkItemNote,
   applyWorkItemAction,
   assignWorkItem,
-  completeWorkItemTask,
-  setWorkItemTaskStatus,
   unassignWorkItem
 } from '#/server/common/helpers/backend-api/backend-api.js'
-
-const TASK_STATUSES = ['NotStarted', 'InProgress', 'Blocked', 'Completed']
 
 /**
  * Service object for the framework-level work item engine.
  *
  * Encapsulates the rules around how a Hapi handler talks to the backend's
- * task & state engine: which endpoint to hit, how to translate the HTTP
+ * state engine: which endpoint to hit, how to translate the HTTP
  * response into a result object that a controller or template can consume,
  * and what the contract is for module-specific service objects that wrap it.
  *
@@ -27,50 +23,12 @@ const TASK_STATUSES = ['NotStarted', 'InProgress', 'Blocked', 'Completed']
  * `undici`.
  */
 export function createWorkItemActionsService({
-  completeTask = completeWorkItemTask,
-  setTaskStatus = setWorkItemTaskStatus,
   applyAction = applyWorkItemAction,
   assign = assignWorkItem,
   unassign = unassignWorkItem,
   addNote = addWorkItemNote
 } = {}) {
   return {
-    /**
-     * Mark a single task complete on a work item.
-     * @returns {Promise<{ ok: true, workItem: object } | { ok: false, reason: string, message: string, status?: number }>}
-     */
-    async completeTask({ workItemId, taskId, user = null }) {
-      assertId(workItemId, 'workItemId')
-      assertId(taskId, 'taskId')
-      const result = await completeTask({ workItemId, taskId, user })
-      return toResult(result)
-    },
-
-    /**
-     * Set a task's lifecycle status (epr-gl6) on a work item. The status
-     * is validated client-side against the canonical set so a bad form
-     * submission is rejected before reaching the backend.
-     */
-    async setTaskStatus({ workItemId, taskId, status, user = null }) {
-      assertId(workItemId, 'workItemId')
-      assertId(taskId, 'taskId')
-      const normalised = normaliseTaskStatus(status)
-      if (normalised == null) {
-        return {
-          ok: false,
-          reason: 'invalid',
-          message: `Choose a valid status. Expected one of: ${TASK_STATUSES.join(', ')}.`
-        }
-      }
-      const result = await setTaskStatus({
-        workItemId,
-        taskId,
-        status: normalised,
-        user
-      })
-      return toResult(result)
-    },
-
     /**
      * Invoke a named action against a work item (e.g. approve, reject, withdraw).
      */
@@ -136,22 +94,6 @@ function assertId(value, label) {
     throw new Error(`${label} must be a non-empty string`)
   }
 }
-
-function normaliseTaskStatus(value) {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  if (trimmed === '') return null
-  // Strip hyphens / underscores / whitespace so wire-friendly variants
-  // (`in-progress`, `not_started`) bind to the same canonical name as the
-  // form's PascalCase value.
-  const compact = trimmed.replace(/[\s_-]+/g, '').toLowerCase()
-  const match = TASK_STATUSES.find(
-    (canonical) => canonical.toLowerCase() === compact
-  )
-  return match ?? null
-}
-
-export { TASK_STATUSES }
 
 function toResult(result) {
   if (result.ok) {

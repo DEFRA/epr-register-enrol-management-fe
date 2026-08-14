@@ -1,17 +1,22 @@
 /**
- * Pure helpers that mirror the backend task/state engine.
+ * Pure helpers that mirror the backend state engine.
  *
  * The authoritative engine lives in `Backend.Api/WorkItems/Core/WorkItemService.cs`;
  * this module exists so frontend route handlers and module service objects can
  * inspect the work item the backend returned (or a freshly-built type
  * declaration) without re-implementing the rules. The backend already attaches
- * `tasks` and `availableActions` to each `WorkItemResponse`, so most callers
- * can read those directly. The helpers below are useful when the caller has
- * only the type declaration to hand (for example to ask "would this type allow
- * `approve` from this state if every task were complete?").
+ * `availableActions` to each `WorkItemResponse`, so most callers can read that
+ * directly. The helpers below are useful when the caller has only the type
+ * declaration to hand (for example to ask "would this type allow `approve`
+ * from this state?").
+ *
+ * RA-410. The task half of this engine is gone. `allTasksComplete` and the
+ * `requiresAllTasksComplete` filter that gated `canApplyAction` went with it:
+ * management-be deleted the property from `WorkItemTransition` entirely, so
+ * there is no longer anything on the wire for them to mirror. Progress is
+ * driven by the explicit Duly make / Assign to yourself and start / Log
+ * decision CTAs instead. Do not reintroduce a completion gate here.
  */
-
-import { isTaskComplete } from './task-status.js'
 
 /**
  * Is this projected action one the caller is actually allowed to invoke?
@@ -55,37 +60,25 @@ export function isCallerInvocable(action) {
 }
 
 /**
- * Compute the task progress and currently-available actions for a work item.
+ * Compute the currently-available actions for a work item.
  *
  * @param {object} type Work item type declaration (`module.type`).
- * @param {{ stateId: string, completedTaskIdsByState?: Record<string, string[]> }} workItem
+ * @param {{ stateId: string }} workItem
  * @returns {{
- *   tasks: Array<{ id: string, displayName: string, isComplete: boolean }>,
- *   availableActions: Array<{ actionId: string, displayName: string, fromStateId: string, toStateId: string, requiresAllTasksComplete: boolean }>
+ *   availableActions: Array<{ actionId: string, displayName: string, fromStateId: string, toStateId: string }>
  * }}
  */
 export function projectWorkItem(type, workItem) {
   if (!type) {
-    return { tasks: [], availableActions: [] }
+    return { availableActions: [] }
   }
   const stateId = workItem?.stateId
-  const completed = new Set(workItem?.completedTaskIdsByState?.[stateId] ?? [])
-
-  const tasks = (type.getTasksForState?.(stateId) ?? []).map((task) => ({
-    id: task.id,
-    displayName: task.displayName,
-    isComplete: completed.has(task.id)
-  }))
 
   const currentState = type.states?.find((s) => s.id === stateId)
   if (currentState?.isTerminal) {
-    return { tasks, availableActions: [] }
+    return { availableActions: [] }
   }
 
-  // Named distinctly from the exported `allTasksComplete` helper below —
-  // an identically-named local would shadow it and make the two easy to
-  // confuse when reading this function in isolation.
-  const everyTaskComplete = tasks.every((t) => t.isComplete)
   const availableActions = (type.transitions ?? [])
     .filter((t) => t.fromStateId === stateId)
     // RA-372. Mirrors the backend's `CallerInvocable` flag. A transition
@@ -98,61 +91,56 @@ export function projectWorkItem(type, workItem) {
     // re-accreditation `continue-review-during-*` transitions out of
     // `updated` as if the user could pick a destination.
     .filter((t) => t.callerInvocable !== false)
-    .filter((t) => t.requiresAllTasksComplete === false || everyTaskComplete)
     .map((t) => ({
       actionId: t.actionId,
       displayName: t.displayName,
       fromStateId: t.fromStateId,
-      toStateId: t.toStateId,
-      requiresAllTasksComplete: t.requiresAllTasksComplete !== false
+      toStateId: t.toStateId
     }))
 
-  return { tasks, availableActions }
+  return { availableActions }
 }
 
 /**
- * Are every one of this work item's current-state tasks complete?
+ * Resolve the transition (if any) that self-assigning a work item should
+ * apply on the caller's behalf (RA-410).
  *
- * RA-346. Callers hand us one of two shapes, so resolve both from a single
- * place rather than letting each caller invent its own rule:
+ * "Assign to yourself and start" is two operations, and the SECOND one is
+ * type-specific: for a re-accreditation it is `payment-received`, moving a
+ * `duly-made` item into assessment. Rather than teach the generic
+ * self-assign handler about re-accreditation, a module marks the transition
+ * declaratively with `startsOnSelfAssign: true` and this helper looks it up.
+ * The generic layer stays type-agnostic and the state literal stays in the
+ * module's declaration — the same discipline `callerInvocable` follows.
  *
- *  - A work item the BACKEND returned. It carries its own NON-EMPTY `tasks`
- *    array (each with a canonical `status`), which is authoritative — it
- *    reflects task state the type declaration cannot know about.
- *  - Anything else — no `tasks` key, or an EMPTY array — where the task list
- *    has to be derived from the type declaration.
+ * ⚠ The `fromStateId` match is what makes this safe, and it is the whole
+ * point. RA-295 renders the assignment panel in EVERY state, so self-assign
+ * fires against `queried`, `awaiting-decision` and the rest. Only a work
+ * item actually sitting in the marked transition's `fromStateId` gets a
+ * state change; everywhere else this returns `null` and self-assign stays a
+ * plain assignment. Loosening this to "the type declares one somewhere"
+ * would silently transition items from unrelated states.
  *
- * An empty `tasks` array is deliberately NOT treated as "nothing to do, so
- * everything is complete". `[].every(...)` is vacuously `true`, which would
- * fail OPEN and permit a gated action. It is also a reachable state, not a
- * hypothetical one: the backend's `WorkItemService.Project` returns an empty
- * task list when it cannot resolve the item's template snapshot. An empty
- * array therefore means "the backend told us nothing useful", so we fall
- * through to the declaration — which, for a state that genuinely declares
- * tasks, correctly reports them incomplete and fails CLOSED.
- *
- * A state that declares no tasks at all still resolves to `true`, which is
- * right: there is genuinely nothing to complete.
- *
- * `isTaskComplete` handles both the canonical `status` field and the legacy
- * `isComplete` boolean that `projectWorkItem` emits, so one predicate covers
- * both branches. It is the single owner of the legacy fallback — do not
- * re-pin that behaviour at other layers.
+ * Returns `null` for a terminal state, an unregistered type, or a type that
+ * marks no such transition — self-assign then does nothing extra.
  *
  * @param {object} type Work item type declaration (`module.type`).
- * @param {object} workItem
- * @returns {boolean} `false` for a missing work item — we cannot prove an
- *   item we do not have is complete.
+ * @param {{ stateId?: string }} workItem A RAW backend DTO.
+ * @returns {{ actionId: string, fromStateId: string, toStateId: string }|null}
  */
-export function allTasksComplete(type, workItem) {
-  if (workItem == null) {
-    return false
+export function resolveSelfAssignTransition(type, workItem) {
+  const stateId = workItem?.stateId
+  if (type == null || stateId == null) {
+    return null
   }
-  if (Array.isArray(workItem.tasks) && workItem.tasks.length > 0) {
-    return workItem.tasks.every((task) => isTaskComplete(task))
+  const currentState = type.states?.find((s) => s.id === stateId)
+  if (currentState?.isTerminal) {
+    return null
   }
-  return projectWorkItem(type, workItem).tasks.every((task) =>
-    isTaskComplete(task)
+  return (
+    (type.transitions ?? []).find(
+      (t) => t.startsOnSelfAssign === true && t.fromStateId === stateId
+    ) ?? null
   )
 }
 
@@ -196,12 +184,6 @@ export function canApplyAction(type, workItem, actionId) {
   // "backend is authoritative" reading holds. See `docs/work-items.md`.
   if (transition.callerInvocable === false) {
     return { allowed: false, reason: 'not-caller-invocable' }
-  }
-  if (
-    transition.requiresAllTasksComplete !== false &&
-    !allTasksComplete(type, workItem)
-  ) {
-    return { allowed: false, reason: 'incomplete-tasks' }
   }
   return { allowed: true }
 }
