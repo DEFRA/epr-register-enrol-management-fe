@@ -43,7 +43,7 @@ export function realOperatorSubmissionPayload() {
       email: 'jane@example.com'
     },
     prns: {
-      plannedTonnageBand: 'UpTo1000',
+      plannedTonnageBand: 'UpTo5000',
       authorisers: [{ fullName: 'Bob Jones', email: 'bob@example.com' }]
     },
     businessPlan: {

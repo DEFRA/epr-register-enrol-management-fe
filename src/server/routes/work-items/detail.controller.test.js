@@ -3227,7 +3227,7 @@ describe('RA-295 individual work item page', () => {
         material: 'plastic',
         siteAddress: '2 Wyld Court, Addingrove, AA3 1AA',
         prns: {
-          plannedTonnageBand: 'UpTo1000',
+          plannedTonnageBand: 'UpTo5000',
           authorisers: [{ fullName: 'Harry Edge', email: 'harry@example.com' }]
         },
         samplingPlan: {
@@ -3356,7 +3356,7 @@ describe('RA-295 individual work item page', () => {
 
     // The actual submitted values render, not just the labels.
     expect(result).toContain('2 Wyld Court, Addingrove, AA3 1AA')
-    expect(result).toContain('Up to 1,000 tonnes')
+    expect(result).toContain('Up to 5,000 tonnes')
     expect(result).toContain('Harry Edge')
     expect(result).toContain('harry@example.com')
     expect(result).toContain('Sorting line investment')
@@ -4040,7 +4040,7 @@ describe('RA-295 individual work item page', () => {
     const authority = detailValue(
       await renderWithSites([], {
         prns: {
-          plannedTonnageBand: 'UpTo1000',
+          plannedTonnageBand: 'UpTo5000',
           authorisers: [
             {
               fullName: 'Grace Adeyemi',
@@ -4082,7 +4082,7 @@ describe('RA-295 individual work item page', () => {
     const authority = detailValue(
       await renderWithSites([], {
         prns: {
-          plannedTonnageBand: 'UpTo1000',
+          plannedTonnageBand: 'UpTo5000',
           authorisers: [
             {
               fullName: 'Grace Adeyemi',
@@ -4115,7 +4115,7 @@ describe('RA-295 individual work item page', () => {
 
   test('RA-292 AC03: an application with no authorisers renders an em dash', async () => {
     const authority = detailValue(
-      await renderWithSites([], { prns: { plannedTonnageBand: 'UpTo1000' } }),
+      await renderWithSites([], { prns: { plannedTonnageBand: 'UpTo5000' } }),
       'authority-to-issue'
     )
     expect(authority).not.toContain('authority-to-issue-contact')

@@ -53,7 +53,7 @@ const REPROCESSOR = {
       postcode: 'AA3 1AA'
     },
     prns: {
-      plannedTonnageBand: 'UpTo1000',
+      plannedTonnageBand: 'UpTo5000',
       authorisers: [
         { fullName: 'Harry Edge', email: 'harry@example.com' },
         { fullName: 'Rosina Campbell', email: 'rosina@example.com' }
@@ -111,9 +111,9 @@ const EXPORTER = {
 describe('#tonnageBandLabel', () => {
   test('maps every known band to its human label', () => {
     expect(tonnageBandLabel('UpTo500')).toBe('Up to 500 tonnes')
-    expect(tonnageBandLabel('UpTo1000')).toBe('Up to 1,000 tonnes')
+    expect(tonnageBandLabel('UpTo5000')).toBe('Up to 5,000 tonnes')
     expect(tonnageBandLabel('UpTo10000')).toBe('Up to 10,000 tonnes')
-    expect(tonnageBandLabel('Over10000')).toBe('Over 10,000 tonnes')
+    expect(tonnageBandLabel('Over10000')).toBe('More than 10,000 tonnes')
   })
 
   test('passes an unknown band through rather than hiding it', () => {
@@ -595,7 +595,7 @@ describe('real operator submission payload contract', () => {
     ])
     expect(row(rows, 'type').value).toBe('Re-accreditation')
     expect(row(rows, 'material').value).toBe('Plastic')
-    expect(row(rows, 'prn-tonnage').value).toBe('Up to 1,000 tonnes')
+    expect(row(rows, 'prn-tonnage').value).toBe('Up to 5,000 tonnes')
     expect(row(rows, 'prn-authorisers').values).toEqual(['Bob Jones'])
     expect(authorityLines(rows)).toEqual(['Bob Jones (bob@example.com)'])
 
