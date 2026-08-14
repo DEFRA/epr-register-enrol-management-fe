@@ -417,6 +417,38 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
   })
 
+  test('RA-412: Applicant type "Exporter" is forwarded as wasteProcessingTypes, not typeId', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=exporter&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typeIds: [],
+        wasteProcessingTypes: ['Exporter']
+      })
+    )
+  })
+
+  test('RA-412: Applicant type "Reprocessor" alone sends no wasteProcessingTypes', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typeIds: ['re-accreditation'],
+        wasteProcessingTypes: []
+      })
+    )
+  })
+
   // RA-295 AC06. The registration number is part of the data displayed on
   // the Applications list. Note this is `registrationNumber` (EPR-xxxxxx) —
   // NOT the confusingly-similar `operatorRegistrationId` (reg-xxx).
@@ -1190,9 +1222,10 @@ describe('#workItemListController', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        // Exporter is a placeholder typeId with no data — still forwarded so
-        // it returns zero results.
-        typeIds: ['re-accreditation', 'exporter'],
+        // RA-412: Exporter is never a real typeId, so it's excluded from
+        // typeIds and forwarded as wasteProcessingTypes instead (see below).
+        typeIds: ['re-accreditation'],
+        wasteProcessingTypes: ['Exporter'],
         // "Updated" group expands to both ids; "Granted" -> approved.
         stateIds: ['assessment-in-progress', 'updated', 'approved'],
         // RA-299 AC05: the UI filter value 'glass-remelt' maps to the real
@@ -2007,7 +2040,7 @@ describe('#workItemListController', () => {
       expect(result).toContain('data-testid="filter-sort-due-date"')
       expect(result).toContain('data-testid="filter-sort-organisation"')
       expect(result).toContain('data-testid="filter-sort-status"')
-      // Type labels (Reprocessor enabled + Exporter placeholder).
+      // Type labels (both real filters as of RA-412).
       expect(result).toContain('Reprocessor reaccreditation')
       expect(result).toContain('Exporter reaccreditation')
       // Material labels.

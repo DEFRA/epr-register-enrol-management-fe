@@ -64,23 +64,28 @@ const ASSIGNEE_FILTER_USER = 'user'
 
 // RA-324 phase-2 (RA-299: relabelled "Applicant type" in the UI to
 // disambiguate from the new "Application type" filter below — the underlying
-// param name/values are unchanged). Frontend-only mapping, STILL a stub:
-// Reprocessor -> the real `re-accreditation` typeId (filters all current
-// data); Exporter -> a not-yet-existing typeId, so selecting it correctly
-// returns zero results.
+// param name/values are unchanged). Reprocessor keeps mapping to the real
+// `re-accreditation` typeId (filters all current data — every work item
+// submitted so far, reprocessor or exporter, has that same typeId, so this
+// alone doesn't discriminate applicant kind).
 //
 // RA-412 gave the CARD LABEL and the applicant-kind derivation a real
 // `payload.wasteProcessingType` field to read (see decorate() below and
-// isExporterApplication() in application-summary.js), but this FILTER is a
-// separate mechanism — it constrains the backend's `typeIds` query param,
-// which has no `wasteProcessingType` counterpart yet. Wiring Exporter up to
-// a real filter needs a management-be change (a `WasteProcessingTypes`
-// param on `WorkItemQuery`, mirroring the existing `Nations` filter) that
-// has not shipped; until it has, this stub is the correct behaviour, not a
-// regression.
+// isExporterApplication() in application-summary.js). The Exporter checkbox
+// now reads from the SAME field via the backend's `WasteProcessingTypes`
+// query param (management-be RA-412, mirroring the existing `Nations`
+// filter) — see the `wasteProcessingTypes` derivation in readFilters below.
+// It is intentionally NOT forwarded as a `typeId`: `exporter` was never a
+// real typeId (there is only ever `re-accreditation` today), so ANDing it
+// into the `typeIds` backend filter would still return zero results.
+const EXPORTER_TYPE_FILTER_VALUE = 'exporter'
+// Case-insensitive on the backend, but matched verbatim against
+// `payload.wasteProcessingType` — mirror the exact wire value RA-314's
+// operator-be writes (see isExporterWasteProcessingType below).
+const EXPORTER_WASTE_PROCESSING_TYPE = 'Exporter'
 const TYPE_FILTER_OPTIONS = [
   { value: 're-accreditation', text: 'Reprocessor reaccreditation' },
-  { value: 'exporter', text: 'Exporter reaccreditation' }
+  { value: EXPORTER_TYPE_FILTER_VALUE, text: 'Exporter reaccreditation' }
 ]
 const ALLOWED_TYPE_IDS = new Set(TYPE_FILTER_OPTIONS.map((o) => o.value))
 const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
@@ -265,8 +270,15 @@ export const workItemListController = {
       // RA-299 AC01/15. "Applicant type" and "Application type" are two
       // separate filter sections in the UI but both constrain the same
       // backend field — merge (and de-dup) the two selections here.
+      // RA-412: `filters.typeIds` still carries the Exporter stub value for
+      // checkbox/chip rendering, but it is never a real typeId, so it's
+      // excluded here — Exporter is filtered via `wasteProcessingTypes`
+      // below instead.
       typeIds: [
-        ...new Set([...filters.typeIds, ...filters.applicationTypeIds])
+        ...new Set([
+          ...filters.typeIds.filter((id) => id !== EXPORTER_TYPE_FILTER_VALUE),
+          ...filters.applicationTypeIds
+        ])
       ],
       stateIds: filters.stateIds,
       // RA-299 AC05. `filters.materials` holds the UI-facing filter values
@@ -279,6 +291,9 @@ export const workItemListController = {
       assigneeId: filters.backendAssigneeId,
       unassigned: filters.backendUnassignedOnly,
       nations: filters.nations,
+      // RA-412. Exporter's real discriminator (management-be matches this
+      // against `payload.wasteProcessingType`, case-insensitively).
+      wasteProcessingTypes: filters.wasteProcessingTypes,
       includeArchived: filters.includeArchived,
       page: filters.page,
       pageSize: DEFAULT_PAGE_SIZE,
@@ -351,13 +366,17 @@ function readFilters(query, user) {
   const filtersApplied = query.filtersApplied === '1'
 
   // Type ("Applicant type" in the UI): only the two Type-filter values are
-  // accepted (Reprocessor -> re-accreditation, Exporter -> exporter). Unlike
-  // phase-1 we do NOT drop the unregistered `exporter` id — it is passed to
-  // the backend so selecting Exporter returns zero results (there is no
-  // exporter data yet).
+  // accepted (Reprocessor -> re-accreditation, Exporter -> exporter).
   const typeIds = uniqueStringList(query.typeId).filter((id) =>
     ALLOWED_TYPE_IDS.has(id)
   )
+
+  // RA-412. Exporter's real backend filter — see the EXPORTER_TYPE_FILTER_VALUE
+  // comment above for why this is derived separately from `typeIds` rather
+  // than forwarded as one.
+  const wasteProcessingTypes = typeIds.includes(EXPORTER_TYPE_FILTER_VALUE)
+    ? [EXPORTER_WASTE_PROCESSING_TYPE]
+    : []
 
   // RA-299 AC01/15. "Application type": a second, independent typeId-style
   // filter (see APPLICATION_TYPE_FILTER_OPTIONS above for the stub-typeId
@@ -442,6 +461,7 @@ function readFilters(query, user) {
 
   return {
     typeIds,
+    wasteProcessingTypes,
     applicationTypeIds,
     statusGroups,
     stateIds,

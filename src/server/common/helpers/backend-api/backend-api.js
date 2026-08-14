@@ -113,6 +113,8 @@ export async function getBackendHealth({
  * Accepts the filter / search / pagination shape that the backend's
  * `GET /work-items` endpoint expects:
  *  - `typeIds` / `stateIds` — string arrays, repeated as `typeId=` / `stateId=`
+ *  - `wasteProcessingTypes` — string array, repeated as `wasteProcessingType=`
+ *    (RA-412 — matches `payload.wasteProcessingType`, e.g. Exporter)
  *  - `search`               — free-text needle
  *  - `page` / `pageSize`    — 1-based page + page size
  *
@@ -127,6 +129,7 @@ export async function getWorkItems({
   typeIds,
   stateIds,
   nations,
+  wasteProcessingTypes,
   materials,
   sort,
   organisation,
@@ -148,6 +151,7 @@ export async function getWorkItems({
     typeIds,
     stateIds,
     nations,
+    wasteProcessingTypes,
     materials,
     sort,
     organisation,
@@ -197,6 +201,7 @@ function buildWorkItemsUrl(
     typeIds,
     stateIds,
     nations,
+    wasteProcessingTypes,
     materials,
     sort,
     organisation,
@@ -222,6 +227,13 @@ function buildWorkItemsUrl(
   }
   for (const nation of toArray(nations)) {
     if (nation) params.append('nation', nation)
+  }
+  // RA-412. Mirrors the nation loop above — repeated values, matched against
+  // `payload.wasteProcessingType` by management-be.
+  for (const wasteProcessingType of toArray(wasteProcessingTypes)) {
+    if (wasteProcessingType) {
+      params.append('wasteProcessingType', wasteProcessingType)
+    }
   }
   // RA-324 phase-2. Repeated material tokens (?material=plastic&material=glass).
   for (const material of toArray(materials)) {
