@@ -19,10 +19,6 @@ import {
   makeSubmitOverrideController
 } from './sla.controller.js'
 import {
-  makeShowWithdrawController,
-  makeSubmitWithdrawController
-} from './withdraw.controller.js'
-import {
   makeShowQueryController,
   makeSubmitQueryController
 } from './query.controller.js'
@@ -109,21 +105,13 @@ export const workItems = {
           options: requireStandard,
           ...makeApplyActionController()
         },
-        {
-          // RA-188. Interstitial confirmation page for withdraw actions.
-          // The detail template swaps the inline POST form for a link to
-          // this GET when it spots a withdraw action; the POST below
-          // PRG-redirects on success.
-          method: 'GET',
-          path: '/work-items/{id}/actions/{actionId}/confirm',
-          ...makeShowWithdrawController()
-        },
-        {
-          method: 'POST',
-          path: '/work-items/{id}/actions/{actionId}/confirm',
-          options: requireStandard,
-          ...makeSubmitWithdrawController()
-        },
+        // RA-317. The withdraw confirmation interstitial (RA-188) GET/POST
+        // `/actions/{actionId}/confirm` routes were REMOVED: withdraw is an
+        // operator-only action and must not be reachable from Case
+        // Management. They existed solely for the now-deleted CM withdraw
+        // journey. The generic apply-action route above additionally rejects
+        // any `withdraw`/`withdraw-*` action id server-side (see
+        // makeApplyActionController), so a crafted POST cannot withdraw.
         {
           // RA-291. Query an application: the caseworker picks the areas
           // to unlock and gives a reason. The backend resolves the state
