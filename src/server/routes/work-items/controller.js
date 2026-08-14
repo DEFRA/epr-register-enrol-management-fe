@@ -626,7 +626,6 @@ function decorate(item) {
     material: materialLabel(item.payload?.material),
     // RA-412. The card's applicant-type label — see the comment above.
     applicantType,
-    isExporter,
     // The two card dates are gated INDEPENDENTLY — see the block comment above
     // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
     // neither render.
