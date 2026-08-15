@@ -88,7 +88,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     expect(row(rows, 'site-name')).toBeUndefined()
   })
 
-  test('uses the reprocessor Site address for the fixture\'s default wasteProcessingType', () => {
+  test("uses the reprocessor Site address for the fixture's default wasteProcessingType", () => {
     const rows = buildAdditionalInformationRows({
       workItem: { payload: realOperatorSubmissionPayload() }
     })
@@ -150,6 +150,18 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
       }
     })
     expect(row(rows, 'permit-numbers')).toBeUndefined()
+  })
+
+  test('trims surrounding whitespace on a kept permit number rather than joining it in', () => {
+    const rows = buildAdditionalInformationRows({
+      workItem: {
+        payload: {
+          ...realOperatorSubmissionPayload(),
+          permitNumbers: ['  WML123456  ', 'PPC456789']
+        }
+      }
+    })
+    expect(row(rows, 'permit-numbers').value).toBe('WML123456, PPC456789')
   })
 
   test('omits every row for a work item with no payload at all', () => {

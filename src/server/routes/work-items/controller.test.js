@@ -364,7 +364,9 @@ describe('#workItemListController', () => {
     })
 
     expect(result).toContain('data-testid="applicant-type">Exporter</span>')
-    expect(result).not.toContain('data-testid="applicant-type">Reprocessor</span>')
+    expect(result).not.toContain(
+      'data-testid="applicant-type">Reprocessor</span>'
+    )
   })
 
   // RA-295 AC06. The registration number is part of the data displayed on

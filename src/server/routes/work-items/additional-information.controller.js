@@ -62,9 +62,10 @@ export function buildAdditionalInformationRows({ workItem }) {
   })
 
   const permitNumbers = Array.isArray(payload.permitNumbers)
-    ? payload.permitNumbers.filter(
-        (permit) => typeof permit === 'string' && permit.trim() !== ''
-      )
+    ? payload.permitNumbers
+        .filter((permit) => typeof permit === 'string')
+        .map((permit) => permit.trim())
+        .filter((permit) => permit !== '')
     : []
 
   const candidates = [

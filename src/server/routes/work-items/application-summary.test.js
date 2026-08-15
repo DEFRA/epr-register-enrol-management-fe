@@ -227,13 +227,20 @@ describe('#applicantTypeOf / #applicantTypeLabel (RA-434-processortype)', () => 
     ).toBe('Exporter')
   })
 
-  test('resolves to null, never a guessed label, for an absent or unrecognised value', () => {
+  // applicantTypeOf resolves to null ONLY for a genuinely absent field — an
+  // unrecognised token is passed through as-is (it is applicantTypeLabel's
+  // job, tested separately below, to turn that into null rather than a
+  // guessed label).
+  test('resolves to null for an absent field, passing an unrecognised token through unchanged', () => {
     expect(applicantTypeOf(undefined)).toBeNull()
     expect(applicantTypeOf({})).toBeNull()
     expect(applicantTypeOf({ payload: {} })).toBeNull()
     expect(
       applicantTypeOf({ payload: { wasteProcessingType: 'something-else' } })
     ).toBe('something-else')
+  })
+
+  test('applicantTypeLabel resolves to null, never a guessed label, for an absent or unrecognised value', () => {
     expect(applicantTypeLabel(undefined)).toBeNull()
     expect(
       applicantTypeLabel({ payload: { wasteProcessingType: 'something-else' } })
