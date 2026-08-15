@@ -31,6 +31,11 @@ export function realOperatorSubmissionPayload() {
     accreditationYear: 2026,
     previousAccreditationYear: 2025,
     complianceIssuesReported: 0,
+    // RA-434-processortype. `BuildPayload` has always emitted this — it was
+    // simply never read on the frontend, which is the bug that fix addresses.
+    // 'reprocessor' here as the default/common case; override per-test for
+    // 'exporter' coverage.
+    wasteProcessingType: 'reprocessor',
     // RA-434. Companies house number + the full registered address, and the
     // permit numbers extracted from `WasteManagementPermitDto` — three wire
     // keys the adapter did not emit before RA-434.
@@ -86,10 +91,10 @@ export function realOperatorSubmissionPayload() {
       ]
     },
     // Emitted unconditionally by BuildPayload, degrading to `{ sites: [] }`
-    // for a reprocessor. Present-and-empty is the case that matters: it is
-    // what `isExporterApplication()` gates BES/ORS on, so a fixture that
-    // omitted the key entirely made the "no BES row" assertion pass on an
-    // absent key rather than on an empty site list.
+    // for a reprocessor. Present-and-empty is still worth pinning even though
+    // BES/ORS gating now reads `wasteProcessingType` (RA-434-processortype),
+    // not this list's emptiness — a fixture that omitted the key entirely
+    // would silently stop proving the adapter still sends it.
     overseasSites: { sites: [] }
   }
 }

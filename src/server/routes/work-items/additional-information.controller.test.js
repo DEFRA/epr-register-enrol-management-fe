@@ -88,7 +88,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     expect(row(rows, 'site-name')).toBeUndefined()
   })
 
-  test('falls back to the reprocessor Site address when wasteProcessingType is absent', () => {
+  test('uses the reprocessor Site address for the fixture\'s default wasteProcessingType', () => {
     const rows = buildAdditionalInformationRows({
       workItem: { payload: realOperatorSubmissionPayload() }
     })
@@ -98,12 +98,21 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     )
   })
 
-  test('also takes the reprocessor branch when wasteProcessingType is an unrecognised value', () => {
+  test('falls back to the reprocessor branch when wasteProcessingType is absent entirely', () => {
+    const payload = realOperatorSubmissionPayload()
+    delete payload.wasteProcessingType
+    const rows = buildAdditionalInformationRows({ workItem: { payload } })
+    expect(row(rows, 'site-address').value).toBe(
+      '123 High Street, London, SW1A 1AA'
+    )
+  })
+
+  test('also falls back to the reprocessor branch for an unrecognised wasteProcessingType value', () => {
     const rows = buildAdditionalInformationRows({
       workItem: {
         payload: {
           ...realOperatorSubmissionPayload(),
-          wasteProcessingType: 'reprocessor'
+          wasteProcessingType: 'unknown'
         }
       }
     })

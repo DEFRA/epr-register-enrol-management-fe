@@ -3521,6 +3521,9 @@ describe('RA-295 individual work item page', () => {
       ok: true,
       workItem: fullPayloadWorkItem({
         payload: {
+          // RA-434-processortype: BES/ORS gate on the real
+          // wasteProcessingType discriminator, not overseasSites presence.
+          wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [
               {
@@ -3575,6 +3578,9 @@ describe('RA-295 individual work item page', () => {
       ok: true,
       workItem: fullPayloadWorkItem({
         payload: {
+          // RA-434-processortype: BES/ORS gate on the real
+          // wasteProcessingType discriminator, not overseasSites presence.
+          wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [
               {
@@ -3940,7 +3946,17 @@ describe('RA-295 individual work item page', () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: fullPayloadWorkItem({
-        payload: { overseasSites: { sites }, ...payload }
+        // RA-434-processortype: BES/ORS now gate on the real
+        // `wasteProcessingType` discriminator, not `overseasSites`
+        // presence — every caller of this helper is exercising exporter-only
+        // rendering, so it is the default here rather than repeated at each
+        // of the 17 call sites. `...payload` still wins if a test ever needs
+        // to override it.
+        payload: {
+          wasteProcessingType: 'exporter',
+          overseasSites: { sites },
+          ...payload
+        }
       })
     })
     const { result } = await server.inject({
