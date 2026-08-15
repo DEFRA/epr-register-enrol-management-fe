@@ -13,6 +13,7 @@ import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { config } from '#/config/config.js'
+import { isExporterApplication } from './application-summary.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -69,19 +70,42 @@ const ASSIGNEE_FILTER_USER = 'user'
 // submitted so far, reprocessor or exporter, has that same typeId, so this
 // alone doesn't discriminate applicant kind).
 //
+// KNOWN LIMITATION, not fixed by RA-412: a "Reprocessor" filter still
+// returns Exporter items too, and a returned card can show a contradictory
+// "(Exporter)" label under it. Fixing that requires deciding, cross-repo
+// with management-be, how a pre-RA-314 work item with no
+// `wasteProcessingType` at all should be treated by a Reprocessor-only
+// filter (naively adding `wasteProcessingTypes: ['Reprocessor']` here would
+// drop every such legacy item from the Reprocessor filter, which is its own
+// regression) — tracked as a follow-up, not resolved in this change.
+//
 // RA-412 gave the CARD LABEL and the applicant-kind derivation a real
 // `payload.wasteProcessingType` field to read (see decorate() below and
-// isExporterApplication() in application-summary.js). The Exporter checkbox
-// now reads from the SAME field via the backend's `WasteProcessingTypes`
-// query param (management-be RA-412, mirroring the existing `Nations`
-// filter) — see the `wasteProcessingTypes` derivation in readFilters below.
-// It is intentionally NOT forwarded as a `typeId`: `exporter` was never a
-// real typeId (there is only ever `re-accreditation` today), so ANDing it
-// into the `typeIds` backend filter would still return zero results.
+// isExporterApplication() in application-summary.js, which decorate() also
+// uses). The Exporter checkbox now reads from the SAME field via the
+// backend's `WasteProcessingTypes` query param (management-be RA-412,
+// mirroring the existing `Nations` filter) — see the `wasteProcessingTypes`
+// derivation in readFilters below. `exporter` is never forwarded as a
+// `typeId` itself (there is no such real typeId — there is only ever
+// `re-accreditation` today); instead it is mapped onto `re-accreditation`
+// (see the handler's `typeIds` merge below) alongside the
+// `wasteProcessingTypes` narrowing, so an Exporter-only selection still
+// carries a real type constraint even where the backend's
+// `WasteProcessingTypes` support isn't deployed yet, rather than silently
+// falling back to the full unfiltered list.
+//
+// The backend ANDs `typeIds` and `wasteProcessingTypes` (confirmed against
+// management-be#118), so `wasteProcessingTypes` must only be sent when
+// Exporter is selected and Reprocessor is NOT — selecting BOTH checkboxes is
+// "either applicant kind", i.e. no wasteProcessingType narrowing at all, not
+// an AND of the two (which would silently narrow to Exporter-only and defeat
+// the GDS checkbox-group OR semantics). See readFilters below.
 const EXPORTER_TYPE_FILTER_VALUE = 'exporter'
-// Case-insensitive on the backend, but matched verbatim against
-// `payload.wasteProcessingType` — mirror the exact wire value RA-314's
-// operator-be writes (see isExporterWasteProcessingType below).
+// Matched case-insensitively by the backend against
+// `payload.wasteProcessingType` (see isExporterApplication in
+// application-summary.js) — RA-314's operator-be actually writes the
+// lowercase wire value `"exporter"`; this constant's casing does not need to
+// mirror it exactly.
 const EXPORTER_WASTE_PROCESSING_TYPE = 'Exporter'
 const TYPE_FILTER_OPTIONS = [
   { value: 're-accreditation', text: 'Reprocessor reaccreditation' },
@@ -271,12 +295,19 @@ export const workItemListController = {
       // separate filter sections in the UI but both constrain the same
       // backend field — merge (and de-dup) the two selections here.
       // RA-412: `filters.typeIds` still carries the Exporter stub value for
-      // checkbox/chip rendering, but it is never a real typeId, so it's
-      // excluded here — Exporter is filtered via `wasteProcessingTypes`
-      // below instead.
+      // checkbox/chip rendering, but it is never a real typeId — map it onto
+      // `re-accreditation`, the one real typeId Exporter items actually carry
+      // today. This keeps a genuine type constraint on an Exporter-only
+      // selection (rather than sending an empty `typeIds`, which the backend
+      // reads as "no type filter" and would return the full unfiltered list
+      // until management-be#118's `wasteProcessingTypes` support is live —
+      // see the EXPORTER_TYPE_FILTER_VALUE comment above). Exporter's real
+      // discrimination still comes from `wasteProcessingTypes` below.
       typeIds: [
         ...new Set([
-          ...filters.typeIds.filter((id) => id !== EXPORTER_TYPE_FILTER_VALUE),
+          ...filters.typeIds.map((id) =>
+            id === EXPORTER_TYPE_FILTER_VALUE ? 're-accreditation' : id
+          ),
           ...filters.applicationTypeIds
         ])
       ],
@@ -373,10 +404,16 @@ function readFilters(query, user) {
 
   // RA-412. Exporter's real backend filter — see the EXPORTER_TYPE_FILTER_VALUE
   // comment above for why this is derived separately from `typeIds` rather
-  // than forwarded as one.
-  const wasteProcessingTypes = typeIds.includes(EXPORTER_TYPE_FILTER_VALUE)
-    ? [EXPORTER_WASTE_PROCESSING_TYPE]
-    : []
+  // than forwarded as one. Only sent when Exporter is selected WITHOUT
+  // Reprocessor: since the backend ANDs `typeIds` and `wasteProcessingTypes`,
+  // sending it while Reprocessor is also selected would narrow the combined
+  // "either applicant type" selection down to Exporter-only results — the
+  // opposite of GDS checkbox-group OR semantics.
+  const wasteProcessingTypes =
+    typeIds.includes(EXPORTER_TYPE_FILTER_VALUE) &&
+    !typeIds.includes('re-accreditation')
+      ? [EXPORTER_WASTE_PROCESSING_TYPE]
+      : []
 
   // RA-299 AC01/15. "Application type": a second, independent typeId-style
   // filter (see APPLICATION_TYPE_FILTER_OPTIONS above for the stub-typeId
@@ -608,10 +645,10 @@ function decorate(item) {
   // (the payload is a schema-less BsonDocument). A work item submitted
   // before RA-314 carries no such field, so it falls back to "Reprocessor" —
   // the value every card showed before this fix, preserving on-screen
-  // behaviour for old data.
-  const isExporter = isExporterWasteProcessingType(
-    item.payload?.wasteProcessingType
-  )
+  // behaviour for old data. Shared with the application-summary page's own
+  // BES/ORS gating so the two derivations of "is this an Exporter
+  // application" can't drift apart.
+  const isExporter = isExporterApplication(item)
   const applicantType = isExporter ? 'Exporter' : 'Reprocessor'
 
   // RA-324 phase-2. `slaState` is non-null exactly when the work item carries
@@ -659,13 +696,6 @@ function decorate(item) {
     dueOn: unwrapMongoDate(item.slaDueDate),
     submittedOn: unwrapMongoDate(item.submittedAt)
   }
-}
-
-// RA-412. Case-insensitive match on the wire value, mirroring the equivalent
-// comparisons already made in management-be (e.g.
-// `ApplicationReferenceGenerator.ResolveRegulatorPostcode`).
-function isExporterWasteProcessingType(value) {
-  return typeof value === 'string' && value.toLowerCase() === 'exporter'
 }
 
 /**

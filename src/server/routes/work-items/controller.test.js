@@ -417,7 +417,7 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
   })
 
-  test('RA-412: Applicant type "Exporter" is forwarded as wasteProcessingTypes, not typeId', async () => {
+  test('RA-412: Applicant type "Exporter" alone maps onto the real typeId AND narrows via wasteProcessingTypes', async () => {
     getWorkItems.mockResolvedValue(emptyPage())
 
     await server.inject({
@@ -427,7 +427,11 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        typeIds: [],
+        // `exporter` is never a real typeId — it maps onto `re-accreditation`
+        // so an Exporter-only selection still carries a real type constraint
+        // (rather than an empty `typeIds`, which the backend reads as "no
+        // type filter" and would return everything).
+        typeIds: ['re-accreditation'],
         wasteProcessingTypes: ['Exporter']
       })
     )
@@ -439,6 +443,26 @@ describe('#workItemListController', () => {
     await server.inject({
       method: 'GET',
       url: '/work-items?typeId=re-accreditation&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typeIds: ['re-accreditation'],
+        wasteProcessingTypes: []
+      })
+    )
+  })
+
+  // Review fix: the backend ANDs typeIds and wasteProcessingTypes, so
+  // selecting BOTH Reprocessor and Exporter must not narrow to Exporter-only
+  // results — it must behave as "either applicant type", i.e. no
+  // wasteProcessingTypes narrowing at all.
+  test('RA-412: selecting both Reprocessor AND Exporter sends no wasteProcessingTypes narrowing', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation&typeId=exporter&filtersApplied=1'
     })
 
     expect(getWorkItems).toHaveBeenCalledWith(
@@ -1222,10 +1246,13 @@ describe('#workItemListController', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        // RA-412: Exporter is never a real typeId, so it's excluded from
-        // typeIds and forwarded as wasteProcessingTypes instead (see below).
+        // RA-412: Exporter is never a real typeId, so it maps onto the real
+        // `re-accreditation` typeId here. Both Reprocessor and Exporter are
+        // selected, so this is "either applicant type" — no
+        // wasteProcessingTypes narrowing (see the dedicated tests below for
+        // the single-selection cases).
         typeIds: ['re-accreditation'],
-        wasteProcessingTypes: ['Exporter'],
+        wasteProcessingTypes: [],
         // "Updated" group expands to both ids; "Granted" -> approved.
         stateIds: ['assessment-in-progress', 'updated', 'approved'],
         // RA-299 AC05: the UI filter value 'glass-remelt' maps to the real
