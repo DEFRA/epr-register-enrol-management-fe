@@ -129,16 +129,18 @@ describe('auth', () => {
     expect(statusCode).toBe(statusCodes.forbidden)
   })
 
-  // RA-335: these 5 routes had NO scope check at all before RA-335 — any
+  // RA-335: these routes had NO scope check at all before RA-335 — any
   // authenticated session, including a future read-only support user,
   // could reach them. route-scope-coverage.test.js proves the route
   // table is configured correctly (static); these prove Hapi actually
   // enforces it at request time (runtime) — the two are not the same
   // guarantee, and this is the regression the fix exists to prevent.
+  // RA-317: the withdraw confirmation POST route was removed (withdraw is an
+  // operator-only action, not available in CM), so it is no longer part of
+  // this set.
   test.each([
     ['self-assign', '/work-items/some-id/self-assign'],
-    ['apply action', '/work-items/some-id/actions/some-action'],
-    ['withdraw confirm', '/work-items/some-id/actions/withdraw/confirm']
+    ['apply action', '/work-items/some-id/actions/some-action']
   ])(
     'a support user is rejected (403) from the previously-ungated %s route',
     async (_name, url) => {

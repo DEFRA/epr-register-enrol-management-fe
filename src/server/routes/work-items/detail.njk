@@ -580,10 +580,12 @@
             {# assignment panel), so it never reaches this loop and the      #}
             {# length check above stays honest.                              #}
 
-            {# Primary actions — full-width buttons, stacked. #}
+            {# Primary actions — full-width buttons, stacked. Query is           #}
+            {# special-cased into the secondary link row below. RA-317: withdraw #}
+            {# is stripped from `availableActions` in the controller, so it can  #}
+            {# never reach this loop — no withdraw guard is needed here.         #}
             {% for action in workItem.availableActions %}
-              {% if not (action.actionId == 'query' or action.actionId.startsWith('query-')
-                         or action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-')) %}
+              {% if not (action.actionId == 'query' or action.actionId.startsWith('query-')) %}
                 <form method="post"
                       action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
                       novalidate>
@@ -613,17 +615,16 @@
                   }) }}
                 {% endif %}
               {% endfor %}
-              {% for action in workItem.availableActions %}
-                {% if action.actionId == 'withdraw' or action.actionId.startsWith('withdraw-') %}
-                  {{ appActionLink({
-                    text: action.displayName,
-                    href: "/work-items/" + workItem.id + "/actions/" + action.actionId + "/confirm",
-                    classes: "govuk-link app-case-panel__link--destructive",
-                    disabled: user.isReadOnly,
-                    testId: "action-" + action.actionId
-                  }) }}
-                {% endif %}
-              {% endfor %}
+              {# RA-317. Withdraw is an OPERATOR action and must not appear in  #}
+              {# Case Management. The link row that rendered it (and the        #}
+              {# RA-188 confirmation interstitial it pointed at) is removed.    #}
+              {# Withdraw ids are stripped from `availableActions` in the       #}
+              {# controller (before the length check above), so a withdraw-only #}
+              {# state renders the "No actions" empty state rather than an      #}
+              {# empty panel, and the apply-action route rejects them too — no  #}
+              {# withdraw affordance renders in any state. The Withdrawn STATUS #}
+              {# notice/tag (AC03) is unaffected: it lives in the               #}
+              {# withdrawn-notice block and the terminal-state Outcome panel.   #}
             </div>
           </div>
         {% else %}
