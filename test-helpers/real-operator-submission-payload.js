@@ -31,6 +31,12 @@ export function realOperatorSubmissionPayload() {
     accreditationYear: 2026,
     previousAccreditationYear: 2025,
     complianceIssuesReported: 0,
+    // RA-434. Companies house number + the full registered address, and the
+    // permit numbers extracted from `WasteManagementPermitDto` — three wire
+    // keys the adapter did not emit before RA-434.
+    companiesHouseNumber: '01234567',
+    companyRegisteredAddress: '1 Example Street, London, EC1A 1BB',
+    permitNumbers: ['WML123456', 'PPC456789'],
     siteAddress: '123 High Street, London, SW1A 1AA',
     siteAddressPostcode: 'SW1A 1AA',
     operatorApplicationId: 'app-001',

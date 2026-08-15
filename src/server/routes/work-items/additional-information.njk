@@ -1,0 +1,39 @@
+{% extends 'layouts/page.njk' %}
+
+{# ---------------------------------------------------------------- #}
+{# Standalone "Additional information" page for a work item (RA-434). #}
+{#                                                                   #}
+{# Six rows built by `buildAdditionalInformationRows`: Registered     #}
+{# name, Companies house number, Registered address, Site name,      #}
+{# Site address, Permit numbers — in that fixed order. Missing rows   #}
+{# are OMITTED upstream, so there is no null test here — the same     #}
+{# borderless govuk-summary-list style as the Application summary     #}
+{# tab's "Reference" footer.                                          #}
+{# ---------------------------------------------------------------- #}
+
+{% block content %}
+  {# RA-434. Rendered as the "Additional information" tab of the individual #}
+  {# work item page — the case header above supplies the page identity, so  #}
+  {# there is no separate page heading here.                                #}
+  {{ appCaseTabs({ tabs: caseTabs }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <dl class="govuk-summary-list app-summary-list--borderless"
+          data-testid="additional-information">
+        {% for row in additionalInformationRows %}
+          <div class="govuk-summary-list__row"
+               data-testid="additional-information-row-{{ row.key }}">
+            <dt class="govuk-summary-list__key">{{ row.label }}</dt>
+            <dd class="govuk-summary-list__value"
+                data-testid="additional-information-value-{{ row.key }}">{{ row.value }}</dd>
+          </div>
+        {% endfor %}
+      </dl>
+
+      <p class="govuk-body">
+        <a class="govuk-link" href="/work-items/{{ workItem.id }}">Back to work item</a>
+      </p>
+    </div>
+  </div>
+{% endblock %}

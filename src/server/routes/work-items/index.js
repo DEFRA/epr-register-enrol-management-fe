@@ -12,6 +12,7 @@ import {
   workItemDetailController
 } from './detail.controller.js'
 import { workItemAuditLogController } from './audit-log.controller.js'
+import { workItemAdditionalInformationController } from './additional-information.controller.js'
 import {
   makeShowExtendController,
   makeSubmitExtendController,
@@ -88,6 +89,14 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}/audit-log',
           ...workItemAuditLogController
+        },
+        {
+          // RA-434. Standalone "Additional information" tab page, same
+          // pattern as the audit log (RA-97): each tab is its own
+          // bookmarkable, JS-free page.
+          method: 'GET',
+          path: '/work-items/{id}/additional-information',
+          ...workItemAdditionalInformationController
         },
         // RA-410. The tasks page and the two task-mutation POSTs
         // (`/tasks/{taskId}/complete`, `/tasks/{taskId}/status`) used to sit
