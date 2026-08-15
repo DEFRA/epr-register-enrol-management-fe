@@ -65,7 +65,8 @@
             classes: "govuk-label--m"
           },
           hint: {
-            text: "The reason you provide is for internal use only."
+            text: "The reason you provide is for internal use only.",
+            attributes: { "data-testid": "query-reason-hint" }
           },
           value: values.reason,
           errorMessage: { text: fieldErrors["reason"] } if fieldErrors["reason"] else null,
