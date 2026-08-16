@@ -8,12 +8,13 @@ those how-tos for the authoritative platform behaviour.
 
 ## Service identity
 
-| Attribute      | Value                                       |
-| -------------- | ------------------------------------------- |
-| Service name   | `epr-register-case-management-frontend-poc` |
-| Runtime        | Node.js 24 (`node24`) running Hapi          |
-| Container port | `3000`                                      |
-| Health probe   | `GET /health` (anonymous, returns `200`)    |
+| Attribute      | Value                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service name   | `epr-register-case-management-frontend-poc`                                                                                                       |
+| Runtime        | Node.js 24 (`node24`) running Hapi                                                                                                                |
+| Container port | `3000`                                                                                                                                            |
+| Health probe   | `GET /health` (anonymous, returns `200`)                                                                                                          |
+| Readiness      | `GET /health/ready` (anonymous, `200`/`503`) — reports missing required config by key name; not wired to any platform probe today, curl on demand |
 
 ## Required environment variables
 
