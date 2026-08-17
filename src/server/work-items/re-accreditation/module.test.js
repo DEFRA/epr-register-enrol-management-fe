@@ -125,6 +125,29 @@ describe('reAccreditationModule', () => {
     expect(transition).not.toHaveProperty('requiresAllTasksComplete')
   })
 
+  // RA-351. The FE mirror holds exactly ONE `sla-extend` transition, on
+  // `assessment-in-progress`. The backend's transition set adds a second
+  // `sla-extend` self-loop on `queried` (so a queried item projects it into
+  // `availableActions`), but the FE framework keys transition `actionId`
+  // uniqueness globally — `assertValidWorkItemModule` throws on a duplicate —
+  // so that second entry is deliberately NOT mirrored here. It buys nothing:
+  // the queried Extend/Override due-date affordance is driven by the backend
+  // PROJECTION (consumed via the detail controller's `canChangeDueDate`),
+  // never by this transition list. Covered end-to-end by the queried tests
+  // in `routes/work-items/detail.controller.test.js`.
+  test('mirrors exactly one sla-extend transition (queried is projection-only)', () => {
+    const slaExtends = reAccreditationType.transitions.filter(
+      (t) => t.actionId === 'sla-extend'
+    )
+    expect(slaExtends).toHaveLength(1)
+    expect(slaExtends[0]).toMatchObject({
+      displayName: 'Extend SLA',
+      fromStateId: 'assessment-in-progress',
+      toStateId: 'assessment-in-progress'
+    })
+    expect(slaExtends[0]).not.toHaveProperty('callerInvocable')
+  })
+
   // RA-372. The four onward transitions out of `updated`, one per state a
   // query can be raised from. Their existence is what makes `updated` a
   // pass-through rather than the dead end the bug reported.
@@ -262,6 +285,14 @@ describe('reAccreditationModule', () => {
       'resume-during-decision',
       'resume-during-duly-made',
       'resume-during-duly-making',
+      // RA-351. Exactly ONE `sla-extend` here, on `assessment-in-progress`.
+      // The backend's transition set also has an `sla-extend` self-loop on
+      // `queried`, but the FE framework keys transition `actionId`
+      // uniqueness globally (`assertValidWorkItemModule`), so the queried
+      // one is deliberately NOT mirrored — see the comment on the
+      // `sla-extend` transition in module.js. The queried Extend/Override
+      // affordance is driven by the backend PROJECTION into `availableActions`
+      // (consumed via `canChangeDueDate`), not by this transition list.
       'sla-extend',
       'submit-for-decision',
       'withdraw',

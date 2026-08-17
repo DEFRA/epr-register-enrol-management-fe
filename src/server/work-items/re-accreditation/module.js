@@ -102,6 +102,22 @@ const TRANSITIONS = [
     fromStateId: 'assessment-in-progress',
     toStateId: 'assessment-in-progress'
   },
+  // RA-351. A queried application can ALSO Extend SLA (and, on the same
+  // `canChangeDueDate` flag, Override the due date) — management-be projects
+  // `sla-extend` into a queried item's `availableActions`, so a queried
+  // item's projected actions are `['sla-extend', 'withdraw-during-query']`.
+  //
+  // There is deliberately NO second `sla-extend` transition entry here for
+  // the `queried` self-loop, even though the backend's transition set has
+  // one. The FE framework's `assertValidWorkItemModule`
+  // (core/module.js) enforces GLOBALLY-UNIQUE transition `actionId`s — an
+  // invariant `engine.js#canApplyAction`'s find-by-actionId relies on — so a
+  // second `sla-extend` cannot be expressed in this list. It does not need
+  // to be: `canChangeDueDate` (detail.controller.js) derives ENTIRELY from
+  // the backend-projected `availableActions`, never from this transitions
+  // array, so both due-date links render on a queried item the instant the
+  // backend projects the action. The mirror is complete for every purpose
+  // the frontend reads it for.
   // RA-410. `submit-for-decision` and `reject` (below) both became
   // NON-caller-invocable in v12, mirroring management-be. Neither is a
   // button any more: both hops are applied server-side by the single

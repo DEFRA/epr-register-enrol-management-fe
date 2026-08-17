@@ -923,6 +923,70 @@ describe('#workItemDetailController', () => {
     )
   })
 
+  // RA-351. The bug: a queried application offered no way to Extend or
+  // Override the SLA even though its clock keeps running while it waits for
+  // the operator. management-be now projects `sla-extend` into a queried
+  // item's `availableActions` (mirrored by the module.js self-loop), so
+  // `canChangeDueDate` turns true exactly as it does in assessment and BOTH
+  // due-date links render — no queried special-casing in the controller.
+  test('renders both SLA links for a queried item projecting sla-extend', async () => {
+    registerReaccreditation()
+
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        stateId: 'queried',
+        availableActions: [
+          { actionId: 'sla-extend', displayName: 'Extend SLA' }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="action-sla-extend"')
+    )
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="action-sla-override"')
+    )
+    expect(result).toEqual(
+      expect.stringContaining(`/work-items/${ID}/sla/extend`)
+    )
+    expect(result).toEqual(
+      expect.stringContaining(`/work-items/${ID}/sla/override`)
+    )
+  })
+
+  // RA-351. The complement: a queried item the backend does NOT project
+  // `sla-extend` for (e.g. a stale backend deployed behind this FE) keeps
+  // both links hidden. Proves the links follow the backend projection, not
+  // a FE-only "queried always shows SLA" override.
+  test('hides both SLA links for a queried item with no sla-extend projected', async () => {
+    registerReaccreditation()
+
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ stateId: 'queried', availableActions: [] })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="action-sla-extend"')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="action-sla-override"')
+    )
+  })
+
   // `sla-extend` is filtered out of availableActions rather than skipped in
   // the template, so the length check stays honest: an item whose ONLY
   // action is sla-extend must report "no actions", not render an empty
