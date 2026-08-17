@@ -3,8 +3,6 @@ import { describe, expect, test } from 'vitest'
 import { realOperatorSubmissionPayload } from '#/test-helpers/real-operator-submission-payload.js'
 import { buildCaseHeader } from './case-header.js'
 import {
-  applicantTypeLabel,
-  applicantTypeOf,
   buildApplicationSummary,
   buildAuthorityToIssueContacts,
   buildBusinessPlanPairs,

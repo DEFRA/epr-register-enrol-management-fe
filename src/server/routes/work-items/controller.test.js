@@ -115,10 +115,12 @@ describe('#workItemListController', () => {
     expect(result).toEqual(
       expect.stringContaining('11111111-1111-1111-1111-111111111111')
     )
-    // RA-434-processortype: a work item with no `wasteProcessingType` on its
-    // payload renders the applicant-type em dash, never a guessed label.
+    // RA-412: a work item with no `wasteProcessingType` on its payload falls
+    // back to "Reprocessor" — the value every card showed before this fix,
+    // preserving on-screen behaviour for pre-RA-314 data (see the dedicated
+    // fallback test below).
     expect(result).toEqual(
-      expect.stringContaining('data-testid="applicant-type">—</span>')
+      expect.stringContaining('data-testid="applicant-type">Reprocessor</span>')
     )
     // State badge text = the state display name (RA-324 contract label).
     expect(result).toEqual(expect.stringContaining('Not started'))

@@ -46,41 +46,6 @@ const BUSINESS_PLAN_CATEGORIES = [
   { key: 'newUses', label: 'New uses' }
 ]
 
-const APPLICANT_TYPE_LABEL = {
-  reprocessor: 'Reprocessor',
-  exporter: 'Exporter'
-}
-
-/**
- * RA-434-processortype. The real applicant-kind discriminator: re-ex's
- * `wasteProcessingType` ("reprocessor" | "exporter"), threaded through by
- * `HttpCaseWorkingApiAdapter.BuildPayload` (backend) on every submission
- * going through the current adapter. management-be's `WorkItem.Payload` is a
- * schemaless BsonDocument, so the field survives storage untouched and is
- * present on `workItem.payload.wasteProcessingType` in every API response —
- * it was simply never read on this side until now (see the former
- * `overseasSites`-presence proxy this replaced, epr-ow16).
- *
- * Lower-cased on read since nothing in the wire contract guarantees casing.
- * Returns `null` for a work item that predates this field (old data, or any
- * future submission path that doesn't set it) rather than guessing — every
- * caller must decide its own fallback display, so a missing value can never
- * silently render as "Reprocessor" again.
- */
-export function applicantTypeOf(workItem) {
-  const raw = workItem?.payload?.wasteProcessingType
-  return typeof raw === 'string' ? raw.toLowerCase() : null
-}
-
-/**
- * The applicant-kind DISPLAY LABEL. Only the two tokens re-ex actually sends
- * resolve to a label — an unrecognised value falls through to `null`, same
- * as an absent field, rather than guessing.
- */
-export function applicantTypeLabel(workItem) {
-  return APPLICANT_TYPE_LABEL[applicantTypeOf(workItem)] ?? null
-}
-
 /**
  * AC02 items 9 and 10 (BES and ORS) render for exporter applications only.
  *
