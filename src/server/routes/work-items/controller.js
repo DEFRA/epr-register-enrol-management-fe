@@ -70,14 +70,18 @@ const ASSIGNEE_FILTER_USER = 'user'
 // submitted so far, reprocessor or exporter, has that same typeId, so this
 // alone doesn't discriminate applicant kind).
 //
-// KNOWN LIMITATION, not fixed by RA-412: a "Reprocessor" filter still
-// returns Exporter items too, and a returned card can show a contradictory
-// "(Exporter)" label under it. Fixing that requires deciding, cross-repo
-// with management-be, how a pre-RA-314 work item with no
-// `wasteProcessingType` at all should be treated by a Reprocessor-only
-// filter (naively adding `wasteProcessingTypes: ['Reprocessor']` here would
-// drop every such legacy item from the Reprocessor filter, which is its own
-// regression) — tracked as a follow-up, not resolved in this change.
+// PR #179 review, resolved: a "Reprocessor" filter used to also return
+// Exporter items, and a returned card could show a contradictory
+// "(Exporter)" label under it, because `wasteProcessingTypes` was only ever
+// narrowed for an Exporter-only selection. Fixed by also narrowing for a
+// Reprocessor-only selection (see `wasteProcessingTypes` derivation in
+// readFilters below) — checked against management-be#118's `BuildFilter`
+// directly rather than guessing: any `WasteProcessingTypes` value other
+// than a literal case-insensitive "exporter" is matched as `$not` of the
+// exporter regex, which Mongo already matches against a MISSING field too.
+// So a Reprocessor-only filter narrowed this way still includes pre-RA-314
+// legacy items with no `wasteProcessingType` at all — the drop-legacy-items
+// regression this was previously left unfixed to avoid does not occur.
 //
 // RA-412 gave the CARD LABEL and the applicant-kind derivation a real
 // `payload.wasteProcessingType` field to read (see decorate() below and
@@ -96,10 +100,11 @@ const ASSIGNEE_FILTER_USER = 'user'
 //
 // The backend ANDs `typeIds` and `wasteProcessingTypes` (confirmed against
 // management-be#118), so `wasteProcessingTypes` must only be sent when
-// Exporter is selected and Reprocessor is NOT — selecting BOTH checkboxes is
-// "either applicant kind", i.e. no wasteProcessingType narrowing at all, not
-// an AND of the two (which would silently narrow to Exporter-only and defeat
-// the GDS checkbox-group OR semantics). See readFilters below.
+// exactly one of Exporter/Reprocessor is selected — selecting BOTH
+// checkboxes (or neither) is "either applicant kind", i.e. no
+// wasteProcessingType narrowing at all, not an AND of the two (which would
+// silently narrow to one kind and defeat the GDS checkbox-group OR
+// semantics). See readFilters below.
 //
 // PR review (#179): this used to be two near-identical top-level constants
 // ('exporter' and 'Exporter') disambiguated only by a comment. Bundled into
@@ -117,6 +122,16 @@ const EXPORTER_TYPE_FILTER = {
   // of those exactly given the case-insensitive match.
   wasteProcessingType: 'Exporter'
 }
+
+// Sent to the backend's `WasteProcessingTypes` filter param to narrow a
+// Reprocessor-only Applicant-type selection — see the block comment above.
+// management-be#118 has no dedicated "reprocessor" match: any value other
+// than a literal case-insensitive "exporter" hits its `$not` branch, so this
+// string's exact casing is arbitrary in the same way EXPORTER_TYPE_FILTER's
+// comment describes, and it is what makes the filter include pre-RA-314
+// items with no `wasteProcessingType` field (Mongo's `$not` on a `$regex`
+// already matches a missing field).
+const REPROCESSOR_WASTE_PROCESSING_TYPE = 'Reprocessor'
 const TYPE_FILTER_OPTIONS = [
   { value: 're-accreditation', text: 'Reprocessor reaccreditation' },
   { value: EXPORTER_TYPE_FILTER.typeIdToken, text: 'Exporter reaccreditation' }
@@ -427,18 +442,24 @@ function readFilters(query, user) {
     ALLOWED_TYPE_IDS.has(id)
   )
 
-  // RA-412. Exporter's real backend filter — see the EXPORTER_TYPE_FILTER
-  // comment above for why this is derived separately from `typeIds` rather
-  // than forwarded as one. Only sent when Exporter is selected WITHOUT
-  // Reprocessor: since the backend ANDs `typeIds` and `wasteProcessingTypes`,
-  // sending it while Reprocessor is also selected would narrow the combined
-  // "either applicant type" selection down to Exporter-only results — the
+  // RA-412 (PR #179 review follow-up). The applicant-kind backend filter —
+  // see the EXPORTER_TYPE_FILTER / REPROCESSOR_WASTE_PROCESSING_TYPE
+  // comments above for why this is derived separately from `typeIds` rather
+  // than forwarded as one. Only sent when exactly one of Exporter/Reprocessor
+  // is selected: since the backend ANDs `typeIds` and `wasteProcessingTypes`,
+  // sending it while BOTH (or neither) are selected would narrow the
+  // combined "either applicant type" selection down to one kind — the
   // opposite of GDS checkbox-group OR semantics.
+  const exporterSelected = typeIds.includes(EXPORTER_TYPE_FILTER.typeIdToken)
+  const reprocessorSelected = typeIds.includes('re-accreditation')
   const wasteProcessingTypes =
-    typeIds.includes(EXPORTER_TYPE_FILTER.typeIdToken) &&
-    !typeIds.includes('re-accreditation')
-      ? [EXPORTER_TYPE_FILTER.wasteProcessingType]
-      : []
+    exporterSelected === reprocessorSelected
+      ? []
+      : [
+          exporterSelected
+            ? EXPORTER_TYPE_FILTER.wasteProcessingType
+            : REPROCESSOR_WASTE_PROCESSING_TYPE
+        ]
 
   // RA-299 AC01/15. "Application type": a second, independent typeId-style
   // filter (see APPLICATION_TYPE_FILTER_OPTIONS above for the stub-typeId

@@ -441,7 +441,12 @@ describe('#workItemListController', () => {
     )
   })
 
-  test('RA-412: Applicant type "Reprocessor" alone sends no wasteProcessingTypes', async () => {
+  // PR #179 review fix: this used to send no wasteProcessingTypes narrowing
+  // at all, so a Reprocessor-only filter could return (and label) Exporter
+  // items. management-be#118 treats any non-"exporter" WasteProcessingTypes
+  // value as "not exporter", which already includes pre-RA-314 items with no
+  // wasteProcessingType field, so narrowing here does not drop legacy items.
+  test('RA-412: Applicant type "Reprocessor" alone narrows via wasteProcessingTypes', async () => {
     getWorkItems.mockResolvedValue(emptyPage())
 
     await server.inject({
@@ -452,7 +457,7 @@ describe('#workItemListController', () => {
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
         typeIds: ['re-accreditation'],
-        wasteProcessingTypes: []
+        wasteProcessingTypes: ['Reprocessor']
       })
     )
   })
