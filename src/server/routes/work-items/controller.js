@@ -100,16 +100,26 @@ const ASSIGNEE_FILTER_USER = 'user'
 // "either applicant kind", i.e. no wasteProcessingType narrowing at all, not
 // an AND of the two (which would silently narrow to Exporter-only and defeat
 // the GDS checkbox-group OR semantics). See readFilters below.
-const EXPORTER_TYPE_FILTER_VALUE = 'exporter'
-// Matched case-insensitively by the backend against
-// `payload.wasteProcessingType` (see isExporterApplication in
-// application-summary.js) — RA-314's operator-be actually writes the
-// lowercase wire value `"exporter"`; this constant's casing does not need to
-// mirror it exactly.
-const EXPORTER_WASTE_PROCESSING_TYPE = 'Exporter'
+//
+// PR review (#179): this used to be two near-identical top-level constants
+// ('exporter' and 'Exporter') disambiguated only by a comment. Bundled into
+// one mapping so the UI/URL token and the backend wire value can't drift
+// apart from each other silently.
+const EXPORTER_TYPE_FILTER = {
+  // UI/URL token for the Applicant type checkbox (`typeId=exporter`).
+  typeIdToken: 'exporter',
+  // Sent to the backend's `WasteProcessingTypes` filter param, matched
+  // case-insensitively against `payload.wasteProcessingType` (see
+  // isExporterApplication in application-summary.js). Confirmed against
+  // management-be#118, which matches with a `^exporter$` regex and the `i`
+  // flag — RA-314's operator-be itself writes the lowercase wire value
+  // `"exporter"`, but this constant's casing does not need to mirror either
+  // of those exactly given the case-insensitive match.
+  wasteProcessingType: 'Exporter'
+}
 const TYPE_FILTER_OPTIONS = [
   { value: 're-accreditation', text: 'Reprocessor reaccreditation' },
-  { value: EXPORTER_TYPE_FILTER_VALUE, text: 'Exporter reaccreditation' }
+  { value: EXPORTER_TYPE_FILTER.typeIdToken, text: 'Exporter reaccreditation' }
 ]
 const ALLOWED_TYPE_IDS = new Set(TYPE_FILTER_OPTIONS.map((o) => o.value))
 const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
@@ -301,13 +311,11 @@ export const workItemListController = {
       // selection (rather than sending an empty `typeIds`, which the backend
       // reads as "no type filter" and would return the full unfiltered list
       // until management-be#118's `wasteProcessingTypes` support is live —
-      // see the EXPORTER_TYPE_FILTER_VALUE comment above). Exporter's real
+      // see the EXPORTER_TYPE_FILTER comment above). Exporter's real
       // discrimination still comes from `wasteProcessingTypes` below.
       typeIds: [
         ...new Set([
-          ...filters.typeIds.map((id) =>
-            id === EXPORTER_TYPE_FILTER_VALUE ? 're-accreditation' : id
-          ),
+          ...toBackendTypeIds(filters.typeIds),
           ...filters.applicationTypeIds
         ])
       ],
@@ -388,6 +396,23 @@ export const workItemListController = {
   }
 }
 
+/**
+ * Translate the UI's Applicant-type filter tokens (already validated against
+ * `ALLOWED_TYPE_IDS`) into real backend typeIds, mapping the Exporter stub
+ * token onto `re-accreditation` — see the EXPORTER_TYPE_FILTER comment above.
+ * Mirrors `toBackendMaterialTokens`' UI-token -> backend-token translation
+ * shape (materials.js) for the same reason: a filter value with no typeId of
+ * its own on the backend today.
+ *
+ * @param {string[]} typeIds
+ * @returns {string[]}
+ */
+function toBackendTypeIds(typeIds) {
+  return typeIds.map((id) =>
+    id === EXPORTER_TYPE_FILTER.typeIdToken ? 're-accreditation' : id
+  )
+}
+
 function readFilters(query, user) {
   // Hidden form marker that lets the controller distinguish 'user
   // submitted the filter form' from 'fresh GET of /work-items'. Without
@@ -402,7 +427,7 @@ function readFilters(query, user) {
     ALLOWED_TYPE_IDS.has(id)
   )
 
-  // RA-412. Exporter's real backend filter — see the EXPORTER_TYPE_FILTER_VALUE
+  // RA-412. Exporter's real backend filter — see the EXPORTER_TYPE_FILTER
   // comment above for why this is derived separately from `typeIds` rather
   // than forwarded as one. Only sent when Exporter is selected WITHOUT
   // Reprocessor: since the backend ANDs `typeIds` and `wasteProcessingTypes`,
@@ -410,9 +435,9 @@ function readFilters(query, user) {
   // "either applicant type" selection down to Exporter-only results — the
   // opposite of GDS checkbox-group OR semantics.
   const wasteProcessingTypes =
-    typeIds.includes(EXPORTER_TYPE_FILTER_VALUE) &&
+    typeIds.includes(EXPORTER_TYPE_FILTER.typeIdToken) &&
     !typeIds.includes('re-accreditation')
-      ? [EXPORTER_WASTE_PROCESSING_TYPE]
+      ? [EXPORTER_TYPE_FILTER.wasteProcessingType]
       : []
 
   // RA-299 AC01/15. "Application type": a second, independent typeId-style
