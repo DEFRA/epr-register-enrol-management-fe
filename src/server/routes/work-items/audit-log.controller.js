@@ -4,9 +4,8 @@ import { decorateAuditLog } from '#/server/work-items/core/audit-log.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { buildCaseHeader, buildCaseTabs } from './case-header.js'
+import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
 
-const NOT_FOUND_VIEW = 'work-items/not-found'
-const UNAVAILABLE_VIEW = 'work-items/detail-error'
 const AUDIT_LOG_VIEW = 'work-items/audit-log'
 
 /**
@@ -23,34 +22,8 @@ export const workItemAuditLogController = {
     const user = getUser(request)
     const result = await getWorkItem({ workItemId: id, user })
 
-    if (result.ok === false && result.status === 404) {
-      return h
-        .view(NOT_FOUND_VIEW, {
-          pageTitle: 'Application not found',
-          heading: 'Application not found',
-          workItemId: id,
-          breadcrumbs: [
-            { text: 'Applications', href: '/work-items' },
-            { text: 'Not found' }
-          ]
-        })
-        .code(404)
-    }
-
-    if (!result.ok) {
-      return h
-        .view(UNAVAILABLE_VIEW, {
-          pageTitle: 'Work item unavailable',
-          heading: 'Work item unavailable',
-          workItemId: id,
-          error: result.error ?? `Backend returned ${result.status}`,
-          breadcrumbs: [
-            { text: 'Work items', href: '/work-items' },
-            { text: 'Work item' }
-          ]
-        })
-        .code(502)
-    }
+    const errorResponse = renderWorkItemFetchError({ h, result, id })
+    if (errorResponse) return errorResponse
 
     const workItem = result.workItem
     const applicationRef = workItem.payload.applicationReference

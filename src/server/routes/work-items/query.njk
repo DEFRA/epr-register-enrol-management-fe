@@ -65,7 +65,8 @@
             classes: "govuk-label--m"
           },
           hint: {
-            text: "This will be included in the email to the operator."
+            text: "The reason you provide is for internal use only.",
+            attributes: { "data-testid": "query-reason-hint" }
           },
           value: values.reason,
           errorMessage: { text: fieldErrors["reason"] } if fieldErrors["reason"] else null,
@@ -79,7 +80,7 @@
         {# you" is either redundant or wrong.                                 #}
         {% if isUnassigned %}
           {{ govukInsetText({
-            text: "When you send the query, the application will also be assigned to you.",
+            text: "The operator query status will be updated.",
             attributes: { "data-testid": "query-assignment-notice" }
           }) }}
         {% endif %}
