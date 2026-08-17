@@ -343,7 +343,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v12',
+  templateVersion: 'v13',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -375,6 +375,16 @@ export const reAccreditationModule = {
     //      `submit-for-decision` / `reject` made non-caller-invocable
     //      (both hops now applied server-side by the `/decision` endpoint
     //      behind the Log decision CTA)
+    // v13: RA-351 backend added an `sla-extend` self-loop on `queried` so a
+    //      queried item projects the action into its `availableActions`
+    //      (making the Extend/Override due-date links available while an
+    //      application waits on a query). management-be bumps v12 -> v13 with
+    //      a ReAccreditationSlaExtendQuerySnapshotMigration. Not mirrored as
+    //      a transition here — the FE keys transition `actionId`s uniquely
+    //      and already has an `sla-extend` self-loop on
+    //      `assessment-in-progress`; the queried affordance rides
+    //      `canChangeDueDate` off the backend projection, not this list
+    //      (see the `sla-extend` transition comment above).
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11
@@ -414,7 +424,8 @@ export const reAccreditationModule = {
       v9: 're-accreditation/detail-v1',
       v10: 're-accreditation/detail-v1',
       v11: 're-accreditation/detail-v1',
-      v12: 're-accreditation/detail-v1'
+      v12: 're-accreditation/detail-v1',
+      v13: 're-accreditation/detail-v1'
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

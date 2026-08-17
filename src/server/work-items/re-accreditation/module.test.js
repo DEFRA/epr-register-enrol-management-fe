@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v12')
+    expect(reAccreditationType.templateVersion).toBe('v13')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
