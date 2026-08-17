@@ -292,14 +292,12 @@
                   </p>
 
                   {# RA-370. Material type then applicant type, in that order.   #}
-                  {# RA-434-processortype: applicant type is now the DECORATED   #}
-                  {# `item.applicantType` (read from the real                    #}
-                  {# `payload.wasteProcessingType` in controller.js's decorate), #}
-                  {# not a hard-coded literal — falls back to an em dash for a   #}
-                  {# work item that predates the field, matching every other     #}
-                  {# "no data" field on this card.                               #}
+                  {# RA-412. Applicant type is set by decorate() from the real   #}
+                  {# `payload.wasteProcessingType` field, falling back to        #}
+                  {# "Reprocessor" for work items submitted before that field    #}
+                  {# existed (RA-314).                                          #}
                   <p class="govuk-body app-application-card__title" data-testid="application-card-title">
-                    <span data-testid="material">{{ item.material or "—" }}</span> reaccreditation (<span data-testid="applicant-type">{{ item.applicantType or "—" }}</span>)
+                    <span data-testid="material">{{ item.material or "—" }}</span> reaccreditation (<span data-testid="applicant-type">{{ item.applicantType }}</span>)
                   </p>
 
                   {# RA-370. The footer always renders, because "Assigned to" is #}

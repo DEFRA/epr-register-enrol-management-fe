@@ -288,6 +288,45 @@ describe('#getWorkItems', () => {
     expect(calledUrl).not.toContain('nation=')
   })
 
+  // RA-412. Mirrors the nation param tests above.
+  test('Appends wasteProcessingType as a repeated query string param', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      wasteProcessingTypes: ['Exporter'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const calledUrl = fetchImpl.mock.calls[0][0]
+    expect(calledUrl).toContain('wasteProcessingType=Exporter')
+  })
+
+  test('Omits the wasteProcessingType param when wasteProcessingTypes is empty', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      wasteProcessingTypes: [],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const calledUrl = fetchImpl.mock.calls[0][0]
+    expect(calledUrl).not.toContain('wasteProcessingType=')
+  })
+
   test('Appends includeArchived=true when includeArchived is true', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
