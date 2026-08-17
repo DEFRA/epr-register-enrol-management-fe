@@ -352,9 +352,7 @@ describe('GET /work-items/{id}/query', () => {
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).toEqual(expect.stringContaining(NOTICE))
       expect(result).toEqual(
-        expect.stringContaining(
-          'When you send the query, the application will also be assigned to you.'
-        )
+        expect.stringContaining('The operator query status will be updated.')
       )
     })
 
@@ -375,7 +373,7 @@ describe('GET /work-items/{id}/query', () => {
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).not.toEqual(expect.stringContaining(NOTICE))
       expect(result).not.toEqual(
-        expect.stringContaining('will also be assigned to you')
+        expect.stringContaining('The operator query status will be updated.')
       )
     })
 
@@ -433,7 +431,7 @@ describe('GET /work-items/{id}/query', () => {
     expect(result).toEqual(expect.stringContaining('Reason for the query'))
     expect(result).toEqual(
       expect.stringContaining(
-        'This will be included in the email to the operator.'
+        'The reason you provide is for internal use only.'
       )
     )
     expect(result).toEqual(

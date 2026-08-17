@@ -13,6 +13,7 @@ import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { config } from '#/config/config.js'
+import { applicantTypeLabel } from './application-summary.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -574,7 +575,12 @@ function decorate(item) {
 
   // RA-324 phase-2. `slaState` is non-null exactly when the work item carries
   // an SLA clock, and it gates "Due on" alone.
-  const slaStarted = Boolean(item.slaState)
+  //
+  // RA-359 part 2. A terminal/withdrawn item now reports the new `Cancelled`
+  // SLA state (management-be) while keeping its `slaDueDate`. `Cancelled` is a
+  // STOPPED clock, not a running one, so it must not surface a live "Due on" —
+  // treat it exactly like "no active SLA". OnTrack/AtRisk/Breached unchanged.
+  const slaStarted = Boolean(item.slaState) && item.slaState !== 'Cancelled'
 
   return {
     ...item,
@@ -597,6 +603,11 @@ function decorate(item) {
     // "Fibre-based composite material"), matching the filter checkboxes,
     // active-filter chips and summary — never the raw lowercase token.
     material: materialLabel(item.payload?.material),
+    // RA-434-processortype. The applicant kind ("Reprocessor" / "Exporter"),
+    // read from the real `payload.wasteProcessingType` discriminator — `null`
+    // for a work item that predates the field, so the card can render its own
+    // fallback rather than ever claiming a wrong kind.
+    applicantType: applicantTypeLabel(item),
     // The two card dates are gated INDEPENDENTLY — see the block comment above
     // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
     // neither render.

@@ -586,6 +586,29 @@ describe('#workItemDetailController', () => {
     expect(result).toEqual(expect.stringContaining('Tasks outstanding'))
   })
 
+  // RA-317. Withdraw is an OPERATOR action. The generic apply-action route
+  // must reject a `withdraw`/`withdraw-*` id even though the backend is
+  // otherwise authoritative for actions — so a crafted POST that bypasses
+  // the removed UI control cannot withdraw a case from Case Management. The
+  // backend is never asked; the app renders its "action not available" page.
+  test.each(['withdraw', 'withdraw-during-decision', 'withdraw-during-query'])(
+    'POST action rejects the %s id without calling the backend',
+    async (actionId) => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+      const { statusCode, result } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/${ID}/actions/${actionId}`
+      })
+
+      expect(statusCode).toBe(statusCodes.conflict)
+      expect(result).toEqual(
+        expect.stringContaining('This action is not available.')
+      )
+      expect(applyWorkItemAction).not.toHaveBeenCalled()
+    }
+  )
+
   test('POST assign forwards the assignee id and a directory-resolved name to the API', async () => {
     registerReaccreditation()
     assignWorkItem.mockResolvedValue({
@@ -1044,8 +1067,11 @@ describe('#workItemDetailController', () => {
 
     // AC3. The reported bug, exactly as screenshotted: a queried
     // re-accreditation showed four green "Resume" buttons over a Withdraw
-    // link. Only the Withdraw link is real.
-    test('a queried item renders only Withdraw, and no Resume buttons', async () => {
+    // link. The Resume buttons are non-invocable and must not render.
+    // RA-317: Withdraw is an operator action and must not render in CM
+    // either, so a queried item whose only actions are Resume + Withdraw
+    // renders NO action affordances at all.
+    test('a queried item renders no Resume buttons and no Withdraw link', async () => {
       registerWorkItemType(reAccreditationType)
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -1058,16 +1084,23 @@ describe('#workItemDetailController', () => {
       const { result, statusCode } = await get()
 
       expect(statusCode).toBe(statusCodes.ok)
-      expect(actionTestIds(result)).toEqual(['action-withdraw-during-query'])
+      expect(actionTestIds(result)).toEqual([])
       expect(actionsPanel(result)).not.toContain('Resume')
+      expect(result).not.toContain('action-withdraw-during-query')
+      // RA-317 + RA-364. Withdraw is filtered in the controller BEFORE the
+      // template's length check, so a state whose only action was withdraw
+      // renders the empty-state notice, not an empty `work-item-actions` div.
+      expect(result).toContain('data-testid="work-item-no-actions"')
       for (const action of RESUME_ACTIONS) {
         expect(result).not.toContain(action.actionId)
       }
     })
 
     // AC4. Same defect, different state and label. Unreachable from the
-    // browser, so this is the only place it is pinned.
-    test('an updated item renders only Withdraw, and no Continue review controls', async () => {
+    // browser, so this is the only place it is pinned. RA-317: Withdraw is
+    // gone from CM too, so an updated item whose only actions are Continue
+    // review + Withdraw renders NO action affordances.
+    test('an updated item renders no Continue review controls and no Withdraw link', async () => {
       registerWorkItemType(reAccreditationType)
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -1080,8 +1113,13 @@ describe('#workItemDetailController', () => {
       const { result, statusCode } = await get()
 
       expect(statusCode).toBe(statusCodes.ok)
-      expect(actionTestIds(result)).toEqual(['action-withdraw-during-updated'])
+      expect(actionTestIds(result)).toEqual([])
       expect(actionsPanel(result)).not.toContain('Continue review')
+      expect(result).not.toContain('action-withdraw-during-updated')
+      // RA-317 + RA-364. Same invariant: withdraw is stripped in the
+      // controller, so the empty-state notice renders rather than an empty
+      // `work-item-actions` container.
+      expect(result).toContain('data-testid="work-item-no-actions"')
       for (const action of CONTINUE_REVIEW_ACTIONS) {
         expect(result).not.toContain(action.actionId)
       }
@@ -1189,10 +1227,12 @@ describe('#workItemDetailController', () => {
       }
     )
 
-    // AC6. The query/withdraw link special-casing is unchanged. Note the
-    // query link's testid is hardcoded `action-query` regardless of the
-    // real action id, while withdraw uses the id verbatim.
-    test('keeps the query and withdraw link special-casing intact', async () => {
+    // AC6. The query link special-casing is unchanged: the query link's
+    // testid is hardcoded `action-query` regardless of the real action id.
+    // RA-317: the withdraw link special-casing is GONE — a queried item
+    // renders the Query link but no withdraw affordance, and never links to
+    // the (removed) withdraw confirmation interstitial.
+    test('keeps the query link special-casing and drops the withdraw link', async () => {
       registerWorkItemType(reAccreditationType)
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -1213,18 +1253,18 @@ describe('#workItemDetailController', () => {
       const { result, statusCode } = await get()
 
       expect(statusCode).toBe(statusCodes.ok)
-      expect(actionTestIds(result)).toEqual([
-        'action-query',
-        'action-withdraw-during-query'
-      ])
+      expect(actionTestIds(result)).toEqual(['action-query'])
       expect(result).toContain(`/work-items/${ID}/query`)
-      expect(result).toContain(
+      expect(result).not.toContain('action-withdraw-during-query')
+      expect(result).not.toContain(
         `/work-items/${ID}/actions/withdraw-during-query/confirm`
       )
     })
 
     // A non-invocable query action must be filtered too — the special-cased
-    // branches read the same decorated list, so nothing sneaks past.
+    // branch reads the same decorated list, so nothing sneaks past. RA-317:
+    // withdraw no longer renders, so with query filtered out there are no
+    // action affordances left.
     test('filters a non-invocable query action out of the link row', async () => {
       registerWorkItemType(reAccreditationType)
       getWorkItem.mockResolvedValue({
@@ -1244,8 +1284,12 @@ describe('#workItemDetailController', () => {
 
       const { result } = await get()
 
-      expect(actionTestIds(result)).toEqual(['action-withdraw-during-query'])
+      expect(actionTestIds(result)).toEqual([])
       expect(result).not.toContain('data-testid="action-query"')
+      expect(result).not.toContain('action-withdraw-during-query')
+      // RA-317 + RA-364. Both actions stripped in the controller, so the
+      // honest empty-state notice renders rather than an empty container.
+      expect(result).toContain('data-testid="work-item-no-actions"')
     })
 
     // The filter is applied at the SOURCE, so it also covers a
@@ -2587,7 +2631,9 @@ describe('#workItemDetailController', () => {
 
     test('still renders actions the declaration does NOT mark non-invocable', async () => {
       // Guards against the filter over-reaching into a vacuous pass: the
-      // withdraw link must survive alongside the suppressed decision actions.
+      // Query link must survive alongside the suppressed decision actions.
+      // RA-317: withdraw is no longer a CM affordance, so the query link is
+      // now the survivor that proves the filter does not over-reach.
       registerReaccreditation()
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -2602,10 +2648,11 @@ describe('#workItemDetailController', () => {
               callerInvocable: true
             },
             {
-              actionId: 'withdraw-during-decision',
-              displayName: 'Withdraw',
+              actionId: 'query-during-decision',
+              displayName: 'Query',
               fromStateId: 'awaiting-decision',
-              toStateId: 'withdrawn'
+              toStateId: 'queried',
+              callerInvocable: true
             }
           ]
         })
@@ -2617,7 +2664,7 @@ describe('#workItemDetailController', () => {
       })
 
       expect(result).toEqual(
-        expect.stringContaining('data-testid="action-withdraw-during-decision"')
+        expect.stringContaining('data-testid="action-query"')
       )
       expect(result).not.toEqual(
         expect.stringContaining('data-testid="action-reject"')
@@ -2731,7 +2778,11 @@ describe('#workItemDetailController', () => {
     // tasks and their pre-query progress render through the existing
     // markup, and the "no tasks" message is gone.
 
-    test('renders the CTA alongside the Withdraw link rather than replacing it', async () => {
+    // RA-317: the updated-state item's only projected action is Withdraw,
+    // which must NOT render in CM. The Continue review CTA still renders
+    // (it is a type-specific affordance, not a projected action), so this
+    // now pins "CTA present, withdraw absent".
+    test('renders the CTA and does not render the Withdraw link', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({ ok: true, workItem: updatedWorkItem() })
 
@@ -2743,7 +2794,7 @@ describe('#workItemDetailController', () => {
       expect(result).toEqual(
         expect.stringContaining('data-testid="action-continue-review"')
       )
-      expect(result).toEqual(
+      expect(result).not.toEqual(
         expect.stringContaining('data-testid="action-withdraw-during-updated"')
       )
     })
@@ -3227,7 +3278,7 @@ describe('RA-295 individual work item page', () => {
         material: 'plastic',
         siteAddress: '2 Wyld Court, Addingrove, AA3 1AA',
         prns: {
-          plannedTonnageBand: 'UpTo1000',
+          plannedTonnageBand: 'UpTo5000',
           authorisers: [{ fullName: 'Harry Edge', email: 'harry@example.com' }]
         },
         samplingPlan: {
@@ -3356,7 +3407,7 @@ describe('RA-295 individual work item page', () => {
 
     // The actual submitted values render, not just the labels.
     expect(result).toContain('2 Wyld Court, Addingrove, AA3 1AA')
-    expect(result).toContain('Up to 1,000 tonnes')
+    expect(result).toContain('Up to 5,000 tonnes')
     expect(result).toContain('Harry Edge')
     expect(result).toContain('harry@example.com')
     expect(result).toContain('Sorting line investment')
@@ -3470,6 +3521,9 @@ describe('RA-295 individual work item page', () => {
       ok: true,
       workItem: fullPayloadWorkItem({
         payload: {
+          // RA-434-processortype: BES/ORS gate on the real
+          // wasteProcessingType discriminator, not overseasSites presence.
+          wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [
               {
@@ -3524,6 +3578,9 @@ describe('RA-295 individual work item page', () => {
       ok: true,
       workItem: fullPayloadWorkItem({
         payload: {
+          // RA-434-processortype: BES/ORS gate on the real
+          // wasteProcessingType discriminator, not overseasSites presence.
+          wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [
               {
@@ -3728,6 +3785,32 @@ describe('RA-295 individual work item page', () => {
     expect(result).toContain('data-testid="case-header-due-on"')
   })
 
+  // RA-359 part 2. A withdrawn/terminal item reports the new `Cancelled` SLA
+  // state (management-be) while KEEPING its `slaDueDate`. The header's "Due on"
+  // must not present that frozen date as a live deadline: the cell still
+  // renders (so the layout is stable) but its value degrades to the em dash,
+  // exactly as for a work item whose clock never started. This does NOT
+  // reintroduce the RA-295-removed SLA badge — asserted above.
+  test('suppresses the header Due on date for a Cancelled SLA (withdrawn item)', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        stateId: 'withdrawn',
+        slaState: 'Cancelled',
+        slaDueDate: '2026-08-24T09:00:00Z'
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    // The cell is still present (stable layout) but shows no live date.
+    expect(result).toContain('data-testid="case-header-due-on"')
+    expect(result).not.toContain('24 August 2026')
+  })
+
   // AC05 -------------------------------------------------------------
   test('AC05: the body uses the responsive two-thirds / one-third grid', async () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
@@ -3863,7 +3946,17 @@ describe('RA-295 individual work item page', () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: fullPayloadWorkItem({
-        payload: { overseasSites: { sites }, ...payload }
+        // RA-434-processortype: BES/ORS now gate on the real
+        // `wasteProcessingType` discriminator, not `overseasSites`
+        // presence — every caller of this helper is exercising exporter-only
+        // rendering, so it is the default here rather than repeated at each
+        // of the 17 call sites. `...payload` still wins if a test ever needs
+        // to override it.
+        payload: {
+          wasteProcessingType: 'exporter',
+          overseasSites: { sites },
+          ...payload
+        }
       })
     })
     const { result } = await server.inject({
@@ -4014,7 +4107,7 @@ describe('RA-295 individual work item page', () => {
     const authority = detailValue(
       await renderWithSites([], {
         prns: {
-          plannedTonnageBand: 'UpTo1000',
+          plannedTonnageBand: 'UpTo5000',
           authorisers: [
             {
               fullName: 'Grace Adeyemi',
@@ -4056,7 +4149,7 @@ describe('RA-295 individual work item page', () => {
     const authority = detailValue(
       await renderWithSites([], {
         prns: {
-          plannedTonnageBand: 'UpTo1000',
+          plannedTonnageBand: 'UpTo5000',
           authorisers: [
             {
               fullName: 'Grace Adeyemi',
@@ -4089,7 +4182,7 @@ describe('RA-295 individual work item page', () => {
 
   test('RA-292 AC03: an application with no authorisers renders an em dash', async () => {
     const authority = detailValue(
-      await renderWithSites([], { prns: { plannedTonnageBand: 'UpTo1000' } }),
+      await renderWithSites([], { prns: { plannedTonnageBand: 'UpTo5000' } }),
       'authority-to-issue'
     )
     expect(authority).not.toContain('authority-to-issue-contact')

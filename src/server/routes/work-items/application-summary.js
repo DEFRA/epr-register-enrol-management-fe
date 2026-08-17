@@ -32,9 +32,9 @@ export const EM_DASH = '—'
 
 const TONNAGE_BAND_LABELS = {
   UpTo500: 'Up to 500 tonnes',
-  UpTo1000: 'Up to 1,000 tonnes',
+  UpTo5000: 'Up to 5,000 tonnes',
   UpTo10000: 'Up to 10,000 tonnes',
-  Over10000: 'Over 10,000 tonnes'
+  Over10000: 'More than 10,000 tonnes'
 }
 
 const BUSINESS_PLAN_CATEGORIES = [
@@ -46,58 +46,47 @@ const BUSINESS_PLAN_CATEGORIES = [
   { key: 'newUses', label: 'New uses' }
 ]
 
+const APPLICANT_TYPE_LABEL = {
+  reprocessor: 'Reprocessor',
+  exporter: 'Exporter'
+}
+
+/**
+ * RA-434-processortype. The real applicant-kind discriminator: re-ex's
+ * `wasteProcessingType` ("reprocessor" | "exporter"), threaded through by
+ * `HttpCaseWorkingApiAdapter.BuildPayload` (backend) on every submission
+ * going through the current adapter. management-be's `WorkItem.Payload` is a
+ * schemaless BsonDocument, so the field survives storage untouched and is
+ * present on `workItem.payload.wasteProcessingType` in every API response —
+ * it was simply never read on this side until now (see the former
+ * `overseasSites`-presence proxy this replaced, epr-ow16).
+ *
+ * Lower-cased on read since nothing in the wire contract guarantees casing.
+ * Returns `null` for a work item that predates this field (old data, or any
+ * future submission path that doesn't set it) rather than guessing — every
+ * caller must decide its own fallback display, so a missing value can never
+ * silently render as "Reprocessor" again.
+ */
+export function applicantTypeOf(workItem) {
+  const raw = workItem?.payload?.wasteProcessingType
+  return typeof raw === 'string' ? raw.toLowerCase() : null
+}
+
+/**
+ * The applicant-kind DISPLAY LABEL. Only the two tokens re-ex actually sends
+ * resolve to a label — an unrecognised value falls through to `null`, same
+ * as an absent field, rather than guessing.
+ */
+export function applicantTypeLabel(workItem) {
+  return APPLICANT_TYPE_LABEL[applicantTypeOf(workItem)] ?? null
+}
+
 /**
  * AC02 items 9 and 10 (BES and ORS) render for exporter applications only.
- *
- * TODO(RA-295): this is a PROXY for "the application type is Exporter", not
- * a type check — management-be carries no reprocessor/exporter discriminator
- * at all today (confirmed with the management-be owner on this story). The
- * upstream source of truth is ReEx's `wasteProcessingType`
- * ("reprocessor" | "exporter"), which the operator backend already turns into
- * `AccreditationApplicationModel.IsExporter` to gate its own BES / overseas
- * sites journey — but `HttpCaseWorkingApiAdapter.BuildPayload` never writes it
- * into the work item payload, and `typeId` is hard-coded `re-accreditation`
- * for both operator types. So there is no `payload.applicationType` /
- * `operatorType` / exporter `typeId` to read; reading one would silently never
- * match while looking like a working type check.
- *
- * The only signal that exists is whether the operator actually declared any
- * overseas reprocessing sites. `payload.overseasSites` itself is emitted
- * unconditionally (it degrades to `{ sites: [] }` for reprocessors), so the
- * test has to be on the site list being NON-EMPTY.
- *
- * THE PROXY IS WRONG IN BOTH DIRECTIONS. It is not merely imprecise:
- *
- *   - False negative — an Exporter who has NOT YET added an overseas site is
- *     indistinguishable from a Reprocessor, so BES/ORS are hidden from them,
- *     which is precisely what AC02 items 9-10 require to be shown.
- *   - False positive — a Reprocessor that DOES carry `overseasSites` gets
- *     both sections shown, which AC02 forbids.
- *
- * Hiding for a reprocessor with no sites is the common case and the required
- * default, which is why this ships — but do not read that as "correct for
- * every reprocessor".
- *
- * Replace this with the real discriminator once the payload carries one — see
- * epr-ow16 (add `isExporter` to `BuildPayload` in the operator backend plus a
- * matching property in management-be).
- *
- * When you do, the regression suite needs THREE fixtures, not one, because
- * each direction above fails independently:
- *
- *   1. Exporter WITH overseas sites      -> true positive
- *   2. Exporter WITHOUT overseas sites   -> catches the false negative
- *   3. Reprocessor WITH overseas sites   -> catches the false positive
- *
- * Fixture 2 is the one that looks redundant next to fixture 1 and will be
- * dropped by someone tidying up. Do not drop it: it is the ONLY fixture that
- * fails if a future reader decides this proxy is good enough to keep.
- *
- * Note: do NOT reach for `siteType` on an overseas site — that distinguishes
- * "ors" from "interim" sites, and is not an operator-type field.
+ * Reads the real discriminator via `applicantTypeOf` above.
  */
 export function isExporterApplication(workItem) {
-  return overseasSitesOf(workItem).length > 0
+  return applicantTypeOf(workItem) === 'exporter'
 }
 
 export function buildSiteAddressLines(payload) {
@@ -617,13 +606,11 @@ export function buildApplicationSummary({ workItem }) {
       // into this generic route.
       //
       // Deliberately NOT prefixed with an applicant kind ("Reprocessor" /
-      // "Exporter"). The `overseasSites` proxy below is only safe in one
-      // direction: hiding BES/ORS when the signal is missing is a
-      // conservative default, whereas PRINTING "Reprocessor" is a positive
-      // factual claim — and by that proxy's own logic an exporter who has
-      // not yet added a site would be labelled a Reprocessor on a
-      // regulator's case screen. Restore the prefix only once a real
-      // discriminator reaches the payload (epr-ow16).
+      // "Exporter"), even though `applicantTypeOf` (RA-434-processortype) now
+      // reads the REAL `wasteProcessingType` discriminator rather than the
+      // old `overseasSites`-presence proxy. Whether AC02's "Type" row should
+      // show a prefix (e.g. "Glass — Exporter") is a product/BA decision, not
+      // just an engineering one — flagged rather than silently changed here.
       value: workItem?.typeDisplayName || workItem?.typeId || EM_DASH
     },
     {

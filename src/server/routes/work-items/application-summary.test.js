@@ -3,6 +3,8 @@ import { describe, expect, test } from 'vitest'
 import { realOperatorSubmissionPayload } from '#/test-helpers/real-operator-submission-payload.js'
 import { buildCaseHeader } from './case-header.js'
 import {
+  applicantTypeLabel,
+  applicantTypeOf,
   buildApplicationSummary,
   buildAuthorityToIssueContacts,
   buildBusinessPlanPairs,
@@ -53,7 +55,7 @@ const REPROCESSOR = {
       postcode: 'AA3 1AA'
     },
     prns: {
-      plannedTonnageBand: 'UpTo1000',
+      plannedTonnageBand: 'UpTo5000',
       authorisers: [
         { fullName: 'Harry Edge', email: 'harry@example.com' },
         { fullName: 'Rosina Campbell', email: 'rosina@example.com' }
@@ -87,6 +89,8 @@ const EXPORTER = {
   ...REPROCESSOR,
   payload: {
     ...REPROCESSOR.payload,
+    // RA-434-processortype. The real applicant-kind discriminator.
+    wasteProcessingType: 'exporter',
     overseasSites: {
       sites: [
         {
@@ -111,9 +115,9 @@ const EXPORTER = {
 describe('#tonnageBandLabel', () => {
   test('maps every known band to its human label', () => {
     expect(tonnageBandLabel('UpTo500')).toBe('Up to 500 tonnes')
-    expect(tonnageBandLabel('UpTo1000')).toBe('Up to 1,000 tonnes')
+    expect(tonnageBandLabel('UpTo5000')).toBe('Up to 5,000 tonnes')
     expect(tonnageBandLabel('UpTo10000')).toBe('Up to 10,000 tonnes')
-    expect(tonnageBandLabel('Over10000')).toBe('Over 10,000 tonnes')
+    expect(tonnageBandLabel('Over10000')).toBe('More than 10,000 tonnes')
   })
 
   test('passes an unknown band through rather than hiding it', () => {
@@ -204,63 +208,93 @@ describe('#buildBusinessPlanPairs', () => {
   })
 })
 
-describe('#isExporterApplication (RA-295 AC02 items 9 & 10)', () => {
-  test('is false for a reprocessor — no overseas sites declared', () => {
+describe('#applicantTypeOf / #applicantTypeLabel (RA-434-processortype)', () => {
+  test('reads the real wasteProcessingType discriminator, lower-cased', () => {
+    expect(
+      applicantTypeOf({ payload: { wasteProcessingType: 'exporter' } })
+    ).toBe('exporter')
+    expect(
+      applicantTypeOf({ payload: { wasteProcessingType: 'Reprocessor' } })
+    ).toBe('reprocessor')
+  })
+
+  test('resolves to the display label for each known token', () => {
+    expect(
+      applicantTypeLabel({ payload: { wasteProcessingType: 'reprocessor' } })
+    ).toBe('Reprocessor')
+    expect(
+      applicantTypeLabel({ payload: { wasteProcessingType: 'exporter' } })
+    ).toBe('Exporter')
+  })
+
+  // applicantTypeOf resolves to null ONLY for a genuinely absent field — an
+  // unrecognised token is passed through as-is (it is applicantTypeLabel's
+  // job, tested separately below, to turn that into null rather than a
+  // guessed label).
+  test('resolves to null for an absent field, passing an unrecognised token through unchanged', () => {
+    expect(applicantTypeOf(undefined)).toBeNull()
+    expect(applicantTypeOf({})).toBeNull()
+    expect(applicantTypeOf({ payload: {} })).toBeNull()
+    expect(
+      applicantTypeOf({ payload: { wasteProcessingType: 'something-else' } })
+    ).toBe('something-else')
+  })
+
+  test('applicantTypeLabel resolves to null, never a guessed label, for an absent or unrecognised value', () => {
+    expect(applicantTypeLabel(undefined)).toBeNull()
+    expect(
+      applicantTypeLabel({ payload: { wasteProcessingType: 'something-else' } })
+    ).toBeNull()
+  })
+})
+
+describe('#isExporterApplication (RA-295 AC02 items 9 & 10, RA-434-processortype)', () => {
+  test('is false for a reprocessor, regardless of overseasSites', () => {
     expect(isExporterApplication(REPROCESSOR)).toBe(false)
   })
 
-  test('is false when the payload carries an empty overseasSites list', () => {
-    // The operator backend emits `overseasSites` unconditionally, degrading
-    // to `{ sites: [] }` for reprocessors — so its mere presence must not
-    // flip the conditional.
-    expect(
-      isExporterApplication({ payload: { overseasSites: { sites: [] } } })
-    ).toBe(false)
-  })
-
-  test('is true once at least one overseas reprocessing site is declared', () => {
+  test('is true for an exporter, regardless of overseasSites', () => {
     expect(isExporterApplication(EXPORTER)).toBe(true)
   })
 
-  // KNOWN LIMITATION, pinned deliberately (epr-ow16).
-  //
-  // These two assert the proxy's WRONG answers, not desired behaviour, so
-  // the limitation is executable rather than only a comment. Both should
-  // FAIL the moment a real `isExporter` discriminator lands — that failure
-  // is the point: it forces whoever implements epr-ow16 to confront both
-  // directions instead of fixing the one they happened to think of.
-  test('KNOWN WRONG: an Exporter with no sites yet is misread as not-exporter', () => {
+  // The two directional cases the former `overseasSites`-presence proxy got
+  // wrong (epr-ow16) — kept as regression fixtures now proving the REAL
+  // discriminator is read instead, not the proxy's site-list emptiness.
+  test('an Exporter with no sites yet is still read as an exporter', () => {
     // AC02 items 9-10 require BES/ORS to be shown for this application; the
-    // proxy hides them, because "declared an overseas site" is not the same
-    // question as "is an Exporter".
+    // old proxy hid them, because "declared an overseas site" was never the
+    // same question as "is an Exporter".
     const exporterBeforeAddingSites = {
       typeId: 're-accreditation',
       payload: {
         organisationName: 'Exporter Ltd',
+        wasteProcessingType: 'exporter',
         overseasSites: { sites: [] }
       }
     }
-    expect(isExporterApplication(exporterBeforeAddingSites)).toBe(false)
+    expect(isExporterApplication(exporterBeforeAddingSites)).toBe(true)
   })
 
-  test('KNOWN WRONG: a Reprocessor carrying overseas sites is misread as exporter', () => {
-    // The mirror-image defect: AC02 forbids showing BES/ORS here.
+  test('a Reprocessor carrying overseas sites is still read as not-exporter', () => {
+    // The mirror-image case: AC02 forbids showing BES/ORS here, even though
+    // the site list is non-empty.
     const reprocessorWithSites = {
       typeId: 're-accreditation',
       payload: {
         organisationName: 'Reprocessor Ltd',
+        wasteProcessingType: 'reprocessor',
         overseasSites: { sites: [{ siteName: 'X' }] }
       }
     }
-    expect(isExporterApplication(reprocessorWithSites)).toBe(true)
+    expect(isExporterApplication(reprocessorWithSites)).toBe(false)
   })
 
-  test('is false for absent / malformed payloads rather than throwing', () => {
+  test('is false — the safe default — for an absent or unrecognised wasteProcessingType', () => {
     expect(isExporterApplication(undefined)).toBe(false)
     expect(isExporterApplication({})).toBe(false)
     expect(isExporterApplication({ payload: {} })).toBe(false)
     expect(
-      isExporterApplication({ payload: { overseasSites: { sites: 'nope' } } })
+      isExporterApplication({ payload: { wasteProcessingType: 'unknown' } })
     ).toBe(false)
   })
 })
@@ -313,11 +347,10 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     ).toBe('Re-accreditation')
   })
 
-  // The `overseasSites` proxy is safe for HIDING BES/ORS but not for
-  // asserting an applicant kind: printing "Reprocessor" would be a positive
-  // factual claim the backend never makes, and by that proxy's own logic an
-  // exporter who has not yet added a site would be mislabelled "Reprocessor"
-  // on a regulator's case screen.
+  // RA-434-processortype: the "Type" row deliberately still carries no
+  // applicant-kind prefix — see the comment on that row in
+  // application-summary.js. Restoring one is a product/BA decision, not
+  // made here.
   test('never claims an applicant kind the backend does not send', () => {
     for (const workItem of [REPROCESSOR, EXPORTER]) {
       const typeRow = row(buildApplicationSummary({ workItem }).rows, 'type')
@@ -484,7 +517,12 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
 
   test('names an overseas site with an em dash when it has none', () => {
     const { rows } = buildApplicationSummary({
-      workItem: { payload: { overseasSites: { sites: [{}] } } }
+      workItem: {
+        payload: {
+          wasteProcessingType: 'exporter',
+          overseasSites: { sites: [{}] }
+        }
+      }
     })
     expect(row(rows, 'ors').sites[0]).toMatchObject({
       siteName: EM_DASH,
@@ -609,7 +647,7 @@ describe('real operator submission payload contract', () => {
     ])
     expect(row(rows, 'type').value).toBe('Re-accreditation')
     expect(row(rows, 'material').value).toBe('Plastic')
-    expect(row(rows, 'prn-tonnage').value).toBe('Up to 1,000 tonnes')
+    expect(row(rows, 'prn-tonnage').value).toBe('Up to 5,000 tonnes')
     expect(row(rows, 'prn-authorisers').values).toEqual(['Bob Jones'])
     expect(authorityLines(rows)).toEqual(['Bob Jones (bob@example.com)'])
 
@@ -1139,6 +1177,7 @@ describe('#buildInterimSite (RA-292 AC02 + AC04)', () => {
     const { rows } = buildApplicationSummary({
       workItem: {
         payload: {
+          wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [{ siteName: 'Rotterdam', interimSite: INTERIM }]
           }

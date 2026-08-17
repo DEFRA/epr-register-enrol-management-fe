@@ -78,6 +78,24 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(header, 'material')).toBe('Glass - Other')
   })
 
+  // RA-359 part 2. management-be keeps `slaDueDate` on a terminal/withdrawn
+  // item but reports the new `slaState: 'Cancelled'`. A stopped clock must not
+  // read as a live deadline, so "Due on" degrades to the em dash — exactly as
+  // it does for a work item whose clock never started.
+  test('suppresses the Due on date for a Cancelled SLA (RA-359 part 2)', () => {
+    const header = buildCaseHeader({
+      workItem: { ...workItem, slaState: 'Cancelled' }
+    })
+    expect(metaValue(header, 'due-on')).toBe(EM_DASH)
+  })
+
+  test('keeps the Due on date for a running SLA (OnTrack) unchanged', () => {
+    const header = buildCaseHeader({
+      workItem: { ...workItem, slaState: 'OnTrack' }
+    })
+    expect(metaValue(header, 'due-on')).toBe('24 August 2026')
+  })
+
   test('keeps the shared state-badge colour on the status entry', () => {
     const header = buildCaseHeader({ workItem })
     const status = header.meta.find((entry) => entry.key === 'status')
@@ -139,8 +157,8 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
   })
 })
 
-describe('#buildCaseTabs (RA-295)', () => {
-  test('marks the summary tab active and links the history tab to the audit log', () => {
+describe('#buildCaseTabs (RA-295, RA-434)', () => {
+  test('marks the summary tab active and links the other two tabs to their pages', () => {
     const tabs = buildCaseTabs({ workItemId: 'w 1', active: 'summary' })
 
     expect(tabs).toEqual([
@@ -155,12 +173,26 @@ describe('#buildCaseTabs (RA-295)', () => {
         text: 'Application history',
         href: '/work-items/w%201/audit-log',
         active: false
+      },
+      {
+        key: 'additional-information',
+        text: 'Additional information',
+        href: '/work-items/w%201/additional-information',
+        active: false
       }
     ])
   })
 
   test('marks the history tab active on the audit log page', () => {
     const tabs = buildCaseTabs({ workItemId: 'w-1', active: 'history' })
-    expect(tabs.map((t) => t.active)).toEqual([false, true])
+    expect(tabs.map((t) => t.active)).toEqual([false, true, false])
+  })
+
+  test('marks the additional information tab active on its page (RA-434)', () => {
+    const tabs = buildCaseTabs({
+      workItemId: 'w-1',
+      active: 'additional-information'
+    })
+    expect(tabs.map((t) => t.active)).toEqual([false, false, true])
   })
 })

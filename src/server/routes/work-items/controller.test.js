@@ -115,10 +115,10 @@ describe('#workItemListController', () => {
     expect(result).toEqual(
       expect.stringContaining('11111111-1111-1111-1111-111111111111')
     )
-    // RA-324 phase-2: applicant type on the card is always the literal
-    // "Reprocessor" (not the work-item type display name).
+    // RA-434-processortype: a work item with no `wasteProcessingType` on its
+    // payload renders the applicant-type em dash, never a guessed label.
     expect(result).toEqual(
-      expect.stringContaining('data-testid="applicant-type">Reprocessor</span>')
+      expect.stringContaining('data-testid="applicant-type">—</span>')
     )
     // State badge text = the state display name (RA-324 contract label).
     expect(result).toEqual(expect.stringContaining('Not started'))
@@ -278,8 +278,8 @@ describe('#workItemListController', () => {
   })
 
   // RA-324 phase-2, re-ordered by RA-370: the "{Org} ({Org ID})" line now
-  // precedes the "{Material} reaccreditation (Reprocessor)" title line, so
-  // material leads the title and applicant type follows it.
+  // precedes the "{Material} reaccreditation ({Applicant type})" title line,
+  // so material leads the title and applicant type follows it.
   test('Renders the card title, applicant type, material and org line', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
@@ -294,7 +294,9 @@ describe('#workItemListController', () => {
             payload: {
               material: 'plastic',
               organisationName: 'Acme Recycling',
-              operatorOrganisationId: 'ORG-4242'
+              operatorOrganisationId: 'ORG-4242',
+              // RA-434-processortype.
+              wasteProcessingType: 'reprocessor'
             }
           }
         ],
@@ -326,6 +328,44 @@ describe('#workItemListController', () => {
     // RA-324 prototype fix: the title is normal weight, not bold.
     expect(result).not.toContain(
       'govuk-!-font-weight-bold app-application-card__title'
+    )
+  })
+
+  // RA-434-processortype: the bug this fixes. Global Glass Exports-style
+  // fixture — an Exporter reaccreditation must render "Exporter", not the
+  // literal "Reprocessor" every card used to show unconditionally.
+  test('Renders "Exporter" on the card for an exporter work item (RA-434-processortype)', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: {
+              material: 'glass',
+              organisationName: 'Global Glass Exports',
+              operatorOrganisationId: 'ORG-5006',
+              registrationNumber: 'EXP-5006',
+              wasteProcessingType: 'exporter'
+            }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="applicant-type">Exporter</span>')
+    expect(result).not.toContain(
+      'data-testid="applicant-type">Reprocessor</span>'
     )
   })
 
@@ -484,6 +524,44 @@ describe('#workItemListController', () => {
     expect(result.indexOf('data-testid="submitted-on"')).toBeLessThan(
       result.indexOf('data-testid="assigned-to"')
     )
+  })
+
+  // RA-359 part 2. A withdrawn/terminal item reports the new `Cancelled` SLA
+  // state (management-be) while KEEPING its `slaDueDate`. The stopped clock
+  // must NOT surface a live "Due on" — it is gated off exactly like a
+  // not-started clock, while the rest of the footer (Assigned to) still shows.
+  test('Hides Due on for a Cancelled SLA (withdrawn item) but keeps the footer', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+            typeId: 'unknown-type',
+            stateId: 'withdrawn',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: 'frontend',
+            assignedToName: 'Olga Officer',
+            slaState: 'Cancelled',
+            // Retained by management-be, but the clock is stopped: must not show.
+            slaDueDate: '2026-02-10T00:00:00Z',
+            payload: { operatorOrganisationId: 'ORG-4242' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="application-card-footer"')
+    expect(result).toContain('data-testid="assigned-to">Olga Officer</span>')
+    // The stopped clock is gated off just like a not-started one.
+    expect(result).not.toContain('data-testid="due-on"')
+    expect(result).not.toContain('10 February 2026')
   })
 
   // RA-370 AC04. The assignee's display name shows when the case is held by an

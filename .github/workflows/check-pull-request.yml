@@ -14,6 +14,9 @@ jobs:
   pr-validator:
     name: Run Pull Request Checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -33,6 +36,33 @@ jobs:
           npm run format:check
           npm run lint
           npm test
+
+      # `npm test` (vitest --coverage) already fails this job if coverage drops
+      # below the thresholds in vitest.config.js — this step just surfaces the
+      # numbers on the PR. Runs even when the step above failed the gate.
+      - name: Report coverage on PR
+        if: always()
+        run: |
+          node -e "
+            const s = require('./coverage/coverage-summary.json').total;
+            const row = (k, label) => \`| \${label} | \${s[k].pct}% | \${s[k].covered}/\${s[k].total} |\`;
+            console.log([
+              '### Test coverage — epr-register-enrol-management-fe',
+              '| Metric | Coverage | Covered/Total |',
+              '|---|---|---|',
+              row('statements', 'Statements'),
+              row('branches', 'Branches'),
+              row('functions', 'Functions'),
+              row('lines', 'Lines')
+            ].join('\n'));
+          " > /tmp/coverage-comment.md
+
+      - name: Comment coverage on PR
+        if: always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: coverage
+          path: /tmp/coverage-comment.md
 
       - name: Test Docker Image Build
         run: |
