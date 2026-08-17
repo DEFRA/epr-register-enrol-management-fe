@@ -115,10 +115,10 @@ describe('#workItemListController', () => {
     expect(result).toEqual(
       expect.stringContaining('11111111-1111-1111-1111-111111111111')
     )
-    // RA-324 phase-2: applicant type on the card is always the literal
-    // "Reprocessor" (not the work-item type display name).
+    // RA-434-processortype: a work item with no `wasteProcessingType` on its
+    // payload renders the applicant-type em dash, never a guessed label.
     expect(result).toEqual(
-      expect.stringContaining('data-testid="applicant-type">Reprocessor</span>')
+      expect.stringContaining('data-testid="applicant-type">—</span>')
     )
     // State badge text = the state display name (RA-324 contract label).
     expect(result).toEqual(expect.stringContaining('Not started'))
@@ -278,8 +278,8 @@ describe('#workItemListController', () => {
   })
 
   // RA-324 phase-2, re-ordered by RA-370: the "{Org} ({Org ID})" line now
-  // precedes the "{Material} reaccreditation (Reprocessor)" title line, so
-  // material leads the title and applicant type follows it.
+  // precedes the "{Material} reaccreditation ({Applicant type})" title line,
+  // so material leads the title and applicant type follows it.
   test('Renders the card title, applicant type, material and org line', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
@@ -294,7 +294,9 @@ describe('#workItemListController', () => {
             payload: {
               material: 'plastic',
               organisationName: 'Acme Recycling',
-              operatorOrganisationId: 'ORG-4242'
+              operatorOrganisationId: 'ORG-4242',
+              // RA-434-processortype.
+              wasteProcessingType: 'reprocessor'
             }
           }
         ],

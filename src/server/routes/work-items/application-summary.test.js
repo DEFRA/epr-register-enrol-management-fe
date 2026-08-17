@@ -3,6 +3,8 @@ import { describe, expect, test } from 'vitest'
 import { realOperatorSubmissionPayload } from '#/test-helpers/real-operator-submission-payload.js'
 import { buildCaseHeader } from './case-header.js'
 import {
+  applicantTypeLabel,
+  applicantTypeOf,
   buildApplicationSummary,
   buildAuthorityToIssueContacts,
   buildBusinessPlanPairs,
@@ -316,11 +318,10 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     ).toBe('Re-accreditation')
   })
 
-  // The `overseasSites` proxy is safe for HIDING BES/ORS but not for
-  // asserting an applicant kind: printing "Reprocessor" would be a positive
-  // factual claim the backend never makes, and by that proxy's own logic an
-  // exporter who has not yet added a site would be mislabelled "Reprocessor"
-  // on a regulator's case screen.
+  // RA-434-processortype: the "Type" row deliberately still carries no
+  // applicant-kind prefix — see the comment on that row in
+  // application-summary.js. Restoring one is a product/BA decision, not
+  // made here.
   test('never claims an applicant kind the backend does not send', () => {
     for (const workItem of [REPROCESSOR, EXPORTER]) {
       const typeRow = row(buildApplicationSummary({ workItem }).rows, 'type')

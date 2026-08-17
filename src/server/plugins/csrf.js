@@ -48,7 +48,11 @@ export const csrfProtection = {
     },
     skip(request) {
       const path = request.path
-      return path === '/auth/regulator/callback' || path === '/health'
+      return (
+        path === '/auth/regulator/callback' ||
+        path === '/health' ||
+        path === '/health/ready'
+      )
     }
   }
 }
