@@ -3521,8 +3521,6 @@ describe('RA-295 individual work item page', () => {
       ok: true,
       workItem: fullPayloadWorkItem({
         payload: {
-          // RA-434-processortype: BES/ORS gate on the real
-          // wasteProcessingType discriminator, not overseasSites presence.
           wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [
@@ -3565,10 +3563,10 @@ describe('RA-295 individual work item page', () => {
       'data-testid="overseas-site-address"'
     )
     expect(result).toContain('1 Overseas Lane, Rotterdam')
-    // Even on an exporter the Type row must not claim "Exporter": the
-    // overseasSites signal gates the BES/ORS SECTIONS, it is not evidence of
-    // an applicant type. Positive assertion first, so the negative below is
-    // scoped to a row that demonstrably exists.
+    // Even on an exporter the Type row must not claim "Exporter" — AC02 never
+    // asked for that prefix on this row (see the comment on it in
+    // application-summary.js). Positive assertion first, so the negative
+    // below is scoped to a row that demonstrably exists.
     expect(detailRow(result, 'type')).toContain('Re-accreditation')
     expect(detailRow(result, 'type')).not.toContain('Exporter')
   })
@@ -3578,8 +3576,6 @@ describe('RA-295 individual work item page', () => {
       ok: true,
       workItem: fullPayloadWorkItem({
         payload: {
-          // RA-434-processortype: BES/ORS gate on the real
-          // wasteProcessingType discriminator, not overseasSites presence.
           wasteProcessingType: 'exporter',
           overseasSites: {
             sites: [
@@ -3946,12 +3942,10 @@ describe('RA-295 individual work item page', () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: fullPayloadWorkItem({
-        // RA-434-processortype: BES/ORS now gate on the real
-        // `wasteProcessingType` discriminator, not `overseasSites`
-        // presence — every caller of this helper is exercising exporter-only
-        // rendering, so it is the default here rather than repeated at each
-        // of the 17 call sites. `...payload` still wins if a test ever needs
-        // to override it.
+        // RA-412: every caller of this helper is exercising ORS/BES
+        // rendering, which now gates on the real `wasteProcessingType`
+        // field rather than the presence of `overseasSites` — default it to
+        // 'exporter' here so callers don't each have to repeat it.
         payload: {
           wasteProcessingType: 'exporter',
           overseasSites: { sites },

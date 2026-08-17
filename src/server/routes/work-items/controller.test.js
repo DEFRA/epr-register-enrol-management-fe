@@ -115,10 +115,12 @@ describe('#workItemListController', () => {
     expect(result).toEqual(
       expect.stringContaining('11111111-1111-1111-1111-111111111111')
     )
-    // RA-434-processortype: a work item with no `wasteProcessingType` on its
-    // payload renders the applicant-type em dash, never a guessed label.
+    // RA-412: a work item with no `wasteProcessingType` on its payload falls
+    // back to "Reprocessor" — the value every card showed before this fix,
+    // preserving on-screen behaviour for pre-RA-314 data (see the dedicated
+    // fallback test below).
     expect(result).toEqual(
-      expect.stringContaining('data-testid="applicant-type">—</span>')
+      expect.stringContaining('data-testid="applicant-type">Reprocessor</span>')
     )
     // State badge text = the state display name (RA-324 contract label).
     expect(result).toEqual(expect.stringContaining('Not started'))
@@ -331,25 +333,23 @@ describe('#workItemListController', () => {
     )
   })
 
-  // RA-434-processortype: the bug this fixes. Global Glass Exports-style
-  // fixture — an Exporter reaccreditation must render "Exporter", not the
-  // literal "Reprocessor" every card used to show unconditionally.
-  test('Renders "Exporter" on the card for an exporter work item (RA-434-processortype)', async () => {
+  // RA-412. The applicant-type label is read from the real
+  // `payload.wasteProcessingType` field (added upstream by RA-314), not the
+  // literal "Reprocessor" every card previously showed regardless of data.
+  test('RA-412: renders "Exporter" for a work item whose payload is flagged exporter', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
         items: [
           {
-            id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
             typeId: 'unknown-type',
             stateId: 'submitted',
             submittedAt: '2026-01-15T10:00:00Z',
             submittedBy: null,
             payload: {
-              material: 'glass',
+              material: 'plastic',
               organisationName: 'Global Glass Exports',
-              operatorOrganisationId: 'ORG-5006',
-              registrationNumber: 'EXP-5006',
               wasteProcessingType: 'exporter'
             }
           }
@@ -366,6 +366,119 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="applicant-type">Exporter</span>')
     expect(result).not.toContain(
       'data-testid="applicant-type">Reprocessor</span>'
+    )
+  })
+
+  test('RA-412: matches wasteProcessingType case-insensitively', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: { wasteProcessingType: 'Exporter' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="applicant-type">Exporter</span>')
+  })
+
+  test('RA-412: falls back to "Reprocessor" for a pre-RA-314 work item with no wasteProcessingType', async () => {
+    clearWorkItemRegistry()
+    getWorkItems.mockResolvedValue(
+      emptyPage({
+        items: [
+          {
+            id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            typeId: 'unknown-type',
+            stateId: 'submitted',
+            submittedAt: '2026-01-15T10:00:00Z',
+            submittedBy: null,
+            payload: { material: 'plastic' }
+          }
+        ],
+        totalCount: 1
+      })
+    )
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: '/work-items'
+    })
+
+    expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
+  })
+
+  test('RA-412: Applicant type "Exporter" alone maps onto the real typeId AND narrows via wasteProcessingTypes', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=exporter&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // `exporter` is never a real typeId — it maps onto `re-accreditation`
+        // so an Exporter-only selection still carries a real type constraint
+        // (rather than an empty `typeIds`, which the backend reads as "no
+        // type filter" and would return everything).
+        typeIds: ['re-accreditation'],
+        wasteProcessingTypes: ['Exporter']
+      })
+    )
+  })
+
+  // PR #179 review fix: this used to send no wasteProcessingTypes narrowing
+  // at all, so a Reprocessor-only filter could return (and label) Exporter
+  // items. management-be#118 treats any non-"exporter" WasteProcessingTypes
+  // value as "not exporter", which already includes pre-RA-314 items with no
+  // wasteProcessingType field, so narrowing here does not drop legacy items.
+  test('RA-412: Applicant type "Reprocessor" alone narrows via wasteProcessingTypes', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typeIds: ['re-accreditation'],
+        wasteProcessingTypes: ['Reprocessor']
+      })
+    )
+  })
+
+  // Review fix: the backend ANDs typeIds and wasteProcessingTypes, so
+  // selecting BOTH Reprocessor and Exporter must not narrow to Exporter-only
+  // results — it must behave as "either applicant type", i.e. no
+  // wasteProcessingTypes narrowing at all.
+  test('RA-412: selecting both Reprocessor AND Exporter sends no wasteProcessingTypes narrowing', async () => {
+    getWorkItems.mockResolvedValue(emptyPage())
+
+    await server.inject({
+      method: 'GET',
+      url: '/work-items?typeId=re-accreditation&typeId=exporter&filtersApplied=1'
+    })
+
+    expect(getWorkItems).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typeIds: ['re-accreditation'],
+        wasteProcessingTypes: []
+      })
     )
   })
 
@@ -1142,9 +1255,13 @@ describe('#workItemListController', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        // Exporter is a placeholder typeId with no data — still forwarded so
-        // it returns zero results.
-        typeIds: ['re-accreditation', 'exporter'],
+        // RA-412: Exporter is never a real typeId, so it maps onto the real
+        // `re-accreditation` typeId here. Both Reprocessor and Exporter are
+        // selected, so this is "either applicant type" — no
+        // wasteProcessingTypes narrowing (see the dedicated tests below for
+        // the single-selection cases).
+        typeIds: ['re-accreditation'],
+        wasteProcessingTypes: [],
         // "Updated" group expands to both ids; "Granted" -> approved.
         stateIds: ['assessment-in-progress', 'updated', 'approved'],
         // RA-299 AC05: the UI filter value 'glass-remelt' maps to the real
@@ -1959,7 +2076,7 @@ describe('#workItemListController', () => {
       expect(result).toContain('data-testid="filter-sort-due-date"')
       expect(result).toContain('data-testid="filter-sort-organisation"')
       expect(result).toContain('data-testid="filter-sort-status"')
-      // Type labels (Reprocessor enabled + Exporter placeholder).
+      // Type labels (both real filters as of RA-412).
       expect(result).toContain('Reprocessor reaccreditation')
       expect(result).toContain('Exporter reaccreditation')
       // Material labels.

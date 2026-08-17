@@ -46,47 +46,33 @@ const BUSINESS_PLAN_CATEGORIES = [
   { key: 'newUses', label: 'New uses' }
 ]
 
-const APPLICANT_TYPE_LABEL = {
-  reprocessor: 'Reprocessor',
-  exporter: 'Exporter'
-}
-
-/**
- * RA-434-processortype. The real applicant-kind discriminator: re-ex's
- * `wasteProcessingType` ("reprocessor" | "exporter"), threaded through by
- * `HttpCaseWorkingApiAdapter.BuildPayload` (backend) on every submission
- * going through the current adapter. management-be's `WorkItem.Payload` is a
- * schemaless BsonDocument, so the field survives storage untouched and is
- * present on `workItem.payload.wasteProcessingType` in every API response —
- * it was simply never read on this side until now (see the former
- * `overseasSites`-presence proxy this replaced, epr-ow16).
- *
- * Lower-cased on read since nothing in the wire contract guarantees casing.
- * Returns `null` for a work item that predates this field (old data, or any
- * future submission path that doesn't set it) rather than guessing — every
- * caller must decide its own fallback display, so a missing value can never
- * silently render as "Reprocessor" again.
- */
-export function applicantTypeOf(workItem) {
-  const raw = workItem?.payload?.wasteProcessingType
-  return typeof raw === 'string' ? raw.toLowerCase() : null
-}
-
-/**
- * The applicant-kind DISPLAY LABEL. Only the two tokens re-ex actually sends
- * resolve to a label — an unrecognised value falls through to `null`, same
- * as an absent field, rather than guessing.
- */
-export function applicantTypeLabel(workItem) {
-  return APPLICANT_TYPE_LABEL[applicantTypeOf(workItem)] ?? null
-}
-
 /**
  * AC02 items 9 and 10 (BES and ORS) render for exporter applications only.
- * Reads the real discriminator via `applicantTypeOf` above.
+ *
+ * RA-412: this used to read `payload.overseasSites.length > 0` as a PROXY for
+ * "the application type is Exporter", because management-be carried no
+ * reprocessor/exporter discriminator on a work item. That proxy was wrong in
+ * both directions — an Exporter who had not yet added a site was misread as
+ * a Reprocessor (hiding BES/ORS that AC02 requires), and a Reprocessor
+ * carrying overseas sites was misread as an Exporter (showing BES/ORS that
+ * AC02 forbids).
+ *
+ * RA-314 closed the upstream gap: the operator backend now writes
+ * `wasteProcessingType` ("reprocessor" | "exporter") into every submitted
+ * work-item payload, and management-be forwards it untouched (the payload is
+ * a schema-less BsonDocument), so this reads it directly instead of
+ * inferring from site data.
+ *
+ * A work item submitted before RA-314 carries no `wasteProcessingType` at
+ * all, and is treated as a reprocessor (`false`) — matching how every such
+ * item already rendered.
  */
 export function isExporterApplication(workItem) {
-  return applicantTypeOf(workItem) === 'exporter'
+  const wasteProcessingType = workItem?.payload?.wasteProcessingType
+  return (
+    typeof wasteProcessingType === 'string' &&
+    wasteProcessingType.toLowerCase() === 'exporter'
+  )
 }
 
 export function buildSiteAddressLines(payload) {
@@ -427,9 +413,8 @@ const ORS_DETAIL_FIELDS = [
   // A pre-formatted string ("48.8566,2.3522"), NOT a {lat,long} pair —
   // confirmed against a captured payload by the producer, who pins it with an
   // exact-JSON test. An earlier revision also handled the object shape; it was
-  // removed once confirmed dead, for the reason spelled out on
-  // `isExporterApplication` above — a branch that can never fire still reads
-  // as a working feature to the next person.
+  // removed once confirmed dead — an unreachable branch still reads as a
+  // working feature to the next person.
   ['coordinates', 'Coordinates', (site) => toDisplayLines(site.coordinates)],
   ['contact-name', 'Contact name', (site) => toDisplayLines(site.contactName)],
   [
@@ -606,11 +591,10 @@ export function buildApplicationSummary({ workItem }) {
       // into this generic route.
       //
       // Deliberately NOT prefixed with an applicant kind ("Reprocessor" /
-      // "Exporter"), even though `applicantTypeOf` (RA-434-processortype) now
-      // reads the REAL `wasteProcessingType` discriminator rather than the
-      // old `overseasSites`-presence proxy. Whether AC02's "Type" row should
-      // show a prefix (e.g. "Glass — Exporter") is a product/BA decision, not
-      // just an engineering one — flagged rather than silently changed here.
+      // "Exporter"). RA-412 added a real `payload.wasteProcessingType` field
+      // (see `isExporterApplication` above, and the work-items list card,
+      // which now reads it) — but AC02 never asked for that prefix on this
+      // row, so it stays as the registry's plain display name.
       value: workItem?.typeDisplayName || workItem?.typeId || EM_DASH
     },
     {

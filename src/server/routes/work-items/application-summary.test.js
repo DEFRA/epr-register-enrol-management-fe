@@ -3,8 +3,6 @@ import { describe, expect, test } from 'vitest'
 import { realOperatorSubmissionPayload } from '#/test-helpers/real-operator-submission-payload.js'
 import { buildCaseHeader } from './case-header.js'
 import {
-  applicantTypeLabel,
-  applicantTypeOf,
   buildApplicationSummary,
   buildAuthorityToIssueContacts,
   buildBusinessPlanPairs,
@@ -89,7 +87,6 @@ const EXPORTER = {
   ...REPROCESSOR,
   payload: {
     ...REPROCESSOR.payload,
-    // RA-434-processortype. The real applicant-kind discriminator.
     wasteProcessingType: 'exporter',
     overseasSites: {
       sites: [
@@ -208,61 +205,29 @@ describe('#buildBusinessPlanPairs', () => {
   })
 })
 
-describe('#applicantTypeOf / #applicantTypeLabel (RA-434-processortype)', () => {
-  test('reads the real wasteProcessingType discriminator, lower-cased', () => {
-    expect(
-      applicantTypeOf({ payload: { wasteProcessingType: 'exporter' } })
-    ).toBe('exporter')
-    expect(
-      applicantTypeOf({ payload: { wasteProcessingType: 'Reprocessor' } })
-    ).toBe('reprocessor')
-  })
-
-  test('resolves to the display label for each known token', () => {
-    expect(
-      applicantTypeLabel({ payload: { wasteProcessingType: 'reprocessor' } })
-    ).toBe('Reprocessor')
-    expect(
-      applicantTypeLabel({ payload: { wasteProcessingType: 'exporter' } })
-    ).toBe('Exporter')
-  })
-
-  // applicantTypeOf resolves to null ONLY for a genuinely absent field — an
-  // unrecognised token is passed through as-is (it is applicantTypeLabel's
-  // job, tested separately below, to turn that into null rather than a
-  // guessed label).
-  test('resolves to null for an absent field, passing an unrecognised token through unchanged', () => {
-    expect(applicantTypeOf(undefined)).toBeNull()
-    expect(applicantTypeOf({})).toBeNull()
-    expect(applicantTypeOf({ payload: {} })).toBeNull()
-    expect(
-      applicantTypeOf({ payload: { wasteProcessingType: 'something-else' } })
-    ).toBe('something-else')
-  })
-
-  test('applicantTypeLabel resolves to null, never a guessed label, for an absent or unrecognised value', () => {
-    expect(applicantTypeLabel(undefined)).toBeNull()
-    expect(
-      applicantTypeLabel({ payload: { wasteProcessingType: 'something-else' } })
-    ).toBeNull()
-  })
-})
-
-describe('#isExporterApplication (RA-295 AC02 items 9 & 10, RA-434-processortype)', () => {
-  test('is false for a reprocessor, regardless of overseasSites', () => {
+describe('#isExporterApplication (RA-412: real wasteProcessingType field)', () => {
+  test('is false for a reprocessor', () => {
     expect(isExporterApplication(REPROCESSOR)).toBe(false)
   })
 
-  test('is true for an exporter, regardless of overseasSites', () => {
+  test('is true for an exporter', () => {
     expect(isExporterApplication(EXPORTER)).toBe(true)
   })
 
-  // The two directional cases the former `overseasSites`-presence proxy got
-  // wrong (epr-ow16) — kept as regression fixtures now proving the REAL
-  // discriminator is read instead, not the proxy's site-list emptiness.
-  test('an Exporter with no sites yet is still read as an exporter', () => {
+  test("is case-insensitive, matching management-be's own comparison", () => {
+    expect(
+      isExporterApplication({ payload: { wasteProcessingType: 'Exporter' } })
+    ).toBe(true)
+    expect(
+      isExporterApplication({ payload: { wasteProcessingType: 'EXPORTER' } })
+    ).toBe(true)
+  })
+
+  // RA-412 fixed both directions of the old `overseasSites`-based proxy's
+  // wrong answers — pinned here so neither regresses.
+  test('is true for an Exporter with no overseas sites declared yet', () => {
     // AC02 items 9-10 require BES/ORS to be shown for this application; the
-    // old proxy hid them, because "declared an overseas site" was never the
+    // old proxy hid them, because "declared an overseas site" is not the
     // same question as "is an Exporter".
     const exporterBeforeAddingSites = {
       typeId: 're-accreditation',
@@ -275,9 +240,8 @@ describe('#isExporterApplication (RA-295 AC02 items 9 & 10, RA-434-processortype
     expect(isExporterApplication(exporterBeforeAddingSites)).toBe(true)
   })
 
-  test('a Reprocessor carrying overseas sites is still read as not-exporter', () => {
-    // The mirror-image case: AC02 forbids showing BES/ORS here, even though
-    // the site list is non-empty.
+  test('is false for a Reprocessor that happens to carry overseas sites', () => {
+    // The mirror-image case: AC02 forbids showing BES/ORS here.
     const reprocessorWithSites = {
       typeId: 're-accreditation',
       payload: {
@@ -289,12 +253,17 @@ describe('#isExporterApplication (RA-295 AC02 items 9 & 10, RA-434-processortype
     expect(isExporterApplication(reprocessorWithSites)).toBe(false)
   })
 
-  test('is false — the safe default — for an absent or unrecognised wasteProcessingType', () => {
+  // Pre-RA-314 work items carry no `wasteProcessingType` at all — treated as
+  // a reprocessor, matching how every such item already rendered.
+  test('is false for absent / malformed payloads rather than throwing', () => {
     expect(isExporterApplication(undefined)).toBe(false)
     expect(isExporterApplication({})).toBe(false)
     expect(isExporterApplication({ payload: {} })).toBe(false)
     expect(
-      isExporterApplication({ payload: { wasteProcessingType: 'unknown' } })
+      isExporterApplication({ payload: { wasteProcessingType: null } })
+    ).toBe(false)
+    expect(
+      isExporterApplication({ payload: { wasteProcessingType: 123 } })
     ).toBe(false)
   })
 })
@@ -666,7 +635,8 @@ describe('real operator submission payload contract', () => {
     // BES/ORS stay hidden because the site list is empty — not because the key
     // is missing from the fixture. Pinned so the distinction cannot rot.
     expect(workItem.payload.overseasSites).toEqual({ sites: [] })
-    expect(isExporterApplication(workItem.payload)).toBe(false)
+    expect(workItem.payload.wasteProcessingType).toBe('reprocessor')
+    expect(isExporterApplication(workItem)).toBe(false)
     expect(rows.map((r) => r.key)).not.toContain('bes')
     expect(rows.map((r) => r.key)).not.toContain('ors')
   })
