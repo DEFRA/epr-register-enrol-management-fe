@@ -64,6 +64,20 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(header, 'registration-number')).toBe('EPR-100999')
   })
 
+  test('appends the glass recycling type suffix to the material meta entry', () => {
+    const header = buildCaseHeader({
+      workItem: {
+        ...workItem,
+        payload: {
+          ...workItem.payload,
+          material: 'glass',
+          glassRecyclingProcess: 'glass_other'
+        }
+      }
+    })
+    expect(metaValue(header, 'material')).toBe('Glass - Other')
+  })
+
   // RA-359 part 2. management-be keeps `slaDueDate` on a terminal/withdrawn
   // item but reports the new `slaState: 'Cancelled'`. A stopped clock must not
   // read as a live deadline, so "Due on" degrades to the em dash — exactly as

@@ -54,13 +54,28 @@ describe('materials', () => {
       expect(materialLabel('Glass')).toBe('Glass')
     })
 
-    // RA-299 AC05: the operator backend's MaterialType enum has only ONE
-    // `Glass` value — a work item payload can never actually store
-    // 'glass-remelt' / 'glass-other', but materialLabel must still resolve
-    // the real 'glass' token to its generic "Glass" label unaffected by the
-    // filter-checkbox split (see materials.js for the full reasoning).
-    test('the real "glass" backend token still labels as "Glass"', () => {
+    // materialLabel must resolve the real 'glass' token to its generic
+    // "Glass" label when no glassRecyclingProcess is present, unaffected by
+    // the filter-checkbox split (see materials.js for the full reasoning).
+    test('the real "glass" backend token labels as plain "Glass" with no recycling process', () => {
       expect(materialLabel('glass')).toBe('Glass')
+    })
+
+    // RA-307: item.payload.glassRecyclingProcess distinguishes remelt/other.
+    test('appends the Remelt suffix when glassRecyclingProcess is glass_re_melt', () => {
+      expect(materialLabel('glass', 'glass_re_melt')).toBe('Glass - Remelt')
+    })
+
+    test('appends the Other suffix when glassRecyclingProcess is glass_other', () => {
+      expect(materialLabel('glass', 'glass_other')).toBe('Glass - Other')
+    })
+
+    test('falls back to plain "Glass" for an unrecognised glassRecyclingProcess value', () => {
+      expect(materialLabel('glass', 'glass_pulverise')).toBe('Glass')
+    })
+
+    test('ignores glassRecyclingProcess for a non-glass material', () => {
+      expect(materialLabel('steel', 'glass_re_melt')).toBe('Steel')
     })
 
     test('returns the original value for an unrecognised token', () => {

@@ -601,7 +601,9 @@ export function buildApplicationSummary({ workItem }) {
       key: 'material',
       label: 'Material',
       kind: 'text',
-      value: payload.material ? materialLabel(payload.material) : EM_DASH
+      value: payload.material
+        ? materialLabel(payload.material, payload.glassRecyclingProcess)
+        : EM_DASH
     },
     {
       key: 'prn-tonnage',

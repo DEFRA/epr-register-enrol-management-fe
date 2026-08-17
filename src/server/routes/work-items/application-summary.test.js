@@ -356,6 +356,20 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     ).toBe(EM_DASH)
   })
 
+  test('appends the glass recycling type suffix to the material row', () => {
+    const workItem = {
+      ...REPROCESSOR,
+      payload: {
+        ...REPROCESSOR.payload,
+        material: 'glass',
+        glassRecyclingProcess: 'glass_re_melt'
+      }
+    }
+    expect(
+      row(buildApplicationSummary({ workItem }).rows, 'material').value
+    ).toBe('Glass - Remelt')
+  })
+
   test('lists PRN authorisers by name and authority-to-issue with contact detail', () => {
     const { rows } = buildApplicationSummary({ workItem: REPROCESSOR })
     expect(row(rows, 'prn-authorisers').values).toEqual([
