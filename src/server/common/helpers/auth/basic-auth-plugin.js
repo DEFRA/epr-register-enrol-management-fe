@@ -13,6 +13,7 @@ function safeCompare(a, b) {
 // Frozen so no import site can accidentally push to this array and widen the bypass.
 export const basicAuthExcludedPaths = Object.freeze([
   '/health',
+  '/health/ready',
   '/favicon.ico',
   '/auth/regulator/callback'
 ])

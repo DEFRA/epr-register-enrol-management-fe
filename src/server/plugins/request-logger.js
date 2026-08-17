@@ -5,6 +5,7 @@ import { loggerOptions } from './logger-options.js'
 const pathToIgnore = (_, request) =>
   request.path.startsWith('/public') ||
   request.path === '/health' ||
+  request.path === '/health/ready' ||
   request.path === '/favicon.ico'
 
 const requestLogger = {
