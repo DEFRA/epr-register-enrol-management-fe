@@ -86,6 +86,44 @@ export function buildSiteAddressLines(payload) {
   return lines
 }
 
+/**
+ * RA-434 / RA-447 (CM2). re-ex's site address exists only for reprocessors
+ * (`SiteDto.Address` lives on `ReprocessorRegistrationDto.Site`) — exporters
+ * carry none. Mirrors the fallback the OJ frontend's `applicationHeader.js`
+ * already applies to its own "Site" header row: the registered address
+ * stands in for an exporter's site address, and an absent
+ * `wasteProcessingType` (e.g. a work item created manually through CM's
+ * "create work item" form) defaults to the reprocessor branch rather than
+ * the exporter one.
+ *
+ * For an exporter this deliberately makes Site address equal Registered
+ * address — matches OJ's own header, not a bug.
+ *
+ * Shared by both the Application summary and Additional information tabs
+ * (CM2) so the two rows can never disagree on which applications get the
+ * fallback. Uses `isExporterApplication` (case-insensitive) rather than an
+ * exact-case string match, for the same reason that helper exists.
+ *
+ * @param {object} payload the work item's payload
+ * @param {string|null} registeredAddress pre-formatted registered address,
+ *   used as the exporter fallback
+ * @returns {string[]} display lines — a single line for an exporter fallback,
+ *   or the normal address/postcode lines for a reprocessor
+ */
+export function deriveSiteAddressLines(payload, registeredAddress) {
+  if (isExporterApplication({ payload })) {
+    return registeredAddress ? [registeredAddress] : []
+  }
+  return buildSiteAddressLines(payload)
+}
+
+/** Single-line form of {@link deriveSiteAddressLines}, for rows that render
+ * one comma-joined value rather than separate lines. */
+export function deriveSiteAddress(payload, registeredAddress) {
+  const lines = deriveSiteAddressLines(payload, registeredAddress)
+  return lines.length > 0 ? lines.join(', ') : null
+}
+
 function overseasSitesOf(workItem) {
   const sites = workItem?.payload?.overseasSites?.sites
   return Array.isArray(sites) ? sites : []
@@ -571,6 +609,12 @@ export function buildApplicationSummary({ workItem }) {
     ? payload.samplingPlan.files
     : []
   const overseasSites = overseasSitesOf(workItem)
+  // CM2. Mirrors the "Additional information" tab's registered-address
+  // computation, so both tabs' site-address rows resolve to exactly the
+  // same fallback for an exporter.
+  const registeredAddress = formatSiteAddress({
+    siteAddress: payload.companyRegisteredAddress
+  })
 
   const rows = [
     {
@@ -581,7 +625,11 @@ export function buildApplicationSummary({ workItem }) {
       // object, excluded from `formatSiteAddress`) or as a legacy flat
       // string that already contains the postcode — so the postcode is added
       // as a second line only when it is not already part of the first.
-      values: buildSiteAddressLines(payload)
+      //
+      // CM2. For an exporter, re-ex carries no site address at all, so this
+      // falls back to the registered address instead of rendering an em
+      // dash — see `deriveSiteAddressLines`.
+      values: deriveSiteAddressLines(payload, registeredAddress)
     },
     {
       key: 'type',
@@ -697,6 +745,13 @@ export function buildCaseFooterRows({ workItem }) {
       'Application reference',
       payload.applicationReference
     ],
+    // RA-447 (CM3). `paymentReference` is null on initial submit (the
+    // operator backend cannot know `applicationReference` before
+    // management-be generates it) and is only ever populated once
+    // management-be starts stamping it at work-item creation — so this row
+    // follows the rest of this footer's convention and simply omits itself
+    // until then, rather than showing a placeholder.
+    ['payment-reference', 'Payment reference', payload.paymentReference],
     ['work-item-id', 'Work item ID', workItem?.id],
     ['registration-number', 'Registration number', payload.registrationNumber],
     ['accreditation-year', 'Accreditation year', payload.accreditationYear],

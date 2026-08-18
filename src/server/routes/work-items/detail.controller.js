@@ -21,7 +21,6 @@ import {
 } from '#/server/work-items/core/engine.js'
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
-import { config } from '#/config/config.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { buildCaseHeader, buildCaseTabs } from './case-header.js'
 import {
@@ -459,9 +458,6 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       ? flashedBanners[0]
       : null
 
-  // RA-131. SLA management affordances — available to any caseworker.
-  const slaMaxDays = config.get('workItems.sla.maxExtensionDays')
-
   // RA-211: surface an unresolved notification failure as a banner so
   // case workers know a lifecycle email (e.g. Queried) didn't reach the
   // operator, without having to open the audit log to find out.
@@ -501,9 +497,7 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       // page (management-be never deletes withdrawn items), so the page has
       // to say so itself. Built from the DECORATED item, whose
       // `applicationRef` is already the RA-249-safe "human ref or null".
-      withdrawnNotice: buildWithdrawnNotice(enriched),
-      slaMaxDays,
-      reasonMaxLength: 500
+      withdrawnNotice: buildWithdrawnNotice(enriched)
     })
     .code(statusCode)
 }

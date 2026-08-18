@@ -325,16 +325,6 @@ export const config = convict({
       env: 'AWS_ENDPOINT_URL'
     }
   },
-  workItems: {
-    sla: {
-      maxExtensionDays: {
-        doc: 'RA-131. Maximum number of days a single SLA extend call may add. Must match the backend WorkItems:Sla:MaxExtensionDays setting.',
-        format: Number,
-        default: 31,
-        env: 'WorkItems__Sla__MaxExtensionDays'
-      }
-    }
-  },
   auth: {
     stubEnabled: {
       doc: 'Enable stub auth (bypasses real OAuth). Defaults true for non-prod.',

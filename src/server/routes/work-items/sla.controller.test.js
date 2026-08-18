@@ -26,10 +26,18 @@ const { extendWorkItemSla, overrideWorkItemSla, getWorkItem } =
 const ID = '22222222-2222-2222-2222-222222222222'
 const REF = 'RA-123456789'
 
+// Fixed "current due date" used by the extend fixtures below, so a new
+// deadline of 2026-07-01 is unambiguously an extension.
+const CURRENT_DUE_DATE = '2026-06-01T00:00:00Z'
+
 const aWorkItem = {
   id: ID,
-  payload: { applicationReference: REF }
+  payload: { applicationReference: REF },
+  slaDueDate: CURRENT_DUE_DATE
 }
+
+const VALID_DEADLINE_PAYLOAD =
+  'new-deadline-day=1&new-deadline-month=7&new-deadline-year=2026'
 
 describe('#makeShowExtendController', () => {
   let server
@@ -48,15 +56,18 @@ describe('#makeShowExtendController', () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
   })
 
-  test('GET renders the extend SLA form', async () => {
+  test('GET renders the extend determination deadline form', async () => {
     const { statusCode, result } = await server.inject({
       method: 'GET',
       url: `/work-items/${ID}/sla/extend`
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Extend SLA'))
+    expect(result).toEqual(
+      expect.stringContaining('Extend determination deadline')
+    )
     expect(result).toEqual(expect.stringContaining('sla-extend-form'))
+    expect(result).toEqual(expect.stringContaining('sla-extend-days'))
     expect(result).toEqual(expect.stringContaining(REF))
   })
 
@@ -102,13 +113,13 @@ describe('#makeSubmitExtendController', () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
   })
 
-  test('POST with valid data applies the extension and redirects to detail', async () => {
+  test('POST with a valid new deadline applies the extension and redirects to detail', async () => {
     extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
 
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/sla/extend`,
-      payload: `reason=Need+more+time&additionalDays=7`,
+      payload: `reason=Need+more+time&${VALID_DEADLINE_PAYLOAD}`,
       headers: {
         'content-type': 'application/x-www-form-urlencoded'
       }
@@ -116,11 +127,12 @@ describe('#makeSubmitExtendController', () => {
 
     expect(statusCode).toBe(statusCodes.redirect)
     expect(headers.location).toBe(`/work-items/${ID}`)
+    // 2026-06-01 → 2026-07-01 is 30 days.
     expect(extendWorkItemSla).toHaveBeenCalledWith(
       expect.objectContaining({
         workItemId: ID,
         reason: 'Need more time',
-        additionalDuration: 'P7D'
+        additionalDuration: 'P30D'
       })
     )
   })
@@ -129,7 +141,7 @@ describe('#makeSubmitExtendController', () => {
     const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/sla/extend`,
-      payload: `reason=&additionalDays=7`,
+      payload: `reason=&${VALID_DEADLINE_PAYLOAD}`,
       headers: {
         'content-type': 'application/x-www-form-urlencoded'
       }
@@ -141,11 +153,11 @@ describe('#makeSubmitExtendController', () => {
     expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 
-  test('POST with invalid days re-renders form with 400', async () => {
+  test('POST with an invalid date re-renders form with 400', async () => {
     const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/sla/extend`,
-      payload: `reason=Some+reason&additionalDays=notanumber`,
+      payload: 'reason=Some+reason&new-deadline-day=31&new-deadline-month=2&new-deadline-year=2026',
       headers: {
         'content-type': 'application/x-www-form-urlencoded'
       }
@@ -153,6 +165,31 @@ describe('#makeSubmitExtendController', () => {
 
     expect(statusCode).toBe(statusCodes.badRequest)
     expect(result).toEqual(expect.stringContaining('There is a problem'))
+    expect(result).toEqual(
+      expect.stringContaining('Determination deadline must be a real date')
+    )
+    expect(extendWorkItemSla).not.toHaveBeenCalled()
+  })
+
+  // RA-447 CM6: the extension cap is gone, but a reduction is still
+  // rejected — a new deadline on/before the current one is not an extension.
+  test('POST with a new deadline that is not after the current one re-renders form with 400', async () => {
+    const { statusCode, result } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload:
+        'reason=Some+reason&new-deadline-day=1&new-deadline-month=6&new-deadline-year=2026',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toEqual(
+      expect.stringContaining(
+        'The new determination deadline must be after the current deadline'
+      )
+    )
     expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 
@@ -167,7 +204,7 @@ describe('#makeSubmitExtendController', () => {
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/sla/extend`,
-      payload: `reason=Some+reason&additionalDays=3`,
+      payload: `reason=Some+reason&${VALID_DEADLINE_PAYLOAD}`,
       headers: {
         'content-type': 'application/x-www-form-urlencoded'
       }
@@ -188,7 +225,7 @@ describe('#makeSubmitExtendController', () => {
     const { statusCode, headers } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/sla/extend`,
-      payload: `reason=Some+reason&additionalDays=3`,
+      payload: `reason=Some+reason&${VALID_DEADLINE_PAYLOAD}`,
       headers: {
         'content-type': 'application/x-www-form-urlencoded'
       }
@@ -196,6 +233,26 @@ describe('#makeSubmitExtendController', () => {
 
     expect(statusCode).toBe(statusCodes.redirect)
     expect(headers.location).toBe(`/work-items/${ID}`)
+  })
+
+  // RA-358 AC2 equivalent for the submit path: the work item is now fetched
+  // on every submit (RA-447 CM6 needs its slaDueDate before validating), so
+  // this path needs the same 404 coverage as the GET handler.
+  test('POST renders the 404 page when the work item does not exist', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 404 })
+
+    const { statusCode, result } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload: `reason=Some+reason&${VALID_DEADLINE_PAYLOAD}`,
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.notFound)
+    expect(result).toEqual(expect.stringContaining('Application not found'))
+    expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 })
 
