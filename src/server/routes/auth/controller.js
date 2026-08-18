@@ -15,6 +15,7 @@ import {
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 
 const LOGIN_PATH = '/auth/regulator/login'
+const LOGOUT_PATH = '/auth/logout'
 const LOGGED_OUT_PATH = '/auth/logged-out'
 
 function base64url(buf) {
@@ -253,19 +254,28 @@ export function createAuthControllers({
       // real Entra ID login re-triggered it immediately — with an active
       // Entra ID browser session that looked like signing out hadn't
       // worked at all. Stub users (no id_token) have no upstream session
-      // to end, so they land here directly.
+      // to end, so they land here directly; a real Entra ID sign-out also
+      // falls through here on Entra's redirect back to /auth/logout below,
+      // since the id_token was already cleared by the reset() above.
       return h.redirect(LOGGED_OUT_PATH)
     }
 
     // End the upstream Entra ID session too — resetting only the local
     // session left the caller's Entra ID SSO session alive, so a later
     // sign-in would silently re-authenticate via SSO with no prompt.
-    // post_logout_redirect_uri still points at our own public interstitial
-    // (not a page requiring auth), so this can't reproduce the RA-449
-    // bounce-back — Entra redirects back here once its session is gone.
+    //
+    // post_logout_redirect_uri must be /auth/logout, not /auth/logged-out —
+    // that's the only URL registered in the Entra app registration's
+    // allowed logout redirect list; anything else and Entra either errors
+    // or silently drops the redirect. This still can't reproduce the
+    // RA-449 bounce-back: /auth/logout is auth:false, and by the time
+    // Entra redirects back here the local session (and its id_token) is
+    // already gone, so this second pass falls straight into the !idToken
+    // branch above and lands on the interstitial rather than looping back
+    // to Entra again.
     const provider = getProviderConfig()
     const params = new URLSearchParams({
-      post_logout_redirect_uri: `${config.get('auth.callbackBaseUrl')}${LOGGED_OUT_PATH}`
+      post_logout_redirect_uri: `${config.get('auth.callbackBaseUrl')}${LOGOUT_PATH}`
     })
     params.set('id_token_hint', idToken)
 
