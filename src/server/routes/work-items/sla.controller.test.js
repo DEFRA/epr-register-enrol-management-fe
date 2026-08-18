@@ -157,7 +157,8 @@ describe('#makeSubmitExtendController', () => {
     const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/sla/extend`,
-      payload: 'reason=Some+reason&new-deadline-day=31&new-deadline-month=2&new-deadline-year=2026',
+      payload:
+        'reason=Some+reason&new-deadline-day=31&new-deadline-month=2&new-deadline-year=2026',
       headers: {
         'content-type': 'application/x-www-form-urlencoded'
       }

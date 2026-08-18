@@ -111,9 +111,7 @@ export function validateExtendDeadline(deadline, currentDueDate) {
 
   const currentDue = currentDueDate ? new Date(currentDueDate) : null
   if (!currentDue || isNaN(currentDue.getTime())) {
-    return invalid(
-      'This application has no determination deadline to extend'
-    )
+    return invalid('This application has no determination deadline to extend')
   }
   const currentDueUtcDay = startOfUtcDay(currentDue)
 

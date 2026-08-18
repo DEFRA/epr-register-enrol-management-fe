@@ -602,7 +602,11 @@ describe('#buildCaseFooterRows (RA-295: reference retained at the bottom)', () =
         label: 'Application reference',
         value: 'RA-2026-00001'
       },
-      { key: 'payment-reference', label: 'Payment reference', value: 'PAY-00042' },
+      {
+        key: 'payment-reference',
+        label: 'Payment reference',
+        value: 'PAY-00042'
+      },
       { key: 'work-item-id', label: 'Work item ID', value: 'w-1' }
     ])
   })

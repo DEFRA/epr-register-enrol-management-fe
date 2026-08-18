@@ -190,7 +190,10 @@ export function makeSubmitExtendController({
       )
       flashBanner(
         request,
-        bannerForSlaFailure(result, 'Could not extend the determination deadline')
+        bannerForSlaFailure(
+          result,
+          'Could not extend the determination deadline'
+        )
       )
       return h.redirect(detailHref(id))
     }
@@ -310,7 +313,10 @@ export function makeSubmitOverrideController({
         { workItemId: id, outcome: result.outcome, message: result.message },
         'SLA override failed'
       )
-      flashBanner(request, bannerForSlaFailure(result, 'Could not override SLA'))
+      flashBanner(
+        request,
+        bannerForSlaFailure(result, 'Could not override SLA')
+      )
       return h.redirect(detailHref(id))
     }
   }
