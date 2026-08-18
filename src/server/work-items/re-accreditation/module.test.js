@@ -36,7 +36,7 @@ describe('reAccreditationModule', () => {
       submitted: 'Not started',
       'duly-made': 'Duly made',
       'assessment-in-progress': 'Updated',
-      'awaiting-decision': 'Awaiting decision',
+      'awaiting-decision': 'Duly made',
       queried: 'Queried',
       updated: 'Updated',
       approved: 'Granted',

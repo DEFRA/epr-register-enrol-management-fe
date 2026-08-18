@@ -7,6 +7,7 @@ import {
   clearWorkItemRegistry,
   registerWorkItemType
 } from '#/server/work-items/core/registry.js'
+import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getReAccreditationPriorYear: vi.fn(),
@@ -1128,7 +1129,7 @@ describe('#workItemListController', () => {
         { id: 'submitted', displayName: 'Not started' },
         { id: 'duly-made', displayName: 'Duly made' },
         { id: 'assessment-in-progress', displayName: 'Updated' },
-        { id: 'awaiting-decision', displayName: 'Awaiting decision' },
+        { id: 'awaiting-decision', displayName: 'Duly made' },
         { id: 'queried', displayName: 'Queried' },
         { id: 'updated', displayName: 'Updated' },
         { id: 'approved', displayName: 'Granted' },
@@ -1141,7 +1142,7 @@ describe('#workItemListController', () => {
       { stateId: 'submitted', cls: 'govuk-tag--grey' },
       { stateId: 'duly-made', cls: 'govuk-tag--purple' },
       { stateId: 'assessment-in-progress', cls: 'govuk-tag--blue' },
-      { stateId: 'awaiting-decision', cls: 'govuk-tag--light-blue' },
+      { stateId: 'awaiting-decision', cls: 'govuk-tag--purple' },
       { stateId: 'queried', cls: 'govuk-tag--yellow' },
       { stateId: 'updated', cls: 'govuk-tag--turquoise' },
       { stateId: 'approved', cls: 'govuk-tag--green' },
@@ -2903,6 +2904,147 @@ describe('#workItemListController', () => {
 
       expect(getWorkItems).toHaveBeenCalledWith(
         expect.objectContaining({ materials: ['steel'] })
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-304 — `awaiting-decision` presents as "Duly made"              //
+  // ---------------------------------------------------------------- //
+  //
+  // The BA ruled that only the RA-324 AC06 status vocabulary may be
+  // user-visible. `awaiting-decision` was the last survivor outside it, and
+  // post-RA-410 it is an internal staging hop no caseworker clicks through,
+  // so it now presents as "Duly made". The state id is UNCHANGED — these
+  // tests exist precisely to catch someone "tidying up" by deleting it.
+  describe('RA-304 awaiting-decision presents as Duly made', () => {
+    beforeEach(() => {
+      clearWorkItemRegistry()
+      registerWorkItemType(reAccreditationType)
+    })
+
+    // AC1. Rendered through the REAL registered module, so this pins the
+    // whole path: module declaration -> registry lookup -> tile. The detail
+    // page (detail.controller.js#decorate) and the audit log
+    // (audit-log.controller.js) resolve the label with the byte-identical
+    // `type.states.find(...).displayName` lookup off the same registration,
+    // so one declaration governs all three surfaces.
+    test('AC1: a work item in awaiting-decision renders the tile status as "Duly made"', async () => {
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: 'cccccccc-0000-0000-0000-000000000001',
+              typeId: 're-accreditation',
+              stateId: 'awaiting-decision',
+              submittedAt: '2026-04-27T10:00:00Z',
+              submittedBy: 'frontend',
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toContain(
+        'data-testid="work-item-state-tag-cccccccc-0000-0000-0000-000000000001"'
+      )
+      // The tag body: purple (AC3) and the AC06 word (AC1), same as an item
+      // genuinely sitting in `duly-made`.
+      expect(result).toMatch(
+        /govuk-tag--purple[^>]*data-testid="work-item-state-tag-cccccccc-0000-0000-0000-000000000001"[^>]*>\s*Duly made/
+      )
+      expect(result).not.toContain('Awaiting decision')
+    })
+
+    // AC2. The Status filter offers the AC06 set and nothing else. Asserted
+    // as an exact ordered list rather than a "does not contain" so that a
+    // future extra option has to be a deliberate edit here.
+    test('AC2: the Status filter offers exactly the RA-324 AC06 options', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      const statusValues = [
+        ...result.matchAll(/name="status"[^>]*value="([^"]+)"/g)
+      ].map((m) => m[1])
+
+      expect(statusValues).toEqual([
+        'submitted',
+        'duly-made',
+        'updated',
+        'queried',
+        'approved',
+        'rejected',
+        'withdrawn'
+      ])
+      expect(statusValues).not.toContain('awaiting-decision')
+      expect(result).not.toContain('Awaiting decision')
+    })
+
+    // AC2. One checkbox, two backend state ids — the same server-side
+    // expansion the "Updated" option already uses. Without this, items parked
+    // in the staging hop would be invisible to the filter that names them.
+    test('AC2: the single "Duly made" checkbox expands to duly-made AND awaiting-decision', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { statusCode } = await server.inject({
+        method: 'GET',
+        url: '/work-items?status=duly-made&filtersApplied=1'
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stateIds: ['duly-made', 'awaiting-decision']
+        })
+      )
+    })
+
+    // AC4. A bookmarked pre-RA-304 URL. `readFilters` validates every
+    // submitted token through `STATUS_OPTION_BY_VALUE.has(v)`, so the retired
+    // token is dropped exactly like the `status=ghost` junk value tested
+    // above — no defensive code was needed, and this test pins that. The page
+    // renders unfiltered rather than 400ing or erroring.
+    test('AC4: a bookmarked ?status=awaiting-decision degrades to no status filter', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?status=awaiting-decision&filtersApplied=1'
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ stateIds: [] })
+      )
+      // No active-filter chip is offered for a token that no longer resolves
+      // (a chip would need STATUS_OPTION_BY_VALUE.get(v).text and would throw).
+      expect(result).not.toContain('data-testid="active-filter-label"')
+    })
+
+    // AC4. The retired token must not poison a request that ALSO carries a
+    // still-valid one: the good token survives, the dead one is dropped.
+    test('AC4: a retired token alongside a valid one drops only the retired token', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { statusCode } = await server.inject({
+        method: 'GET',
+        url: '/work-items?status=awaiting-decision&status=approved&filtersApplied=1'
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ stateIds: ['approved'] })
       )
     })
   })

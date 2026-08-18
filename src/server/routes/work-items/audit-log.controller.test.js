@@ -6,6 +6,7 @@ import {
   clearWorkItemRegistry,
   registerWorkItemType
 } from '#/server/work-items/core/registry.js'
+import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getReAccreditationPriorYear: vi.fn(),
@@ -396,5 +397,34 @@ describe('#workItemAuditLogController', () => {
     expect(statusCode).toBe(statusCodes.badGateway)
     expect(result).toEqual(expect.stringContaining('Work item unavailable'))
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
+  })
+
+  // RA-304 AC1. The audit log is the third surface that renders a state
+  // label (alongside the worklist tiles and the detail page); all three
+  // resolve it with the same `type.states.find(...).displayName` lookup, so
+  // this drives the REAL module through the real controller to prove the
+  // "Duly made" rename reaches the "Show details" snapshot too.
+  //
+  // Note the deliberate asymmetry with the "Previous state" row: that row
+  // renders `details.fromStateId` RAW (a state *id*, not a label — see
+  // core/audit-log.js), so an `awaiting-decision` transition still shows the
+  // literal id there. Pre-existing, intentional, and out of scope: the id is
+  // the wire contract and that row is diagnostic.
+  test('RA-304: an awaiting-decision item shows "Duly made" as its snapshot State', async () => {
+    clearWorkItemRegistry()
+    registerWorkItemType(reAccreditationType)
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ stateId: 'awaiting-decision' })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('Duly made')
+    expect(result).not.toContain('Awaiting decision')
   })
 })

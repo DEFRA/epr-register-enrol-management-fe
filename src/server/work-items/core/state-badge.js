@@ -14,11 +14,16 @@
  */
 // RA-324 phase-2. Colours realigned to Tom's prototype feedback. The AC06
 // DisplayNames are UNCHANGED (Not started / Updated / Granted / Refused …) —
-// only the badge colours move. `awaiting-decision` keeps a colour DISTINCT
-// from the solid blue used by `assessment-in-progress`'s "Updated" so a
-// caseworker can tell the decision-pending state apart at a glance (prototype
-// allowed either "blue" or a distinct colour here — we keep it distinct with
-// light-blue).
+// only the badge colours move.
+//
+// RA-304 supersedes the phase-2 note about `awaiting-decision`, which used to
+// carry a DISTINCT light-blue so a caseworker could pick the decision-pending
+// state out at a glance. That state now displays as "Duly made" (see the
+// RA-304 comment on STATES in `re-accreditation/module.js`), so a distinct
+// colour would show two different-coloured badges reading the same word.
+// It therefore shares `duly-made`'s purple. The map is still keyed by state
+// id, not by label, so the collision is expressed as two keys with the same
+// value rather than by dropping the entry.
 //
 // RA-311 (rescoped, superseding the original plan doc — see PR description):
 // the plan assumed CM had a single query-related state and proposed merging
@@ -35,7 +40,7 @@ const STATE_TAG_CLASSES = {
   submitted: 'govuk-tag--grey', // Not started
   'duly-made': 'govuk-tag--purple', // Duly made
   'assessment-in-progress': 'govuk-tag--blue', // Updated
-  'awaiting-decision': 'govuk-tag--light-blue', // Awaiting decision (distinct)
+  'awaiting-decision': 'govuk-tag--purple', // Duly made (RA-304 — same as duly-made)
   queried: 'govuk-tag--yellow', // Queried
   updated: 'govuk-tag--turquoise', // Updated (RA-311 turquoise parity with OJ)
   approved: 'govuk-tag--green', // Granted

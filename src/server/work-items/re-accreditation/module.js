@@ -32,7 +32,18 @@ const STATES = [
   { id: 'submitted', displayName: 'Not started' },
   { id: 'duly-made', displayName: 'Duly made' },
   { id: 'assessment-in-progress', displayName: 'Updated' },
-  { id: 'awaiting-decision', displayName: 'Awaiting decision' },
+  // RA-304. Presents as "Duly made", NOT "Awaiting decision". The BA ruled
+  // that only the RA-324 AC06 vocabulary may be user-visible, and RA-410 turned
+  // `awaiting-decision` into an internal staging hop no caseworker clicks
+  // through (`submit-for-decision` and `reject` are both callerInvocable:
+  // false), so there is no longer a user-facing concept for it to name. The
+  // state *id* is UNCHANGED — it is the wire contract with the backend, the hop
+  // is kept deliberately for crash-safety, and the Log decision CTA still
+  // rescues items parked here (see `decision/eligibility.js`). Presentation
+  // only: no state/transition moves, so no templateVersion bump. This is a
+  // SECOND intentional label collision, alongside the
+  // `assessment-in-progress`/`updated` one described above.
+  { id: 'awaiting-decision', displayName: 'Duly made' },
   // RA-211 / RA-291. Deliberately NOT terminal: a queried application is
   // paused awaiting the operator's resubmission, after which it re-enters
   // assessment. Added here so the state label resolves — the detail view,

@@ -174,18 +174,31 @@ const APPLICATION_TYPE_LABEL = new Map(
 // the UI shows one checkbox while the backend receives both state ids. The
 // `value` is the stable UI/URL token (submitted via `status=`), decoupled from
 // the raw `stateId` backend param.
+//
+// RA-304. The "Awaiting decision" option is GONE: only the RA-324 AC06
+// vocabulary may be user-visible, and `awaiting-decision` now displays as
+// "Duly made" everywhere (see `re-accreditation/module.js`). Rather than drop
+// the state id from the filter — which would make items parked in the internal
+// staging hop unreachable through the "Duly made" checkbox that names them —
+// the id is folded into the `duly-made` option's `stateIds`, exactly as
+// "Updated" expands to both `assessment-in-progress` and `updated` below. The
+// URL/UI token stays `duly-made`; the expansion is server-side.
+//
+// A bookmarked `?status=awaiting-decision` degrades gracefully with no extra
+// code: `readFilters` validates every submitted token through
+// `STATUS_OPTION_BY_VALUE.has(v)`, so the now-unknown token is dropped like
+// any other junk value and the page renders unfiltered.
 const STATUS_FILTER_OPTIONS = [
   { value: 'submitted', text: 'Not started', stateIds: ['submitted'] },
-  { value: 'duly-made', text: 'Duly made', stateIds: ['duly-made'] },
+  {
+    value: 'duly-made',
+    text: 'Duly made',
+    stateIds: ['duly-made', 'awaiting-decision']
+  },
   {
     value: 'updated',
     text: 'Updated',
     stateIds: ['assessment-in-progress', 'updated']
-  },
-  {
-    value: 'awaiting-decision',
-    text: 'Awaiting decision',
-    stateIds: ['awaiting-decision']
   },
   { value: 'queried', text: 'Queried', stateIds: ['queried'] },
   { value: 'approved', text: 'Granted', stateIds: ['approved'] },
