@@ -285,14 +285,9 @@ describe('reAccreditationModule', () => {
       'resume-during-decision',
       'resume-during-duly-made',
       'resume-during-duly-making',
-      // RA-351. Exactly ONE `sla-extend` here, on `assessment-in-progress`.
-      // The backend's transition set also has an `sla-extend` self-loop on
-      // `queried`, but the FE framework keys transition `actionId`
-      // uniqueness globally (`assertValidWorkItemModule`), so the queried
-      // one is deliberately NOT mirrored — see the comment on the
-      // `sla-extend` transition in module.js. The queried Extend/Override
-      // affordance is driven by the backend PROJECTION into `availableActions`
-      // (consumed via `canChangeDueDate`), not by this transition list.
+      // RA-351. Exactly ONE `sla-extend`, on `assessment-in-progress`; the
+      // backend's queried `sla-extend` self-loop is deliberately not mirrored
+      // (see the module.js transition comment and the dedicated test above).
       'sla-extend',
       'submit-for-decision',
       'withdraw',
