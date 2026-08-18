@@ -20,8 +20,12 @@
  * backend's `MaterialType` enum
  * (epr-register-enrol-backend/AccreditationApplication/Models/MaterialType.cs)
  * has a single `Glass` value, so a work item's stored material can only ever
- * be the bare `glass` token; there is no remelt/other distinction in the data
- * yet (RA-299 AC05 — see the reasoning on `MATERIAL_FILTER_OPTIONS` below).
+ * be the bare `glass` token.
+ *
+ * The remelt/other distinction for glass IS present in the data (RA-407), but
+ * it lives in a SEPARATE payload field, `payload.glassRecyclingProcess`
+ * (`glass_re_melt` / `glass_other`), not encoded into the `material` token —
+ * resolve that field with `glassSubTypeLabel` below.
  */
 const DISPLAY_LABEL_BY_BACKEND_TOKEN = new Map([
   ['aluminium', 'Aluminium'],
@@ -51,15 +55,43 @@ export function materialLabel(token) {
 }
 
 /**
+ * Glass sub type tokens ↔ display labels (RA-407).
+ *
+ * The operator submission carries the glass recycling process in
+ * `payload.glassRecyclingProcess`, distinct from the `material` token. The two
+ * wire values are `glass_re_melt` ("Glass - Remelt") and `glass_other`
+ * ("Glass - other"); the field is absent/null for non-glass or older
+ * applications.
+ */
+const GLASS_SUB_TYPE_LABEL_BY_TOKEN = new Map([
+  ['glass_re_melt', 'Glass - Remelt'],
+  ['glass_other', 'Glass - other']
+])
+
+/**
+ * Resolve a raw `payload.glassRecyclingProcess` token to its display label.
+ * Matches case-insensitively; returns the original value unchanged when it is
+ * not a recognised token, and `null` for an absent/empty value.
+ *
+ * @param {string} [token]
+ * @returns {string|null}
+ */
+export function glassSubTypeLabel(token) {
+  if (token == null || token === '') return null
+  return GLASS_SUB_TYPE_LABEL_BY_TOKEN.get(String(token).toLowerCase()) ?? token
+}
+
+/**
  * Material FILTER checkboxes (UI-facing values, submitted via `material=`).
  *
  * RA-299 AC05 splits the single "Glass" checkbox into "Glass- remelt" and
- * "Glass- other". Investigation: the operator backend's `MaterialType` enum
- * has only ONE `Glass` value (no remelt/other field anywhere in the
- * accreditation-application data model), so no work item currently stores —
- * or can store — data that distinguishes the two. This is therefore a
- * FILTER-UI-ONLY split ahead of the data model, not a reflection of real
- * data variance.
+ * "Glass- other". The remelt/other distinction does exist in the submission
+ * data (`payload.glassRecyclingProcess`, surfaced for display by
+ * `glassSubTypeLabel` — RA-407), but the backend `material` token it is
+ * filtered on is still the single `Glass` value, so both checkboxes must map
+ * back to the same `glass` token to filter. This remains a FILTER-UI split
+ * over a single filterable token, even though the underlying sub type is now
+ * displayable per work item.
  *
  * Judgement call: unlike the Reprocessor/Exporter type-filter precedent
  * (RA-324 phase-2, where the not-yet-existing `exporter` typeId is EXPECTED

@@ -3,6 +3,7 @@ import { describe, test, expect } from 'vitest'
 import {
   MATERIAL_FILTER_OPTIONS,
   MATERIAL_TOKENS,
+  glassSubTypeLabel,
   materialLabel,
   materialFilterLabel,
   toBackendMaterialTokens
@@ -116,6 +117,27 @@ describe('materials', () => {
 
     test('returns an empty array for no input', () => {
       expect(toBackendMaterialTokens([])).toEqual([])
+    })
+  })
+
+  describe('glassSubTypeLabel (RA-407)', () => {
+    test('maps the two wire tokens to their display labels', () => {
+      expect(glassSubTypeLabel('glass_re_melt')).toBe('Glass - Remelt')
+      expect(glassSubTypeLabel('glass_other')).toBe('Glass - other')
+    })
+
+    test('matches case-insensitively', () => {
+      expect(glassSubTypeLabel('GLASS_RE_MELT')).toBe('Glass - Remelt')
+    })
+
+    test('returns null for an absent or empty value', () => {
+      expect(glassSubTypeLabel(null)).toBeNull()
+      expect(glassSubTypeLabel(undefined)).toBeNull()
+      expect(glassSubTypeLabel('')).toBeNull()
+    })
+
+    test('returns an unknown token unchanged', () => {
+      expect(glassSubTypeLabel('glass_mystery')).toBe('glass_mystery')
     })
   })
 })

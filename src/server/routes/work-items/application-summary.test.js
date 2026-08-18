@@ -327,6 +327,50 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     ).toBe(EM_DASH)
   })
 
+  // RA-407: the glass sub type is rendered directly after Material, but only
+  // for glass applications that actually carry `payload.glassRecyclingProcess`.
+  test('renders the glass sub type row directly after Material for a remelt application', () => {
+    const { rows } = buildApplicationSummary({
+      workItem: {
+        payload: { material: 'glass', glassRecyclingProcess: 'glass_re_melt' }
+      }
+    })
+    const keys = rows.map((r) => r.key)
+    expect(keys.indexOf('glass-sub-type')).toBe(keys.indexOf('material') + 1)
+
+    const subType = row(rows, 'glass-sub-type')
+    expect(subType.label).toBe('Glass sub type')
+    expect(subType.kind).toBe('text')
+    expect(subType.value).toBe('Glass - Remelt')
+  })
+
+  test('shows "Glass - other" for a glass_other application', () => {
+    const { rows } = buildApplicationSummary({
+      workItem: {
+        payload: { material: 'glass', glassRecyclingProcess: 'glass_other' }
+      }
+    })
+    expect(row(rows, 'glass-sub-type').value).toBe('Glass - other')
+  })
+
+  test('omits the glass sub type row when glass carries no recycling process', () => {
+    for (const glassRecyclingProcess of [undefined, null, '']) {
+      const { rows } = buildApplicationSummary({
+        workItem: { payload: { material: 'glass', glassRecyclingProcess } }
+      })
+      expect(row(rows, 'glass-sub-type')).toBeUndefined()
+    }
+  })
+
+  test('omits the glass sub type row for a non-glass material even if the field is present', () => {
+    const { rows } = buildApplicationSummary({
+      workItem: {
+        payload: { material: 'plastic', glassRecyclingProcess: 'glass_re_melt' }
+      }
+    })
+    expect(row(rows, 'glass-sub-type')).toBeUndefined()
+  })
+
   test('lists PRN authorisers by name and authority-to-issue with contact detail', () => {
     const { rows } = buildApplicationSummary({ workItem: REPROCESSOR })
     expect(row(rows, 'prn-authorisers').values).toEqual([

@@ -3,7 +3,10 @@ import {
   formatSiteAddress,
   getSitePostcode
 } from '#/server/common/helpers/format/site-address.js'
-import { materialLabel } from '#/server/work-items/core/materials.js'
+import {
+  glassSubTypeLabel,
+  materialLabel
+} from '#/server/work-items/core/materials.js'
 
 /**
  * Application information view model (RA-295 AC02).
@@ -230,6 +233,15 @@ export function buildApplicationSummary({ workItem }) {
     : []
   const overseasSites = overseasSitesOf(workItem)
 
+  // RA-407: the glass sub type (`payload.glassRecyclingProcess`) is a separate
+  // field from the `material` token. Only surface it for glass applications
+  // that actually carry the field — never render an em-dash sub-type row for a
+  // non-glass application or when the field is absent.
+  const glassSubType =
+    String(payload.material ?? '').toLowerCase() === 'glass'
+      ? glassSubTypeLabel(payload.glassRecyclingProcess)
+      : null
+
   const rows = [
     {
       key: 'site-address',
@@ -264,6 +276,17 @@ export function buildApplicationSummary({ workItem }) {
       kind: 'text',
       value: payload.material ? materialLabel(payload.material) : EM_DASH
     },
+    // RA-407: rendered directly after Material, glass-only, field-present-only.
+    ...(glassSubType
+      ? [
+          {
+            key: 'glass-sub-type',
+            label: 'Glass sub type',
+            kind: 'text',
+            value: glassSubType
+          }
+        ]
+      : []),
     {
       key: 'prn-tonnage',
       label: 'PRN tonnage',
