@@ -1,6 +1,20 @@
 import { describe, expect, test, vi } from 'vitest'
 
+// The default `recordDecision`/`addNote` collaborators lazily `import()`
+// backend-api.js rather than importing it statically (so tests can stub the
+// call without mocking undici). Mocking the module here exercises that
+// lazy-import wiring itself, which the constructor-injection tests below
+// never touch.
+vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
+  recordReAccreditationDecision: vi.fn(),
+  addWorkItemNote: vi.fn()
+}))
+
 import { createDecisionService, DECISION_NOTE_MAX_LENGTH } from './service.js'
+import {
+  recordReAccreditationDecision,
+  addWorkItemNote
+} from '#/server/common/helpers/backend-api/backend-api.js'
 
 /**
  * RA-410. One call, both outcomes. The service's job is to validate the
@@ -282,4 +296,57 @@ describe('createDecisionService#recordWorkItemDecision', () => {
       ).rejects.toThrow('workItemId must be a non-empty string')
     }
   )
+})
+
+// The default collaborators (used when the caller injects neither
+// `recordDecision` nor `addNote`) lazily import backend-api.js and delegate
+// straight through. Covered separately from the constructor-injection tests
+// above, which never exercise that wiring.
+describe('createDecisionService — default backend-api collaborators', () => {
+  test('recordDecision defaults to recordReAccreditationDecision', async () => {
+    recordReAccreditationDecision.mockResolvedValue({
+      ok: true,
+      workItem: { id: 'wi-1', stateId: 'approved' }
+    })
+    const service = createDecisionService()
+
+    const result = await service.recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      user: { id: 'u-1' }
+    })
+
+    expect(recordReAccreditationDecision).toHaveBeenCalledWith({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      user: { id: 'u-1' }
+    })
+    expect(result).toEqual({
+      ok: true,
+      workItem: { id: 'wi-1', stateId: 'approved' }
+    })
+  })
+
+  test('addNote defaults to addWorkItemNote and is called before the decision', async () => {
+    addWorkItemNote.mockResolvedValue({ ok: true })
+    recordReAccreditationDecision.mockResolvedValue({
+      ok: true,
+      workItem: { id: 'wi-1', stateId: 'approved' }
+    })
+    const service = createDecisionService()
+
+    const result = await service.recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      decisionNote: 'Rationale',
+      user: { id: 'u-1' }
+    })
+
+    expect(addWorkItemNote).toHaveBeenCalledWith({
+      workItemId: 'wi-1',
+      text: 'Rationale',
+      user: { id: 'u-1' }
+    })
+    expect(result.ok).toBe(true)
+  })
 })
