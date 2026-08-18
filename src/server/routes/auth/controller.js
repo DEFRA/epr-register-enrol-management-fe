@@ -15,6 +15,7 @@ import {
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 
 const LOGIN_PATH = '/auth/regulator/login'
+const LOGGED_OUT_PATH = '/auth/logged-out'
 
 function base64url(buf) {
   return buf
@@ -238,7 +239,11 @@ export function createAuthControllers({
     // cookie is worthless afterwards. Mirrors the yar.reset() in the OAuth
     // callback above and in the stub login controller.
     request.yar.reset()
-    return h.redirect(LOGIN_PATH)
+    // RA-449: land on an interstitial confirming the sign-out rather than
+    // bouncing straight back to Entra ID, which looked like signing out
+    // hadn't worked (or signed you straight back in with an active Entra
+    // ID browser session).
+    return h.redirect(LOGGED_OUT_PATH)
   }
 
   return {
@@ -246,6 +251,15 @@ export function createAuthControllers({
     regulatorCallbackController,
     logoutController
   }
+}
+
+// RA-449: takes no injected dependencies (unlike the controllers above), so
+// it doesn't need to live inside the factory — a plain top-level export.
+export function loggedOutController(_request, h) {
+  return h.view('auth/logged-out', {
+    pageTitle: 'You have been signed out',
+    loginPath: LOGIN_PATH
+  })
 }
 
 // Default instances used by the route plugin.

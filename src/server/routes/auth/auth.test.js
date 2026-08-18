@@ -183,14 +183,32 @@ describe('auth', () => {
     expect(headers.location).toBe('/auth/stub/login')
   })
 
-  test('logout redirects to regulator login', async () => {
+  // RA-449.
+  test('logout redirects to the logged-out page', async () => {
     const { statusCode, headers } = await server.inject({
       method: 'GET',
       url: '/auth/logout'
     })
 
     expect(statusCode).toBe(302)
-    expect(headers.location).toBe('/auth/regulator/login')
+    expect(headers.location).toBe('/auth/logged-out')
+  })
+
+  // The test-mode auth strategy authenticates every injection regardless of
+  // route config (see 'protected routes are accessible to authenticated
+  // test users' above), so a 200 here wouldn't on its own prove auth: false
+  // — check the route config directly too.
+  test('logged-out page has auth disabled and is reachable', async () => {
+    expect(server.match('get', '/auth/logged-out').settings.auth).toBe(false)
+
+    const { statusCode, payload } = await server.inject({
+      method: 'GET',
+      url: '/auth/logged-out'
+    })
+
+    expect(statusCode).toBe(200)
+    expect(payload).toContain('You have been signed out')
+    expect(payload).toContain('/auth/regulator/login')
   })
 })
 
