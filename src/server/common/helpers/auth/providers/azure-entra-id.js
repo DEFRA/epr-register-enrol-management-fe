@@ -8,6 +8,7 @@ export function getAzureEntraIdConfig(config) {
     tokenUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
     jwksUri: `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`,
     issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+    logoutUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/logout`,
     scopes: ['openid', 'profile', 'email'],
     clientId: config.get('auth.azureEntraId.clientId'),
     clientSecret: config.get('auth.azureEntraId.clientSecret'),

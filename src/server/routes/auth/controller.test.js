@@ -48,6 +48,7 @@ const provider = {
   tokenUrl: 'https://login.example/token',
   jwksUri: 'https://login.example/jwks',
   issuer: 'https://login.example/v2.0',
+  logoutUrl: 'https://login.example/logout',
   scopes: ['openid', 'profile', 'email'],
   clientId: 'client-id',
   clientSecret: 'client-secret',
@@ -519,7 +520,10 @@ describe('logoutController', () => {
 
     logoutController(request, h)
 
-    expect(order).toEqual([['reset']])
+    // The idToken lookup is a read that must happen before reset() wipes
+    // it, but it's read-only and doesn't affect the RA-306 guarantee that
+    // reset() runs before anything is redirected.
+    expect(order).toEqual([['get', 'idToken'], ['reset']])
   })
 
   test('is safe to call when there is no session to destroy', () => {
@@ -528,6 +532,62 @@ describe('logoutController', () => {
 
     expect(() => logoutController(request, h)).not.toThrow()
     expect(yar.reset).toHaveBeenCalledTimes(1)
+    expect(h.redirect).toHaveBeenCalledWith('/auth/logged-out')
+  })
+
+  // RA-437.
+  test('ends the Entra ID session too when signed in via real Entra ID', () => {
+    const { request, yar } = makeRequest({
+      session: { user: { id: 'oid' }, idToken: 'the-entra-id-token' }
+    })
+    const { logoutController } = buildOk()
+
+    logoutController(request, h)
+
+    expect(yar.reset).toHaveBeenCalledTimes(1)
+    expect(h.redirect).toHaveBeenCalledTimes(1)
+    const [redirectUrl] = h.redirect.mock.calls[0]
+    const url = new URL(redirectUrl)
+
+    expect(url.origin + url.pathname).toBe(provider.logoutUrl)
+    expect(url.searchParams.get('id_token_hint')).toBe('the-entra-id-token')
+    expect(url.searchParams.get('post_logout_redirect_uri')).toBe(
+      'http://localhost:3000/auth/logout'
+    )
+  })
+
+  test('reads the id_token before resetting the session, then resets before redirecting', () => {
+    const { request, order } = makeRequest({
+      session: { user: { id: 'oid' }, idToken: 'the-entra-id-token' }
+    })
+    const { logoutController } = buildOk()
+
+    logoutController(request, h)
+
+    expect(order).toEqual([['get', 'idToken'], ['reset']])
+  })
+
+  // RA-437: post_logout_redirect_uri must be /auth/logout — that's the
+  // only URL registered in the Entra app registration's allowed logout
+  // redirect list. This proves the round trip through it doesn't
+  // reopen RA-449: by the time Entra redirects back to /auth/logout, the
+  // session (and its id_token) is already gone, so the second pass falls
+  // through to a plain local sign-out instead of looping back to Entra.
+  test('a second hit to /auth/logout, as Entra redirects back to, lands on the interstitial rather than looping back to Entra', () => {
+    const { request: firstRequest } = makeRequest({
+      session: { user: { id: 'oid' }, idToken: 'the-entra-id-token' }
+    })
+    const { logoutController } = buildOk()
+
+    logoutController(firstRequest, h)
+    h.redirect.mockClear()
+
+    // Entra redirects the browser back to /auth/logout — a fresh request,
+    // with no session left (the reset() above already cleared it).
+    const { request: secondRequest } = makeRequest()
+
+    logoutController(secondRequest, h)
+
     expect(h.redirect).toHaveBeenCalledWith('/auth/logged-out')
   })
 })

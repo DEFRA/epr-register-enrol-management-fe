@@ -20,6 +20,8 @@ describe('getAzureEntraIdConfig', () => {
       jwksUri:
         'https://login.microsoftonline.com/tenant-123/discovery/v2.0/keys',
       issuer: 'https://login.microsoftonline.com/tenant-123/v2.0',
+      logoutUrl:
+        'https://login.microsoftonline.com/tenant-123/oauth2/v2.0/logout',
       scopes: ['openid', 'profile', 'email'],
       clientId: 'client-abc',
       clientSecret: 'secret',
