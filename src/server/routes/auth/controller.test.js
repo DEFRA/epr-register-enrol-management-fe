@@ -48,6 +48,7 @@ const provider = {
   tokenUrl: 'https://login.example/token',
   jwksUri: 'https://login.example/jwks',
   issuer: 'https://login.example/v2.0',
+  logoutUrl: 'https://login.example/logout',
   scopes: ['openid', 'profile', 'email'],
   clientId: 'client-id',
   clientSecret: 'client-secret',
@@ -519,7 +520,10 @@ describe('logoutController', () => {
 
     logoutController(request, h)
 
-    expect(order).toEqual([['reset']])
+    // The idToken lookup is a read that must happen before reset() wipes
+    // it, but it's read-only and doesn't affect the RA-306 guarantee that
+    // reset() runs before anything is redirected.
+    expect(order).toEqual([['get', 'idToken'], ['reset']])
   })
 
   test('is safe to call when there is no session to destroy', () => {
@@ -529,6 +533,38 @@ describe('logoutController', () => {
     expect(() => logoutController(request, h)).not.toThrow()
     expect(yar.reset).toHaveBeenCalledTimes(1)
     expect(h.redirect).toHaveBeenCalledWith('/auth/logged-out')
+  })
+
+  // RA-437.
+  test('ends the Entra ID session too when signed in via real Entra ID', () => {
+    const { request, yar } = makeRequest({
+      session: { user: { id: 'oid' }, idToken: 'the-entra-id-token' }
+    })
+    const { logoutController } = buildOk()
+
+    logoutController(request, h)
+
+    expect(yar.reset).toHaveBeenCalledTimes(1)
+    expect(h.redirect).toHaveBeenCalledTimes(1)
+    const [redirectUrl] = h.redirect.mock.calls[0]
+    const url = new URL(redirectUrl)
+
+    expect(url.origin + url.pathname).toBe(provider.logoutUrl)
+    expect(url.searchParams.get('id_token_hint')).toBe('the-entra-id-token')
+    expect(url.searchParams.get('post_logout_redirect_uri')).toBe(
+      'http://localhost:3000/auth/logged-out'
+    )
+  })
+
+  test('reads the id_token before resetting the session, then resets before redirecting', () => {
+    const { request, order } = makeRequest({
+      session: { user: { id: 'oid' }, idToken: 'the-entra-id-token' }
+    })
+    const { logoutController } = buildOk()
+
+    logoutController(request, h)
+
+    expect(order).toEqual([['get', 'idToken'], ['reset']])
   })
 })
 

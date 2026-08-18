@@ -227,11 +227,18 @@ export function createAuthControllers({
     // session-fixation: any pre-login session id (which an attacker might
     // know) is discarded, and a fresh session id is bound to the user.
     request.yar.reset()
+
+    // Stored so it can be passed as id_token_hint at federated logout —
+    // stub users (no real Entra ID id_token) simply won't have one, and
+    // logoutController falls back to a local-only sign-out for them.
+    request.yar.set('idToken', idToken)
     request.yar.set('user', user)
     return h.redirect(redirectTo)
   }
 
   function logoutController(request, h) {
+    const idToken = request.yar.get('idToken')
+
     // RA-306 (AC01/AC02): destroy the whole session rather than clearing
     // the `user` key alone. Anything else the session accumulated while
     // signed in (RA-299 work-items filters, in-flight OAuth state) must go
@@ -239,11 +246,30 @@ export function createAuthControllers({
     // cookie is worthless afterwards. Mirrors the yar.reset() in the OAuth
     // callback above and in the stub login controller.
     request.yar.reset()
-    // RA-449: land on an interstitial confirming the sign-out rather than
-    // bouncing straight back to Entra ID, which looked like signing out
-    // hadn't worked (or signed you straight back in with an active Entra
-    // ID browser session).
-    return h.redirect(LOGGED_OUT_PATH)
+
+    if (!idToken) {
+      // RA-449: land on an interstitial confirming the sign-out rather
+      // than bouncing straight back to /auth/regulator/login, which for a
+      // real Entra ID login re-triggered it immediately — with an active
+      // Entra ID browser session that looked like signing out hadn't
+      // worked at all. Stub users (no id_token) have no upstream session
+      // to end, so they land here directly.
+      return h.redirect(LOGGED_OUT_PATH)
+    }
+
+    // End the upstream Entra ID session too — resetting only the local
+    // session left the caller's Entra ID SSO session alive, so a later
+    // sign-in would silently re-authenticate via SSO with no prompt.
+    // post_logout_redirect_uri still points at our own public interstitial
+    // (not a page requiring auth), so this can't reproduce the RA-449
+    // bounce-back — Entra redirects back here once its session is gone.
+    const provider = getProviderConfig()
+    const params = new URLSearchParams({
+      post_logout_redirect_uri: `${config.get('auth.callbackBaseUrl')}${LOGGED_OUT_PATH}`
+    })
+    params.set('id_token_hint', idToken)
+
+    return h.redirect(`${provider.logoutUrl}?${params}`)
   }
 
   return {
