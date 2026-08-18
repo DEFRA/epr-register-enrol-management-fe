@@ -18,7 +18,7 @@ const UNAVAILABLE_VIEW = 'work-items/detail-error'
 // RA-447 CM6. The `govukDateInput` id / name prefix for the new
 // determination deadline, and the error-summary anchor (the DAY box, so
 // focus lands on the first field of the group).
-export const EXTEND_DEADLINE_ID = 'new-deadline'
+const EXTEND_DEADLINE_ID = 'new-deadline'
 const EXTEND_DEADLINE_ANCHOR = `#${EXTEND_DEADLINE_ID}-day`
 
 const EXTEND_HEADING = 'Extend determination deadline'
