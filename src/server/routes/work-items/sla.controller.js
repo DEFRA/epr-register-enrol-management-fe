@@ -97,7 +97,9 @@ export function makeShowExtendController() {
     async handler(request, h) {
       const id = request.params.id
       const loaded = await loadWorkItemForExtend(request, h, id)
-      if (loaded.response) return loaded.response
+      if (loaded.response) {
+        return loaded.response
+      }
 
       const workItem = loaded.workItem
       const applicationRef = workItem.payload.applicationReference
@@ -118,6 +120,36 @@ export function makeShowExtendController() {
   }
 }
 
+/** The error-summary link for an invalid-outcome field: the deadline's day
+ * box for a deadline error, the reason field for anything else. */
+function extendErrorHref(field) {
+  return field === 'deadline' ? EXTEND_DEADLINE_ANCHOR : '#field-reason'
+}
+
+function renderExtendInvalid(
+  h,
+  { id, workItem, applicationRef, reason, deadline, result }
+) {
+  return h
+    .view(EXTEND_VIEW, {
+      pageTitle: `Error: ${EXTEND_HEADING}`,
+      heading: EXTEND_HEADING,
+      breadcrumbs: breadcrumbs(id, EXTEND_HEADING, applicationRef),
+      workItem: { ...workItem, applicationRef },
+      formAction: `/work-items/${encodeURIComponent(id)}/sla/extend`,
+      cancelHref: detailHref(id),
+      reasonMaxLength: REASON_MAX_LENGTH,
+      dateInputId: EXTEND_DEADLINE_ID,
+      values: { reason, deadline },
+      errorSummary: {
+        titleText: 'There is a problem',
+        items: [{ text: result.message, href: extendErrorHref(result.field) }]
+      },
+      fieldErrors: { [result.field ?? 'reason']: result.message }
+    })
+    .code(400)
+}
+
 export function makeSubmitExtendController({
   service = createSlaService()
 } = {}) {
@@ -133,7 +165,9 @@ export function makeSubmitExtendController({
       }
 
       const loaded = await loadWorkItemForExtend(request, h, id)
-      if (loaded.response) return loaded.response
+      if (loaded.response) {
+        return loaded.response
+      }
 
       const workItem = loaded.workItem
       const applicationRef = workItem.payload.applicationReference
@@ -156,32 +190,14 @@ export function makeSubmitExtendController({
       }
 
       if (result.outcome === 'invalid') {
-        return h
-          .view(EXTEND_VIEW, {
-            pageTitle: `Error: ${EXTEND_HEADING}`,
-            heading: EXTEND_HEADING,
-            breadcrumbs: breadcrumbs(id, EXTEND_HEADING, applicationRef),
-            workItem: { ...workItem, applicationRef },
-            formAction: `/work-items/${encodeURIComponent(id)}/sla/extend`,
-            cancelHref: detailHref(id),
-            reasonMaxLength: REASON_MAX_LENGTH,
-            dateInputId: EXTEND_DEADLINE_ID,
-            values: { reason, deadline },
-            errorSummary: {
-              titleText: 'There is a problem',
-              items: [
-                {
-                  text: result.message,
-                  href:
-                    result.field === 'deadline'
-                      ? EXTEND_DEADLINE_ANCHOR
-                      : '#field-reason'
-                }
-              ]
-            },
-            fieldErrors: { [result.field ?? 'reason']: result.message }
-          })
-          .code(400)
+        return renderExtendInvalid(h, {
+          id,
+          workItem,
+          applicationRef,
+          reason,
+          deadline,
+          result
+        })
       }
 
       logger.warn(

@@ -53,6 +53,34 @@ function startOfUtcDay(date) {
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/**
+ * Parse a day/month/year triple into a real calendar date, or null when the
+ * parts aren't well-formed or don't round-trip to a real date (e.g.
+ * 2026-02-30, which `Date.UTC` would otherwise roll forward into March).
+ */
+function parseCalendarDate(day, month, year) {
+  if (
+    !/^\d{1,2}$/.test(day) ||
+    !/^\d{1,2}$/.test(month) ||
+    !/^\d{4}$/.test(year)
+  ) {
+    return null
+  }
+
+  const d = Number(day)
+  const m = Number(month)
+  const y = Number(year)
+  const asUtc = new Date(Date.UTC(y, m - 1, d))
+  const isReal =
+    asUtc.getUTCFullYear() === y &&
+    asUtc.getUTCMonth() === m - 1 &&
+    asUtc.getUTCDate() === d
+
+  return isReal ? { date: asUtc, day: d, month: m, year: y } : null
+}
+
 /**
  * Pure validator for the extend-SLA form's new-deadline date input.
  *
@@ -87,30 +115,14 @@ export function validateExtendDeadline(deadline, currentDueDate) {
   if (day === '' && month === '' && year === '') {
     return invalid('Enter the new determination deadline')
   }
-  if (
-    !/^\d{1,2}$/.test(day) ||
-    !/^\d{1,2}$/.test(month) ||
-    !/^\d{4}$/.test(year)
-  ) {
-    return invalid('Determination deadline must be a real date')
-  }
 
-  const d = Number(day)
-  const m = Number(month)
-  const y = Number(year)
-  const asUtc = new Date(Date.UTC(y, m - 1, d))
-  // Round-trip check — `Date.UTC` rolls an unreal date (e.g. 2026-02-30)
-  // forward rather than rejecting it, so the parts are compared back.
-  if (
-    asUtc.getUTCFullYear() !== y ||
-    asUtc.getUTCMonth() !== m - 1 ||
-    asUtc.getUTCDate() !== d
-  ) {
+  const parsed = parseCalendarDate(day, month, year)
+  if (!parsed) {
     return invalid('Determination deadline must be a real date')
   }
 
   const currentDue = currentDueDate ? new Date(currentDueDate) : null
-  if (!currentDue || isNaN(currentDue.getTime())) {
+  if (!currentDue || Number.isNaN(currentDue.getTime())) {
     return invalid('This application has no determination deadline to extend')
   }
   const currentDueUtcDay = startOfUtcDay(currentDue)
@@ -118,16 +130,18 @@ export function validateExtendDeadline(deadline, currentDueDate) {
   // EXTENSION ONLY (RA-447 CM6). Strictly after, not on-or-after, so
   // resubmitting the current deadline is rejected as a no-op rather than
   // silently accepted as a zero-day "extension".
-  if (asUtc.getTime() <= currentDueUtcDay) {
+  if (parsed.date.getTime() <= currentDueUtcDay) {
     return invalid(
       'The new determination deadline must be after the current deadline'
     )
   }
 
-  const days = Math.round((asUtc.getTime() - currentDueUtcDay) / 86400000)
+  const days = Math.round(
+    (parsed.date.getTime() - currentDueUtcDay) / MS_PER_DAY
+  )
   return {
     ok: true,
-    value: `${pad(y, 4)}-${pad(m, 2)}-${pad(d, 2)}`,
+    value: `${pad(parsed.year, 4)}-${pad(parsed.month, 2)}-${pad(parsed.day, 2)}`,
     additionalDuration: `P${days}D`
   }
 }
@@ -146,7 +160,9 @@ export function createSlaService({
         deadline,
         currentDueDate
       )
-      if (!deadlineValidation.ok) return deadlineValidation
+      if (!deadlineValidation.ok) {
+        return deadlineValidation
+      }
 
       const result = await extend({
         workItemId,
@@ -154,7 +170,9 @@ export function createSlaService({
         additionalDuration: deadlineValidation.additionalDuration,
         user
       })
-      if (result.ok) return { ok: true, workItem: result.workItem }
+      if (result.ok) {
+        return { ok: true, workItem: result.workItem }
+      }
       return {
         ok: false,
         outcome: result.reason ?? 'server',
@@ -170,7 +188,9 @@ export function createSlaService({
       user
     }) {
       const reasonValidation = validateReason(reason)
-      if (!reasonValidation.ok) return reasonValidation
+      if (!reasonValidation.ok) {
+        return reasonValidation
+      }
 
       const days = Number(newTargetDays)
       if (!Number.isInteger(days) || days < 1) {
@@ -187,7 +207,7 @@ export function createSlaService({
       let resolvedStartedAt
       if (trimmedStartedAt) {
         const startedAtDate = new Date(trimmedStartedAt)
-        if (isNaN(startedAtDate.getTime())) {
+        if (Number.isNaN(startedAtDate.getTime())) {
           return {
             ok: false,
             outcome: 'invalid',
@@ -206,7 +226,9 @@ export function createSlaService({
           : {}),
         user
       })
-      if (result.ok) return { ok: true, workItem: result.workItem }
+      if (result.ok) {
+        return { ok: true, workItem: result.workItem }
+      }
       return {
         ok: false,
         outcome: result.reason ?? 'server',
