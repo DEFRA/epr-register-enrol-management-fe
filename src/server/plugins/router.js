@@ -9,6 +9,28 @@ import { workItemsPlugin } from '../work-items/core/plugin.js'
 import { workItemModules } from '../work-items/modules.js'
 import { config } from '#/config/config.js'
 
+/**
+ * Bridges a hapi request into Vite's connect-style dev middleware.
+ *
+ * Exported (rather than left as an inline route handler) purely so it can
+ * be unit tested directly with fake `app`/`finished` collaborators — driving
+ * it through a real hapi/Vite/connect stack to hit the "Vite already ended
+ * the response" branch is unreliable, since `h.abandon` intentionally
+ * leaves the raw response exactly as the middleware left it.
+ */
+export function createViteMiddlewareHandler(app, finished) {
+  return async (request, h) => {
+    const { req, res } = request.raw
+    const { promise: next, resolve: resolveNext } = Promise.withResolvers()
+    app(req, res, () => resolveNext(true))
+    const nextCalled = await Promise.race([finished(res), next])
+    if (nextCalled) {
+      return h.response().code(404)
+    }
+    return h.abandon
+  }
+}
+
 export const router = {
   plugin: {
     name: 'router',
@@ -43,17 +65,7 @@ export const router = {
             method: '*',
             path: '/public/{param*}',
             options: { auth: false },
-            handler: async (request, h) => {
-              const { req, res } = request.raw
-              const { promise: next, resolve: resolveNext } =
-                Promise.withResolvers()
-              app(req, res, () => resolveNext(true))
-              const nextCalled = await Promise.race([finished(res), next])
-              if (nextCalled) {
-                return h.response().code(404)
-              }
-              return h.abandon
-            }
+            handler: createViteMiddlewareHandler(app, finished)
           })
         })()
       } else {
