@@ -273,14 +273,16 @@ describe('#makeShowOverrideController', () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
   })
 
-  test('GET renders the override SLA form', async () => {
+  test('GET renders the override determination deadline form', async () => {
     const { statusCode, result } = await server.inject({
       method: 'GET',
       url: `/work-items/${ID}/sla/override`
     })
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toEqual(expect.stringContaining('Override SLA'))
+    expect(result).toEqual(
+      expect.stringContaining('Override determination deadline')
+    )
     expect(result).toEqual(expect.stringContaining('sla-override-form'))
     expect(result).toEqual(expect.stringContaining(REF))
   })

@@ -1,8 +1,9 @@
 /**
- * SLA extend and override controllers (RA-131). Extend reworked by RA-447
- * (CM5: "SLA" relabelled "Determination Deadline"; CM6: a calendar date
- * picker replaces the day-count input and the extension cap is removed).
- * Override is untouched by RA-447 — see `sla-override.njk` / `OverrideAsync`.
+ * SLA extend and override controllers (RA-131), both relabelled from "SLA"
+ * to "Determination Deadline" by RA-447. Extend also got behavioural
+ * changes: CM6 replaced the day-count input with a calendar date picker and
+ * removed the extension cap. Override (CM9) is a pure wording change — its
+ * validation, wire contract and `OverrideAsync` audit string are untouched.
  */
 
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
@@ -22,7 +23,9 @@ const EXTEND_DEADLINE_ID = 'new-deadline'
 const EXTEND_DEADLINE_ANCHOR = `#${EXTEND_DEADLINE_ID}-day`
 
 const EXTEND_HEADING = 'Extend determination deadline'
-const OVERRIDE_HEADING = 'Override SLA'
+// RA-447 CM9. This single constant drives pageTitle/heading/breadcrumb on
+// both the GET and the validation-error re-render.
+const OVERRIDE_HEADING = 'Override determination deadline'
 
 const logger = createLogger()
 

@@ -47,7 +47,7 @@
       {% endif %}
 
       {{ govukWarningText({
-        text: "This records the final decision and notifies the applicant. It cannot be undone.",
+        text: "This records the final decision. It cannot be undone.",
         iconFallbackText: "Warning",
         attributes: { "data-testid": "log-decision-warning" }
       }) }}
@@ -113,7 +113,7 @@
             classes: "govuk-label--s"
           },
           hint: {
-            text: "This is recorded in the audit log and included in the email sent to the applicant."
+            text: "This is recorded in the audit log. Contact the applicant when a determination has been made."
           },
           value: values.decisionNote,
           errorMessage: { text: fieldErrors["decisionNote"] } if fieldErrors["decisionNote"] else null,

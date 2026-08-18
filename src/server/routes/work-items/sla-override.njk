@@ -5,7 +5,9 @@
 {% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
 {% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
 
-{# RA-131: Override SLA clock #}
+{# RA-131: Override the determination deadline. Relabelled from "SLA" to    #}
+{# "Determination Deadline" by RA-447 (CM9) — a pure wording change, no     #}
+{# behaviour or API change. `data-testid`s are unchanged.                   #}
 
 {% block content %}
   {{ appHeading({
@@ -35,11 +37,11 @@
           name: "reason",
           maxlength: reasonMaxLength,
           label: {
-            text: "Reason for overriding the SLA",
+            text: "Reason for overriding determination deadline",
             classes: "govuk-label--s"
           },
           hint: {
-            text: "Explain why the SLA clock needs to be manually overridden."
+            text: "Explain why the determination deadline clock needs to be manually overridden."
           },
           value: values.reason,
           errorMessage: { text: fieldErrors["reason"] } if fieldErrors["reason"] else null,
@@ -80,7 +82,7 @@
 
         <div class="govuk-button-group">
           {{ govukButton({
-            text: "Override SLA",
+            text: "Override determination deadline",
             disabled: user.isReadOnly,
             attributes: { "data-testid": "sla-override-submit" }
           }) }}
