@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v12')
+    expect(reAccreditationType.templateVersion).toBe('v13')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -123,6 +123,29 @@ describe('reAccreditationModule', () => {
     // management-be deleted the property from `WorkItemTransition`, so a
     // lingering one here would be mirror drift.
     expect(transition).not.toHaveProperty('requiresAllTasksComplete')
+  })
+
+  // RA-351. The FE mirror holds exactly ONE `sla-extend` transition, on
+  // `assessment-in-progress`. The backend's transition set adds a second
+  // `sla-extend` self-loop on `queried` (so a queried item projects it into
+  // `availableActions`), but the FE framework keys transition `actionId`
+  // uniqueness globally — `assertValidWorkItemModule` throws on a duplicate —
+  // so that second entry is deliberately NOT mirrored here. It buys nothing:
+  // the queried Extend/Override due-date affordance is driven by the backend
+  // PROJECTION (consumed via the detail controller's `canChangeDueDate`),
+  // never by this transition list. Covered end-to-end by the queried tests
+  // in `routes/work-items/detail.controller.test.js`.
+  test('mirrors exactly one sla-extend transition (queried is projection-only)', () => {
+    const slaExtends = reAccreditationType.transitions.filter(
+      (t) => t.actionId === 'sla-extend'
+    )
+    expect(slaExtends).toHaveLength(1)
+    expect(slaExtends[0]).toMatchObject({
+      displayName: 'Extend SLA',
+      fromStateId: 'assessment-in-progress',
+      toStateId: 'assessment-in-progress'
+    })
+    expect(slaExtends[0]).not.toHaveProperty('callerInvocable')
   })
 
   // RA-372. The four onward transitions out of `updated`, one per state a
@@ -262,6 +285,9 @@ describe('reAccreditationModule', () => {
       'resume-during-decision',
       'resume-during-duly-made',
       'resume-during-duly-making',
+      // RA-351. Exactly ONE `sla-extend`, on `assessment-in-progress`; the
+      // backend's queried `sla-extend` self-loop is deliberately not mirrored
+      // (see the module.js transition comment and the dedicated test above).
       'sla-extend',
       'submit-for-decision',
       'withdraw',

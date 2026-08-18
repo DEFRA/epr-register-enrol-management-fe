@@ -102,6 +102,22 @@ const TRANSITIONS = [
     fromStateId: 'assessment-in-progress',
     toStateId: 'assessment-in-progress'
   },
+  // RA-351. A queried application can ALSO Extend SLA (and, on the same
+  // `canChangeDueDate` flag, Override the due date) — management-be projects
+  // `sla-extend` into a queried item's `availableActions`, so a queried
+  // item's projected actions are `['sla-extend', 'withdraw-during-query']`.
+  //
+  // There is deliberately NO second `sla-extend` transition entry here for
+  // the `queried` self-loop, even though the backend's transition set has
+  // one. The FE framework's `assertValidWorkItemModule`
+  // (core/module.js) enforces GLOBALLY-UNIQUE transition `actionId`s — an
+  // invariant `engine.js#canApplyAction`'s find-by-actionId relies on — so a
+  // second `sla-extend` cannot be expressed in this list. It does not need
+  // to be: `canChangeDueDate` (detail.controller.js) derives ENTIRELY from
+  // the backend-projected `availableActions`, never from this transitions
+  // array, so both due-date links render on a queried item the instant the
+  // backend projects the action. The mirror is complete for every purpose
+  // the frontend reads it for.
   // RA-410. `submit-for-decision` and `reject` (below) both became
   // NON-caller-invocable in v12, mirroring management-be. Neither is a
   // button any more: both hops are applied server-side by the single
@@ -327,7 +343,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v12',
+  templateVersion: 'v13',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -359,6 +375,16 @@ export const reAccreditationModule = {
     //      `submit-for-decision` / `reject` made non-caller-invocable
     //      (both hops now applied server-side by the `/decision` endpoint
     //      behind the Log decision CTA)
+    // v13: RA-351 backend added an `sla-extend` self-loop on `queried` so a
+    //      queried item projects the action into its `availableActions`
+    //      (making the Extend/Override due-date links available while an
+    //      application waits on a query). management-be bumps v12 -> v13 with
+    //      a ReAccreditationSlaExtendQuerySnapshotMigration. Not mirrored as
+    //      a transition here — the FE keys transition `actionId`s uniquely
+    //      and already has an `sla-extend` self-loop on
+    //      `assessment-in-progress`; the queried affordance rides
+    //      `canChangeDueDate` off the backend projection, not this list
+    //      (see the `sla-extend` transition comment above).
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11
@@ -398,7 +424,8 @@ export const reAccreditationModule = {
       v9: 're-accreditation/detail-v1',
       v10: 're-accreditation/detail-v1',
       v11: 're-accreditation/detail-v1',
-      v12: 're-accreditation/detail-v1'
+      v12: 're-accreditation/detail-v1',
+      v13: 're-accreditation/detail-v1'
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once
