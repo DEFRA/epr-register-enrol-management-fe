@@ -2,7 +2,8 @@ import { config } from '#/config/config.js'
 import {
   regulatorLoginController,
   regulatorCallbackController,
-  logoutController
+  logoutController,
+  loggedOutController
 } from './controller.js'
 import { stubAuthRoutes } from './stub/index.js'
 
@@ -17,6 +18,13 @@ export const authRoutes = {
         path: '/auth/logout',
         options: { auth: false },
         handler: logoutController
+      })
+
+      server.route({
+        method: 'GET',
+        path: '/auth/logged-out',
+        options: { auth: false },
+        handler: loggedOutController
       })
 
       if (stubEnabled) {
