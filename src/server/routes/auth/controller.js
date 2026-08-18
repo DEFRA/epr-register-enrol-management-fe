@@ -246,19 +246,20 @@ export function createAuthControllers({
     return h.redirect(LOGGED_OUT_PATH)
   }
 
-  function loggedOutController(request, h) {
-    return h.view('auth/logged-out', {
-      pageTitle: 'You have been signed out',
-      loginPath: LOGIN_PATH
-    })
-  }
-
   return {
     regulatorLoginController,
     regulatorCallbackController,
-    logoutController,
-    loggedOutController
+    logoutController
   }
+}
+
+// RA-449: takes no injected dependencies (unlike the controllers above), so
+// it doesn't need to live inside the factory — a plain top-level export.
+export function loggedOutController(_request, h) {
+  return h.view('auth/logged-out', {
+    pageTitle: 'You have been signed out',
+    loginPath: LOGIN_PATH
+  })
 }
 
 // Default instances used by the route plugin.
@@ -266,4 +267,3 @@ const defaults = createAuthControllers()
 export const regulatorLoginController = defaults.regulatorLoginController
 export const regulatorCallbackController = defaults.regulatorCallbackController
 export const logoutController = defaults.logoutController
-export const loggedOutController = defaults.loggedOutController

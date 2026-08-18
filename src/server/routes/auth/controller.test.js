@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
-import { createAuthControllers } from './controller.js'
+import { createAuthControllers, loggedOutController } from './controller.js'
 import { config } from '#/config/config.js'
 
 const REQUIRED_ROLE = config.get('auth.azureEntraId.regulatorRoleValue')
@@ -536,7 +536,6 @@ describe('logoutController', () => {
 describe('loggedOutController', () => {
   test('renders the logged-out view', () => {
     const { request } = makeRequest()
-    const { loggedOutController } = buildOk()
 
     const result = loggedOutController(request, h)
 
