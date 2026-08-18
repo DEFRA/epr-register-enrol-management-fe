@@ -503,13 +503,14 @@ describe('logoutController', () => {
     expect(yar._store).toEqual({})
   })
 
-  test('redirects to the sign-in page (AC01)', () => {
+  // RA-449.
+  test('redirects to the logged-out page rather than straight to Entra ID', () => {
     const { request } = makeRequest({ session: { user: { id: 'oid' } } })
     const { logoutController } = buildOk()
 
     logoutController(request, h)
 
-    expect(h.redirect).toHaveBeenCalledWith('/auth/regulator/login')
+    expect(h.redirect).toHaveBeenCalledWith('/auth/logged-out')
   })
 
   test('resets the session before redirecting', () => {
@@ -527,6 +528,22 @@ describe('logoutController', () => {
 
     expect(() => logoutController(request, h)).not.toThrow()
     expect(yar.reset).toHaveBeenCalledTimes(1)
-    expect(h.redirect).toHaveBeenCalledWith('/auth/regulator/login')
+    expect(h.redirect).toHaveBeenCalledWith('/auth/logged-out')
+  })
+})
+
+// RA-449.
+describe('loggedOutController', () => {
+  test('renders the logged-out view', () => {
+    const { request } = makeRequest()
+    const { loggedOutController } = buildOk()
+
+    const result = loggedOutController(request, h)
+
+    expect(h.view).toHaveBeenCalledWith('auth/logged-out', {
+      pageTitle: 'You have been signed out',
+      loginPath: '/auth/regulator/login'
+    })
+    expect(result.viewPath).toBe('auth/logged-out')
   })
 })
