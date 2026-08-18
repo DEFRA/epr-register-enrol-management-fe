@@ -797,7 +797,13 @@ function buildStatusOptions(selectedStatusGroups) {
   return STATUS_FILTER_OPTIONS.map((o) => ({
     value: o.value,
     text: o.text,
-    checked: selected.has(o.value)
+    checked: selected.has(o.value),
+    // RA-304. Keyed on the stable UI token, matching the `filter-sort-*`
+    // precedent. Without this the only handle on an individual status
+    // checkbox is govukCheckboxes' positional `filter-status-2`/`-3` id
+    // scheme, which silently re-points at a different status the moment an
+    // option is added or removed — exactly what this story does.
+    attributes: { 'data-testid': `filter-status-${o.value}` }
   }))
 }
 

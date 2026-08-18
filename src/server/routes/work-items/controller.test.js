@@ -2989,6 +2989,17 @@ describe('#workItemListController', () => {
       ])
       expect(statusValues).not.toContain('awaiting-decision')
       expect(result).not.toContain('Awaiting decision')
+
+      // Each surviving option carries a token-keyed test hook, and the
+      // retired one carries none — the e2e suite binds to these rather than
+      // to govukCheckboxes' positional `filter-status-2`/`-3` ids, which
+      // shift whenever an option is added or removed.
+      for (const value of statusValues) {
+        expect(result).toContain(`data-testid="filter-status-${value}"`)
+      }
+      expect(result).not.toContain(
+        'data-testid="filter-status-awaiting-decision"'
+      )
     })
 
     // AC2. One checkbox, two backend state ids — the same server-side
