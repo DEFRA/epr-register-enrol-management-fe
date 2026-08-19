@@ -141,7 +141,7 @@ describe('reAccreditationModule', () => {
     )
     expect(slaExtends).toHaveLength(1)
     expect(slaExtends[0]).toMatchObject({
-      displayName: 'Extend SLA',
+      displayName: 'Extend determination deadline',
       fromStateId: 'assessment-in-progress',
       toStateId: 'assessment-in-progress'
     })

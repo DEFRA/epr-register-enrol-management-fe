@@ -33,7 +33,7 @@ const VIEW_PATH = 're-accreditation/decision/index'
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
 
-const PAGE_TITLE = 'Log the decision for this application'
+const PAGE_TITLE = 'Make determination for this application'
 
 // The GOV.UK error-summary link must target the FIRST radio in the group,
 // which is the id govuk-frontend generates for the first item — not the

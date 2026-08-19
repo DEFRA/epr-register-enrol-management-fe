@@ -98,7 +98,12 @@ const TRANSITIONS = [
   },
   {
     actionId: 'sla-extend',
-    displayName: 'Extend SLA',
+    // RA-447 CM5. `sla-extend` is filtered out of `availableActions` before
+    // this reaches a template (see the RA-372 note in
+    // `work-items/detail.njk`), so this displayName is never rendered — kept
+    // in step with the page's own wording anyway, for anyone reading the
+    // action registry as documentation.
+    displayName: 'Extend determination deadline',
     fromStateId: 'assessment-in-progress',
     toStateId: 'assessment-in-progress'
   },

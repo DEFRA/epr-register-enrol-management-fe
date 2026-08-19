@@ -121,6 +121,23 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     )
   })
 
+  // RA-447 CM2. Standardised on `isExporterApplication`'s case-insensitive
+  // match — pre-RA-447 this row's local check was exact-case only, so a
+  // mixed-case value would have wrongly taken the reprocessor branch.
+  test('uses the registered address as the Site address for a mixed-case wasteProcessingType', () => {
+    const rows = buildAdditionalInformationRows({
+      workItem: {
+        payload: {
+          ...realOperatorSubmissionPayload(),
+          wasteProcessingType: 'Exporter'
+        }
+      }
+    })
+    expect(row(rows, 'site-address').value).toBe(
+      '1 Example Street, London, EC1A 1BB'
+    )
+  })
+
   test('uses the registered address as the Site address for an exporter', () => {
     const rows = buildAdditionalInformationRows({
       workItem: {
