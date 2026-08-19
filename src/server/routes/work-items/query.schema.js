@@ -25,20 +25,50 @@ export const QUERY_SECTION_OPTIONS = [
   },
   {
     value: 'broadly-equivalent-standards',
-    text: 'Broadly equivalent standards (BES)'
+    text: 'Broadly equivalent standards (BES)',
+    // RA-367: BES and ORS are exporter-only. A reprocessor's operator app
+    // has no such sections to unlock, so querying them is meaningless and
+    // blocks the query from reaching the operator. This one flag is the
+    // shared source of truth for both the controller's checkbox filter and
+    // the server-side guard against a crafted POST.
+    exporterOnly: true
   },
   {
     value: 'overseas-reprocessing-sites',
-    text: 'Overseas reprocessing sites (ORS)'
+    text: 'Overseas reprocessing sites (ORS)',
+    exporterOnly: true
   }
 ]
 
 export const QUERY_SECTION_VALUES = QUERY_SECTION_OPTIONS.map((o) => o.value)
 
+/** RA-367: section values that only apply to exporter applications. */
+export const EXPORTER_ONLY_SECTION_VALUES = QUERY_SECTION_OPTIONS.filter(
+  (o) => o.exporterOnly
+).map((o) => o.value)
+
+/**
+ * RA-367 — the section values permitted for a work item, given whether it
+ * is an exporter application. Exporter-only sections (BES/ORS) are dropped
+ * for non-exporters. Shared by the controller (to filter the rendered
+ * checkboxes) and the validator (to reject a crafted POST).
+ */
+export function allowedSectionValues(isExporter) {
+  return QUERY_SECTION_OPTIONS.filter((o) => isExporter || !o.exporterOnly).map(
+    (o) => o.value
+  )
+}
+
 /** AC07/AC08 — the reason is capped in *words*, not characters. */
 export const QUERY_REASON_MAX_WORDS = 200
 
 export const SELECT_SECTIONS_MESSAGE = 'Select which areas you want to query'
+/**
+ * RA-367 — shown when a non-exporter POST includes an exporter-only
+ * section (BES/ORS). Anchors to `#field-sections`, same as the other
+ * sections errors, so the error summary shape is unchanged.
+ */
+export const INVALID_SECTIONS_MESSAGE = 'Select which areas you want to query'
 export const ENTER_REASON_MESSAGE = 'Enter a reason for the query'
 export const REASON_TOO_LONG_MESSAGE = `Query must be ${QUERY_REASON_MAX_WORDS} words or fewer`
 
@@ -117,11 +147,18 @@ export function buildErrorSummary(fieldErrors) {
 /**
  * Validate a raw Hapi payload.
  *
+ * @param {*} payload - the raw Hapi payload.
+ * @param {object} [options]
+ * @param {boolean} [options.isExporter=true] - RA-367: when false, the
+ *   exporter-only sections (BES/ORS) are rejected as invalid. Defaults to
+ *   true so callers that do not know the work item type keep the historic
+ *   "all six valid" behaviour; the query controller always passes the real
+ *   flag derived from the work item.
  * @returns {{ ok: true, value: { sections: string[], reason: string } }
  *          | { ok: false, fieldErrors: Record<string,string>,
  *              values: { sections: string[], reason: string } }}
  */
-export function validateQueryForm(payload) {
+export function validateQueryForm(payload, { isExporter = true } = {}) {
   const sections = normaliseSections(payload?.sections)
   const rawReason = typeof payload?.reason === 'string' ? payload.reason : ''
   const values = { sections, reason: rawReason }
@@ -131,12 +168,22 @@ export function validateQueryForm(payload) {
     { abortEarly: false, stripUnknown: true }
   )
 
-  if (error) {
-    return {
-      ok: false,
-      fieldErrors: joiDetailsToFieldErrors(error.details),
-      values
+  const fieldErrors = error ? joiDetailsToFieldErrors(error.details) : {}
+
+  // RA-367 AC3: exporter-only sections are invalid for a non-exporter work
+  // item. Only raise this when Joi did not already flag `sections`, so the
+  // first-error-per-field contract holds.
+  if (!isExporter && !fieldErrors.sections) {
+    const hasExporterOnly = sections.some((v) =>
+      EXPORTER_ONLY_SECTION_VALUES.includes(v)
+    )
+    if (hasExporterOnly) {
+      fieldErrors.sections = INVALID_SECTIONS_MESSAGE
     }
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return { ok: false, fieldErrors, values }
   }
 
   return { ok: true, value }
