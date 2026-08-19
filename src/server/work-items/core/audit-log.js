@@ -25,12 +25,20 @@ import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
  * The optional `workItemSnapshot` adds a consistent set of work-item
  * context rows (Org ID, Type, State, Submitted at, Submitted by,
  * Last modified, Assigned to) to the disclosure of every audit entry.
+ *
+ * The "State" row is special: it is per-entry, resolved from each entry's
+ * OWN `stateId` (the work-item state as-of that event — epr-rr9s) via the
+ * optional `resolveStateDisplayName(stateId)` callback, NOT from the live
+ * work-item state on the snapshot. Passing the live state onto every entry
+ * was the historical-state bug this contract fixes.
  */
-export function decorateAuditLog(entries, { payload, workItemSnapshot } = {}) {
+export function decorateAuditLog(
+  entries,
+  { payload, workItemSnapshot, resolveStateDisplayName } = {}
+) {
   if (!Array.isArray(entries)) {
     return []
   }
-  const snapshotRows = buildSnapshotRows(workItemSnapshot)
   return entries.map((entry) => ({
     ...entry,
     actionDisplayName: actionDisplayNameFor(entry),
@@ -38,26 +46,91 @@ export function decorateAuditLog(entries, { payload, workItemSnapshot } = {}) {
     isFailure: isFailureAuditEntry(entry),
     detailRows: [
       ...detailRowsForAuditEntry(entry, { payload }),
-      ...snapshotRows
+      ...buildSnapshotRows(workItemSnapshot, entry, resolveStateDisplayName)
     ]
   }))
 }
 
 /**
- * Build the fixed work-item context rows that appear in the "Show details"
- * disclosure of every audit entry. Returns an empty array when no snapshot
- * is supplied so callers that don't need this context are unaffected.
+ * Audit actions whose own event-specific detail rows already state the
+ * work item's resulting (as-of) state. For these we suppress the
+ * context-block "State" row so the same value is not shown twice on the
+ * one entry:
+ *
+ *   - `work-item-submitted`  — Initial state (`details.stateId`)
+ *   - `action-applied`       — Previous / New state
+ *   - `status-push-sent` / `status-push-skipped` / `status-push-failed`
+ *     — Previous / New state, via `statusPushDetailRows`
+ *
+ * The status-push actions matter especially: their `New state` row reads
+ * `details.toStateDisplayName ?? details.toStateId`, the vocabulary the
+ * push hook recorded for OJ, while the context row would resolve
+ * `entry.stateId` through the CM `type.states` display names. Left
+ * unsuppressed, one entry could show `New state: <OJ label>` alongside
+ * `State: <CM label>` for the same state.
+ *
+ * Every other action — assignment, notes, notifications, and the retired
+ * `task-completed` / `task-status-changed` entries — carries no state in
+ * its own rows, so it DOES get the context-block State row: that is where
+ * a caseworker learns which state the item was in when the event happened.
+ *
+ * RA-410 removed the task framework and purged the `task-completed` /
+ * `task-status-changed` cases from `detailRowsForAuditEntry`, so those
+ * actions no longer render a State row of their own. They are therefore
+ * NOT in this set: a historical task entry that carries a per-entry
+ * `stateId` now surfaces it through the context-block row like any other
+ * auxiliary action (and old task entries with no `stateId` simply omit
+ * it), rather than being silently suppressed.
  */
-function buildSnapshotRows(snapshot) {
+const STATE_BEARING_ACTIONS = new Set([
+  'work-item-submitted',
+  'action-applied',
+  'status-push-sent',
+  'status-push-skipped',
+  'status-push-failed'
+])
+
+/**
+ * Build the context-block "State" row for a single audit entry from that
+ * entry's OWN `stateId` (epr-rr9s): the work-item state as-of the event,
+ * resolved to a display name via the SAME state-definition machinery the
+ * controller uses for the live state. Returns null when the row should be
+ * omitted:
+ *   - the entry already conveys its resulting state in its own rows (see
+ *     STATE_BEARING_ACTIONS), or
+ *   - the entry has no `stateId` (older documents predating the backend
+ *     change). We NEVER fall back to the current work-item state here —
+ *     that is exactly the bug this fixes.
+ */
+function buildEntryStateRow(entry, resolveStateDisplayName) {
+  if (entry == null || typeof entry !== 'object') return null
+  if (STATE_BEARING_ACTIONS.has(entry.action)) return null
+  const stateId = entry.stateId
+  if (stateId == null || stateId === '') return null
+  const value =
+    typeof resolveStateDisplayName === 'function'
+      ? resolveStateDisplayName(stateId)
+      : stateId
+  if (value == null || value === '') return null
+  return { key: 'State', value }
+}
+
+/**
+ * Build the work-item context rows that appear in the "Show details"
+ * disclosure of an audit entry. Returns an empty array when no snapshot is
+ * supplied so callers that don't need this context are unaffected. Every
+ * row except "State" is the same across entries; the "State" row is
+ * per-entry (see `buildEntryStateRow`).
+ */
+function buildSnapshotRows(snapshot, entry, resolveStateDisplayName) {
   if (snapshot == null || typeof snapshot !== 'object') return []
   const rows = []
   if (snapshot.orgId) rows.push({ key: 'Org ID', value: snapshot.orgId })
   if (snapshot.typeDisplayName) {
     rows.push({ key: 'Type', value: snapshot.typeDisplayName })
   }
-  if (snapshot.stateDisplayName) {
-    rows.push({ key: 'State', value: snapshot.stateDisplayName })
-  }
+  const stateRow = buildEntryStateRow(entry, resolveStateDisplayName)
+  if (stateRow) rows.push(stateRow)
   const submittedAt = formatDateTimeGds(snapshot.submittedAt)
   if (submittedAt) rows.push({ key: 'Submitted at', value: submittedAt })
   if (snapshot.submittedBy) {
