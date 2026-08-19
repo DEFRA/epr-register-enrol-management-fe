@@ -270,6 +270,55 @@ describe('#workItemAuditLogController', () => {
     expect(result).toEqual(expect.stringContaining('Assigned to'))
   })
 
+  test('Renders each entry State row from the entry OWN stateId, not the current work-item state (epr-rr9s)', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      // Current state is "Approved", but the early "assigned" entry
+      // happened while the item was still "Submitted".
+      workItem: aWorkItem({
+        stateId: 'approved',
+        auditLog: [
+          {
+            id: 'aaaa9999-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            action: 'assigned',
+            actionDisplayName: 'Assigned',
+            stateId: 'submitted',
+            details: { assigneeName: 'Bob Barker' },
+            createdAt: '2026-04-27T08:30:00Z'
+          },
+          {
+            id: 'bbbb0000-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+            action: 'note-added',
+            actionDisplayName: 'Note added',
+            // Old-document entry: no stateId — its State row is omitted.
+            details: { noteText: 'Looks fine' },
+            createdAt: '2026-04-27T09:30:00Z'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // The assigned entry's disclosure shows the historical state display
+    // name ("Submitted"), resolved via the type's state definitions.
+    expect(result).toEqual(expect.stringContaining('Submitted'))
+    // The note-added entry has no stateId; scope to its <li> and assert no
+    // State row leaked the current ("Approved") state into it.
+    const noteEntry = result.slice(
+      result.indexOf(
+        'data-testid="work-item-audit-entry-bbbb0000-bbbb-bbbb-bbbb-bbbbbbbbbbbb"'
+      ),
+      result.indexOf('Back to work item')
+    )
+    expect(noteEntry).not.toEqual(expect.stringContaining('Approved'))
+  })
+
   test('Surfaces the work item payload on the submitted audit entry (RA-186)', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({

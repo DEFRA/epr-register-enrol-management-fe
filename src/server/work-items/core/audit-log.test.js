@@ -371,26 +371,33 @@ describe('detailRowsForAuditEntry', () => {
 })
 
 describe('decorateAuditLog — workItemSnapshot rows', () => {
+  // Auxiliary action (no state in its own detail rows), so it takes the
+  // per-entry context-block "State" row from its OWN `stateId`.
   const baseEntry = {
     id: '1',
     action: 'unassigned',
     actionDisplayName: 'Unassigned',
+    stateId: 'submitted',
     details: {},
     createdAt: '2026-05-01T09:00:00Z'
   }
+
+  // Mirrors the controller's resolver (state code → display name).
+  const resolveStateDisplayName = (stateId) =>
+    ({ submitted: 'Not started', 'duly-made': 'Duly made' })[stateId] ?? stateId
 
   test('appends snapshot rows to every entry when workItemSnapshot is provided', () => {
     const snapshot = {
       orgId: 'APP-001',
       typeDisplayName: 'Re-accreditation',
-      stateDisplayName: 'Submitted',
       submittedAt: '2026-05-01T08:00:00Z',
       submittedBy: 'frontend',
       lastModifiedAt: '2026-05-01T09:00:00Z',
       assignedToName: 'Alice Anderson'
     }
     const [decorated] = decorateAuditLog([baseEntry], {
-      workItemSnapshot: snapshot
+      workItemSnapshot: snapshot,
+      resolveStateDisplayName
     })
     const keys = decorated.detailRows.map((r) => r.key)
     expect(keys).toContain('Org ID')
@@ -457,6 +464,187 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
       workItemSnapshot: null
     })
     expect(decorated.detailRows).toEqual([])
+  })
+})
+
+describe('decorateAuditLog — per-entry State row (epr-rr9s)', () => {
+  const snapshot = {
+    orgId: 'APP-001',
+    typeDisplayName: 'Re-accreditation',
+    assignedToName: 'Alice Anderson'
+  }
+  // State code → display name, mirroring the controller's resolver. Note
+  // the CURRENT work item is (say) "Duly made"; historical entries must
+  // NOT show that.
+  const resolveStateDisplayName = (stateId) =>
+    ({ submitted: 'Not started', 'duly-made': 'Duly made' })[stateId] ?? stateId
+
+  const stateRowOf = (decorated) =>
+    decorated.detailRows.find((r) => r.key === 'State')
+
+  test('renders the entry OWN stateId, resolved via the display-name machinery', () => {
+    // A "Routed to nation"-style early entry: it happened while the item
+    // was still "Not started", even though the item is now "Duly made".
+    const [decorated] = decorateAuditLog(
+      [
+        {
+          id: 'r1',
+          action: 'notification-sent',
+          stateId: 'submitted',
+          details: { templateKey: 'routed-to-nation', nation: 'england' },
+          createdAt: '2026-05-01T08:05:00Z'
+        }
+      ],
+      { workItemSnapshot: snapshot, resolveStateDisplayName }
+    )
+    expect(stateRowOf(decorated)?.value).toBe('Not started')
+    expect(stateRowOf(decorated)?.value).not.toBe('Duly made')
+  })
+
+  test('does NOT stamp the current work-item state onto historical entries', () => {
+    // Two entries at different points in the item's life. Each must show
+    // its own state, never a single shared (current) value.
+    const [early, later] = decorateAuditLog(
+      [
+        {
+          id: 'e1',
+          action: 'assigned',
+          stateId: 'submitted',
+          details: { assigneeName: 'Bob' },
+          createdAt: '2026-05-01T08:10:00Z'
+        },
+        {
+          id: 'e2',
+          action: 'assigned',
+          stateId: 'duly-made',
+          details: { assigneeName: 'Carol' },
+          createdAt: '2026-05-02T08:10:00Z'
+        }
+      ],
+      { workItemSnapshot: snapshot, resolveStateDisplayName }
+    )
+    expect(stateRowOf(early)?.value).toBe('Not started')
+    expect(stateRowOf(later)?.value).toBe('Duly made')
+  })
+
+  test('omits the State row entirely when the entry has no stateId (old documents)', () => {
+    const [decorated] = decorateAuditLog(
+      [
+        {
+          id: 'old1',
+          action: 'assigned',
+          // no stateId — predates the backend change
+          details: { assigneeName: 'Bob' },
+          createdAt: '2026-05-01T08:10:00Z'
+        }
+      ],
+      { workItemSnapshot: snapshot, resolveStateDisplayName }
+    )
+    expect(stateRowOf(decorated)).toBeUndefined()
+    // and it must NOT have fallen back to the current work-item state
+    const values = decorated.detailRows.map((r) => r.value)
+    expect(values).not.toContain('Duly made')
+  })
+
+  test('omits the State row when stateId is null (never falls back to current state)', () => {
+    const [decorated] = decorateAuditLog(
+      [
+        {
+          id: 'old2',
+          action: 'note-added',
+          stateId: null,
+          details: { noteText: 'A note' },
+          createdAt: '2026-05-01T08:10:00Z'
+        }
+      ],
+      { workItemSnapshot: snapshot, resolveStateDisplayName }
+    )
+    expect(stateRowOf(decorated)).toBeUndefined()
+  })
+
+  test('there is no appended current-state row (the historical-state bug is gone)', () => {
+    // The snapshot no longer carries stateDisplayName; even if a stray
+    // stateDisplayName were present it must be ignored.
+    const [decorated] = decorateAuditLog(
+      [
+        {
+          id: 'a1',
+          action: 'unassigned',
+          stateId: 'submitted',
+          details: {},
+          createdAt: '2026-05-01T08:10:00Z'
+        }
+      ],
+      {
+        workItemSnapshot: { ...snapshot, stateDisplayName: 'Duly made' },
+        resolveStateDisplayName
+      }
+    )
+    const stateValues = decorated.detailRows
+      .filter((r) => r.key === 'State')
+      .map((r) => r.value)
+    expect(stateValues).toEqual(['Not started'])
+  })
+
+  test('suppresses the redundant State row on state-bearing actions', () => {
+    // work-item-submitted already shows "Initial state"; action-applied
+    // already shows Previous/New state; task-completed already shows
+    // "State". The context-block State row must not duplicate those.
+    const [submitted, applied, completed] = decorateAuditLog(
+      [
+        {
+          id: 's1',
+          action: 'work-item-submitted',
+          stateId: 'submitted',
+          details: { typeId: 're-accreditation', stateId: 'submitted' },
+          createdAt: '2026-05-01T08:00:00Z'
+        },
+        {
+          id: 's2',
+          action: 'action-applied',
+          stateId: 'duly-made',
+          details: { fromStateId: 'submitted', toStateId: 'duly-made' },
+          createdAt: '2026-05-01T09:00:00Z'
+        },
+        {
+          id: 's3',
+          action: 'task-completed',
+          stateId: 'duly-made',
+          details: { taskId: 't', stateId: 'duly-made' },
+          createdAt: '2026-05-01T10:00:00Z'
+        }
+      ],
+      { workItemSnapshot: snapshot, resolveStateDisplayName }
+    )
+    // Exactly one State row each, and it comes from the event-specific
+    // rows (raw state id), not a second context-block copy.
+    expect(submitted.detailRows.filter((r) => r.key === 'State')).toHaveLength(
+      0
+    )
+    expect(applied.detailRows.filter((r) => r.key === 'State')).toHaveLength(0)
+    expect(completed.detailRows.filter((r) => r.key === 'State')).toHaveLength(
+      1
+    )
+    // task-completed's single State row is its OWN event row (details.stateId)
+    expect(completed.detailRows.find((r) => r.key === 'State')?.value).toBe(
+      'duly-made'
+    )
+  })
+
+  test('falls back to the raw stateId when no resolver is supplied', () => {
+    const [decorated] = decorateAuditLog(
+      [
+        {
+          id: 'nr1',
+          action: 'assigned',
+          stateId: 'submitted',
+          details: { assigneeName: 'Bob' },
+          createdAt: '2026-05-01T08:10:00Z'
+        }
+      ],
+      { workItemSnapshot: snapshot }
+    )
+    expect(stateRowOf(decorated)?.value).toBe('submitted')
   })
 })
 
