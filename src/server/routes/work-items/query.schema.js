@@ -154,11 +154,19 @@ export function buildErrorSummary(fieldErrors) {
  *   true so callers that do not know the work item type keep the historic
  *   "all six valid" behaviour; the query controller always passes the real
  *   flag derived from the work item.
+ * @param {boolean} [options.enforceExporterOnly=true] - RA-367: gates the
+ *   exporter-only section guard. The controller passes `false` when the work
+ *   item lookup failed, so the request falls through to the backend (which
+ *   owns the not-found / network error banner) instead of being rejected with
+ *   a misleading sections error on a type we could not actually determine.
  * @returns {{ ok: true, value: { sections: string[], reason: string } }
  *          | { ok: false, fieldErrors: Record<string,string>,
  *              values: { sections: string[], reason: string } }}
  */
-export function validateQueryForm(payload, { isExporter = true } = {}) {
+export function validateQueryForm(
+  payload,
+  { isExporter = true, enforceExporterOnly = true } = {}
+) {
   const sections = normaliseSections(payload?.sections)
   const rawReason = typeof payload?.reason === 'string' ? payload.reason : ''
   const values = { sections, reason: rawReason }
@@ -173,7 +181,7 @@ export function validateQueryForm(payload, { isExporter = true } = {}) {
   // RA-367 AC3: exporter-only sections are invalid for a non-exporter work
   // item. Only raise this when Joi did not already flag `sections`, so the
   // first-error-per-field contract holds.
-  if (!isExporter && !fieldErrors.sections) {
+  if (enforceExporterOnly && !isExporter && !fieldErrors.sections) {
     const hasExporterOnly = sections.some((v) =>
       EXPORTER_ONLY_SECTION_VALUES.includes(v)
     )

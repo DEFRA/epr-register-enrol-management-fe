@@ -202,16 +202,23 @@ export function makeSubmitQueryController({
 
       // RA-367: we need the work item's type to validate the submitted
       // sections (exporter-only BES/ORS are invalid for a reprocessor), so
-      // read it up front. A work item we cannot load is treated as a
-      // non-exporter, which is the safe default: it rejects a crafted
-      // BES/ORS POST rather than letting it through.
+      // read it up front.
       const item = await getWorkItem({ workItemId: id, user })
       const workItem = item.ok ? item.workItem : null
       const isExporter = workItem ? isExporterApplication(workItem) : false
 
+      // Only enforce the exporter-only section guard when the work item
+      // actually loaded and told us its type. If the lookup itself failed we
+      // cannot know the type, so we let the request fall through to
+      // `service.raiseQuery`, whose existing not-found / network error
+      // handling surfaces the right banner — rather than rejecting a BES/ORS
+      // POST with a misleading "select an area" error (review: jather-code-ee).
       // `validateQueryForm` tolerates a null/undefined payload itself, so
       // there is no need to defend against it twice.
-      const validation = validateQueryForm(request.payload, { isExporter })
+      const validation = validateQueryForm(request.payload, {
+        isExporter,
+        enforceExporterOnly: item.ok
+      })
 
       if (!validation.ok) {
         return renderForm(h, {

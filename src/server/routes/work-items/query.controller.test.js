@@ -804,6 +804,33 @@ describe('POST /work-items/{id}/query', () => {
     expect(result).toEqual(expect.stringContaining(SELECT_SECTIONS_MESSAGE))
   })
 
+  // RA-367 review (jather-code-ee): a lookup failure must NOT trip the
+  // exporter-only guard. We cannot know the applicant type when the fetch
+  // failed, so a BES/ORS POST has to fall through to raiseQuery — whose own
+  // not-found / network banner is the right feedback — rather than being
+  // rejected with a misleading "select an area" sections error.
+  test('lets a BES/ORS POST reach the backend when the work item lookup fails', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 503 })
+    raiseWorkItemQuery.mockResolvedValue({
+      ok: false,
+      reason: 'not-found',
+      status: 404,
+      message: 'gone'
+    })
+
+    const { statusCode, headers } = await postQuery(
+      server,
+      form({
+        sections: ['business-plan', 'broadly-equivalent-standards'],
+        reason: 'A reason'
+      })
+    )
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(DETAIL_HREF)
+    expect(raiseWorkItemQuery).toHaveBeenCalled()
+  })
+
   test.each([
     [400, 'invalid'],
     [403, 'not-authorized'],
