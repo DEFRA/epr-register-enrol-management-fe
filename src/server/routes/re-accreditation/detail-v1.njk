@@ -125,7 +125,7 @@
         </form>
       </div>
     {% endif %}
-    {# RA-410. "Log decision" — the final step, replacing the RA-132       #}
+    {# RA-410. "Make Determination" — the final step, replacing the RA-132 #}
     {# Approve CTA. ONE green button for BOTH outcomes: it opens a page    #}
     {# carrying an Approved / Refused radio which posts a single call.     #}
     {# There is deliberately no Reject button beside it — a second control #}
@@ -146,7 +146,7 @@
     {% if workItem.canLogDecision %}
       <div data-testid="re-accreditation-log-decision-cta">
         {{ appActionLink({
-          text: "Log decision",
+          text: "Make Determination",
           href: workItem.logDecisionHref,
           variant: "button",
           classes: "app-case-panel__primary-action",

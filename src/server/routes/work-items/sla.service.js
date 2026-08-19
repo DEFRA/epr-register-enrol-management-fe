@@ -1,15 +1,17 @@
 /**
- * SLA extend/override service (RA-131).
+ * SLA extend/override service (RA-131, extend reworked by RA-447 CM6).
  *
  * Two operations:
- *  - extendSla: validates reason + days → calls BE extend endpoint
- *  - overrideSla: validates reason + days + date → calls BE override endpoint
+ *  - extendSla: validates reason + a new deadline date → calls BE extend
+ *    endpoint. There is no upper bound on the extension (RA-447 CM6) — the
+ *    only constraint is that the new deadline is strictly after the current
+ *    one.
+ *  - overrideSla: validates reason + days + date → calls BE override
+ *    endpoint. Unchanged by RA-447.
  *
  * Result shape: { ok: true, workItem } OR { ok: false, outcome, message }
  * Outcomes: 'invalid', 'forbidden', 'not-found', 'conflict', 'server', 'network'
  */
-
-import { config } from '#/config/config.js'
 
 export const REASON_MAX_LENGTH = 500
 
@@ -23,19 +25,8 @@ async function defaultOverride(args) {
   return mod.overrideWorkItemSla(args)
 }
 
-/**
- * Pure validator for the extend-SLA form inputs. Split out from
- * `extendSla` so the confirmation flow (RA-131) can validate without
- * calling the backend on the first POST step.
- *
- * Returns `{ ok: true, normalised: { reason, days, additionalDuration } }`
- * or `{ ok: false, outcome: 'invalid', message }`.
- */
-export function validateExtendInput({
-  reason,
-  additionalDays,
-  maxDays = config.get('workItems.sla.maxExtensionDays')
-} = {}) {
+/** Shared reason validation for both extend and override. */
+function validateReason(reason) {
   const trimmedReason = typeof reason === 'string' ? reason.trim() : ''
   if (!trimmedReason) {
     return { ok: false, outcome: 'invalid', message: 'Reason is required' }
@@ -47,53 +38,141 @@ export function validateExtendInput({
       message: `Reason must be ${REASON_MAX_LENGTH} characters or fewer`
     }
   }
-  const days = Number(additionalDays)
-  if (!Number.isInteger(days) || days < 1) {
-    return {
-      ok: false,
-      outcome: 'invalid',
-      message: 'Additional days must be a whole number of at least 1'
-    }
+  return { ok: true, reason: trimmedReason }
+}
+
+function textOf(value) {
+  return value == null ? '' : String(value).trim()
+}
+
+function pad(value, length) {
+  return String(value).padStart(length, '0')
+}
+
+function startOfUtcDay(date) {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/**
+ * Parse a day/month/year triple into a real calendar date, or null when the
+ * parts aren't well-formed or don't round-trip to a real date (e.g.
+ * 2026-02-30, which `Date.UTC` would otherwise roll forward into March).
+ */
+function parseCalendarDate(day, month, year) {
+  if (
+    !/^\d{1,2}$/.test(day) ||
+    !/^\d{1,2}$/.test(month) ||
+    !/^\d{4}$/.test(year)
+  ) {
+    return null
   }
-  if (days > maxDays) {
-    return {
-      ok: false,
-      outcome: 'invalid',
-      message: `Additional days must be ${maxDays} or fewer`
-    }
+
+  const d = Number(day)
+  const m = Number(month)
+  const y = Number(year)
+  const asUtc = new Date(Date.UTC(y, m - 1, d))
+  const isReal =
+    asUtc.getUTCFullYear() === y &&
+    asUtc.getUTCMonth() === m - 1 &&
+    asUtc.getUTCDate() === d
+
+  return isReal ? { date: asUtc, day: d, month: m, year: y } : null
+}
+
+/**
+ * Pure validator for the extend-SLA form's new-deadline date input.
+ *
+ * RA-447 CM6 replaced the "number of additional days" input (capped by
+ * `workItems.sla.maxExtensionDays`) with a `govukDateInput` for the new
+ * determination deadline, and dropped the cap entirely — the only rule left
+ * is that the new deadline must be an EXTENSION, never a reduction, so it
+ * must fall strictly after the work item's current `slaDueDate`.
+ *
+ * The day-count the backend's wire contract still expects
+ * (`additionalDuration`, an ISO-8601 duration) is derived here from the gap
+ * between the two dates, so the API contract is unchanged even though the
+ * user no longer types a day count directly.
+ *
+ * @param {{ day?: string, month?: string, year?: string }} deadline
+ * @param {string|null|undefined} currentDueDate the work item's current
+ *   `slaDueDate`, as an ISO string
+ * @returns {{ ok: true, additionalDuration: string } |
+ *   { ok: false, outcome: 'invalid', field: 'deadline', message: string }}
+ */
+export function validateExtendDeadline(deadline, currentDueDate) {
+  const day = textOf(deadline?.day)
+  const month = textOf(deadline?.month)
+  const year = textOf(deadline?.year)
+  const invalid = (message) => ({
+    ok: false,
+    outcome: 'invalid',
+    field: 'deadline',
+    message
+  })
+
+  if (day === '' && month === '' && year === '') {
+    return invalid('Enter the new determination deadline')
   }
+
+  const parsed = parseCalendarDate(day, month, year)
+  if (!parsed) {
+    return invalid('Determination deadline must be a real date')
+  }
+
+  const currentDue = currentDueDate ? new Date(currentDueDate) : null
+  if (!currentDue || Number.isNaN(currentDue.getTime())) {
+    return invalid('This application has no determination deadline to extend')
+  }
+  const currentDueUtcDay = startOfUtcDay(currentDue)
+
+  // EXTENSION ONLY (RA-447 CM6). Strictly after, not on-or-after, so
+  // resubmitting the current deadline is rejected as a no-op rather than
+  // silently accepted as a zero-day "extension".
+  if (parsed.date.getTime() <= currentDueUtcDay) {
+    return invalid(
+      'The new determination deadline must be after the current deadline'
+    )
+  }
+
+  const days = Math.round(
+    (parsed.date.getTime() - currentDueUtcDay) / MS_PER_DAY
+  )
   return {
     ok: true,
-    normalised: {
-      reason: trimmedReason,
-      days,
-      additionalDuration: `P${days}D`
-    }
+    value: `${pad(parsed.year, 4)}-${pad(parsed.month, 2)}-${pad(parsed.day, 2)}`,
+    additionalDuration: `P${days}D`
   }
 }
 
 export function createSlaService({
   extend = defaultExtend,
-  override = defaultOverride,
-  maxDays = config.get('workItems.sla.maxExtensionDays')
+  override = defaultOverride
 } = {}) {
   return {
-    async extendSla({ workItemId, reason, additionalDays, user }) {
-      const validation = validateExtendInput({
-        reason,
-        additionalDays,
-        maxDays
-      })
-      if (!validation.ok) return validation
-      const { reason: trimmedReason, additionalDuration } =
-        validation.normalised
+    async extendSla({ workItemId, reason, deadline, currentDueDate, user }) {
+      const reasonValidation = validateReason(reason)
+      if (!reasonValidation.ok) {
+        return { ...reasonValidation, field: 'reason' }
+      }
+      const deadlineValidation = validateExtendDeadline(
+        deadline,
+        currentDueDate
+      )
+      if (!deadlineValidation.ok) {
+        return deadlineValidation
+      }
+
       const result = await extend({
         workItemId,
-        reason: trimmedReason,
-        additionalDuration,
+        reason: reasonValidation.reason,
+        additionalDuration: deadlineValidation.additionalDuration,
         user
       })
-      if (result.ok) return { ok: true, workItem: result.workItem }
+      if (result.ok) {
+        return { ok: true, workItem: result.workItem }
+      }
       return {
         ok: false,
         outcome: result.reason ?? 'server',
@@ -108,17 +187,11 @@ export function createSlaService({
       newStartedAt,
       user
     }) {
-      const trimmedReason = typeof reason === 'string' ? reason.trim() : ''
-      if (!trimmedReason) {
-        return { ok: false, outcome: 'invalid', message: 'Reason is required' }
+      const reasonValidation = validateReason(reason)
+      if (!reasonValidation.ok) {
+        return reasonValidation
       }
-      if (trimmedReason.length > REASON_MAX_LENGTH) {
-        return {
-          ok: false,
-          outcome: 'invalid',
-          message: `Reason must be ${REASON_MAX_LENGTH} characters or fewer`
-        }
-      }
+
       const days = Number(newTargetDays)
       if (!Number.isInteger(days) || days < 1) {
         return {
@@ -134,7 +207,7 @@ export function createSlaService({
       let resolvedStartedAt
       if (trimmedStartedAt) {
         const startedAtDate = new Date(trimmedStartedAt)
-        if (isNaN(startedAtDate.getTime())) {
+        if (Number.isNaN(startedAtDate.getTime())) {
           return {
             ok: false,
             outcome: 'invalid',
@@ -146,14 +219,16 @@ export function createSlaService({
       const newTargetDuration = `P${days}D`
       const result = await override({
         workItemId,
-        reason: trimmedReason,
+        reason: reasonValidation.reason,
         newTargetDuration,
         ...(resolvedStartedAt !== undefined
           ? { newStartedAt: resolvedStartedAt }
           : {}),
         user
       })
-      if (result.ok) return { ok: true, workItem: result.workItem }
+      if (result.ok) {
+        return { ok: true, workItem: result.workItem }
+      }
       return {
         ok: false,
         outcome: result.reason ?? 'server',

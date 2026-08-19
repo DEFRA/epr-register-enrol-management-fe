@@ -10,6 +10,8 @@ import {
   buildInterimSite,
   buildOverseasSite,
   buildSiteAddressLines,
+  deriveSiteAddress,
+  deriveSiteAddressLines,
   isExporterApplication,
   isFlaggedNew,
   toDisplayLines,
@@ -268,6 +270,56 @@ describe('#isExporterApplication (RA-412: real wasteProcessingType field)', () =
   })
 })
 
+describe('#deriveSiteAddressLines / #deriveSiteAddress (RA-447 CM2)', () => {
+  test('a reprocessor uses its own site address, unaffected by a registered address', () => {
+    const payload = {
+      siteAddress: { line1: '2 Wyld Court', town: 'Addingrove' }
+    }
+    expect(deriveSiteAddressLines(payload, '1 Registered Way')).toEqual([
+      '2 Wyld Court, Addingrove'
+    ])
+    expect(deriveSiteAddress(payload, '1 Registered Way')).toBe(
+      '2 Wyld Court, Addingrove'
+    )
+  })
+
+  test('an exporter falls back to the registered address as a single line', () => {
+    const payload = { wasteProcessingType: 'exporter' }
+    expect(deriveSiteAddressLines(payload, '1 Registered Way')).toEqual([
+      '1 Registered Way'
+    ])
+    expect(deriveSiteAddress(payload, '1 Registered Way')).toBe(
+      '1 Registered Way'
+    )
+  })
+
+  test('an exporter with no registered address either yields nothing, not a crash', () => {
+    const payload = { wasteProcessingType: 'exporter' }
+    expect(deriveSiteAddressLines(payload, null)).toEqual([])
+    expect(deriveSiteAddress(payload, null)).toBeNull()
+  })
+
+  // RA-447 standardises on `isExporterApplication`'s case-insensitive match,
+  // where the pre-RA-447 local check in additional-information.controller.js
+  // was exact-case only.
+  test('is case-insensitive, matching isExporterApplication', () => {
+    const payload = { wasteProcessingType: 'Exporter' }
+    expect(deriveSiteAddress(payload, '1 Registered Way')).toBe(
+      '1 Registered Way'
+    )
+  })
+
+  test('an unrecognised wasteProcessingType falls back to the reprocessor branch', () => {
+    const payload = {
+      wasteProcessingType: 'unknown',
+      siteAddress: { line1: '2 Wyld Court', town: 'Addingrove' }
+    }
+    expect(deriveSiteAddress(payload, '1 Registered Way')).toBe(
+      '2 Wyld Court, Addingrove'
+    )
+  })
+})
+
 describe('#buildApplicationSummary (RA-295 AC02)', () => {
   test('emits the eight reprocessor rows in the literal AC02 order', () => {
     const { rows, isExporter } = buildApplicationSummary({
@@ -284,6 +336,23 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
       'authority-to-issue',
       'sampling-inspection-plan',
       'business-plan'
+    ])
+  })
+
+  // RA-447 CM2. Previously this row silently rendered an em dash for an
+  // exporter, because `payload.siteAddress` only ever exists for a
+  // reprocessor — see `deriveSiteAddressLines`.
+  test('falls back to the registered address for an exporter, matching the Additional information tab', () => {
+    const { rows } = buildApplicationSummary({
+      workItem: {
+        payload: {
+          ...EXPORTER.payload,
+          companyRegisteredAddress: '1 Example Street, London, EC1A 1BB'
+        }
+      }
+    })
+    expect(row(rows, 'site-address').values).toEqual([
+      '1 Example Street, London, EC1A 1BB'
     ])
   })
 
@@ -515,6 +584,36 @@ describe('#buildCaseFooterRows (RA-295: reference retained at the bottom)', () =
       },
       { key: 'work-item-id', label: 'Work item ID', value: 'w-1' }
     ])
+  })
+
+  // RA-447 CM3. `paymentReference` is only ever populated once management-be
+  // stamps it at work-item creation, so this row follows the rest of the
+  // footer's convention and omits itself until then.
+  test('shows the payment reference, between application reference and work item id, when present', () => {
+    const rows = buildCaseFooterRows({
+      workItem: {
+        ...REPROCESSOR,
+        payload: { ...REPROCESSOR.payload, paymentReference: 'PAY-00042' }
+      }
+    })
+    expect(rows.slice(0, 3)).toEqual([
+      {
+        key: 'application-reference',
+        label: 'Application reference',
+        value: 'RA-2026-00001'
+      },
+      {
+        key: 'payment-reference',
+        label: 'Payment reference',
+        value: 'PAY-00042'
+      },
+      { key: 'work-item-id', label: 'Work item ID', value: 'w-1' }
+    ])
+  })
+
+  test('omits the payment reference row when absent, rather than a placeholder', () => {
+    const rows = buildCaseFooterRows({ workItem: REPROCESSOR })
+    expect(rows.map((r) => r.key)).not.toContain('payment-reference')
   })
 
   test('omits rows with no value rather than rendering an em dash', () => {

@@ -9,7 +9,7 @@
 {# ----------------------------------------------------------------- #}
 {# Log-decision page (RA-410).                                        #}
 {#                                                                    #}
-{# Reached from the primary "Log decision" button on the              #}
+{# Reached from the primary "Make Determination" button on the        #}
 {# re-accreditation detail page. Posts back to its own URL; the       #}
 {# controller makes a SINGLE call to the type-specific `/decision`    #}
 {# endpoint, which applies both lifecycle hops server-side, then      #}
@@ -47,7 +47,7 @@
       {% endif %}
 
       {{ govukWarningText({
-        text: "This records the final decision and notifies the applicant. It cannot be undone.",
+        text: "This determination is final and it cannot be changed.",
         iconFallbackText: "Warning",
         attributes: { "data-testid": "log-decision-warning" }
       }) }}
@@ -67,7 +67,7 @@
           name: "decision",
           fieldset: {
             legend: {
-              text: "What is the decision for this application?",
+              text: "What is the determination for this application?",
               classes: "govuk-fieldset__legend--m"
             }
           },
@@ -109,11 +109,11 @@
           name: "decisionNote",
           maxlength: decisionNoteMaxLength,
           label: {
-            text: "Decision note (optional)",
+            text: "Determination note (optional)",
             classes: "govuk-label--s"
           },
           hint: {
-            text: "This is recorded in the audit log and included in the email sent to the applicant."
+            text: "The determination will be recorded in the audit log (application history). Contact the applicant when the determination has been made."
           },
           value: values.decisionNote,
           errorMessage: { text: fieldErrors["decisionNote"] } if fieldErrors["decisionNote"] else null,
@@ -122,7 +122,7 @@
 
         <div class="govuk-button-group">
           {{ govukButton({
-            text: "Log decision",
+            text: "Make determination",
             disabled: user.isReadOnly,
             attributes: { "data-testid": "log-decision-submit" }
           }) }}

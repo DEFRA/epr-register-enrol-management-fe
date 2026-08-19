@@ -4,36 +4,10 @@ import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { formatSiteAddress } from '#/server/common/helpers/format/site-address.js'
 import { buildCaseHeader, buildCaseTabs } from './case-header.js'
-import { buildSiteAddressLines } from './application-summary.js'
+import { deriveSiteAddress } from './application-summary.js'
 import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
 
 const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
-
-// The only wasteProcessingType value re-ex emits for an exporter — see
-// deriveSiteAddress below. Any other value (including absent) takes the
-// reprocessor branch.
-const EXPORTER_WASTE_PROCESSING_TYPE = 'exporter'
-
-/**
- * RA-434. re-ex's site address exists only for reprocessors
- * (`SiteDto.Address` lives on `ReprocessorRegistrationDto.Site`) — exporters
- * carry none. Mirrors the fallback the OJ frontend's `applicationHeader.js`
- * already applies to its own "Site" header row: the registered address
- * stands in for an exporter's site address, and an absent
- * `wasteProcessingType` (e.g. a work item created manually through CM's
- * "create work item" form) defaults to the reprocessor branch rather than
- * the exporter one.
- *
- * For an exporter this deliberately makes Site address equal Registered
- * address — matches OJ's own header, not a bug.
- */
-function deriveSiteAddress(payload, registeredAddress) {
-  if (payload.wasteProcessingType === EXPORTER_WASTE_PROCESSING_TYPE) {
-    return registeredAddress
-  }
-  const lines = buildSiteAddressLines(payload)
-  return lines.length > 0 ? lines.join(', ') : null
-}
 
 /**
  * RA-434. The "Additional information" tab's six-row view model, in the

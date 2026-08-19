@@ -1,11 +1,14 @@
 {% extends 'layouts/page.njk' %}
 
 {% from "govuk/components/button/macro.njk" import govukButton %}
-{% from "govuk/components/input/macro.njk" import govukInput %}
+{% from "govuk/components/date-input/macro.njk" import govukDateInput %}
 {% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
 {% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
 
-{# RA-131: Extend SLA clock #}
+{# RA-131: Extend the determination deadline. Relabelled from "SLA" to      #}
+{# "Determination Deadline" and moved from a day-count input to a calendar  #}
+{# date picker with no upper bound by RA-447 (CM5 / CM6) — see              #}
+{# `sla.service.js#validateExtendDeadline`. `data-testid`s are unchanged.   #}
 
 {% block content %}
   {{ appHeading({
@@ -35,37 +38,51 @@
           name: "reason",
           maxlength: reasonMaxLength,
           label: {
-            text: "Reason for extending the SLA",
+            text: "Reason for extending the determination deadline",
             classes: "govuk-label--s"
           },
           hint: {
-            text: "Explain why the SLA deadline needs to be extended."
+            text: "Explain why the determination deadline needs to be extended."
           },
           value: values.reason,
           errorMessage: { text: fieldErrors["reason"] } if fieldErrors["reason"] else null,
           attributes: { "data-testid": "sla-extend-reason" }
         }) }}
 
-        {{ govukInput({
-          id: "field-additionalDays",
-          name: "additionalDays",
-          label: {
-            text: "Number of additional days",
-            classes: "govuk-label--s"
+        {{ govukDateInput({
+          id: dateInputId,
+          namePrefix: dateInputId,
+          fieldset: {
+            legend: {
+              text: "New determination deadline",
+              classes: "govuk-fieldset__legend--s"
+            }
           },
-          hint: {
-            text: "Enter a whole number between 1 and " + maxDays + "."
-          },
-          value: values.additionalDays,
-          inputmode: "numeric",
-          classes: "govuk-input--width-5",
-          errorMessage: { text: fieldErrors["additionalDays"] } if fieldErrors["additionalDays"] else null,
+          hint: { text: "For example, 27 3 2026" },
+          items: [
+            {
+              name: "day",
+              classes: "govuk-input--width-2" + (" govuk-input--error" if fieldErrors["deadline"] else ""),
+              value: values.deadline.day
+            },
+            {
+              name: "month",
+              classes: "govuk-input--width-2" + (" govuk-input--error" if fieldErrors["deadline"] else ""),
+              value: values.deadline.month
+            },
+            {
+              name: "year",
+              classes: "govuk-input--width-4" + (" govuk-input--error" if fieldErrors["deadline"] else ""),
+              value: values.deadline.year
+            }
+          ],
+          errorMessage: { text: fieldErrors["deadline"] } if fieldErrors["deadline"] else null,
           attributes: { "data-testid": "sla-extend-days" }
         }) }}
 
         <div class="govuk-button-group">
           {{ govukButton({
-            text: "Extend SLA",
+            text: "Extend determination deadline",
             disabled: user.isReadOnly,
             attributes: { "data-testid": "sla-extend-submit" }
           }) }}
