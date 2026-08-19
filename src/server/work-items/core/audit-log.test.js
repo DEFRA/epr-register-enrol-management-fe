@@ -616,6 +616,40 @@ describe('decorateAuditLog — per-entry State row (epr-rr9s)', () => {
     expect(applied.detailRows.filter((r) => r.key === 'State')).toHaveLength(0)
   })
 
+  test('suppresses the context State row on OJ status-push actions', () => {
+    // statusPushDetailRows already emits Previous state / New state for all
+    // three status-push actions, so the context-block State row would be a
+    // second, differently-worded state on the same entry: New state reads
+    // details.toStateDisplayName (the label the push hook recorded for OJ)
+    // while the context row resolves entry.stateId through the CM state
+    // definitions. One entry must not show both.
+    const entries = decorateAuditLog(
+      ['status-push-sent', 'status-push-skipped', 'status-push-failed'].map(
+        (action, i) => ({
+          id: `p${i}`,
+          action,
+          stateId: 'duly-made',
+          details: {
+            actionId: 'duly-make',
+            fromStateId: 'submitted',
+            toStateId: 'duly-made',
+            toStateDisplayName: 'DULY_MADE'
+          },
+          createdAt: '2026-05-01T10:00:00Z'
+        })
+      ),
+      { workItemSnapshot: snapshot, resolveStateDisplayName }
+    )
+
+    for (const entry of entries) {
+      expect(entry.detailRows.filter((r) => r.key === 'State')).toHaveLength(0)
+      // The entry's own New state row still carries the OJ vocabulary.
+      expect(entry.detailRows.find((r) => r.key === 'New state')?.value).toBe(
+        'DULY_MADE'
+      )
+    }
+  })
+
   test('renders a per-entry State row for retired task actions post-RA-410', () => {
     // RA-410 removed the task framework and its detail-row handling, so a
     // historical task-completed entry no longer shows its own State row.

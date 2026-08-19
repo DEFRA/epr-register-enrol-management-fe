@@ -53,14 +53,26 @@ export function decorateAuditLog(
 
 /**
  * Audit actions whose own event-specific detail rows already state the
- * work item's resulting (as-of) state — `work-item-submitted` (Initial
- * state) and `action-applied` (Previous / New state). For these we
- * suppress the context-block "State" row so the same value is not shown
- * twice on the one entry. Every other action — assignment, notes,
- * notifications, OJ status pushes, and the retired `task-completed` /
- * `task-status-changed` entries — carries no state in its own rows, so it
- * DOES get the context-block State row: that is where a caseworker learns
- * which state the item was in when the event happened.
+ * work item's resulting (as-of) state. For these we suppress the
+ * context-block "State" row so the same value is not shown twice on the
+ * one entry:
+ *
+ *   - `work-item-submitted`  — Initial state (`details.stateId`)
+ *   - `action-applied`       — Previous / New state
+ *   - `status-push-sent` / `status-push-skipped` / `status-push-failed`
+ *     — Previous / New state, via `statusPushDetailRows`
+ *
+ * The status-push actions matter especially: their `New state` row reads
+ * `details.toStateDisplayName ?? details.toStateId`, the vocabulary the
+ * push hook recorded for OJ, while the context row would resolve
+ * `entry.stateId` through the CM `type.states` display names. Left
+ * unsuppressed, one entry could show `New state: <OJ label>` alongside
+ * `State: <CM label>` for the same state.
+ *
+ * Every other action — assignment, notes, notifications, and the retired
+ * `task-completed` / `task-status-changed` entries — carries no state in
+ * its own rows, so it DOES get the context-block State row: that is where
+ * a caseworker learns which state the item was in when the event happened.
  *
  * RA-410 removed the task framework and purged the `task-completed` /
  * `task-status-changed` cases from `detailRowsForAuditEntry`, so those
@@ -70,7 +82,13 @@ export function decorateAuditLog(
  * auxiliary action (and old task entries with no `stateId` simply omit
  * it), rather than being silently suppressed.
  */
-const STATE_BEARING_ACTIONS = new Set(['work-item-submitted', 'action-applied'])
+const STATE_BEARING_ACTIONS = new Set([
+  'work-item-submitted',
+  'action-applied',
+  'status-push-sent',
+  'status-push-skipped',
+  'status-push-failed'
+])
 
 /**
  * Build the context-block "State" row for a single audit entry from that
