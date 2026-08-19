@@ -54,20 +54,23 @@ export function decorateAuditLog(
 /**
  * Audit actions whose own event-specific detail rows already state the
  * work item's resulting (as-of) state — `work-item-submitted` (Initial
- * state), `task-completed` / `task-status-changed` (State) and
- * `action-applied` (Previous / New state). For these we suppress the
- * context-block "State" row so the same value is not shown twice on the
- * one entry. Auxiliary actions (assignment, notes, notifications, OJ
- * status pushes) carry no state in their own rows, so they DO get the
- * context-block State row — that is where a caseworker learns which state
- * the item was in when the event happened.
+ * state) and `action-applied` (Previous / New state). For these we
+ * suppress the context-block "State" row so the same value is not shown
+ * twice on the one entry. Every other action — assignment, notes,
+ * notifications, OJ status pushes, and the retired `task-completed` /
+ * `task-status-changed` entries — carries no state in its own rows, so it
+ * DOES get the context-block State row: that is where a caseworker learns
+ * which state the item was in when the event happened.
+ *
+ * RA-410 removed the task framework and purged the `task-completed` /
+ * `task-status-changed` cases from `detailRowsForAuditEntry`, so those
+ * actions no longer render a State row of their own. They are therefore
+ * NOT in this set: a historical task entry that carries a per-entry
+ * `stateId` now surfaces it through the context-block row like any other
+ * auxiliary action (and old task entries with no `stateId` simply omit
+ * it), rather than being silently suppressed.
  */
-const STATE_BEARING_ACTIONS = new Set([
-  'work-item-submitted',
-  'task-completed',
-  'task-status-changed',
-  'action-applied'
-])
+const STATE_BEARING_ACTIONS = new Set(['work-item-submitted', 'action-applied'])
 
 /**
  * Build the context-block "State" row for a single audit entry from that

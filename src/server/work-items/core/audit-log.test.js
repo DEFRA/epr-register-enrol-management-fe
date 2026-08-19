@@ -587,10 +587,10 @@ describe('decorateAuditLog — per-entry State row (epr-rr9s)', () => {
   })
 
   test('suppresses the redundant State row on state-bearing actions', () => {
-    // work-item-submitted already shows "Initial state"; action-applied
-    // already shows Previous/New state; task-completed already shows
-    // "State". The context-block State row must not duplicate those.
-    const [submitted, applied, completed] = decorateAuditLog(
+    // work-item-submitted already shows "Initial state" and action-applied
+    // already shows Previous/New state, so the context-block State row must
+    // not duplicate those.
+    const [submitted, applied] = decorateAuditLog(
       [
         {
           id: 's1',
@@ -605,30 +605,38 @@ describe('decorateAuditLog — per-entry State row (epr-rr9s)', () => {
           stateId: 'duly-made',
           details: { fromStateId: 'submitted', toStateId: 'duly-made' },
           createdAt: '2026-05-01T09:00:00Z'
-        },
+        }
+      ],
+      { workItemSnapshot: snapshot, resolveStateDisplayName }
+    )
+    // No context-block State row on either — their own event rows carry it.
+    expect(submitted.detailRows.filter((r) => r.key === 'State')).toHaveLength(
+      0
+    )
+    expect(applied.detailRows.filter((r) => r.key === 'State')).toHaveLength(0)
+  })
+
+  test('renders a per-entry State row for retired task actions post-RA-410', () => {
+    // RA-410 removed the task framework and its detail-row handling, so a
+    // historical task-completed entry no longer shows its own State row.
+    // When such an entry carries a per-entry stateId it must now surface it
+    // via the context-block State row (resolved to a display name), NOT be
+    // suppressed as if it were still state-bearing.
+    const [completed] = decorateAuditLog(
+      [
         {
-          id: 's3',
+          id: 't1',
           action: 'task-completed',
-          stateId: 'duly-made',
-          details: { taskId: 't', stateId: 'duly-made' },
+          stateId: 'submitted',
+          details: { taskId: 't', stateId: 'submitted' },
           createdAt: '2026-05-01T10:00:00Z'
         }
       ],
       { workItemSnapshot: snapshot, resolveStateDisplayName }
     )
-    // Exactly one State row each, and it comes from the event-specific
-    // rows (raw state id), not a second context-block copy.
-    expect(submitted.detailRows.filter((r) => r.key === 'State')).toHaveLength(
-      0
-    )
-    expect(applied.detailRows.filter((r) => r.key === 'State')).toHaveLength(0)
-    expect(completed.detailRows.filter((r) => r.key === 'State')).toHaveLength(
-      1
-    )
-    // task-completed's single State row is its OWN event row (details.stateId)
-    expect(completed.detailRows.find((r) => r.key === 'State')?.value).toBe(
-      'duly-made'
-    )
+    const stateRows = completed.detailRows.filter((r) => r.key === 'State')
+    expect(stateRows).toHaveLength(1)
+    expect(stateRows[0].value).toBe('Not started')
   })
 
   test('falls back to the raw stateId when no resolver is supplied', () => {
