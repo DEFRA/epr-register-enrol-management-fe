@@ -13,12 +13,14 @@ const logger = createLogger()
  * cdp-example-node-frontend file-controller pattern — direct S3 access, not
  * cdp-uploader (upload/scan only).
  *
- * Access control is inherited for free from `getWorkItem`: it hits the same
- * backend endpoint the application-details page already uses, which already
- * enforces work-item tenancy (`WorkItemTenancy.CanRead`) and 404s for any
- * work item the caller's session can't see. No separate ownership check is
- * written here on purpose — re-deriving it would risk drifting from the
- * backend's rules.
+ * Access control: this hits the same `getWorkItem` backend endpoint the
+ * application-details page already uses, which 404s for a non-existent
+ * work item id. There is no per-caseworker ownership check here — per
+ * ADR-0005, `WorkItemTenancy`/`CanRead` was deliberately deleted from the
+ * backend, and by design (RA-323) every caseworker holds the same role and
+ * can see every case. No separate ownership check is written here on
+ * purpose — this matches the system's documented "any caseworker sees any
+ * case" model, not an oversight.
  */
 
 function findFile(payload, fileId) {
