@@ -24,6 +24,7 @@ import {
   validateQueryForm
 } from './query.schema.js'
 import { createQueryService } from './query.service.js'
+import { isExporterApplication } from './application-summary.js'
 
 const VIEW_PATH = 'work-items/query'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -70,13 +71,20 @@ export function hasQueryAction(workItem) {
   return actions.some((a) => isQueryActionId(a?.actionId))
 }
 
-function sectionOptions(selected) {
+/**
+ * RA-367 — the checkbox items for the query form. Exporter-only sections
+ * (BES/ORS) are omitted for non-exporter applications so a reprocessor
+ * never sees a section its operator app cannot unlock.
+ */
+function sectionOptions(selected, isExporter) {
   const chosen = new Set(selected)
-  return QUERY_SECTION_OPTIONS.map((o) => ({
-    value: o.value,
-    text: o.text,
-    checked: chosen.has(o.value)
-  }))
+  return QUERY_SECTION_OPTIONS.filter((o) => isExporter || !o.exporterOnly).map(
+    (o) => ({
+      value: o.value,
+      text: o.text,
+      checked: chosen.has(o.value)
+    })
+  )
 }
 
 function renderForm(
@@ -90,6 +98,10 @@ function renderForm(
     // failure on the validation-error path) hides the notice rather than
     // asserting something that may not be true.
     isUnassigned = false,
+    // RA-367: whether this is an exporter application. Defaults to false so
+    // a work item we could not re-read hides BES/ORS rather than showing
+    // sections a reprocessor cannot use.
+    isExporter = false,
     values = { sections: [], reason: '' },
     fieldErrors = {},
     errorSummary = null,
@@ -106,7 +118,7 @@ function renderForm(
       formAction: queryHref(id),
       cancelHref: detailHref(id),
       maxWords: QUERY_REASON_MAX_WORDS,
-      sectionItems: sectionOptions(values.sections),
+      sectionItems: sectionOptions(values.sections, isExporter),
       values,
       fieldErrors,
       errorSummary
@@ -173,7 +185,8 @@ export function makeShowQueryController() {
       return renderForm(h, {
         id,
         applicationRef: workItem.payload?.applicationReference ?? null,
-        isUnassigned: !workItem.assignedToId
+        isUnassigned: !workItem.assignedToId,
+        isExporter: isExporterApplication(workItem)
       })
     }
   }
@@ -186,18 +199,33 @@ export function makeSubmitQueryController({
     async handler(request, h) {
       const id = request.params.id
       const user = getUser(request)
+
+      // RA-367: we need the work item's type to validate the submitted
+      // sections (exporter-only BES/ORS are invalid for a reprocessor), so
+      // read it up front.
+      const item = await getWorkItem({ workItemId: id, user })
+      const workItem = item.ok ? item.workItem : null
+      const isExporter = workItem ? isExporterApplication(workItem) : false
+
+      // Only enforce the exporter-only section guard when the work item
+      // actually loaded and told us its type. If the lookup itself failed we
+      // cannot know the type, so we let the request fall through to
+      // `service.raiseQuery`, whose existing not-found / network error
+      // handling surfaces the right banner — rather than rejecting a BES/ORS
+      // POST with a misleading "select an area" error (review: jather-code-ee).
       // `validateQueryForm` tolerates a null/undefined payload itself, so
       // there is no need to defend against it twice.
-      const validation = validateQueryForm(request.payload)
+      const validation = validateQueryForm(request.payload, {
+        isExporter,
+        enforceExporterOnly: item.ok
+      })
 
       if (!validation.ok) {
-        const item = await getWorkItem({ workItemId: id, user })
         return renderForm(h, {
           id,
-          applicationRef: item.ok
-            ? (item.workItem.payload?.applicationReference ?? null)
-            : null,
-          isUnassigned: item.ok ? !item.workItem.assignedToId : false,
+          applicationRef: workItem?.payload?.applicationReference ?? null,
+          isUnassigned: workItem ? !workItem.assignedToId : false,
+          isExporter,
           values: validation.values,
           fieldErrors: validation.fieldErrors,
           errorSummary: buildErrorSummary(validation.fieldErrors),

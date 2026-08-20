@@ -1,12 +1,12 @@
-# EPR Register Case Management Frontend (PoC)
+# EPR Register Enrol Management Frontend
 
-A proof-of-concept Node.js / [Hapi](https://hapi.dev/) frontend for the EPR
-Register case management service. Built from
+A Node.js / [Hapi](https://hapi.dev/) frontend for the EPR Register case
+management service. Built from
 [cdp-node-frontend-template](https://github.com/DEFRA/cdp-node-frontend-template)
 and styled with the [GOV.UK Design System](https://design-system.service.gov.uk/).
 
 The frontend renders GDS-compliant pages and calls the
-[`epr-register-case-management-backend-poc`](../epr-register-case-management-backend-poc/)
+[`epr-register-enrol-management-be`](../epr-register-enrol-management-be/)
 HTTP API server-to-server.
 
 - [Requirements](#requirements)
@@ -23,7 +23,7 @@ HTTP API server-to-server.
 - Node.js 24+ (managed via [`nvm`](https://github.com/nvm-sh/nvm) — `nvm use`)
 - npm 10+
 - [Docker](https://www.docker.com/) and Docker Compose (for the Docker workflow)
-- The [case management backend](../epr-register-case-management-backend-poc/)
+- The [case management backend](../epr-register-enrol-management-be/)
   running on `http://localhost:8085` (see backend README)
 
 ## Local development
@@ -69,7 +69,7 @@ docker compose down -v
 ```
 
 > The frontend Compose file builds the backend image directly from the
-> sibling repository at `../epr-register-case-management-backend-poc`. If
+> sibling repository at `../epr-register-enrol-management-be`. If
 > you keep the two repos in different parent directories, adjust the
 > `build:` path in [compose.yml](compose.yml) accordingly.
 
@@ -85,11 +85,11 @@ share the `cdp-tenant` Docker network and that the frontend's
 To run both natively (no Docker):
 
 ```bash
-# In epr-register-case-management-backend-poc
+# In epr-register-enrol-management-be
 docker compose up -d mongodb       # or run MongoDB locally
 dotnet run --project Backend.Api --launch-profile Backend.Api
 
-# In epr-register-case-management-frontend-poc
+# In epr-register-enrol-management-fe
 npm run dev
 ```
 

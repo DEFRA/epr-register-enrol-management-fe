@@ -29,14 +29,17 @@ export const workItemAuditLogController = {
     const applicationRef = workItem.payload.applicationReference
     const type = getWorkItemType(workItem.typeId)
     const typeDisplayName = type?.displayName ?? workItem.typeId
-    const stateDisplayName =
-      type?.states?.find((s) => s.id === workItem.stateId)?.displayName ??
-      workItem.stateId
+    // Single state-code → display-name resolver, reused for the live case
+    // state (header) AND for each audit entry's own `stateId` (epr-rr9s),
+    // so historical entries render their state as-of the event rather than
+    // the current one.
+    const resolveStateDisplayName = (stateId) =>
+      type?.states?.find((s) => s.id === stateId)?.displayName ?? stateId
+    const stateDisplayName = resolveStateDisplayName(workItem.stateId)
 
     const workItemSnapshot = {
       orgId: workItem.payload?.applicationReference ?? null,
       typeDisplayName,
-      stateDisplayName,
       submittedAt: workItem.submittedAt ?? null,
       submittedBy: workItem.submittedBy ?? null,
       lastModifiedAt: workItem.lastModifiedAt ?? null,
@@ -63,7 +66,8 @@ export const workItemAuditLogController = {
         typeDisplayName,
         auditLog: decorateAuditLog(workItem.auditLog, {
           payload: workItem.payload,
-          workItemSnapshot
+          workItemSnapshot,
+          resolveStateDisplayName
         })
       }
     })

@@ -58,6 +58,19 @@ function aWorkItem(overrides = {}) {
   }
 }
 
+// RA-367: an application counts as an exporter iff its payload declares
+// `wasteProcessingType: 'exporter'` (case-insensitive). The default
+// `aWorkItem()` carries no such field, so it is a reprocessor.
+function anExporterWorkItem(overrides = {}) {
+  return aWorkItem({
+    payload: {
+      applicationReference: REF,
+      wasteProcessingType: 'exporter'
+    },
+    ...overrides
+  })
+}
+
 function form({
   sections = ['business-plan'],
   reason = 'Please clarify'
@@ -318,7 +331,11 @@ describe('GET /work-items/{id}/query', () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
   })
 
-  test('renders the query form with all six section checkboxes', async () => {
+  // RA-367 AC02: an exporter application (one with overseas sites) still
+  // sees all six areas.
+  test('renders the query form with all six section checkboxes for an exporter', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: anExporterWorkItem() })
+
     const { statusCode, result } = await server.inject({
       method: 'GET',
       url: QUERY_HREF
@@ -329,6 +346,33 @@ describe('GET /work-items/{id}/query', () => {
     for (const option of QUERY_SECTION_OPTIONS) {
       expect(result).toEqual(expect.stringContaining(`value="${option.value}"`))
       expect(result).toEqual(expect.stringContaining(option.text))
+    }
+  })
+
+  // RA-367 AC01: a reprocessor application (no overseas sites) must not see
+  // the exporter-only BES and ORS checkboxes; the other four still render.
+  test('hides BES and ORS checkboxes for a reprocessor', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: QUERY_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toEqual(
+      expect.stringContaining('value="broadly-equivalent-standards"')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining('value="overseas-reprocessing-sites"')
+    )
+    for (const value of [
+      'authority-to-issue',
+      'business-plan',
+      'prn-tonnage',
+      'sampling-and-inspection-plan'
+    ]) {
+      expect(result).toEqual(expect.stringContaining(`value="${value}"`))
     }
   })
 
@@ -676,6 +720,68 @@ describe('POST /work-items/{id}/query', () => {
     expect(result).toMatch(/value="prn-tonnage"[^>]*checked/)
   })
 
+  // RA-367 AC03: the server-side guard. A crafted POST (JS disabled, or a
+  // hand-built form) that includes an exporter-only section for a
+  // reprocessor is rejected as invalid rather than sent to the backend.
+  test('rejects a reprocessor POST that includes BES', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await postQuery(
+      server,
+      form({
+        sections: ['business-plan', 'broadly-equivalent-standards'],
+        reason: 'A reason'
+      })
+    )
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toEqual(expect.stringContaining('href="#field-sections"'))
+    expect(raiseWorkItemQuery).not.toHaveBeenCalled()
+  })
+
+  test('rejects a reprocessor POST that includes ORS', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode } = await postQuery(
+      server,
+      form({ sections: ['overseas-reprocessing-sites'], reason: 'A reason' })
+    )
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(raiseWorkItemQuery).not.toHaveBeenCalled()
+  })
+
+  // RA-367 AC02: BES/ORS remain valid for an exporter application.
+  test('accepts an exporter POST that includes BES and ORS', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: anExporterWorkItem() })
+    raiseWorkItemQuery.mockResolvedValue({
+      ok: true,
+      workItem: anExporterWorkItem()
+    })
+
+    const { statusCode, headers } = await postQuery(
+      server,
+      form({
+        sections: [
+          'broadly-equivalent-standards',
+          'overseas-reprocessing-sites'
+        ],
+        reason: 'A reason'
+      })
+    )
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(DETAIL_HREF)
+    expect(raiseWorkItemQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sections: [
+          'broadly-equivalent-standards',
+          'overseas-reprocessing-sites'
+        ]
+      })
+    )
+  })
+
   test('re-renders validation errors when the item has no application reference', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -696,6 +802,33 @@ describe('POST /work-items/{id}/query', () => {
 
     expect(statusCode).toBe(statusCodes.badRequest)
     expect(result).toEqual(expect.stringContaining(SELECT_SECTIONS_MESSAGE))
+  })
+
+  // RA-367 review (jather-code-ee): a lookup failure must NOT trip the
+  // exporter-only guard. We cannot know the applicant type when the fetch
+  // failed, so a BES/ORS POST has to fall through to raiseQuery — whose own
+  // not-found / network banner is the right feedback — rather than being
+  // rejected with a misleading "select an area" sections error.
+  test('lets a BES/ORS POST reach the backend when the work item lookup fails', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 503 })
+    raiseWorkItemQuery.mockResolvedValue({
+      ok: false,
+      reason: 'not-found',
+      status: 404,
+      message: 'gone'
+    })
+
+    const { statusCode, headers } = await postQuery(
+      server,
+      form({
+        sections: ['business-plan', 'broadly-equivalent-standards'],
+        reason: 'A reason'
+      })
+    )
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(DETAIL_HREF)
+    expect(raiseWorkItemQuery).toHaveBeenCalled()
   })
 
   test.each([

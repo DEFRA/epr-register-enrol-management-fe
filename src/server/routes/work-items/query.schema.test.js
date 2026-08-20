@@ -2,11 +2,14 @@ import { describe, expect, test } from 'vitest'
 
 import {
   ENTER_REASON_MESSAGE,
+  EXPORTER_ONLY_SECTION_VALUES,
+  INVALID_SECTIONS_MESSAGE,
   QUERY_REASON_MAX_WORDS,
   QUERY_SECTION_OPTIONS,
   QUERY_SECTION_VALUES,
   REASON_TOO_LONG_MESSAGE,
   SELECT_SECTIONS_MESSAGE,
+  allowedSectionValues,
   buildErrorSummary,
   joiDetailsToFieldErrors,
   normaliseSections,
@@ -27,14 +30,41 @@ describe('QUERY_SECTION_OPTIONS', () => {
       },
       {
         value: 'broadly-equivalent-standards',
-        text: 'Broadly equivalent standards (BES)'
+        text: 'Broadly equivalent standards (BES)',
+        exporterOnly: true
       },
       {
         value: 'overseas-reprocessing-sites',
-        text: 'Overseas reprocessing sites (ORS)'
+        text: 'Overseas reprocessing sites (ORS)',
+        exporterOnly: true
       }
     ])
     expect(QUERY_SECTION_VALUES).toHaveLength(6)
+  })
+
+  test('RA-367: BES and ORS are the exporter-only sections', () => {
+    expect(EXPORTER_ONLY_SECTION_VALUES).toEqual([
+      'broadly-equivalent-standards',
+      'overseas-reprocessing-sites'
+    ])
+  })
+})
+
+describe('allowedSectionValues (RA-367)', () => {
+  test('an exporter may query all six sections', () => {
+    expect(allowedSectionValues(true)).toEqual(QUERY_SECTION_VALUES)
+  })
+
+  test('a non-exporter may not query BES or ORS', () => {
+    const allowed = allowedSectionValues(false)
+    expect(allowed).toEqual([
+      'authority-to-issue',
+      'business-plan',
+      'prn-tonnage',
+      'sampling-and-inspection-plan'
+    ])
+    expect(allowed).not.toContain('broadly-equivalent-standards')
+    expect(allowed).not.toContain('overseas-reprocessing-sites')
   })
 })
 
@@ -193,5 +223,66 @@ describe('validateQueryForm', () => {
     const result = validateQueryForm(null)
     expect(result.ok).toBe(false)
     expect(result.values).toEqual({ sections: [], reason: '' })
+  })
+
+  describe('RA-367 exporter-only guard', () => {
+    test('defaults to allowing BES/ORS when no type is supplied', () => {
+      const result = validateQueryForm({
+        sections: ['broadly-equivalent-standards'],
+        reason: 'A reason'
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    test('an exporter may query BES and ORS', () => {
+      const result = validateQueryForm(
+        {
+          sections: [
+            'broadly-equivalent-standards',
+            'overseas-reprocessing-sites'
+          ],
+          reason: 'A reason'
+        },
+        { isExporter: true }
+      )
+      expect(result.ok).toBe(true)
+      expect(result.value.sections).toEqual([
+        'broadly-equivalent-standards',
+        'overseas-reprocessing-sites'
+      ])
+    })
+
+    test('rejects BES for a non-exporter with an error on the sections field', () => {
+      const result = validateQueryForm(
+        { sections: ['broadly-equivalent-standards'], reason: 'A reason' },
+        { isExporter: false }
+      )
+      expect(result.ok).toBe(false)
+      expect(result.fieldErrors.sections).toBe(INVALID_SECTIONS_MESSAGE)
+      expect(result.fieldErrors.reason).toBeUndefined()
+    })
+
+    test('rejects ORS mixed with a valid section for a non-exporter', () => {
+      const result = validateQueryForm(
+        {
+          sections: ['business-plan', 'overseas-reprocessing-sites'],
+          reason: 'A reason'
+        },
+        { isExporter: false }
+      )
+      expect(result.ok).toBe(false)
+      expect(result.fieldErrors.sections).toBe(INVALID_SECTIONS_MESSAGE)
+    })
+
+    test('a non-exporter may still query the four shared sections', () => {
+      const result = validateQueryForm(
+        {
+          sections: ['authority-to-issue', 'business-plan'],
+          reason: 'A reason'
+        },
+        { isExporter: false }
+      )
+      expect(result.ok).toBe(true)
+    })
   })
 })
