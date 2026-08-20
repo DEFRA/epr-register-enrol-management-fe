@@ -75,7 +75,7 @@ services:
       - cdp-tenant
 
   case-management-backend:
-    build: ../epr-register-case-management-backend-poc
+    build: ../epr-register-enrol-management-be
     container_name: case-management-backend
     ports:
       - '8085:8085'
