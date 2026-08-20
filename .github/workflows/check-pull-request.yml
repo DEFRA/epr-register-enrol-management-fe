@@ -80,7 +80,7 @@ jobs:
       - name: Test Docker Image Build
         run: |
           set +e
-          docker build --no-cache --tag epr-register-case-management-frontend-poc .
+          docker build --no-cache --tag epr-register-enrol-management-fe .
           exit $?
 
   test-e2e:

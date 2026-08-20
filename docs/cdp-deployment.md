@@ -1,7 +1,7 @@
 # CDP deployment configuration
 
 This document captures the metadata required to deploy
-`epr-register-case-management-frontend-poc` onto the CDP platform. It
+`epr-register-enrol-management-fe` onto the CDP platform. It
 complements the official
 [CDP documentation](https://github.com/DEFRA/cdp-documentation) — refer to
 those how-tos for the authoritative platform behaviour.
@@ -10,7 +10,7 @@ those how-tos for the authoritative platform behaviour.
 
 | Attribute      | Value                                                                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Service name   | `epr-register-case-management-frontend-poc`                                                                                                       |
+| Service name   | `epr-register-enrol-management-fe`                                                                                                                |
 | Runtime        | Node.js 24 (`node24`) running Hapi                                                                                                                |
 | Container port | `3000`                                                                                                                                            |
 | Health probe   | `GET /health` (anonymous, returns `200`)                                                                                                          |
