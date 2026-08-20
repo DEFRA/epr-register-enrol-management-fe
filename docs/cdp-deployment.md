@@ -36,7 +36,11 @@ those how-tos for the authoritative platform behaviour.
 | `HTTP_PROXY`                      | CDP platform      | CDP outbound proxy for plain HTTP. Wired onto `global-agent` for legacy HTTP clients.                                                                                                                                                                                                                                                                                                           |
 | `HTTPS_PROXY`                     | CDP platform      | CDP outbound proxy for HTTPS (the common case — backend calls are HTTPS in deployed envs). Used by undici's global dispatcher (the `fetch` exported from `undici`). Falls back to `HTTP_PROXY` if unset.                                                                                                                                                                                        |
 | `ENABLE_SECURE_CONTEXT`           | Service config    | `true` in production (loads CDP CA bundle).                                                                                                                                                                                                                                                                                                                                                     |
-| `AUTH_STUB_ENABLED`               | Service config    | **Must** be `false` when `ENVIRONMENT=prod` — boot fails loudly if both conditions are true. Can be set to `true` in other deployed environments (e.g. `dev`, `test`) to bypass OAuth while real auth is being wired up.                                                                                                                                                                        |
+| `AUTH_STUB_ENABLED`               | Service config    | **Must** be `false` when `ENVIRONMENT=prod` — boot fails loudly if both conditions are true. Defaults to `true` whenever `ENVIRONMENT !== 'prod'`, so non-prod environments run stub auth unless explicitly overridden. Can be set to `true` in other deployed environments (e.g. `dev`, `test`) to bypass OAuth while real auth is being wired up.                                             |
+| `ENTRA_CLIENT_ID`                 | Service config    | Azure Entra ID app registration client ID. Required (boot fails) in production when `AUTH_STUB_ENABLED=false`.                                                                                                                                                                                                                                                                                  |
+| `ENTRA_TENANT_ID`                 | Service config    | Azure Entra ID tenant ID, used to build the Microsoft OAuth URLs.                                                                                                                                                                                                                                                                                                                               |
+| `ENTRA_REGULATOR_ROLE_VALUE`      | Service config    | Entra app role value that identifies a regulator user.                                                                                                                                                                                                                                                                                                                                          |
+| `ENTRA_SUPPORT_USER_ROLE_VALUE`   | Service config    | Entra app role value that identifies a support user.                                                                                                                                                                                                                                                                                                                                            |
 | `WORK_ITEM_CREATION_ENABLED`      | Service config    | RA-127 demo. Toggles the "Create work item" form (`GET`/`POST /work-items/re-accreditation/new`) and the entry point on the work items list page. Defaults to `true` outside production and `false` when `NODE_ENV=production` or `ENVIRONMENT=prod`.                                                                                                                                           |
 
 ## Required secrets (cdp-portal)
@@ -47,10 +51,16 @@ those how-tos for the authoritative platform behaviour.
   [`src/config/config.js`](../src/config/config.js) refuses to start the
   process if this is missing (i.e. still set to the public placeholder
   default) when the cookie is configured as secure or `NODE_ENV=production`.
-- `COGNITO_CLIENT_SECRET` — once real Cognito auth is wired up (currently
-  stubbed in non-prod environments). `AUTH_STUB_ENABLED` **must** remain
-  `false` when `ENVIRONMENT=prod`; the boot-time hardening assertion fails
-  if stub auth is enabled in that environment.
+- `ENTRA_CLIENT_SECRET` — Azure Entra ID app registration client secret
+  (regulator/support-user sign-in). Real auth is implemented via Entra ID
+  (`src/server/routes/auth`), selected over the stub provider by
+  `select-auth-plugin.js` whenever `AUTH_STUB_ENABLED` is false. `AUTH_STUB_ENABLED`
+  **must** remain `false` when `ENVIRONMENT=prod`; the boot-time hardening
+  assertion fails if stub auth is enabled in that environment. A separate
+  guard (gated on `isProduction`, not `ENVIRONMENT=prod` specifically —
+  see `src/config/config.js`) requires both `ENTRA_CLIENT_ID` and
+  `ENTRA_CLIENT_SECRET` to be non-empty whenever stub auth is off in a
+  production build.
 - `BACKEND_API_SHARED_SECRET` — HMAC-SHA256 secret this service signs its
   outbound requests to the case management backend with (sent as
   `x-cdp-auth-signature` alongside `BACKEND_API_CLIENT_ID`'s
@@ -75,7 +85,7 @@ those how-tos for the authoritative platform behaviour.
 
 ## Squid proxy allow-list
 
-- `cognito-idp.eu-west-2.amazonaws.com` — Cognito hosted UI / OIDC.
+- `login.microsoftonline.com` — Azure Entra ID hosted login / OIDC endpoints.
 - The CDP-internal hostname of the case-management backend (resolved by
   `BACKEND_API_URL`).
 
