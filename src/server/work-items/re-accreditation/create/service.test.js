@@ -5,6 +5,8 @@ import { createReAccreditationService } from './service.js'
 const validForm = () => ({
   operatorEmail: 'test@defra.gov.uk',
   organisationName: 'Acme',
+  operatorOrganisationId: '500001',
+  operatorRegistrationId: 'reg-001',
   siteAddress: {
     line1: '1 Test Way',
     line2: '',

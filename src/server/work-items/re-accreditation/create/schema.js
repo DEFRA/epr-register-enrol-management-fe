@@ -67,6 +67,28 @@ export const createReAccreditationSchema = Joi.object({
     'string.empty': 'Enter the organisation name',
     'string.max': 'Organisation name must be 200 characters or fewer'
   }),
+  // RA-448: management-be's accreditation-number adapter requires a real,
+  // numeric 6-digit Org ID to call the backend — an item created through
+  // this form previously had none, which every submission now needs
+  // regardless of how the work item was created (case-management form or
+  // real operator journey).
+  operatorOrganisationId: Joi.string()
+    .trim()
+    .required()
+    .pattern(/^\d{6}$/)
+    .messages({
+      'any.required': 'Enter the organisation ID',
+      'string.empty': 'Enter the organisation ID',
+      'string.pattern.base': 'Organisation ID must be 6 digits'
+    }),
+  // RA-448: also required by the accreditation-number adapter (used as the
+  // backend application id). No format constraint beyond non-blank — unlike
+  // Org ID this has no universally fixed shape in the real data.
+  operatorRegistrationId: Joi.string().trim().required().max(100).messages({
+    'any.required': 'Enter the operator registration ID',
+    'string.empty': 'Enter the operator registration ID',
+    'string.max': 'Operator registration ID must be 100 characters or fewer'
+  }),
   siteAddress: Joi.object({
     line1: Joi.string().trim().required().max(100).messages({
       'any.required': 'Enter the site address line 1',

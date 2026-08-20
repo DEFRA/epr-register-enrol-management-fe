@@ -38,6 +38,8 @@ function renderForm(
       values: {
         operatorEmail: values.operatorEmail ?? '',
         organisationName: values.organisationName ?? '',
+        operatorOrganisationId: values.operatorOrganisationId ?? '',
+        operatorRegistrationId: values.operatorRegistrationId ?? '',
         siteAddress: {
           line1: site.line1 ?? '',
           line2: site.line2 ?? '',
@@ -61,6 +63,8 @@ function renderForm(
 const FIELD_ORDER = [
   'operatorEmail',
   'organisationName',
+  'operatorOrganisationId',
+  'operatorRegistrationId',
   'siteAddress.line1',
   'siteAddress.line2',
   'siteAddress.town',
@@ -97,6 +101,10 @@ function buildErrorSummary(fieldErrors) {
  */
 const DEMO_VALUES = {
   organisationName: 'Acme Recycling Ltd',
+  // RA-448: arbitrary but realistic 6-digit demo Org ID. A caseworker
+  // creating a real item overrides it with the operator's actual Org ID.
+  operatorOrganisationId: '500001',
+  operatorRegistrationId: 'reg-demo-001',
   siteAddress: {
     line1: '12 Industrial Way',
     line2: 'Parkside Estate',
@@ -161,6 +169,8 @@ function reshapeFormPayload(payload) {
   const shaped = {
     operatorEmail: p.operatorEmail,
     organisationName: p.organisationName,
+    operatorOrganisationId: p.operatorOrganisationId,
+    operatorRegistrationId: p.operatorRegistrationId,
     siteAddress: {
       line1: p.siteAddressLine1,
       line2: p.siteAddressLine2,

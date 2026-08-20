@@ -59,6 +59,29 @@
           errorMessage: { text: fieldErrors["organisationName"] } if fieldErrors["organisationName"] else null
         }) }}
 
+        {# RA-448: management-be's accreditation-number adapter requires a #}
+        {# real numeric Org ID and a registration ID to call the backend    #}
+        {# for a real accreditation number, for every work item regardless #}
+        {# of how it was created.                                          #}
+        {{ govukInput({
+          id: "field-operatorOrganisationId",
+          name: "operatorOrganisationId",
+          label: { text: "Organisation ID", classes: "govuk-label--s" },
+          hint: { text: "The organisation's 6-digit Org ID, e.g. 123456" },
+          value: values.operatorOrganisationId,
+          inputmode: "numeric",
+          classes: "govuk-input--width-10",
+          errorMessage: { text: fieldErrors["operatorOrganisationId"] } if fieldErrors["operatorOrganisationId"] else null
+        }) }}
+
+        {{ govukInput({
+          id: "field-operatorRegistrationId",
+          name: "operatorRegistrationId",
+          label: { text: "Operator registration ID", classes: "govuk-label--s" },
+          value: values.operatorRegistrationId,
+          errorMessage: { text: fieldErrors["operatorRegistrationId"] } if fieldErrors["operatorRegistrationId"] else null
+        }) }}
+
         <fieldset class="govuk-fieldset">
           <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
             <h2 class="govuk-fieldset__heading">Site address</h2>
