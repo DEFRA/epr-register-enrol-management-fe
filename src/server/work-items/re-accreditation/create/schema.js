@@ -81,13 +81,25 @@ export const createReAccreditationSchema = Joi.object({
       'string.empty': 'Enter the organisation ID',
       'string.pattern.base': 'Organisation ID must be 6 digits'
     }),
-  // RA-448: also required by the accreditation-number adapter (used as the
-  // backend application id). No format constraint beyond non-blank — unlike
-  // Org ID this has no universally fixed shape in the real data.
+  // RA-448: required for prior-year ReEx lookups (paired with Org ID). No
+  // format constraint beyond non-blank — unlike Org ID this has no
+  // universally fixed shape in the real data.
   operatorRegistrationId: Joi.string().trim().required().max(100).messages({
     'any.required': 'Enter the operator registration ID',
     'string.empty': 'Enter the operator registration ID',
     'string.max': 'Operator registration ID must be 100 characters or fewer'
+  }),
+  // RA-448 phase 2 review: the accreditation-number adapter's {applicationId}
+  // route segment is management-be's payload.operatorApplicationId — the
+  // backend's own AccreditationApplicationModel id for a real submission,
+  // confirmed against HttpCaseWorkingApiAdapter.BuildPayload. It is a
+  // DIFFERENT field from operatorRegistrationId above (the ReEx
+  // registration id, used for prior-year lookups) — an earlier version of
+  // this integration sent operatorRegistrationId here, which was wrong.
+  operatorApplicationId: Joi.string().trim().required().max(100).messages({
+    'any.required': 'Enter the operator application ID',
+    'string.empty': 'Enter the operator application ID',
+    'string.max': 'Operator application ID must be 100 characters or fewer'
   }),
   siteAddress: Joi.object({
     line1: Joi.string().trim().required().max(100).messages({

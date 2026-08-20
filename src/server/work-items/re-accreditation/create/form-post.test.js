@@ -60,6 +60,7 @@ function form(overrides = {}) {
     operatorEmail: 'test@defra.gov.uk',
     organisationName: 'Acme Recycling Ltd',
     operatorOrganisationId: '500001',
+    operatorApplicationId: 'app-001',
     operatorRegistrationId: 'reg-001',
     siteAddressLine1: '12 Industrial Way',
     siteAddressLine2: '',
@@ -178,15 +179,17 @@ describe('the create form POST', () => {
     expect(result).toContain('value="54600"')
   })
 
-  test('forwards operatorOrganisationId and operatorRegistrationId to the backend', async () => {
+  test('forwards operatorOrganisationId, operatorApplicationId and operatorRegistrationId to the backend', async () => {
     await submit(
       form({
         operatorOrganisationId: '654321',
+        operatorApplicationId: 'app-999',
         operatorRegistrationId: 'reg-999'
       })
     )
     expect(sentPayload()).toMatchObject({
       operatorOrganisationId: '654321',
+      operatorApplicationId: 'app-999',
       operatorRegistrationId: 'reg-999'
     })
   })
@@ -209,6 +212,7 @@ describe('the create form POST', () => {
       operatorEmail: 'test@defra.gov.uk',
       organisationName: 'Acme Recycling Ltd',
       operatorOrganisationId: '500001',
+      operatorApplicationId: 'app-001',
       operatorRegistrationId: 'reg-001',
       siteAddress: {
         line1: '12 Industrial Way',

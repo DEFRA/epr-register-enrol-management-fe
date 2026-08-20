@@ -39,6 +39,7 @@ function renderForm(
         operatorEmail: values.operatorEmail ?? '',
         organisationName: values.organisationName ?? '',
         operatorOrganisationId: values.operatorOrganisationId ?? '',
+        operatorApplicationId: values.operatorApplicationId ?? '',
         operatorRegistrationId: values.operatorRegistrationId ?? '',
         siteAddress: {
           line1: site.line1 ?? '',
@@ -64,6 +65,7 @@ const FIELD_ORDER = [
   'operatorEmail',
   'organisationName',
   'operatorOrganisationId',
+  'operatorApplicationId',
   'operatorRegistrationId',
   'siteAddress.line1',
   'siteAddress.line2',
@@ -104,6 +106,11 @@ const DEMO_VALUES = {
   // RA-448: arbitrary but realistic 6-digit demo Org ID. A caseworker
   // creating a real item overrides it with the operator's actual Org ID.
   operatorOrganisationId: '500001',
+  // RA-448 phase 2 review: management-be's accreditation-number adapter
+  // forwards this as {applicationId} — the backend's own
+  // AccreditationApplicationModel id for a real submission. Distinct from
+  // operatorRegistrationId below (the ReEx registration id).
+  operatorApplicationId: 'app-demo-001',
   operatorRegistrationId: 'reg-demo-001',
   siteAddress: {
     line1: '12 Industrial Way',
@@ -170,6 +177,7 @@ function reshapeFormPayload(payload) {
     operatorEmail: p.operatorEmail,
     organisationName: p.organisationName,
     operatorOrganisationId: p.operatorOrganisationId,
+    operatorApplicationId: p.operatorApplicationId,
     operatorRegistrationId: p.operatorRegistrationId,
     siteAddress: {
       line1: p.siteAddressLine1,

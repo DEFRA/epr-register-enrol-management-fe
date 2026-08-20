@@ -74,6 +74,18 @@
           errorMessage: { text: fieldErrors["operatorOrganisationId"] } if fieldErrors["operatorOrganisationId"] else null
         }) }}
 
+        {# RA-448 phase 2 review: management-be's accreditation-number      #}
+        {# adapter forwards this as {applicationId} — the backend's own    #}
+        {# AccreditationApplicationModel id for a real submission. Distinct#}
+        {# from Operator registration ID below (the ReEx registration id). #}
+        {{ govukInput({
+          id: "field-operatorApplicationId",
+          name: "operatorApplicationId",
+          label: { text: "Operator application ID", classes: "govuk-label--s" },
+          value: values.operatorApplicationId,
+          errorMessage: { text: fieldErrors["operatorApplicationId"] } if fieldErrors["operatorApplicationId"] else null
+        }) }}
+
         {{ govukInput({
           id: "field-operatorRegistrationId",
           name: "operatorRegistrationId",

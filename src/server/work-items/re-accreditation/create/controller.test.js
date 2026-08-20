@@ -62,6 +62,7 @@ describe('#makeCreateWorkItemController (RA-127, RA-219)', () => {
     // RA-448: the accreditation-number adapter needs both, for every item
     // regardless of how it was created.
     expect(captured.viewModel.values.operatorOrganisationId).toBe('500001')
+    expect(captured.viewModel.values.operatorApplicationId).toBe('app-demo-001')
     expect(captured.viewModel.values.operatorRegistrationId).toBe(
       'reg-demo-001'
     )

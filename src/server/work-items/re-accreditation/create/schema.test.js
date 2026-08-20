@@ -11,6 +11,7 @@ const validForm = () => ({
   operatorEmail: 'test@defra.gov.uk',
   organisationName: 'Acme Recycling Ltd',
   operatorOrganisationId: '500001',
+  operatorApplicationId: 'app-001',
   operatorRegistrationId: 'reg-001',
   siteAddress: {
     line1: '1 Test Way',
@@ -150,6 +151,9 @@ describe('#createReAccreditationSchema (RA-127, RA-219)', () => {
     expect(errors.operatorEmail).toBe('Enter an email address')
     expect(errors.organisationName).toBe('Enter the organisation name')
     expect(errors.operatorOrganisationId).toBe('Enter the organisation ID')
+    expect(errors.operatorApplicationId).toBe(
+      'Enter the operator application ID'
+    )
     expect(errors.operatorRegistrationId).toBe(
       'Enter the operator registration ID'
     )
@@ -158,7 +162,7 @@ describe('#createReAccreditationSchema (RA-127, RA-219)', () => {
     expect(errors.siteAddress).toBe('Enter the site address')
   })
 
-  describe('RA-448 operatorOrganisationId / operatorRegistrationId', () => {
+  describe('RA-448 operatorOrganisationId / operatorApplicationId / operatorRegistrationId', () => {
     test.each([
       ['', 'Enter the organisation ID'],
       ['12345', 'Organisation ID must be 6 digits'],
@@ -197,6 +201,19 @@ describe('#createReAccreditationSchema (RA-127, RA-219)', () => {
       const errors = joiDetailsToFieldErrors(error.details)
       expect(errors.operatorRegistrationId).toBe(
         'Enter the operator registration ID'
+      )
+    })
+
+    test('rejects a blank operatorApplicationId', () => {
+      const form = validForm()
+      form.operatorApplicationId = ''
+      const { error } = createReAccreditationSchema.validate(form, {
+        abortEarly: false
+      })
+      expect(error).toBeDefined()
+      const errors = joiDetailsToFieldErrors(error.details)
+      expect(errors.operatorApplicationId).toBe(
+        'Enter the operator application ID'
       )
     })
   })

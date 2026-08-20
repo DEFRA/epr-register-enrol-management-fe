@@ -6,6 +6,7 @@ const validForm = () => ({
   operatorEmail: 'test@defra.gov.uk',
   organisationName: 'Acme',
   operatorOrganisationId: '500001',
+  operatorApplicationId: 'app-001',
   operatorRegistrationId: 'reg-001',
   siteAddress: {
     line1: '1 Test Way',
