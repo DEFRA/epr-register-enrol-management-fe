@@ -62,7 +62,12 @@ describe('#makeCreateWorkItemController (RA-127, RA-219)', () => {
     // RA-448: the accreditation-number adapter needs both, for every item
     // regardless of how it was created.
     expect(captured.viewModel.values.operatorOrganisationId).toBe('500001')
-    expect(captured.viewModel.values.operatorApplicationId).toBe('app-demo-001')
+    // RA-448 phase 2 review: generated fresh per GET (see the controller's
+    // comment for why a shared literal collided with management-be's
+    // submission idempotency check), so only the shape is asserted.
+    expect(captured.viewModel.values.operatorApplicationId).toMatch(
+      /^app-demo-[0-9a-f-]{36}$/
+    )
     expect(captured.viewModel.values.operatorRegistrationId).toBe(
       'reg-demo-001'
     )

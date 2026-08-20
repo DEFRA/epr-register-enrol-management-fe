@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 
 import { MATERIAL_OPTIONS, TONNAGE_BAND_OPTIONS } from './schema.js'
@@ -106,11 +108,6 @@ const DEMO_VALUES = {
   // RA-448: arbitrary but realistic 6-digit demo Org ID. A caseworker
   // creating a real item overrides it with the operator's actual Org ID.
   operatorOrganisationId: '500001',
-  // RA-448 phase 2 review: management-be's accreditation-number adapter
-  // forwards this as {applicationId} — the backend's own
-  // AccreditationApplicationModel id for a real submission. Distinct from
-  // operatorRegistrationId below (the ReEx registration id).
-  operatorApplicationId: 'app-demo-001',
   operatorRegistrationId: 'reg-demo-001',
   siteAddress: {
     line1: '12 Industrial Way',
@@ -146,7 +143,18 @@ export function makeCreateWorkItemController({
       return renderForm(h, {
         values: {
           ...DEMO_VALUES,
-          operatorEmail: defaultEmail
+          operatorEmail: defaultEmail,
+          // RA-448 phase 2 review: generated fresh per GET, NOT a shared
+          // constant like the other demo values. management-be's
+          // WorkItemService.SubmitAsync treats a matching
+          // payload.operatorApplicationId on an existing work item of the
+          // same type as an idempotent REPLAY (RA-311/MBE-3) and returns
+          // that existing item instead of creating a new one. A fixed
+          // literal here meant every UI-created item across an entire
+          // e2e/demo session collided on the same value, so only the
+          // FIRST "Create work item" submission ever actually created
+          // anything — every later one silently returned that same item.
+          operatorApplicationId: `app-demo-${randomUUID()}`
         }
       })
     }
