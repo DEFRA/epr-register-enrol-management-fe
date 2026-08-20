@@ -82,12 +82,24 @@ export function decorateAuditLog(
  * auxiliary action (and old task entries with no `stateId` simply omit
  * it), rather than being silently suppressed.
  */
+const ACTION_WORK_ITEM_SUBMITTED = 'work-item-submitted'
+const ACTION_APPLIED = 'action-applied'
+const ACTION_ASSIGNED = 'assigned'
+const ACTION_UNASSIGNED = 'unassigned'
+const ACTION_NOTE_ADDED = 'note-added'
+const ACTION_NOTIFICATION_SENT = 'notification-sent'
+const ACTION_NOTIFICATION_SKIPPED = 'notification-skipped'
+const ACTION_NOTIFICATION_FAILED = 'notification-failed'
+const ACTION_STATUS_PUSH_SENT = 'status-push-sent'
+const ACTION_STATUS_PUSH_SKIPPED = 'status-push-skipped'
+const ACTION_STATUS_PUSH_FAILED = 'status-push-failed'
+
 const STATE_BEARING_ACTIONS = new Set([
-  'work-item-submitted',
-  'action-applied',
-  'status-push-sent',
-  'status-push-skipped',
-  'status-push-failed'
+  ACTION_WORK_ITEM_SUBMITTED,
+  ACTION_APPLIED,
+  ACTION_STATUS_PUSH_SENT,
+  ACTION_STATUS_PUSH_SKIPPED,
+  ACTION_STATUS_PUSH_FAILED
 ])
 
 /**
@@ -103,15 +115,23 @@ const STATE_BEARING_ACTIONS = new Set([
  *     that is exactly the bug this fixes.
  */
 function buildEntryStateRow(entry, resolveStateDisplayName) {
-  if (entry == null || typeof entry !== 'object') return null
-  if (STATE_BEARING_ACTIONS.has(entry.action)) return null
+  if (entry == null || typeof entry !== 'object') {
+    return null
+  }
+  if (STATE_BEARING_ACTIONS.has(entry.action)) {
+    return null
+  }
   const stateId = entry.stateId
-  if (stateId == null || stateId === '') return null
+  if (stateId == null || stateId === '') {
+    return null
+  }
   const value =
     typeof resolveStateDisplayName === 'function'
       ? resolveStateDisplayName(stateId)
       : stateId
-  if (value == null || value === '') return null
+  if (value == null || value === '') {
+    return null
+  }
   return { key: 'State', value }
 }
 
@@ -130,7 +150,9 @@ function buildSnapshotRows(snapshot, entry, resolveStateDisplayName) {
     rows.push({ key: 'Type', value: snapshot.typeDisplayName })
   }
   const stateRow = buildEntryStateRow(entry, resolveStateDisplayName)
-  if (stateRow) rows.push(stateRow)
+  if (stateRow) {
+    rows.push(stateRow)
+  }
   const submittedAt = formatDateTimeGds(snapshot.submittedAt)
   if (submittedAt) rows.push({ key: 'Submitted at', value: submittedAt })
   if (snapshot.submittedBy) {
@@ -151,17 +173,17 @@ function buildSnapshotRows(snapshot, entry, resolveStateDisplayName) {
  * for newer audit actions added before the backend humaniser caught up).
  */
 const ACTION_DISPLAY_NAMES = {
-  'work-item-submitted': 'Work item submitted',
-  'action-applied': 'Action applied',
-  assigned: 'Assigned',
-  unassigned: 'Unassigned',
-  'note-added': 'Note added',
-  'notification-sent': 'Notification sent',
-  'notification-skipped': 'Notification not sent',
-  'notification-failed': 'Notification failed',
-  'status-push-sent': 'Status sent to OJ',
-  'status-push-skipped': 'Status not sent to OJ (disabled)',
-  'status-push-failed': 'Status failed to send to OJ'
+  [ACTION_WORK_ITEM_SUBMITTED]: 'Work item submitted',
+  [ACTION_APPLIED]: 'Action applied',
+  [ACTION_ASSIGNED]: 'Assigned',
+  [ACTION_UNASSIGNED]: 'Unassigned',
+  [ACTION_NOTE_ADDED]: 'Note added',
+  [ACTION_NOTIFICATION_SENT]: 'Notification sent',
+  [ACTION_NOTIFICATION_SKIPPED]: 'Notification not sent',
+  [ACTION_NOTIFICATION_FAILED]: 'Notification failed',
+  [ACTION_STATUS_PUSH_SENT]: 'Status sent to OJ',
+  [ACTION_STATUS_PUSH_SKIPPED]: 'Status not sent to OJ (disabled)',
+  [ACTION_STATUS_PUSH_FAILED]: 'Status failed to send to OJ'
 }
 
 /**
@@ -170,7 +192,10 @@ const ACTION_DISPLAY_NAMES = {
  * on the audit-log page (RA-234, RA-368) so failures are obviously
  * displayed rather than buried as another grey timeline row.
  */
-const FAILURE_ACTIONS = new Set(['notification-failed', 'status-push-failed'])
+const FAILURE_ACTIONS = new Set([
+  ACTION_NOTIFICATION_FAILED,
+  ACTION_STATUS_PUSH_FAILED
+])
 
 function isFailureAuditEntry(entry) {
   if (entry == null || typeof entry !== 'object') return false
@@ -196,9 +221,11 @@ function isFailureAuditEntry(entry) {
 export function notificationFailureDetected(auditLog) {
   if (!Array.isArray(auditLog)) return false
   const failed = auditLog.filter(
-    (entry) => entry?.action === 'notification-failed'
+    (entry) => entry?.action === ACTION_NOTIFICATION_FAILED
   )
-  const sent = auditLog.filter((entry) => entry?.action === 'notification-sent')
+  const sent = auditLog.filter(
+    (entry) => entry?.action === ACTION_NOTIFICATION_SENT
+  )
   return failed.some((failure) => {
     const failureTemplate = failure?.details?.templateKey
     return !sent.some((success) => {
@@ -236,7 +263,7 @@ export function summariseAuditEntry(entry) {
   }
   const details = entry.details ?? {}
   switch (entry.action) {
-    case 'action-applied': {
+    case ACTION_APPLIED: {
       const action = details.actionDisplayName ?? details.actionId ?? ''
       const from = details.fromStateId
       const to = details.toStateId
@@ -245,28 +272,28 @@ export function summariseAuditEntry(entry) {
       }
       return action
     }
-    case 'assigned': {
+    case ACTION_ASSIGNED: {
       const to = details.assigneeName ?? details.assigneeId ?? 'unknown user'
       const from = details.previousAssigneeName ?? details.previousAssigneeId
       return from ? `${from} → ${to}` : to
     }
-    case 'unassigned': {
+    case ACTION_UNASSIGNED: {
       const from = details.previousAssigneeName ?? details.previousAssigneeId
       return from ? `was ${from}` : ''
     }
-    case 'note-added':
+    case ACTION_NOTE_ADDED:
       return ''
-    case 'notification-sent':
+    case ACTION_NOTIFICATION_SENT:
       return details.recipient ?? ''
-    case 'notification-skipped':
+    case ACTION_NOTIFICATION_SKIPPED:
       return details.reason ?? ''
-    case 'notification-failed':
+    case ACTION_NOTIFICATION_FAILED:
       return details.errorMessage ?? ''
-    case 'status-push-sent':
+    case ACTION_STATUS_PUSH_SENT:
       return details.toStateDisplayName ?? details.toStateId ?? ''
-    case 'status-push-skipped':
+    case ACTION_STATUS_PUSH_SKIPPED:
       return details.reason ?? ''
-    case 'status-push-failed':
+    case ACTION_STATUS_PUSH_FAILED:
       return details.errorMessage ?? ''
     default:
       return ''
@@ -292,7 +319,7 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
   }
   const details = entry.details ?? {}
   switch (entry.action) {
-    case 'work-item-submitted': {
+    case ACTION_WORK_ITEM_SUBMITTED: {
       const rows = []
       if (details.typeId) rows.push({ key: 'Type', value: details.typeId })
       if (details.stateId) {
@@ -306,7 +333,7 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       }
       return rows
     }
-    case 'action-applied': {
+    case ACTION_APPLIED: {
       const rows = []
       const action = details.actionDisplayName ?? details.actionId
       if (action) rows.push({ key: 'Action', value: action })
@@ -320,7 +347,7 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       if (actor) rows.push({ key: 'Applied by', value: actor })
       return rows
     }
-    case 'assigned': {
+    case ACTION_ASSIGNED: {
       const rows = []
       const previous =
         details.previousAssigneeName ?? details.previousAssigneeId
@@ -331,7 +358,7 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       if (actor) rows.push({ key: 'Assigned by', value: actor })
       return rows
     }
-    case 'unassigned': {
+    case ACTION_UNASSIGNED: {
       const rows = []
       const previous =
         details.previousAssigneeName ?? details.previousAssigneeId
@@ -342,7 +369,7 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       if (actor) rows.push({ key: 'Unassigned by', value: actor })
       return rows
     }
-    case 'note-added': {
+    case ACTION_NOTE_ADDED: {
       const rows = []
       const actor = entry.createdByName ?? entry.createdBy
       if (actor) rows.push({ key: 'Added by', value: actor })
@@ -352,13 +379,13 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       }
       return rows
     }
-    case 'notification-sent':
-    case 'notification-skipped':
-    case 'notification-failed':
+    case ACTION_NOTIFICATION_SENT:
+    case ACTION_NOTIFICATION_SKIPPED:
+    case ACTION_NOTIFICATION_FAILED:
       return notificationDetailRows(entry, details)
-    case 'status-push-sent':
-    case 'status-push-skipped':
-    case 'status-push-failed':
+    case ACTION_STATUS_PUSH_SENT:
+    case ACTION_STATUS_PUSH_SKIPPED:
+    case ACTION_STATUS_PUSH_FAILED:
       return statusPushDetailRows(entry, details)
     default:
       return []
