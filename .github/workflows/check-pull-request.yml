@@ -59,10 +59,23 @@ jobs:
 
       - name: Comment coverage on PR
         if: always()
-        uses: marocchino/sticky-pull-request-comment@v3
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3
         with:
           header: coverage
           path: /tmp/coverage-comment.md
+
+      # Runs here (not in the test-e2e job) for two reasons: this job already
+      # has coverage/lcov.info from `npm test` above (sonar-project.properties
+      # reads it via sonar.javascript.lcov.reportPaths), and test-e2e's first
+      # step — DEFRA/epr-register-enrol-mgmt-tests/run-journey-tests — checks
+      # out a different repo with no `path:`, overwriting this repo's files
+      # (including sonar-project.properties) in that job's workspace.
+      - name: SonarCloud Scan
+        if: github.actor != 'dependabot[bot]'
+        uses: SonarSource/sonarqube-scan-action@v8.2.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.EPR_SONAR_TOKEN }}
 
       - name: Test Docker Image Build
         run: |
@@ -136,10 +149,3 @@ jobs:
           management-fe: ${{ github.sha }}
           management-be: ${{ steps.build-be.outputs.tag }}
           branch: ${{ steps.e2e-branch.outputs.ref }}
-
-      # - name: SonarCloud Scan
-      #   if: github.actor != 'dependabot[bot]'
-      #   uses: SonarSource/sonarqube-scan-action@v5.3.1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
