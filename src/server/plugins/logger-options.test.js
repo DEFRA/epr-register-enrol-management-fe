@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { pino } from 'pino'
 
 import { PRODUCTION_LOG_REDACT_PATHS } from '#/config/config.js'
+import { piiSerializers } from './pii-redaction.js'
 
 describe('production log redaction (epr-zld)', () => {
   test('PRODUCTION_LOG_REDACT_PATHS includes the user identity headers', () => {
@@ -48,5 +49,40 @@ describe('production log redaction (epr-zld)', () => {
     // Non-sensitive headers (service client id, trace id) are preserved.
     expect(out.req.headers['x-cdp-client-id']).toBe('frontend')
     expect(out.req.headers['x-cdp-request-id']).toBe('trace-123')
+  })
+})
+
+describe('IP/email redaction (all environments)', () => {
+  test('Pino redacts remoteAddress and forwarded-IP headers via piiSerializers', () => {
+    const chunks = []
+    const stream = { write: (c) => chunks.push(c) }
+
+    const logger = pino({ serializers: piiSerializers }, stream)
+
+    logger.info({
+      req: {
+        method: 'GET',
+        url: '/work-items',
+        headers: { 'x-forwarded-for': '198.51.100.7' },
+        remoteAddress: '203.0.113.5',
+        remotePort: 54321
+      }
+    })
+
+    const out = JSON.parse(chunks[0])
+    expect(out.req.remoteAddress).toBe('[REDACTED]')
+    expect(out.req.headers['x-forwarded-for']).toBe('[REDACTED]')
+  })
+
+  test('Pino redacts an email field via piiSerializers', () => {
+    const chunks = []
+    const stream = { write: (c) => chunks.push(c) }
+
+    const logger = pino({ serializers: piiSerializers }, stream)
+
+    logger.info({ email: 'person@example.com' })
+
+    const out = JSON.parse(chunks[0])
+    expect(out.email).toBe('[REDACTED]')
   })
 })

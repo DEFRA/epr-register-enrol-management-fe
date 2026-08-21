@@ -40,6 +40,41 @@ describe('#redactedReqSerializer', () => {
     expect(result.headers).toEqual({ 'user-agent': 'test-agent' })
     expect(result.remotePort).toBe(54321)
   })
+
+  test('redacts x-forwarded-for and x-real-ip headers when present', () => {
+    const stdSerializedReq = {
+      id: 'req-1',
+      method: 'GET',
+      url: '/work-items',
+      headers: {
+        'user-agent': 'test-agent',
+        'x-forwarded-for': '198.51.100.7',
+        'x-real-ip': '198.51.100.7'
+      },
+      remoteAddress: '10.0.0.5',
+      remotePort: 54321
+    }
+
+    const result = redactedReqSerializer(stdSerializedReq)
+
+    expect(result.headers['x-forwarded-for']).toBe(REDACTED_VALUE)
+    expect(result.headers['x-real-ip']).toBe(REDACTED_VALUE)
+    expect(result.headers['user-agent']).toBe('test-agent')
+  })
+
+  test('handles a request with no headers object', () => {
+    const stdSerializedReq = {
+      id: 'req-1',
+      method: 'GET',
+      url: '/work-items',
+      remoteAddress: '203.0.113.5',
+      remotePort: 54321
+    }
+
+    const result = redactedReqSerializer(stdSerializedReq)
+
+    expect(result.headers).toBeUndefined()
+  })
 })
 
 describe('#piiSerializers.email', () => {
