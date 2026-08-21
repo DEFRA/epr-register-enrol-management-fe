@@ -32,6 +32,9 @@ const validForm = () =>
   [
     'operatorEmail=test%40defra.gov.uk',
     'organisationName=Acme',
+    'operatorOrganisationId=500001',
+    'operatorApplicationId=app-001',
+    'operatorRegistrationId=reg-001',
     'siteAddressLine1=1%20Road',
     'siteAddressLine2=',
     'siteAddressTown=Town',

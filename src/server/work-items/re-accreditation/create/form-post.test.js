@@ -59,6 +59,9 @@ function form(overrides = {}) {
   const fields = {
     operatorEmail: 'test@defra.gov.uk',
     organisationName: 'Acme Recycling Ltd',
+    operatorOrganisationId: '500001',
+    operatorApplicationId: 'app-001',
+    operatorRegistrationId: 'reg-001',
     siteAddressLine1: '12 Industrial Way',
     siteAddressLine2: '',
     siteAddressTown: 'Bristol',
@@ -176,6 +179,30 @@ describe('the create form POST', () => {
     expect(result).toContain('value="54600"')
   })
 
+  test('forwards operatorOrganisationId, operatorApplicationId and operatorRegistrationId to the backend', async () => {
+    await submit(
+      form({
+        operatorOrganisationId: '654321',
+        operatorApplicationId: 'app-999',
+        operatorRegistrationId: 'reg-999'
+      })
+    )
+    expect(sentPayload()).toMatchObject({
+      operatorOrganisationId: '654321',
+      operatorApplicationId: 'app-999',
+      operatorRegistrationId: 'reg-999'
+    })
+  })
+
+  test('rejects a non-6-digit operatorOrganisationId without calling the backend', async () => {
+    const { statusCode, result } = await submit(
+      form({ operatorOrganisationId: '123' })
+    )
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(createWorkItem).not.toHaveBeenCalled()
+    expect(result).toContain('Organisation ID must be 6 digits')
+  })
+
   test('still forwards the other fields unchanged', async () => {
     // Guards the allow-list itself: a careless edit to
     // `reshapeFormPayload` must not drop an existing field while adding
@@ -184,6 +211,9 @@ describe('the create form POST', () => {
     expect(sentPayload()).toMatchObject({
       operatorEmail: 'test@defra.gov.uk',
       organisationName: 'Acme Recycling Ltd',
+      operatorOrganisationId: '500001',
+      operatorApplicationId: 'app-001',
+      operatorRegistrationId: 'reg-001',
       siteAddress: {
         line1: '12 Industrial Way',
         town: 'Bristol',

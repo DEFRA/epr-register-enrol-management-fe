@@ -273,6 +273,12 @@ export const config = convict({
       default: 60000,
       env: 'BACKEND_API_DECISION_TIMEOUT_MS'
     },
+    approveTimeoutMs: {
+      doc: 'Per-call timeout in milliseconds for the re-accreditation approve call (POST /work-items/re-accreditation/{id}/approve). RA-448 phase 2: this endpoint now resolves a real accreditation number from a second backend before committing anything, with a firm worst-case budget of ~19s (3 attempts x 5s + 2 x 2s capped backoff). This timeout MUST comfortably exceed that budget for the same reason as decisionTimeoutMs above: if fe aborts before be finishes retrying, be receives a client cancellation instead of returning its clean HTTP 500, and a caseworker retry can ask the backend to needlessly reapply/orphan a just-issued number. Default 25000ms per be worst-case + margin; separate from backendApi.timeoutMs so raising it does not slow down every other backend call.',
+      format: Number,
+      default: 25000,
+      env: 'BACKEND_API_APPROVE_TIMEOUT_MS'
+    },
     clientId: {
       doc: 'CDP client id sent on outbound calls to the backend (x-cdp-client-id header). Empty string disables the header.',
       format: String,

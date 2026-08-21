@@ -479,12 +479,19 @@ export async function addWorkItemNote({
  *  - 409 → { ok: false, reason: 'conflict', status: 409, message }
  *  - other → { ok: false, reason: 'server', status, message }
  *  - network → { ok: false, reason: 'network', message }
+ *
+ * RA-448 phase 2: uses `backendApi.approveTimeoutMs`, NOT the shared
+ * `backendApi.timeoutMs`. This endpoint now resolves a real accreditation
+ * number from a second backend before committing anything, with a firm
+ * worst-case budget of ~19s — see the config doc for why fe must not abort
+ * before be finishes retrying (same stranding-bug class approveTimeoutMs's
+ * sibling decisionTimeoutMs already guards against on /decision).
  */
 export async function approveReAccreditation({
   workItemId,
   user = null,
   baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  timeoutMs = config.get('backendApi.approveTimeoutMs'),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/approve`

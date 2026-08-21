@@ -1909,3 +1909,54 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
     }
   })
 })
+
+// RA-448 phase 2: the same class of fix as RA-410's decision timeout above,
+// for /approve — management-be now resolves a real accreditation number
+// from a second backend before committing anything.
+describe('#approveReAccreditation approve-specific timeout (RA-448 phase 2)', () => {
+  // The whole point of this fe change: the approve call must NOT inherit
+  // the short shared backendApi.timeoutMs, or fe would abort mid-retry and
+  // re-open the stranding-bug class RA-410 already fixed for /decision.
+  // This proves the default abort fires at the approve-specific budget,
+  // well after the shared one would have.
+  test('defaults its abort to backendApi.approveTimeoutMs, not the shared backendApi.timeoutMs', async () => {
+    vi.useFakeTimers()
+    try {
+      let capturedSignal
+      const fetchImpl = vi.fn((_url, init) => {
+        capturedSignal = init.signal
+        return new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => {
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+          })
+        })
+      })
+
+      const promise = approveReAccreditation({
+        workItemId: 'wi-1',
+        baseUrl: 'http://backend:8085',
+        fetchImpl
+      })
+
+      const sharedTimeout = config.get('backendApi.timeoutMs')
+      const approveTimeout = config.get('backendApi.approveTimeoutMs')
+
+      // Past the shared timeout: a call using it would already have aborted.
+      await vi.advanceTimersByTimeAsync(sharedTimeout + 1000)
+      expect(capturedSignal.aborted).toBe(false)
+
+      // Past the approve-specific budget: now, and only now, it aborts.
+      await vi.advanceTimersByTimeAsync(approveTimeout - sharedTimeout)
+      expect(capturedSignal.aborted).toBe(true)
+
+      const result = await promise
+      expect(result).toEqual({
+        ok: false,
+        reason: 'network',
+        message: 'Request timed out'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

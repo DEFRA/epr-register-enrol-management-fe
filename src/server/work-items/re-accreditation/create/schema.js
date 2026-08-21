@@ -67,6 +67,40 @@ export const createReAccreditationSchema = Joi.object({
     'string.empty': 'Enter the organisation name',
     'string.max': 'Organisation name must be 200 characters or fewer'
   }),
+  // RA-448: management-be's accreditation-number adapter requires a real,
+  // numeric 6-digit Org ID to call the backend — an item created through
+  // this form previously had none, which every submission now needs
+  // regardless of how the work item was created (case-management form or
+  // real operator journey).
+  operatorOrganisationId: Joi.string()
+    .trim()
+    .required()
+    .pattern(/^\d{6}$/)
+    .messages({
+      'any.required': 'Enter the organisation ID',
+      'string.empty': 'Enter the organisation ID',
+      'string.pattern.base': 'Organisation ID must be 6 digits'
+    }),
+  // RA-448: required for prior-year ReEx lookups (paired with Org ID). No
+  // format constraint beyond non-blank — unlike Org ID this has no
+  // universally fixed shape in the real data.
+  operatorRegistrationId: Joi.string().trim().required().max(100).messages({
+    'any.required': 'Enter the operator registration ID',
+    'string.empty': 'Enter the operator registration ID',
+    'string.max': 'Operator registration ID must be 100 characters or fewer'
+  }),
+  // RA-448 phase 2 review: the accreditation-number adapter's {applicationId}
+  // route segment is management-be's payload.operatorApplicationId — the
+  // backend's own AccreditationApplicationModel id for a real submission,
+  // confirmed against HttpCaseWorkingApiAdapter.BuildPayload. It is a
+  // DIFFERENT field from operatorRegistrationId above (the ReEx
+  // registration id, used for prior-year lookups) — an earlier version of
+  // this integration sent operatorRegistrationId here, which was wrong.
+  operatorApplicationId: Joi.string().trim().required().max(100).messages({
+    'any.required': 'Enter the operator application ID',
+    'string.empty': 'Enter the operator application ID',
+    'string.max': 'Operator application ID must be 100 characters or fewer'
+  }),
   siteAddress: Joi.object({
     line1: Joi.string().trim().required().max(100).messages({
       'any.required': 'Enter the site address line 1',
