@@ -942,6 +942,81 @@ export async function raiseWorkItemQuery({
   }
 }
 
+/**
+ * Update the recycling operation codes on one overseas reprocessing site
+ * (RA-469).
+ *
+ * Wraps `PATCH /work-items/{id}/overseas-sites/{siteId}/recycling-operations`.
+ * Body: { operationCodes: string[] }. The endpoint enforces AC10-AC12
+ * (accompanying-code, interim-site, zero-codes) and nation-scoping (AC14)
+ * server-side — this client just forwards the request and translates the
+ * response, using the same shared {@link REASON_BY_STATUS} translation every
+ * other type-specific POST/PATCH client here uses.
+ *
+ * Result shape mirrors {@link extendWorkItemSla}:
+ *  - 200 → { ok: true, workItem }
+ *  - 400 → { ok: false, reason: 'invalid', status: 400, message }
+ *  - 401 → { ok: false, reason: 'unauthorized', status: 401, message }
+ *  - 403 → { ok: false, reason: 'forbidden', status: 403, message }
+ *  - 404 → { ok: false, reason: 'not-found', status: 404, message }
+ *  - 409 → { ok: false, reason: 'conflict', status: 409, message }
+ *  - other → { ok: false, reason: 'server', status, message }
+ *  - network/timeout → { ok: false, reason: 'network', message }
+ */
+export async function updateRecyclingOperations({
+  workItemId,
+  siteId,
+  operationCodes,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/overseas-sites/${encodeURIComponent(siteId)}/recycling-operations`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(url, {
+      method: 'PATCH',
+      signal: controller.signal,
+      headers: buildHeaders(
+        { 'content-type': 'application/json', accept: 'application/json' },
+        user
+      ),
+      body: JSON.stringify({ operationCodes })
+    })
+
+    if (response.ok) {
+      const workItem = await response.json()
+      return { ok: true, workItem }
+    }
+
+    const problem = await safeReadJson(response)
+    const detail =
+      (problem && (problem.detail || problem.title)) ||
+      `Backend returned ${response.status}`
+    return {
+      ok: false,
+      reason: REASON_BY_STATUS[response.status] ?? 'server',
+      status: response.status,
+      message: detail
+    }
+  } catch (error) {
+    logger.warn(
+      { err: error, url },
+      'Backend API updateRecyclingOperations failed'
+    )
+    return {
+      ok: false,
+      reason: 'network',
+      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 const QUERY_REASON_BY_STATUS = {
   400: 'invalid',
   401: 'unauthorized',
