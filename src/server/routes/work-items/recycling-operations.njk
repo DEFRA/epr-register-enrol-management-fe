@@ -1,0 +1,93 @@
+{% extends 'layouts/page.njk' %}
+
+{# ---------------------------------------------------------------- #}
+{# Recycling operations tab (RA-469).                                #}
+{#                                                                   #}
+{# Standalone, bookmarkable page for one work item's overseas        #}
+{# reprocessing sites and their recycling operation codes — same     #}
+{# shape as the Application history tab (audit-log.njk): the case    #}
+{# header above supplies the page identity, single two-thirds        #}
+{# column, no right-hand panel, no JavaScript (RA-94).                #}
+{# ---------------------------------------------------------------- #}
+
+{% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+{% from "action-link/macro.njk" import appActionLink %}
+
+{% block content %}
+  {{ appCaseTabs({ tabs: caseTabs }) }}
+
+  {# Same flash-banner pattern as detail.njk — set by handlers via         #}
+  {# `request.yar.flash('flashBanner', ...)` with shape                   #}
+  {# `{type: 'success' | 'error', title?, text}`. AC13's post-edit         #}
+  {# confirmation banner renders here after the redirect back to this tab. #}
+  {% if flashBanner %}
+    {{ govukNotificationBanner({
+      type: flashBanner.type,
+      titleText: flashBanner.title or (flashBanner.type == 'success' and 'Success' or 'There is a problem'),
+      text: flashBanner.text,
+      attributes: { "data-testid": "recycling-operations-flash-banner" }
+    }) }}
+  {% endif %}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      {% if sites and sites.length > 0 %}
+        <ul class="govuk-list" data-testid="recycling-operations-site-list">
+          {% for site in sites %}
+            <li class="govuk-!-margin-bottom-6" data-testid="recycling-operations-site-{{ site.siteId }}">
+              <h2 class="govuk-heading-m govuk-!-margin-bottom-2" data-testid="recycling-operations-site-name">{{ site.siteName }}</h2>
+
+              {% if site.hasCodes %}
+                <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-2" data-testid="recycling-operations-site-codes">
+                  {% for label in site.codeLabels %}
+                    <li>{{ label }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                {# AC7: a site with no codes set states this clearly rather #}
+                {# than rendering an empty list.                            #}
+                <p class="govuk-body" data-testid="recycling-operations-site-no-codes">
+                  No recycling operation codes are set for this site.
+                </p>
+              {% endif %}
+
+              {% if site.interimSite %}
+                {# AC6: shown only when the site carries R12 or R13 — those #}
+                {# codes describe an operation performed in relation to the #}
+                {# associated interim site.                                 #}
+                <p class="govuk-body govuk-!-margin-bottom-2" data-testid="recycling-operations-site-interim">
+                  Associated interim site: {{ site.interimSite.siteName }}{% if site.interimSite.addressLine %}, {{ site.interimSite.addressLine }}{% endif %}
+                </p>
+              {% endif %}
+
+              {% if site.lastEdited %}
+                <p class="govuk-body-s govuk-hint govuk-!-margin-bottom-2" data-testid="recycling-operations-site-audit">
+                  Last edited{% if site.lastEdited.by %} by {{ site.lastEdited.by }}{% endif %}{% if site.lastEdited.at %} on {{ site.lastEdited.at }}{% endif %}
+                </p>
+              {% endif %}
+
+              {# AC9: standard-role users can open the edit form. AC8: a    #}
+              {# support-readonly session sees an inert span instead of a   #}
+              {# live link — see action-link/macro.njk.                    #}
+              {{ appActionLink({
+                text: "Change",
+                href: site.editHref,
+                classes: "govuk-link",
+                disabled: user.isReadOnly,
+                testId: "recycling-operations-site-change-" + site.siteId
+              }) }}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="govuk-body" data-testid="recycling-operations-no-sites">
+          This application has no overseas reprocessing sites.
+        </p>
+      {% endif %}
+
+      <p class="govuk-body">
+        <a class="govuk-link" href="/work-items/{{ workItem.id }}">Back to work item</a>
+      </p>
+    </div>
+  </div>
+{% endblock %}

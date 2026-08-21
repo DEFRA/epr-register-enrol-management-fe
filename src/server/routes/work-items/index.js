@@ -12,6 +12,7 @@ import {
   workItemDetailController
 } from './detail.controller.js'
 import { workItemAuditLogController } from './audit-log.controller.js'
+import { workItemRecyclingOperationsController } from './recycling-operations.controller.js'
 import { workItemAdditionalInformationController } from './additional-information.controller.js'
 import {
   makeShowExtendController,
@@ -89,6 +90,17 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}/audit-log',
           ...workItemAuditLogController
+        },
+        {
+          // RA-469. Standalone "Recycling operations" tab page, same
+          // pattern as the audit log (RA-97) and additional information
+          // (RA-434) tabs: a real, bookmarkable, JS-free page. Any
+          // authenticated caseworker (including support-readonly) may
+          // view it — only the edit form (RA-469 8pi) requires
+          // requireStandard.
+          method: 'GET',
+          path: '/work-items/{id}/recycling-operations',
+          ...workItemRecyclingOperationsController
         },
         {
           // RA-434. Standalone "Additional information" tab page, same
