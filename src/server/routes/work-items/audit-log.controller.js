@@ -38,7 +38,7 @@ export const workItemAuditLogController = {
     const stateDisplayName = resolveStateDisplayName(workItem.stateId)
 
     const workItemSnapshot = {
-      orgId: workItem.payload?.applicationReference ?? null,
+      orgId: workItem.payload?.operatorOrganisationId ?? null,
       typeDisplayName,
       submittedAt: workItem.submittedAt ?? null,
       submittedBy: workItem.submittedBy ?? null,
