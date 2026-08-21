@@ -8,6 +8,7 @@ import {
 } from '#/server/work-items/core/registry.js'
 import {
   buildRecyclingOperationsSite,
+  filterRecyclingOperationsSites,
   readFlashBanner
 } from './recycling-operations.controller.js'
 
@@ -68,6 +69,18 @@ function anOrsSite(overrides = {}) {
     operationCodes: ['R3'],
     ...overrides
   }
+}
+
+/** N sites named Site 01, Site 02, ... so alphabetical order == numeric order. */
+function manySites(count) {
+  return Array.from({ length: count }, (_, i) => {
+    const n = String(i + 1).padStart(2, '0')
+    return anOrsSite({
+      siteId: `site-${n}`,
+      siteName: `Site ${n}`,
+      operationCodes: ['R3']
+    })
+  })
 }
 
 describe('#workItemRecyclingOperationsController', () => {
@@ -374,5 +387,258 @@ describe('readFlashBanner', () => {
 
   test('returns null when yar is absent', () => {
     expect(readFlashBanner({})).toBeNull()
+  })
+})
+
+describe('filterRecyclingOperationsSites', () => {
+  const sites = [
+    { siteName: 'Alpha Reprocessing' },
+    { siteName: 'Bravo Site' },
+    { siteName: 'alphabet City Recycling' }
+  ]
+
+  test('AC4: case-insensitive substring match on site name', () => {
+    expect(filterRecyclingOperationsSites(sites, 'alpha')).toEqual([
+      { siteName: 'Alpha Reprocessing' },
+      { siteName: 'alphabet City Recycling' }
+    ])
+  })
+
+  test('an empty search term matches every site', () => {
+    expect(filterRecyclingOperationsSites(sites, '')).toEqual(sites)
+    expect(filterRecyclingOperationsSites(sites, undefined)).toEqual(sites)
+  })
+
+  test('a term matching nothing returns an empty array', () => {
+    expect(filterRecyclingOperationsSites(sites, 'zzz')).toEqual([])
+  })
+})
+
+describe('#workItemRecyclingOperationsController search and pagination (RA-469 8hy)', () => {
+  let server
+
+  beforeAll(async () => {
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  beforeEach(() => {
+    getWorkItem.mockReset()
+    clearWorkItemRegistry()
+  })
+
+  test('AC3: search box is absent at exactly 20 sites', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: manySites(20) }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations`
+    })
+
+    expect(result).not.toContain('recycling-operations-search-form')
+  })
+
+  test('AC3: search box is present at 21 sites', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: manySites(21) }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations`
+    })
+
+    expect(result).toContain('recycling-operations-search-form')
+    expect(result).toContain('Find a site by name')
+  })
+
+  test('AC5: pagination is absent when the result set is exactly 20', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: manySites(20) }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations`
+    })
+
+    expect(result).not.toContain('govuk-pagination')
+  })
+
+  test('AC5: pagination is present and correct when the result set exceeds 20', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: manySites(21) }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations`
+    })
+
+    expect(result).toContain('govuk-pagination')
+    // Page 1 shows the first 20 (Site 01..Site 20), not Site 21.
+    expect(result).toContain('Site 01')
+    expect(result).toContain('Site 20')
+    expect(result).not.toContain('Site 21')
+  })
+
+  test('?page=2 shows the remaining site', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: manySites(21) }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations?page=2`
+    })
+
+    expect(result).toContain('Site 21')
+    expect(result).not.toContain('Site 01')
+  })
+
+  test('AC4: q= filters case-insensitively by substring across the full site list', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: {
+            sites: [
+              anOrsSite({ siteId: 's1', siteName: 'Newport Reprocessing' }),
+              anOrsSite({ siteId: 's2', siteName: 'Cardiff Recycling' })
+            ]
+          }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations?q=NEWPORT`
+    })
+
+    expect(result).toContain('Newport Reprocessing')
+    expect(result).not.toContain('Cardiff Recycling')
+  })
+
+  test('a search matching nothing shows a distinct "no results" message', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: [anOrsSite()] }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations?q=doesnotexist`
+    })
+
+    expect(result).toContain('recycling-operations-no-search-results')
+    expect(result).not.toContain('recycling-operations-no-sites')
+  })
+
+  test('page links carry q= forward; the page-1 link omits page=', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          // 25 sites all matching "Site" so filtering still leaves >20.
+          overseasSites: { sites: manySites(25) }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations?q=Site&page=2`
+    })
+
+    // The "previous" link (back to page 1) must carry q= but omit page=.
+    expect(result).toMatch(
+      /href="\/work-items\/[^"]+\/recycling-operations\?q=Site"/
+    )
+    // Page 2's own link carries both q= and page=2 (HTML-escaped &amp;).
+    expect(result).toContain(
+      `/work-items/${ID}/recycling-operations?q=Site&amp;page=2`
+    )
+  })
+
+  test('an out-of-range page number defaults to page 1 rather than erroring', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: manySites(21) }
+        }
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations?page=999`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('Site 01')
   })
 })

@@ -11,6 +11,9 @@
 {# ---------------------------------------------------------------- #}
 
 {% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+{% from "govuk/components/input/macro.njk" import govukInput %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/pagination/macro.njk" import govukPagination %}
 {% from "action-link/macro.njk" import appActionLink %}
 
 {% block content %}
@@ -31,6 +34,22 @@
 
   <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
+      {# AC3: only renders once the application has more than one page's   #}
+      {# worth of sites — a small case never shows a control it doesn't    #}
+      {# need. AC4: plain GET, full page reload, no client-side JS.        #}
+      {% if showSearch %}
+        <form method="get" action="{{ searchFormAction }}" novalidate data-testid="recycling-operations-search-form">
+          {{ govukInput({
+            id: "recycling-operations-search",
+            name: "q",
+            label: { text: "Find a site by name" },
+            value: searchTerm,
+            classes: "govuk-!-width-two-thirds"
+          }) }}
+          {{ govukButton({ text: "Search", classes: "govuk-button--secondary govuk-!-margin-bottom-6" }) }}
+        </form>
+      {% endif %}
+
       {% if sites and sites.length > 0 %}
         <ul class="govuk-list" data-testid="recycling-operations-site-list">
           {% for site in sites %}
@@ -79,6 +98,19 @@
             </li>
           {% endfor %}
         </ul>
+
+        {# AC5: real ?page=N links, 20 sites per page. No infinite scroll. #}
+        {% if pagination %}
+          {{ govukPagination(pagination) }}
+        {% endif %}
+      {% elif searchTerm %}
+        {# A search that matched nothing is a different message from "this  #}
+        {# application has no sites at all" (AC7 is about a SITE having no  #}
+        {# codes, not the list being empty) — distinct data-testid so the   #}
+        {# two states are unambiguous to the e2e suite too.                 #}
+        <p class="govuk-body" data-testid="recycling-operations-no-search-results">
+          No sites match &ldquo;{{ searchTerm }}&rdquo;.
+        </p>
       {% else %}
         <p class="govuk-body" data-testid="recycling-operations-no-sites">
           This application has no overseas reprocessing sites.

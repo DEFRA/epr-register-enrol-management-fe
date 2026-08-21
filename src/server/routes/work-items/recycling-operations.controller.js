@@ -21,6 +21,14 @@ import { recyclingOperationLabel } from './recycling-operations.schema.js'
 const VIEW = 'work-items/recycling-operations'
 const EM_DASH = '—'
 
+/**
+ * GDS's typical default for a list of compound/multi-line items (per the
+ * ticket's "The list itself, at 2-200 sites" section) — one single
+ * threshold shared by both the search-box and pagination decisions, rather
+ * than two separate arbitrary cut-offs.
+ */
+const PAGE_SIZE = 20
+
 function overseasSitesOf(workItem) {
   const sites = workItem?.payload?.overseasSites?.sites
   return Array.isArray(sites) ? sites : []
@@ -127,6 +135,68 @@ export function readFlashBanner(request) {
   return Array.isArray(flashed) && flashed.length > 0 ? flashed[0] : null
 }
 
+/**
+ * AC4: case-insensitive SUBSTRING match on site name. `search` is already
+ * trimmed by the caller; an empty string matches everything (no filter
+ * applied) rather than nothing.
+ */
+export function filterRecyclingOperationsSites(sites, search) {
+  const term = (search ?? '').toLowerCase()
+  if (term === '') return sites
+  return sites.filter((site) => site.siteName.toLowerCase().includes(term))
+}
+
+/**
+ * A govuk-pagination compatible structure, modelled on `controller.js`'s
+ * `buildPagination`/`buildHref` for the work-items list. Hidden when there
+ * is only one page (AC5: renders only when the current search's matching
+ * sites exceed one page). Every href preserves `q=`; the page-1 link
+ * omits `page=` entirely so the "no explicit page" and "page=1" URLs are
+ * the same canonical link.
+ */
+function buildPaginationHref(basePath, { q, page }) {
+  const params = new URLSearchParams()
+  if (q) params.append('q', q)
+  if (page > 1) params.append('page', String(page))
+  const qs = params.toString()
+  return qs === '' ? basePath : `${basePath}?${qs}`
+}
+
+function buildRecyclingOperationsPagination({ basePath, q, page, totalPages }) {
+  if (totalPages <= 1) return null
+
+  const makeHref = (target) =>
+    buildPaginationHref(basePath, { q, page: target })
+  const items = []
+  for (let i = 1; i <= totalPages; i++) {
+    items.push({ number: i, href: makeHref(i), current: i === page })
+  }
+
+  return {
+    previous: page > 1 ? { href: makeHref(page - 1) } : null,
+    next: page < totalPages ? { href: makeHref(page + 1) } : null,
+    items
+  }
+}
+
+/**
+ * Resolve the requested page number against the real page count: a
+ * missing, non-numeric, zero/negative, or out-of-range value defaults to
+ * page 1 rather than erroring — a stale bookmark or a hand-edited URL must
+ * still render a page, not a 400/500. This is also what gives AC4's "page
+ * resets to 1 on a new search" for free: the search form itself never
+ * submits a `page=` field, so a fresh search always arrives with `page`
+ * absent.
+ */
+function resolvePage(rawPage, totalPages) {
+  const requested = Number.parseInt(rawPage, 10)
+  return Number.isInteger(requested) &&
+    requested >= 1 &&
+    requested <= totalPages
+    ? requested
+    : 1
+}
+
 export const workItemRecyclingOperationsController = {
   async handler(request, h) {
     const id = request.params.id
@@ -143,6 +213,20 @@ export const workItemRecyclingOperationsController = {
       type?.states?.find((s) => s.id === workItem.stateId)?.displayName ??
       workItem.stateId
 
+    const allSites = buildRecyclingOperationsSites(workItem)
+    const searchTerm =
+      typeof request.query?.q === 'string' ? request.query.q.trim() : ''
+    const matchingSites = filterRecyclingOperationsSites(allSites, searchTerm)
+
+    const totalPages = Math.max(1, Math.ceil(matchingSites.length / PAGE_SIZE))
+    const page = resolvePage(request.query?.page, totalPages)
+    const pageSites = matchingSites.slice(
+      (page - 1) * PAGE_SIZE,
+      page * PAGE_SIZE
+    )
+
+    const basePath = `/work-items/${encodeURIComponent(workItem.id)}/recycling-operations`
+
     return h.view(VIEW, {
       pageTitle: `Recycling operations — ${applicationRef}`,
       caseHeader: buildCaseHeader({
@@ -157,7 +241,19 @@ export const workItemRecyclingOperationsController = {
         active: 'recycling-operations'
       }),
       workItem: { id: workItem.id, applicationRef },
-      sites: buildRecyclingOperationsSites(workItem),
+      sites: pageSites,
+      // AC3: the search box's own presence is keyed on the TOTAL site
+      // count, not the current search's match count — it must not
+      // disappear the moment a search narrows the list below 20.
+      showSearch: allSites.length > PAGE_SIZE,
+      searchTerm,
+      searchFormAction: basePath,
+      pagination: buildRecyclingOperationsPagination({
+        basePath,
+        q: searchTerm,
+        page,
+        totalPages
+      }),
       flashBanner: readFlashBanner(request)
     })
   }
