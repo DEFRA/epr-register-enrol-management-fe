@@ -143,6 +143,19 @@ function registerReaccreditation() {
     // A type declaring no transitions would silently answer "no" to all
     // three and every CTA assertion here would pass vacuously.
     transitions: [
+      // RA-454. The synthetic type must carry `duly-make` too: both
+      // `evaluateDulyMakeEligibility` (behind `canDulyMake`) and the
+      // `isPreDulyMadeWaypoint` gate that suppresses Continue review for a
+      // query raised before duly making read this declaration's
+      // `fromStateId`. Without it the pre-duly-made scenario cannot be
+      // exercised and every duly-make assertion here would pass vacuously.
+      {
+        actionId: 'duly-make',
+        displayName: 'Duly make',
+        fromStateId: 'submitted',
+        toStateId: 'duly-made',
+        callerInvocable: false
+      },
       {
         actionId: 'payment-received',
         displayName: 'Payment received',
@@ -2986,6 +2999,69 @@ describe('#workItemDetailController', () => {
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).toEqual(
         expect.stringContaining('data-testid="action-continue-review"')
+      )
+    })
+
+    // RA-454. A query raised BEFORE the application was duly made carries it
+    // to `updated` with `originStateId: 'submitted'`. Duly making is still
+    // outstanding, so the SAME item is duly-makeable — without the origin
+    // gate BOTH CTAs would render, and Continue review would run
+    // `continue-review-during-duly-making`, dumping the item back into
+    // `submitted` ("Not started"). The fix makes them mutually exclusive:
+    // for the pre-duly-made waypoint only Duly make shows.
+    test('suppresses the Continue review CTA and shows only Duly make when queried before duly making (origin submitted)', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: updatedWorkItem({ originStateId: 'submitted' })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      // canContinueReview === false: no Continue review CTA at all.
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+      expect(result).not.toEqual(
+        expect.stringContaining(
+          'data-testid="re-accreditation-continue-review-cta"'
+        )
+      )
+      // canDulyMake === true: Duly make is the only onward CTA.
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="re-accreditation-duly-make-cta"')
+      )
+    })
+
+    // Regression guard for the normal continue-review path: a query raised
+    // AFTER duly making (origin `assessment-in-progress`) still surfaces
+    // Continue review, and Duly make stays hidden — the origin gate must not
+    // over-reach and suppress the CTA it was only meant to suppress for
+    // `submitted`.
+    test('still shows Continue review (and not Duly make) when queried after duly making (origin assessment-in-progress)', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: updatedWorkItem({ originStateId: 'assessment-in-progress' })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      // canContinueReview === true.
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="action-continue-review"')
+      )
+      // canDulyMake === false: no Duly make CTA for a post-duly-made query.
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="re-accreditation-duly-make-cta"')
       )
     })
 

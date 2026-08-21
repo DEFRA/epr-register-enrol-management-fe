@@ -13,7 +13,10 @@ import {
   evaluateLogDecisionEligibility,
   RE_ACCREDITATION_TYPE_ID
 } from '#/server/work-items/re-accreditation/decision/eligibility.js'
-import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
+import {
+  evaluateDulyMakeEligibility,
+  DULY_MAKE_ACTION_ID
+} from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import {
   isCallerInvocable,
@@ -698,6 +701,36 @@ function isContinueReviewState(stateId) {
 
 const CONTINUE_REVIEW_ACTION_PREFIX = 'continue-review-during-'
 
+/**
+ * Was this `updated` item queried BEFORE it was ever duly made? (RA-454.)
+ *
+ * `originStateId` is the state a waypoint item returns to when its query
+ * discharges. When that origin is the state the `duly-make` transition
+ * leaves from, the application has never been duly made — there is no review
+ * to "continue", only a duly-making decision still to take. The Continue
+ * review CTA must be suppressed in that case so the page offers Duly make
+ * alone; running `continue-review-during-*` there would send the item back to
+ * `submitted` ("Not started"), the confusing regression this ticket fixes.
+ *
+ * Derived from the module's own `duly-make` declaration rather than a
+ * `'submitted'` literal, so that literal stays in `re-accreditation/module.js`
+ * and a change to its `fromStateId` moves this predicate — and therefore the
+ * CTA gate — with it. Fails CLOSED (returns `false`) when the type or its
+ * `duly-make` transition is not registered, matching `isContinueReviewState`:
+ * an unknown wire shape leaves Continue review visible rather than silently
+ * hiding it.
+ */
+function isPreDulyMadeWaypoint(originStateId) {
+  if (originStateId == null) {
+    return false
+  }
+  const type = getWorkItemType(RE_ACCREDITATION_TYPE_ID)
+  const dulyMake = (type?.transitions ?? []).find(
+    (t) => t.actionId === DULY_MAKE_ACTION_ID
+  )
+  return dulyMake != null && dulyMake.fromStateId === originStateId
+}
+
 function applyReAccreditationViewModel({ workItem, source = workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
@@ -723,7 +756,15 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
   //
   // Replaces the old `isTaskWaypoint` derivation, which read `taskStateId`
   // — a field RA-410 removed. The CTA itself is unchanged.
-  const canContinueReview = isContinueReviewState(source?.stateId)
+  // RA-454. A query raised BEFORE duly making leaves the item in `updated`
+  // with `originStateId: 'submitted'`, so both this CTA and Duly make would
+  // otherwise fire. Continue review is only meaningful once there IS a review
+  // to resume — i.e. the query was raised from `duly-made` /
+  // `assessment-in-progress` / `awaiting-decision`, never from `submitted`.
+  // Suppress it for the pre-duly-made waypoint so only Duly make shows.
+  const canContinueReview =
+    isContinueReviewState(source?.stateId) &&
+    !isPreDulyMadeWaypoint(source?.originStateId)
 
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
