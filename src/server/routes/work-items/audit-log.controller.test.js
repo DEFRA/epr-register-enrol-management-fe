@@ -416,6 +416,79 @@ describe('#workItemAuditLogController', () => {
     )
   })
 
+  // RA-450: the "Org ID" snapshot row must show the operator organisation
+  // id, not the application reference (the old, wrong mapping).
+  test('Shows the operator organisation id (not the application reference) in the Org ID snapshot row', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicantName: 'Acme',
+          applicationReference: 'AP27EA5CB21WO2',
+          operatorOrganisationId: 'ORG-999-XYZ'
+        },
+        auditLog: [
+          {
+            id: 'aaaa9999-bbbb-cccc-dddd-eeeeeeeeeeee',
+            action: 'action-applied',
+            actionDisplayName: 'Routed to nation',
+            details: { actionId: 'route-to-nation' },
+            createdAt: '2026-04-27T09:00:00Z'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    // Scope to the Org ID row's value cell so we assert on the row itself,
+    // not on the application reference that legitimately appears in the
+    // case header elsewhere on the page.
+    const orgIdCell = result
+      .slice(result.indexOf('Org ID</dt>'))
+      .match(/Org ID<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/)
+    expect(orgIdCell).not.toBeNull()
+    expect(orgIdCell[1]).toContain('ORG-999-XYZ')
+    expect(orgIdCell[1]).not.toContain('AP27EA5CB21WO2')
+  })
+
+  // RA-450 AC2: when the org id is genuinely absent, the Org ID row is
+  // omitted entirely rather than rendered blank.
+  test('Omits the Org ID row when operatorOrganisationId is absent', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicantName: 'Acme',
+          applicationReference: 'AP27EA5CB21WO2'
+        },
+        auditLog: [
+          {
+            id: 'bbbb0000-cccc-dddd-eeee-ffffffffffff',
+            action: 'action-applied',
+            actionDisplayName: 'Routed to nation',
+            details: { actionId: 'route-to-nation' },
+            createdAt: '2026-04-27T09:00:00Z'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toContain('Org ID</dt>')
+  })
+
   test('Renders 404 page when the backend reports no such work item', async () => {
     getWorkItem.mockResolvedValue({ ok: false, status: 404 })
 
