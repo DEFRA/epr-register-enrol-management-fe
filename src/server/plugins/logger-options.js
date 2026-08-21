@@ -2,6 +2,7 @@ import { ecsFormat } from '@elastic/ecs-pino-format'
 import { getTraceId } from '@defra/hapi-tracing'
 
 import { config } from '#/config/config.js'
+import { piiSerializers } from './pii-redaction.js'
 
 const logConfig = config.get('log')
 const serviceName = config.get('serviceName')
@@ -24,6 +25,7 @@ export const loggerOptions = {
     paths: logConfig.redact,
     remove: true
   },
+  serializers: piiSerializers,
   level: logConfig.level,
   ...formatters[logConfig.format],
   nesting: true,
