@@ -14,6 +14,10 @@ import {
   RE_ACCREDITATION_TYPE_ID
 } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
+import {
+  isContinueReviewState,
+  isPreDulyMadeWaypoint
+} from './re-accreditation-cta.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import {
   isCallerInvocable,
@@ -669,35 +673,6 @@ function buildAssignmentViewModel({ workItem, user }) {
 // consulting this list. The two rules are independent and both must hold.
 const TERMINAL_STATE_IDS = new Set(['approved', 'rejected', 'withdrawn'])
 
-/**
- * Is `stateId` the state the `continue-review-during-*` transitions leave
- * from? (RA-410.)
- *
- * Derived from the module declaration rather than comparing against a
- * `'updated'` literal, so that literal stays in `re-accreditation/module.js`
- * and a change to it moves this predicate — and therefore the CTA — with it.
- * All four `continue-review-during-*` entries share one `fromStateId`, which
- * is the whole reason they are non-caller-invocable, so any one of them
- * answers the question.
- *
- * Returns `false` when the type is not registered or declares no such
- * transition: failing CLOSED here hides a CTA rather than offering one the
- * route would refuse.
- */
-function isContinueReviewState(stateId) {
-  if (stateId == null) {
-    return false
-  }
-  const type = getWorkItemType(RE_ACCREDITATION_TYPE_ID)
-  return (type?.transitions ?? []).some(
-    (t) =>
-      t.actionId?.startsWith(CONTINUE_REVIEW_ACTION_PREFIX) &&
-      t.fromStateId === stateId
-  )
-}
-
-const CONTINUE_REVIEW_ACTION_PREFIX = 'continue-review-during-'
-
 function applyReAccreditationViewModel({ workItem, source = workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
@@ -723,7 +698,15 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
   //
   // Replaces the old `isTaskWaypoint` derivation, which read `taskStateId`
   // — a field RA-410 removed. The CTA itself is unchanged.
-  const canContinueReview = isContinueReviewState(source?.stateId)
+  // RA-454. A query raised BEFORE duly making leaves the item in `updated`
+  // with `originStateId: 'submitted'`, so both this CTA and Duly make would
+  // otherwise fire. Continue review is only meaningful once there IS a review
+  // to resume — i.e. the query was raised from `duly-made` /
+  // `assessment-in-progress` / `awaiting-decision`, never from `submitted`.
+  // Suppress it for the pre-duly-made waypoint so only Duly make shows.
+  const canContinueReview =
+    isContinueReviewState(source?.stateId) &&
+    !isPreDulyMadeWaypoint(source?.originStateId)
 
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
