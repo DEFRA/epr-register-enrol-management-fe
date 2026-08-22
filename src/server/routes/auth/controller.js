@@ -22,8 +22,8 @@ function base64url(buf) {
   return buf
     .toString('base64')
     .replace(/={1,2}$/, '')
-    .replaceAll(/\+/g, '-')
-    .replaceAll(/\//g, '_')
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
 }
 
 function defaultRandomToken(bytes = 32) {

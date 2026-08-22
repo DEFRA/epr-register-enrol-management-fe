@@ -87,7 +87,7 @@ function buildErrorSummary(fieldErrors) {
     if (fieldErrors[field]) {
       items.push({
         text: fieldErrors[field],
-        href: `#field-${field.replaceAll(/\./g, '-')}`
+        href: `#field-${field.replaceAll('.', '-')}`
       })
     }
   }
