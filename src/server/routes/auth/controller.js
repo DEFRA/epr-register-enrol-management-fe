@@ -21,9 +21,9 @@ const LOGGED_OUT_PATH = '/auth/logged-out'
 function base64url(buf) {
   return buf
     .toString('base64')
-    .replace(/=+$/, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
+    .replace(/={1,2}$/, '')
+    .replaceAll(/\+/g, '-')
+    .replaceAll(/\//g, '_')
 }
 
 function defaultRandomToken(bytes = 32) {
