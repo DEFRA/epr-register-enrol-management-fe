@@ -15,8 +15,12 @@
  * a first-line guard.
  */
 export function countWords(value) {
-  if (typeof value !== 'string') return 0
+  if (typeof value !== 'string') {
+    return 0
+  }
   const trimmed = value.trim()
-  if (trimmed === '') return 0
+  if (trimmed === '') {
+    return 0
+  }
   return trimmed.split(/\s+/).filter((token) => token !== '').length
 }

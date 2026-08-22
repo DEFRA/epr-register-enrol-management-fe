@@ -12,6 +12,7 @@ import {
   workItemDetailController
 } from './detail.controller.js'
 import { workItemAuditLogController } from './audit-log.controller.js'
+import { workItemRecyclingOperationsController } from './recycling-operations.controller.js'
 import { workItemAdditionalInformationController } from './additional-information.controller.js'
 import {
   makeShowExtendController,
@@ -23,6 +24,10 @@ import {
   makeShowQueryController,
   makeSubmitQueryController
 } from './query.controller.js'
+import {
+  makeShowRecyclingOperationsEditController,
+  makeSubmitRecyclingOperationsEditController
+} from './recycling-operations-edit.controller.js'
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
 
 /**
@@ -89,6 +94,44 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}/audit-log',
           ...workItemAuditLogController
+        },
+        {
+          // RA-469. Standalone "Recycling operations" tab page, same
+          // pattern as the audit log (RA-97) and additional information
+          // (RA-434) tabs: a real, bookmarkable, JS-free page. Any
+          // authenticated caseworker (including support-readonly) may
+          // view it — only the edit form (RA-469 8pi) requires
+          // requireStandard.
+          method: 'GET',
+          path: '/work-items/{id}/recycling-operations',
+          ...workItemRecyclingOperationsController
+        },
+        {
+          // RA-469 8pi. Edit one ORS's recycling operation codes. GET is
+          // viewable by any caseworker (including support-readonly, who
+          // sees the form's fields disabled server-side by the `crumb` +
+          // `requireStandard`-gated POST below — the page itself is not
+          // useful to open but is not blocked, matching the GET/POST split
+          // every other case-action pair here uses (assign, sla, query)).
+          method: 'GET',
+          path: '/work-items/{id}/recycling-operations/{siteId}',
+          ...makeShowRecyclingOperationsEditController()
+        },
+        {
+          // AC14/RA-335: mutating POST requires requireStandard so a
+          // support-readonly session cannot update codes via a crafted
+          // request even if a disabled UI control is bypassed.
+          method: 'POST',
+          path: '/work-items/{id}/recycling-operations/{siteId}',
+          options: {
+            ...requireStandard,
+            payload: {
+              parse: true,
+              allow: 'application/x-www-form-urlencoded',
+              maxBytes: 10 * 1024
+            }
+          },
+          ...makeSubmitRecyclingOperationsEditController()
         },
         {
           // RA-434. Standalone "Additional information" tab page, same

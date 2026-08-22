@@ -16,7 +16,8 @@ import {
   overrideWorkItemSla,
   raiseWorkItemQuery,
   recordReAccreditationDecision,
-  unassignWorkItem
+  unassignWorkItem,
+  updateRecyclingOperations
 } from './backend-api.js'
 
 describe('#getBackendHealth', () => {
@@ -1958,5 +1959,330 @@ describe('#approveReAccreditation approve-specific timeout (RA-448 phase 2)', ()
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('#updateRecyclingOperations (RA-469)', () => {
+  test('returns ok=true with workItem on 200', async () => {
+    const workItem = { id: 'wi-1', stateId: 'submitted' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3', 'R12'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi-1/overseas-sites/site-1/recycling-operations',
+      expect.objectContaining({
+        method: 'PATCH',
+        signal: expect.any(AbortSignal)
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('sends correct JSON body', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R5'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [, init] = fetchImpl.mock.calls[0]
+    const body = JSON.parse(init.body)
+    expect(body).toEqual({ operationCodes: ['R5'] })
+  })
+
+  test('URL-encodes workItemId and siteId', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await updateRecyclingOperations({
+      workItemId: 'wi/1',
+      siteId: 'site 1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi%2F1/overseas-sites/site%201/recycling-operations',
+      expect.anything()
+    )
+  })
+
+  test('AC17: sends x-cdp-user-role and x-cdp-user-nation for a standard England user', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      user: {
+        id: 'u-1',
+        name: 'Alice',
+        roles: ['standard', 'role:nation-england']
+      },
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers['x-cdp-user-role']).toBe('standard')
+    expect(init.headers['x-cdp-user-nation']).toBe('England')
+  })
+
+  test('AC17: sends x-cdp-user-role=support-readonly and no nation header when the user has no nation role', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      user: { id: 'u-1', name: 'Alice', roles: ['support-readonly'] },
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers['x-cdp-user-role']).toBe('support-readonly')
+    expect(init.headers['x-cdp-user-nation']).toBeUndefined()
+  })
+
+  test('AC17: sends neither header when no user is supplied', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers['x-cdp-user-role']).toBeUndefined()
+    expect(init.headers['x-cdp-user-nation']).toBeUndefined()
+  })
+
+  test('returns invalid on 400', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ detail: 'R12 requires an interim site' })
+    })
+
+    const result = await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R12'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid',
+      status: 400,
+      message: 'R12 requires an interim site'
+    })
+  })
+
+  test('returns unauthorized on 401', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: () => Promise.resolve({ title: 'Unauthorized' })
+    })
+
+    const result = await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'unauthorized',
+      status: 401,
+      message: 'Unauthorized'
+    })
+  })
+
+  test("returns forbidden on 403 (AC14: another nation's site)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ title: 'Forbidden' })
+    })
+
+    const result = await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'forbidden',
+      status: 403,
+      message: 'Forbidden'
+    })
+  })
+
+  test('returns not-found on 404', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ detail: 'Site not found' })
+    })
+
+    const result = await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'not-found',
+      status: 404,
+      message: 'Site not found'
+    })
+  })
+
+  test('returns conflict on 409', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ title: 'Conflict' })
+    })
+
+    const result = await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      message: 'Conflict'
+    })
+  })
+
+  test('falls back to a generic message when the problem body has no detail/title', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.reject(new Error('not json'))
+    })
+
+    const result = await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'server',
+      status: 500,
+      message: 'Backend returned 500'
+    })
+  })
+
+  test('returns network reason on AbortError', async () => {
+    const abortError = new Error('aborted')
+    abortError.name = 'AbortError'
+    const fetchImpl = vi.fn().mockRejectedValue(abortError)
+
+    const result = await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'Request timed out'
+    })
+  })
+
+  test('returns network reason on transport error', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+
+    const result = await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network',
+      message: 'ECONNREFUSED'
+    })
   })
 })

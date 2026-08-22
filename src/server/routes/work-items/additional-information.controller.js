@@ -88,7 +88,9 @@ export const workItemAdditionalInformationController = {
     const result = await getWorkItem({ workItemId: id, user })
 
     const errorResponse = renderWorkItemFetchError({ h, result, id })
-    if (errorResponse) return errorResponse
+    if (errorResponse) {
+      return errorResponse
+    }
 
     const workItem = result.workItem
     const applicationRef = workItem.payload?.applicationReference

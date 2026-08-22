@@ -42,13 +42,19 @@ function stubDirectoryEnabled() {
  * or filter the result without affecting other callers.
  */
 export function getAssignableUsers() {
-  if (!stubDirectoryEnabled()) return []
+  if (!stubDirectoryEnabled()) {
+    return []
+  }
   return FROZEN_STUB_USERS.slice()
 }
 
 /** Look up a single assignable user by id, or `null` if not in the directory. */
 export function findAssignableUser(id) {
-  if (typeof id !== 'string' || id.trim() === '') return null
-  if (!stubDirectoryEnabled()) return null
+  if (typeof id !== 'string' || id.trim() === '') {
+    return null
+  }
+  if (!stubDirectoryEnabled()) {
+    return null
+  }
   return FROZEN_STUB_USERS.find((u) => u.id === id) ?? null
 }

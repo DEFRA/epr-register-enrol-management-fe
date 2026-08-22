@@ -39,7 +39,9 @@ const UNASSIGNED = 'Unassigned'
  */
 export function formatDueOn(value) {
   const iso = unwrapMongoDate(value)
-  if (!iso) return EM_DASH
+  if (!iso) {
+    return EM_DASH
+  }
   const formatted = formatDateGds(iso)
   return formatted === '' ? EM_DASH : formatted
 }
@@ -112,14 +114,23 @@ export function buildCaseHeader({ workItem, assignment = null }) {
 }
 
 /**
- * The three tabs every individual work item page carries (RA-295, RA-434).
- * "Application summary" is the detail page itself; "Application history" is
- * the audit log page; "Additional information" (RA-434) is the six-field
- * summary list re-ex/CM data that has nowhere else to live.
+ * The four tabs every individual work item page carries (RA-295, RA-434,
+ * RA-469). "Application summary" is the detail page itself; "Recycling
+ * operations" (RA-469) lists each overseas reprocessing site's recycling
+ * operation codes; "Application history" is the audit log page;
+ * "Additional information" (RA-434) is the six-field summary list re-ex/CM
+ * data that has nowhere else to live.
+ *
+ * RA-469 deliberately positions "Recycling operations" SECOND — immediately
+ * after "Application summary" — even though the ticket's own text was
+ * written when only two tabs existed and described it as sitting "between
+ * Application summary and Application history". "Application history" and
+ * "Additional information" both keep their existing order relative to each
+ * other; only the new tab is inserted.
  *
  * @param {object} args
  * @param {string} args.workItemId
- * @param {'summary'|'history'|'additional-information'} args.active
+ * @param {'summary'|'recycling-operations'|'history'|'additional-information'} args.active
  */
 export function buildCaseTabs({ workItemId, active }) {
   const base = `/work-items/${encodeURIComponent(workItemId)}`
@@ -129,6 +140,12 @@ export function buildCaseTabs({ workItemId, active }) {
       text: 'Application summary',
       href: base,
       active: active === 'summary'
+    },
+    {
+      key: 'recycling-operations',
+      text: 'Recycling operations',
+      href: `${base}/recycling-operations`,
+      active: active === 'recycling-operations'
     },
     {
       key: 'application-history',

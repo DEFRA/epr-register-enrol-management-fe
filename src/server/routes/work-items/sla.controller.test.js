@@ -17,7 +17,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
   extendWorkItemSla: vi.fn(),
-  overrideWorkItemSla: vi.fn()
+  overrideWorkItemSla: vi.fn(),
+  updateRecyclingOperations: vi.fn()
 }))
 
 const { extendWorkItemSla, overrideWorkItemSla, getWorkItem } =

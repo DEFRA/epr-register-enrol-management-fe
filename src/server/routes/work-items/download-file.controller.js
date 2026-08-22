@@ -28,17 +28,23 @@ function findFile(payload, fileId) {
   const fromSamplingPlan = Array.isArray(samplingPlanFiles)
     ? samplingPlanFiles.find((f) => f.fileId === fileId)
     : undefined
-  if (fromSamplingPlan) return fromSamplingPlan
+  if (fromSamplingPlan) {
+    return fromSamplingPlan
+  }
 
   const sites = payload?.overseasSites?.sites
-  if (!Array.isArray(sites)) return undefined
+  if (!Array.isArray(sites)) {
+    return undefined
+  }
 
   for (const site of sites) {
     const besFiles = site?.besEvidence?.files
     const found = Array.isArray(besFiles)
       ? besFiles.find((f) => f.fileId === fileId)
       : undefined
-    if (found) return found
+    if (found) {
+      return found
+    }
   }
   return undefined
 }

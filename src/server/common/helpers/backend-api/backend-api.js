@@ -3,12 +3,20 @@ import { fetch } from 'undici'
 import { config } from '#/config/config.js'
 import { createLogger } from '../logging/logger.js'
 import { signRequestHeaders } from './sign-request.js'
+import { statusCodes } from '#/server/common/constants/status-codes.js'
+import {
+  NATION_ROLE_MAP,
+  ROLE_STANDARD,
+  ROLE_SUPPORT_READONLY
+} from '../auth/auth-scopes.js'
 
 const logger = createLogger()
 
 const CLIENT_ID_HEADER = 'x-cdp-client-id'
 const USER_ID_HEADER = 'x-cdp-user-id'
 const USER_NAME_HEADER = 'x-cdp-user-name'
+const USER_ROLE_HEADER = 'x-cdp-user-role'
+const USER_NATION_HEADER = 'x-cdp-user-nation'
 
 /**
  * Defence-in-depth guard against HTTP header injection (CRLF). User-supplied
@@ -66,6 +74,47 @@ function buildHeaders(extra = {}, user = null) {
     }
   }
   return { ...headers, ...signRequestHeaders(headers) }
+}
+
+/**
+ * RA-469 AC17: unlike every other backend call in this file, management-be's
+ * recycling-operations endpoint enforces role/nation authorization
+ * server-side (deliberately, per the ticket - "not just in the UI"), so it
+ * needs the caller's role/nation forwarded as headers, which the general
+ * {@link buildHeaders} contract otherwise deliberately omits. Kept as a
+ * narrow, call-site-scoped exception rather than changing buildHeaders'
+ * default behaviour for every other endpoint.
+ */
+// A session holds exactly one of these two roles, never both (see
+// auth-scopes.js) - checked in this order so an (unexpected) session
+// carrying both is still resolved deterministically rather than by
+// object/array iteration order.
+function currentRole(roles) {
+  if (roles.includes(ROLE_SUPPORT_READONLY)) {
+    return ROLE_SUPPORT_READONLY
+  }
+  if (roles.includes(ROLE_STANDARD)) {
+    return ROLE_STANDARD
+  }
+  return null
+}
+
+function recyclingOperationsAuthHeaders(user) {
+  const roles = user?.roles ?? []
+  const role = currentRole(roles)
+  const nationRole = roles.find((r) => r in NATION_ROLE_MAP)
+  const nation = nationRole ? NATION_ROLE_MAP[nationRole] : null
+
+  const headers = {}
+  if (role) {
+    assertSafeHeaderValue(role)
+    headers[USER_ROLE_HEADER] = role
+  }
+  if (nation) {
+    assertSafeHeaderValue(nation)
+    headers[USER_NATION_HEADER] = nation
+  }
+  return headers
 }
 
 /**
@@ -195,6 +244,40 @@ export async function getWorkItems({
   }
 }
 
+// buildWorkItemsUrl's own repeated-value params (typeId, stateId, nation,
+// wasteProcessingType, material) each get one truthy value per array entry.
+function appendEach(params, key, values) {
+  for (const value of toArray(values)) {
+    if (value) {
+      params.append(key, value)
+    }
+  }
+}
+
+// buildWorkItemsUrl's own free-text filter params: append the trimmed value
+// only when it's non-blank.
+function appendTrimmed(params, key, value) {
+  if (value && String(value).trim() !== '') {
+    params.append(key, String(value).trim())
+  }
+}
+
+// buildWorkItemsUrl's own boolean-flag params: append 'true' only when the
+// value is literally `true` (not merely truthy).
+function appendFlag(params, key, value) {
+  if (value === true) {
+    params.append(key, 'true')
+  }
+}
+
+// buildWorkItemsUrl's own page/pageSize params: append whenever present,
+// including a legitimate `0`.
+function appendIfPresent(params, key, value) {
+  if (value != null && value !== '') {
+    params.append(key, String(value))
+  }
+}
+
 function buildWorkItemsUrl(
   baseUrl,
   {
@@ -219,66 +302,39 @@ function buildWorkItemsUrl(
   const root = `${baseUrl.replace(/\/$/, '')}/work-items`
   const params = new URLSearchParams()
 
-  for (const typeId of toArray(typeIds)) {
-    if (typeId) params.append('typeId', typeId)
-  }
-  for (const stateId of toArray(stateIds)) {
-    if (stateId) params.append('stateId', stateId)
-  }
-  for (const nation of toArray(nations)) {
-    if (nation) params.append('nation', nation)
-  }
-  // RA-412. Mirrors the nation loop above — repeated values, matched against
-  // `payload.wasteProcessingType` by management-be.
-  for (const wasteProcessingType of toArray(wasteProcessingTypes)) {
-    if (wasteProcessingType) {
-      params.append('wasteProcessingType', wasteProcessingType)
-    }
-  }
+  appendEach(params, 'typeId', typeIds)
+  appendEach(params, 'stateId', stateIds)
+  appendEach(params, 'nation', nations)
+  // RA-412. Repeated values, matched against `payload.wasteProcessingType`
+  // by management-be.
+  appendEach(params, 'wasteProcessingType', wasteProcessingTypes)
   // RA-324 phase-2. Repeated material tokens (?material=plastic&material=glass).
-  for (const material of toArray(materials)) {
-    if (material) params.append('material', material)
-  }
+  appendEach(params, 'material', materials)
+
   // RA-324 phase-2. Server-side sort of the full result set.
-  if (sort && String(sort).trim() !== '') {
-    params.append('sort', String(sort).trim())
-  }
+  appendTrimmed(params, 'sort', sort)
   // RA-324 phase-2. Combined "Organisation name or ID" search.
-  if (organisation && String(organisation).trim() !== '') {
-    params.append('organisation', String(organisation).trim())
-  }
-  if (search && String(search).trim() !== '') {
-    params.append('search', String(search).trim())
-  }
-  if (orgId && String(orgId).trim() !== '') {
-    params.append('orgId', String(orgId).trim())
-  }
-  if (registrationId && String(registrationId).trim() !== '') {
-    params.append('registrationId', String(registrationId).trim())
-  }
-  if (orgName && String(orgName).trim() !== '') {
-    params.append('orgName', String(orgName).trim())
-  }
-  if (assigneeId && String(assigneeId).trim() !== '') {
-    params.append('assigneeId', String(assigneeId).trim())
-  }
-  if (unassigned === true) {
-    params.append('unassigned', 'true')
-  }
-  if (includeArchived === true) {
-    params.append('includeArchived', 'true')
-  }
-  if (page != null && page !== '') params.append('page', String(page))
-  if (pageSize != null && pageSize !== '') {
-    params.append('pageSize', String(pageSize))
-  }
+  appendTrimmed(params, 'organisation', organisation)
+  appendTrimmed(params, 'search', search)
+  appendTrimmed(params, 'orgId', orgId)
+  appendTrimmed(params, 'registrationId', registrationId)
+  appendTrimmed(params, 'orgName', orgName)
+  appendTrimmed(params, 'assigneeId', assigneeId)
+
+  appendFlag(params, 'unassigned', unassigned)
+  appendFlag(params, 'includeArchived', includeArchived)
+
+  appendIfPresent(params, 'page', page)
+  appendIfPresent(params, 'pageSize', pageSize)
 
   const qs = params.toString()
   return qs === '' ? root : `${root}?${qs}`
 }
 
 function toArray(value) {
-  if (value == null) return []
+  if (value == null) {
+    return []
+  }
   return Array.isArray(value) ? value : [value]
 }
 
@@ -337,8 +393,8 @@ export async function getWorkItem({
       headers: buildHeaders({ accept: 'application/json' }, user)
     })
 
-    if (response.status === 404) {
-      return { ok: false, status: 404 }
+    if (response.status === statusCodes.notFound) {
+      return { ok: false, status: statusCodes.notFound }
     }
     if (!response.ok) {
       return {
@@ -942,6 +998,91 @@ export async function raiseWorkItemQuery({
   }
 }
 
+/**
+ * Update the recycling operation codes on one overseas reprocessing site
+ * (RA-469).
+ *
+ * Wraps `PATCH /work-items/re-accreditation/{id}/overseas-sites/{siteId}/recycling-operations`.
+ * Body: { operationCodes: string[] }. The endpoint enforces AC10-AC12
+ * (accompanying-code, interim-site, zero-codes) and role/nation-scoping
+ * (AC14/AC17) server-side — this client forwards the caller's role/nation
+ * as headers (see {@link recyclingOperationsAuthHeaders}) for that check to
+ * have anything to check against, then translates the response, using the
+ * same shared {@link REASON_BY_STATUS} translation every other
+ * type-specific POST/PATCH client here uses.
+ *
+ * Result shape mirrors {@link extendWorkItemSla}:
+ *  - 200 → { ok: true, workItem }
+ *  - 400 → { ok: false, reason: 'invalid', status: 400, message }
+ *  - 401 → { ok: false, reason: 'unauthorized', status: 401, message }
+ *  - 403 → { ok: false, reason: 'forbidden', status: 403, message }
+ *  - 404 → { ok: false, reason: 'not-found', status: 404, message }
+ *  - 409 → { ok: false, reason: 'conflict', status: 409, message }
+ *  - other → { ok: false, reason: 'server', status, message }
+ *  - network/timeout → { ok: false, reason: 'network', message }
+ */
+export async function updateRecyclingOperations({
+  workItemId,
+  siteId,
+  operationCodes,
+  user = null,
+  baseUrl = config.get('backendApi.url'),
+  timeoutMs = config.get('backendApi.timeoutMs'),
+  fetchImpl = fetch
+}) {
+  // management-be registers this route under its /work-items/re-accreditation
+  // group (ReAccreditationEndpoints.cs), not a bare /work-items/{id} path -
+  // omitting the type segment 404s at the routing layer before any handler
+  // runs (confirmed against a real docker-compose run of both services).
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/overseas-sites/${encodeURIComponent(siteId)}/recycling-operations`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(url, {
+      method: 'PATCH',
+      signal: controller.signal,
+      headers: buildHeaders(
+        {
+          'content-type': 'application/json',
+          accept: 'application/json',
+          ...recyclingOperationsAuthHeaders(user)
+        },
+        user
+      ),
+      body: JSON.stringify({ operationCodes })
+    })
+
+    if (response.ok) {
+      const workItem = await response.json()
+      return { ok: true, workItem }
+    }
+
+    const problem = await safeReadJson(response)
+    const detail =
+      (problem && (problem.detail || problem.title)) ||
+      `Backend returned ${response.status}`
+    return {
+      ok: false,
+      reason: REASON_BY_STATUS[response.status] ?? 'server',
+      status: response.status,
+      message: detail
+    }
+  } catch (error) {
+    logger.warn(
+      { err: error, url },
+      'Backend API updateRecyclingOperations failed'
+    )
+    return {
+      ok: false,
+      reason: 'network',
+      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 const QUERY_REASON_BY_STATUS = {
   400: 'invalid',
   401: 'unauthorized',
@@ -1088,7 +1229,9 @@ export async function getReAccreditationPriorYear({
       headers: buildHeaders({ accept: 'application/json' }, user)
     })
 
-    if (response.status === 404) return { ok: false, status: 404 }
+    if (response.status === statusCodes.notFound) {
+      return { ok: false, status: statusCodes.notFound }
+    }
     if (!response.ok) {
       return {
         ok: false,

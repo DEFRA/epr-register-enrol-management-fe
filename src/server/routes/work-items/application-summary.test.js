@@ -757,7 +757,9 @@ describe('real operator submission payload contract', () => {
   test('no AC02 row silently degrades to an em dash against the real payload', () => {
     const { rows } = buildApplicationSummary({ workItem })
     for (const r of rows) {
-      if (r.kind === 'text') expect(r.value).not.toBe(EM_DASH)
+      if (r.kind === 'text') {
+        expect(r.value).not.toBe(EM_DASH)
+      }
       if (r.kind === 'lines') {
         // Length alone is not enough: `authoriserName` returns the em dash
         // PER ENTRY, so a producer rename yields `['—']` — length 1, green.

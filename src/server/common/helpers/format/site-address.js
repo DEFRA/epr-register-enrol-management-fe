@@ -27,7 +27,9 @@ function toTrimmedString(value) {
 // (which has its own summary row). Returns null when nothing is present.
 export function formatSiteAddress(payload) {
   const siteAddress = payload?.siteAddress
-  if (siteAddress == null) return null
+  if (siteAddress == null) {
+    return null
+  }
 
   // Legacy flat string shape.
   if (typeof siteAddress === 'string') {
@@ -36,7 +38,9 @@ export function formatSiteAddress(payload) {
 
   // Nested object shape. Anything that is not an object we can index has
   // nothing to offer.
-  if (typeof siteAddress !== 'object') return null
+  if (typeof siteAddress !== 'object') {
+    return null
+  }
 
   const parts = [siteAddress.line1, siteAddress.line2, siteAddress.town]
     .map(toTrimmedString)
@@ -51,7 +55,9 @@ export function getSitePostcode(payload) {
   const siteAddress = payload?.siteAddress
   if (siteAddress != null && typeof siteAddress === 'object') {
     const nested = toTrimmedString(siteAddress.postcode)
-    if (nested !== null) return nested
+    if (nested !== null) {
+      return nested
+    }
   }
   return toTrimmedString(payload?.siteAddressPostcode)
 }

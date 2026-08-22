@@ -66,7 +66,9 @@ export function registerModuleDetailTemplates(
   typeId,
   detailTemplatesByVersion
 ) {
-  if (!detailTemplatesByVersion) return
+  if (!detailTemplatesByVersion) {
+    return
+  }
   for (const [version, path] of Object.entries(detailTemplatesByVersion)) {
     registerDetailTemplate(typeId, version, path)
   }

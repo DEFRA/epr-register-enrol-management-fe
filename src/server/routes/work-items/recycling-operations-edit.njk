@@ -1,0 +1,68 @@
+{% extends 'layouts/page.njk' %}
+
+{# ---------------------------------------------------------------- #}
+{# Recycling operations edit form (RA-469 8pi).                      #}
+{#                                                                   #}
+{# Checkbox group + error-summary shape mirrors query.njk: a plain   #}
+{# POST with a PRG redirect, no client-side JavaScript (RA-94). The  #}
+{# case header/tabs shell is kept (unlike query.njk's standalone     #}
+{# breadcrumb page) because this form edits one row of the Recycling #}
+{# operations tab, not a one-off case action.                        #}
+{# ---------------------------------------------------------------- #}
+
+{% from "govuk/components/checkboxes/macro.njk" import govukCheckboxes %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+
+{% block content %}
+  {{ appCaseTabs({ tabs: caseTabs }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "recycling-operations-edit-error-summary" }
+        }) }}
+      {% endif %}
+
+      <h1 class="govuk-heading-l" data-testid="recycling-operations-edit-heading">
+        {{ heading }}{% if site.siteName %} — {{ site.siteName }}{% endif %}
+      </h1>
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="recycling-operations-edit-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {{ govukCheckboxes({
+          idPrefix: "field-codes",
+          id: "field-codes",
+          name: "codes",
+          fieldset: {
+            legend: {
+              text: "Which recycling operations apply?",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          items: codeItems,
+          errorMessage: { text: fieldErrors["codes"] } if fieldErrors["codes"] else null,
+          attributes: { "data-testid": "recycling-operations-edit-codes" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Save changes",
+            disabled: user.isReadOnly,
+            attributes: { "data-testid": "recycling-operations-edit-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="recycling-operations-edit-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

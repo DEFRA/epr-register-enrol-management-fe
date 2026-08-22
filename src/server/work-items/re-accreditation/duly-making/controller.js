@@ -190,7 +190,9 @@ export function makeShowDulyMakingController() {
     async handler(request, h) {
       const id = request.params.id
       const loaded = await loadWorkItem(request, h, id)
-      if (loaded.response) return loaded.response
+      if (loaded.response) {
+        return loaded.response
+      }
 
       const workItem = loaded.workItem
       const eligibility = evaluateDulyMakeEligibility(workItem)
