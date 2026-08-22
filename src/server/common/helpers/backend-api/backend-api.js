@@ -3,6 +3,7 @@ import { fetch } from 'undici'
 import { config } from '#/config/config.js'
 import { createLogger } from '../logging/logger.js'
 import { signRequestHeaders } from './sign-request.js'
+import { statusCodes } from '#/server/common/constants/status-codes.js'
 import {
   NATION_ROLE_MAP,
   ROLE_STANDARD,
@@ -243,6 +244,40 @@ export async function getWorkItems({
   }
 }
 
+// buildWorkItemsUrl's own repeated-value params (typeId, stateId, nation,
+// wasteProcessingType, material) each get one truthy value per array entry.
+function appendEach(params, key, values) {
+  for (const value of toArray(values)) {
+    if (value) {
+      params.append(key, value)
+    }
+  }
+}
+
+// buildWorkItemsUrl's own free-text filter params: append the trimmed value
+// only when it's non-blank.
+function appendTrimmed(params, key, value) {
+  if (value && String(value).trim() !== '') {
+    params.append(key, String(value).trim())
+  }
+}
+
+// buildWorkItemsUrl's own boolean-flag params: append 'true' only when the
+// value is literally `true` (not merely truthy).
+function appendFlag(params, key, value) {
+  if (value === true) {
+    params.append(key, 'true')
+  }
+}
+
+// buildWorkItemsUrl's own page/pageSize params: append whenever present,
+// including a legitimate `0`.
+function appendIfPresent(params, key, value) {
+  if (value != null && value !== '') {
+    params.append(key, String(value))
+  }
+}
+
 function buildWorkItemsUrl(
   baseUrl,
   {
@@ -267,69 +302,30 @@ function buildWorkItemsUrl(
   const root = `${baseUrl.replace(/\/$/, '')}/work-items`
   const params = new URLSearchParams()
 
-  for (const typeId of toArray(typeIds)) {
-    if (typeId) {
-      params.append('typeId', typeId)
-    }
-  }
-  for (const stateId of toArray(stateIds)) {
-    if (stateId) {
-      params.append('stateId', stateId)
-    }
-  }
-  for (const nation of toArray(nations)) {
-    if (nation) {
-      params.append('nation', nation)
-    }
-  }
-  // RA-412. Mirrors the nation loop above — repeated values, matched against
-  // `payload.wasteProcessingType` by management-be.
-  for (const wasteProcessingType of toArray(wasteProcessingTypes)) {
-    if (wasteProcessingType) {
-      params.append('wasteProcessingType', wasteProcessingType)
-    }
-  }
+  appendEach(params, 'typeId', typeIds)
+  appendEach(params, 'stateId', stateIds)
+  appendEach(params, 'nation', nations)
+  // RA-412. Repeated values, matched against `payload.wasteProcessingType`
+  // by management-be.
+  appendEach(params, 'wasteProcessingType', wasteProcessingTypes)
   // RA-324 phase-2. Repeated material tokens (?material=plastic&material=glass).
-  for (const material of toArray(materials)) {
-    if (material) {
-      params.append('material', material)
-    }
-  }
+  appendEach(params, 'material', materials)
+
   // RA-324 phase-2. Server-side sort of the full result set.
-  if (sort && String(sort).trim() !== '') {
-    params.append('sort', String(sort).trim())
-  }
+  appendTrimmed(params, 'sort', sort)
   // RA-324 phase-2. Combined "Organisation name or ID" search.
-  if (organisation && String(organisation).trim() !== '') {
-    params.append('organisation', String(organisation).trim())
-  }
-  if (search && String(search).trim() !== '') {
-    params.append('search', String(search).trim())
-  }
-  if (orgId && String(orgId).trim() !== '') {
-    params.append('orgId', String(orgId).trim())
-  }
-  if (registrationId && String(registrationId).trim() !== '') {
-    params.append('registrationId', String(registrationId).trim())
-  }
-  if (orgName && String(orgName).trim() !== '') {
-    params.append('orgName', String(orgName).trim())
-  }
-  if (assigneeId && String(assigneeId).trim() !== '') {
-    params.append('assigneeId', String(assigneeId).trim())
-  }
-  if (unassigned === true) {
-    params.append('unassigned', 'true')
-  }
-  if (includeArchived === true) {
-    params.append('includeArchived', 'true')
-  }
-  if (page != null && page !== '') {
-    params.append('page', String(page))
-  }
-  if (pageSize != null && pageSize !== '') {
-    params.append('pageSize', String(pageSize))
-  }
+  appendTrimmed(params, 'organisation', organisation)
+  appendTrimmed(params, 'search', search)
+  appendTrimmed(params, 'orgId', orgId)
+  appendTrimmed(params, 'registrationId', registrationId)
+  appendTrimmed(params, 'orgName', orgName)
+  appendTrimmed(params, 'assigneeId', assigneeId)
+
+  appendFlag(params, 'unassigned', unassigned)
+  appendFlag(params, 'includeArchived', includeArchived)
+
+  appendIfPresent(params, 'page', page)
+  appendIfPresent(params, 'pageSize', pageSize)
 
   const qs = params.toString()
   return qs === '' ? root : `${root}?${qs}`
@@ -397,8 +393,8 @@ export async function getWorkItem({
       headers: buildHeaders({ accept: 'application/json' }, user)
     })
 
-    if (response.status === 404) {
-      return { ok: false, status: 404 }
+    if (response.status === statusCodes.notFound) {
+      return { ok: false, status: statusCodes.notFound }
     }
     if (!response.ok) {
       return {
@@ -1233,8 +1229,8 @@ export async function getReAccreditationPriorYear({
       headers: buildHeaders({ accept: 'application/json' }, user)
     })
 
-    if (response.status === 404) {
-      return { ok: false, status: 404 }
+    if (response.status === statusCodes.notFound) {
+      return { ok: false, status: statusCodes.notFound }
     }
     if (!response.ok) {
       return {
