@@ -143,9 +143,13 @@ function buildEntryStateRow(entry, resolveStateDisplayName) {
  * per-entry (see `buildEntryStateRow`).
  */
 function buildSnapshotRows(snapshot, entry, resolveStateDisplayName) {
-  if (snapshot == null || typeof snapshot !== 'object') return []
+  if (snapshot == null || typeof snapshot !== 'object') {
+    return []
+  }
   const rows = []
-  if (snapshot.orgId) rows.push({ key: 'Org ID', value: snapshot.orgId })
+  if (snapshot.orgId) {
+    rows.push({ key: 'Org ID', value: snapshot.orgId })
+  }
   if (snapshot.typeDisplayName) {
     rows.push({ key: 'Type', value: snapshot.typeDisplayName })
   }
@@ -154,12 +158,16 @@ function buildSnapshotRows(snapshot, entry, resolveStateDisplayName) {
     rows.push(stateRow)
   }
   const submittedAt = formatDateTimeGds(snapshot.submittedAt)
-  if (submittedAt) rows.push({ key: 'Submitted at', value: submittedAt })
+  if (submittedAt) {
+    rows.push({ key: 'Submitted at', value: submittedAt })
+  }
   if (snapshot.submittedBy) {
     rows.push({ key: 'Submitted by', value: snapshot.submittedBy })
   }
   const lastModified = formatDateTimeGds(snapshot.lastModifiedAt)
-  if (lastModified) rows.push({ key: 'Last modified', value: lastModified })
+  if (lastModified) {
+    rows.push({ key: 'Last modified', value: lastModified })
+  }
   rows.push({
     key: 'Assigned to',
     value: snapshot.assignedToName ?? 'Unassigned'
@@ -198,7 +206,9 @@ const FAILURE_ACTIONS = new Set([
 ])
 
 function isFailureAuditEntry(entry) {
-  if (entry == null || typeof entry !== 'object') return false
+  if (entry == null || typeof entry !== 'object') {
+    return false
+  }
   return FAILURE_ACTIONS.has(entry.action)
 }
 
@@ -219,7 +229,9 @@ function isFailureAuditEntry(entry) {
  * still-in-flight send simply hasn't written any entry yet.
  */
 export function notificationFailureDetected(auditLog) {
-  if (!Array.isArray(auditLog)) return false
+  if (!Array.isArray(auditLog)) {
+    return false
+  }
   const failed = auditLog.filter(
     (entry) => entry?.action === ACTION_NOTIFICATION_FAILED
   )
@@ -242,7 +254,9 @@ export function notificationFailureDetected(auditLog) {
 }
 
 function actionDisplayNameFor(entry) {
-  if (entry == null || typeof entry !== 'object') return ''
+  if (entry == null || typeof entry !== 'object') {
+    return ''
+  }
   if (
     typeof entry.actionDisplayName === 'string' &&
     entry.actionDisplayName.trim() !== ''
@@ -321,12 +335,16 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
   switch (entry.action) {
     case ACTION_WORK_ITEM_SUBMITTED: {
       const rows = []
-      if (details.typeId) rows.push({ key: 'Type', value: details.typeId })
+      if (details.typeId) {
+        rows.push({ key: 'Type', value: details.typeId })
+      }
       if (details.stateId) {
         rows.push({ key: 'Initial state', value: details.stateId })
       }
       const actor = entry.createdByName ?? entry.createdBy
-      if (actor) rows.push({ key: 'Submitted by', value: actor })
+      if (actor) {
+        rows.push({ key: 'Submitted by', value: actor })
+      }
       const payloadJson = formatPayloadForAudit(payload)
       if (payloadJson !== '') {
         rows.push({ key: 'Payload', value: payloadJson, preformatted: true })
@@ -336,7 +354,9 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
     case ACTION_APPLIED: {
       const rows = []
       const action = details.actionDisplayName ?? details.actionId
-      if (action) rows.push({ key: 'Action', value: action })
+      if (action) {
+        rows.push({ key: 'Action', value: action })
+      }
       if (details.fromStateId) {
         rows.push({ key: 'Previous state', value: details.fromStateId })
       }
@@ -344,7 +364,9 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
         rows.push({ key: 'New state', value: details.toStateId })
       }
       const actor = entry.createdByName ?? entry.createdBy
-      if (actor) rows.push({ key: 'Applied by', value: actor })
+      if (actor) {
+        rows.push({ key: 'Applied by', value: actor })
+      }
       return rows
     }
     case ACTION_ASSIGNED: {
@@ -353,9 +375,13 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
         details.previousAssigneeName ?? details.previousAssigneeId
       const next = details.assigneeName ?? details.assigneeId
       rows.push({ key: 'Previously assigned to', value: previous ?? 'Nobody' })
-      if (next) rows.push({ key: 'Now assigned to', value: next })
+      if (next) {
+        rows.push({ key: 'Now assigned to', value: next })
+      }
       const actor = entry.createdByName ?? entry.createdBy
-      if (actor) rows.push({ key: 'Assigned by', value: actor })
+      if (actor) {
+        rows.push({ key: 'Assigned by', value: actor })
+      }
       return rows
     }
     case ACTION_UNASSIGNED: {
@@ -366,13 +392,17 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
         rows.push({ key: 'Previously assigned to', value: previous })
       }
       const actor = entry.createdByName ?? entry.createdBy
-      if (actor) rows.push({ key: 'Unassigned by', value: actor })
+      if (actor) {
+        rows.push({ key: 'Unassigned by', value: actor })
+      }
       return rows
     }
     case ACTION_NOTE_ADDED: {
       const rows = []
       const actor = entry.createdByName ?? entry.createdBy
-      if (actor) rows.push({ key: 'Added by', value: actor })
+      if (actor) {
+        rows.push({ key: 'Added by', value: actor })
+      }
       const text = details.noteText
       if (typeof text === 'string' && text.length > 0) {
         rows.push({ key: 'Note', value: text, multiline: true })
@@ -439,7 +469,9 @@ function notificationDetailRows(entry, details) {
     rows.push({ key: 'Error', value: details.errorMessage, multiline: true })
   }
   const actor = entry.createdByName ?? entry.createdBy
-  if (actor) rows.push({ key: 'Triggered by', value: actor })
+  if (actor) {
+    rows.push({ key: 'Triggered by', value: actor })
+  }
   return rows
 }
 
@@ -462,12 +494,16 @@ function notificationDetailRows(entry, details) {
 function statusPushDetailRows(entry, details) {
   const rows = []
   const action = details.actionDisplayName ?? details.actionId
-  if (action) rows.push({ key: 'Action', value: action })
+  if (action) {
+    rows.push({ key: 'Action', value: action })
+  }
   if (details.fromStateId) {
     rows.push({ key: 'Previous state', value: details.fromStateId })
   }
   const toState = details.toStateDisplayName ?? details.toStateId
-  if (toState) rows.push({ key: 'New state', value: toState })
+  if (toState) {
+    rows.push({ key: 'New state', value: toState })
+  }
   if (details.reason) {
     rows.push({ key: 'Reason', value: details.reason })
   }
@@ -475,12 +511,16 @@ function statusPushDetailRows(entry, details) {
     rows.push({ key: 'Error', value: details.errorMessage, multiline: true })
   }
   const actor = entry.createdByName ?? entry.createdBy
-  if (actor) rows.push({ key: 'Triggered by', value: actor })
+  if (actor) {
+    rows.push({ key: 'Triggered by', value: actor })
+  }
   return rows
 }
 
 function formatPayloadForAudit(payload) {
-  if (payload == null) return ''
+  if (payload == null) {
+    return ''
+  }
   if (typeof payload === 'string') {
     return payload.trim() === '' ? '' : payload
   }

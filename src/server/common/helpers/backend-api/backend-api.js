@@ -84,13 +84,23 @@ function buildHeaders(extra = {}, user = null) {
  * narrow, call-site-scoped exception rather than changing buildHeaders'
  * default behaviour for every other endpoint.
  */
+// A session holds exactly one of these two roles, never both (see
+// auth-scopes.js) - checked in this order so an (unexpected) session
+// carrying both is still resolved deterministically rather than by
+// object/array iteration order.
+function currentRole(roles) {
+  if (roles.includes(ROLE_SUPPORT_READONLY)) {
+    return ROLE_SUPPORT_READONLY
+  }
+  if (roles.includes(ROLE_STANDARD)) {
+    return ROLE_STANDARD
+  }
+  return null
+}
+
 function recyclingOperationsAuthHeaders(user) {
   const roles = user?.roles ?? []
-  const role = roles.includes(ROLE_SUPPORT_READONLY)
-    ? ROLE_SUPPORT_READONLY
-    : roles.includes(ROLE_STANDARD)
-      ? ROLE_STANDARD
-      : null
+  const role = currentRole(roles)
   const nationRole = roles.find((r) => r in NATION_ROLE_MAP)
   const nation = nationRole ? NATION_ROLE_MAP[nationRole] : null
 
@@ -258,13 +268,19 @@ function buildWorkItemsUrl(
   const params = new URLSearchParams()
 
   for (const typeId of toArray(typeIds)) {
-    if (typeId) params.append('typeId', typeId)
+    if (typeId) {
+      params.append('typeId', typeId)
+    }
   }
   for (const stateId of toArray(stateIds)) {
-    if (stateId) params.append('stateId', stateId)
+    if (stateId) {
+      params.append('stateId', stateId)
+    }
   }
   for (const nation of toArray(nations)) {
-    if (nation) params.append('nation', nation)
+    if (nation) {
+      params.append('nation', nation)
+    }
   }
   // RA-412. Mirrors the nation loop above — repeated values, matched against
   // `payload.wasteProcessingType` by management-be.
@@ -275,7 +291,9 @@ function buildWorkItemsUrl(
   }
   // RA-324 phase-2. Repeated material tokens (?material=plastic&material=glass).
   for (const material of toArray(materials)) {
-    if (material) params.append('material', material)
+    if (material) {
+      params.append('material', material)
+    }
   }
   // RA-324 phase-2. Server-side sort of the full result set.
   if (sort && String(sort).trim() !== '') {
@@ -306,7 +324,9 @@ function buildWorkItemsUrl(
   if (includeArchived === true) {
     params.append('includeArchived', 'true')
   }
-  if (page != null && page !== '') params.append('page', String(page))
+  if (page != null && page !== '') {
+    params.append('page', String(page))
+  }
   if (pageSize != null && pageSize !== '') {
     params.append('pageSize', String(pageSize))
   }
@@ -316,7 +336,9 @@ function buildWorkItemsUrl(
 }
 
 function toArray(value) {
-  if (value == null) return []
+  if (value == null) {
+    return []
+  }
   return Array.isArray(value) ? value : [value]
 }
 
@@ -1211,7 +1233,9 @@ export async function getReAccreditationPriorYear({
       headers: buildHeaders({ accept: 'application/json' }, user)
     })
 
-    if (response.status === 404) return { ok: false, status: 404 }
+    if (response.status === 404) {
+      return { ok: false, status: 404 }
+    }
     if (!response.ok) {
       return {
         ok: false,

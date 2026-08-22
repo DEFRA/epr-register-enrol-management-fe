@@ -657,14 +657,20 @@ function resolveAssigneeMode(rawValue, filtersApplied) {
 }
 
 function uniqueStringList(value) {
-  if (value == null) return []
+  if (value == null) {
+    return []
+  }
   const list = Array.isArray(value) ? value : [value]
   const seen = new Set()
   const out = []
   for (const item of list) {
-    if (typeof item !== 'string') continue
+    if (typeof item !== 'string') {
+      continue
+    }
     const trimmed = item.trim()
-    if (trimmed === '' || seen.has(trimmed)) continue
+    if (trimmed === '' || seen.has(trimmed)) {
+      continue
+    }
     seen.add(trimmed)
     out.push(trimmed)
   }
@@ -750,9 +756,13 @@ function decorate(item) {
  */
 function formatArchivedAt(value) {
   const iso = unwrapMongoDate(value)
-  if (!iso) return null
+  if (!iso) {
+    return null
+  }
   const d = new Date(iso)
-  if (isNaN(d.getTime())) return null
+  if (isNaN(d.getTime())) {
+    return null
+  }
   return d.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
@@ -857,7 +867,9 @@ function buildAssigneeUserOptions(selectedUserId) {
  * one page. Each href preserves the active filters.
  */
 function buildPagination({ page, totalPages, filters }) {
-  if (totalPages <= 1) return null
+  if (totalPages <= 1) {
+    return null
+  }
 
   const makeHref = (target) => buildHref({ ...filters, page: target })
 
@@ -882,13 +894,21 @@ function buildHref(filters) {
   // withoutFilter / buildPagination), so every list field is guaranteed to be
   // an array — no nullish guards needed on the loops.
   const params = new URLSearchParams()
-  for (const id of filters.typeIds) params.append('typeId', id)
+  for (const id of filters.typeIds) {
+    params.append('typeId', id)
+  }
   for (const id of filters.applicationTypeIds) {
     params.append('applicationType', id)
   }
-  for (const v of filters.statusGroups) params.append('status', v)
-  for (const n of filters.nations) params.append('nation', n)
-  for (const m of filters.materials) params.append('material', m)
+  for (const v of filters.statusGroups) {
+    params.append('status', v)
+  }
+  for (const n of filters.nations) {
+    params.append('nation', n)
+  }
+  for (const m of filters.materials) {
+    params.append('material', m)
+  }
   // RA-299 AC06. Only carry `sort=` forward when it was an explicit user
   // choice — a silently-defaulted sort must not "leak" into the URL as if it
   // were user-chosen (readFilters re-derives the same default on every
@@ -899,10 +919,18 @@ function buildHref(filters) {
   }
   // Carry the form-submission marker through pagination/back-links so
   // role-based defaults don't silently re-apply mid-paging (RA-125).
-  if (filters.filtersApplied) params.append('filtersApplied', '1')
-  if (filters.includeArchived) params.append('includeArchived', 'true')
-  if (filters.search) params.append('search', filters.search)
-  if (filters.organisation) params.append('organisation', filters.organisation)
+  if (filters.filtersApplied) {
+    params.append('filtersApplied', '1')
+  }
+  if (filters.includeArchived) {
+    params.append('includeArchived', 'true')
+  }
+  if (filters.search) {
+    params.append('search', filters.search)
+  }
+  if (filters.organisation) {
+    params.append('organisation', filters.organisation)
+  }
   // RA-299 AC08/09. Same reasoning as `sort` above: only carry
   // `assigneeMode=` forward when it was an explicit user choice, so the
   // silent "mine" default doesn't leak into pagination/chip-removal hrefs as

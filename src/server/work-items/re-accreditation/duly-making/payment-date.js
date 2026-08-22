@@ -165,7 +165,9 @@ export function validatePaymentDate(values, now = new Date()) {
  */
 export function buildPaymentDateErrorSummary(errorCode) {
   const message = messageForErrorCode(errorCode)
-  if (!message) return null
+  if (!message) {
+    return null
+  }
   return {
     titleText: 'There is a problem',
     items: [{ text: message, href: PAYMENT_DATE_ANCHOR }]

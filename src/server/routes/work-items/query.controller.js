@@ -60,7 +60,9 @@ function flashBanner(request, banner) {
  * itself once the item has already been queried.
  */
 export function isQueryActionId(actionId) {
-  if (typeof actionId !== 'string') return false
+  if (typeof actionId !== 'string') {
+    return false
+  }
   return actionId === 'query' || actionId.startsWith('query-')
 }
 
@@ -171,7 +173,9 @@ export function makeShowQueryController() {
     async handler(request, h) {
       const id = request.params.id
       const loaded = await loadWorkItem(request, h, id)
-      if (loaded.response) return loaded.response
+      if (loaded.response) {
+        return loaded.response
+      }
 
       const workItem = loaded.workItem
       if (!hasQueryAction(workItem)) {

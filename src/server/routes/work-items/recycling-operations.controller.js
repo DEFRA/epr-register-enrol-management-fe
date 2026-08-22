@@ -66,7 +66,9 @@ function interimSiteAddressLine(interimSite) {
 function lastEditedOf(site) {
   const by = site?.recyclingOperationsUpdatedBy
   const at = site?.recyclingOperationsUpdatedAt
-  if (!by && !at) return null
+  if (!by && !at) {
+    return null
+  }
   return {
     by: by || null,
     at: at ? formatDateTimeGds(at) : null
@@ -145,7 +147,9 @@ export function readFlashBanner(request) {
  */
 export function filterRecyclingOperationsSites(sites, search) {
   const term = (search ?? '').toLowerCase()
-  if (term === '') return sites
+  if (term === '') {
+    return sites
+  }
   return sites.filter((site) => site.siteName.toLowerCase().includes(term))
 }
 
@@ -159,14 +163,20 @@ export function filterRecyclingOperationsSites(sites, search) {
  */
 function buildPaginationHref(basePath, { q, page }) {
   const params = new URLSearchParams()
-  if (q) params.append('q', q)
-  if (page > 1) params.append('page', String(page))
+  if (q) {
+    params.append('q', q)
+  }
+  if (page > 1) {
+    params.append('page', String(page))
+  }
   const qs = params.toString()
   return qs === '' ? basePath : `${basePath}?${qs}`
 }
 
 function buildRecyclingOperationsPagination({ basePath, q, page, totalPages }) {
-  if (totalPages <= 1) return null
+  if (totalPages <= 1) {
+    return null
+  }
 
   const makeHref = (target) =>
     buildPaginationHref(basePath, { q, page: target })
@@ -207,7 +217,9 @@ export const workItemRecyclingOperationsController = {
     const result = await getWorkItem({ workItemId: id, user })
 
     const errorResponse = renderWorkItemFetchError({ h, result, id })
-    if (errorResponse) return errorResponse
+    if (errorResponse) {
+      return errorResponse
+    }
 
     const workItem = result.workItem
     const applicationRef = workItem.payload?.applicationReference ?? null

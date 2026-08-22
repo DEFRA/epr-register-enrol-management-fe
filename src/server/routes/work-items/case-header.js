@@ -39,7 +39,9 @@ const UNASSIGNED = 'Unassigned'
  */
 export function formatDueOn(value) {
   const iso = unwrapMongoDate(value)
-  if (!iso) return EM_DASH
+  if (!iso) {
+    return EM_DASH
+  }
   const formatted = formatDateGds(iso)
   return formatted === '' ? EM_DASH : formatted
 }

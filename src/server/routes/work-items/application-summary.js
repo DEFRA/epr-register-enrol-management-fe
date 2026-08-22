@@ -79,7 +79,9 @@ export function buildSiteAddressLines(payload) {
   const address = formatSiteAddress(payload)
   const postcode = getSitePostcode(payload)
   const lines = []
-  if (address) lines.push(address)
+  if (address) {
+    lines.push(address)
+  }
   if (postcode && !(address && address.includes(postcode))) {
     lines.push(postcode)
   }
@@ -130,7 +132,9 @@ function overseasSitesOf(workItem) {
 }
 
 export function tonnageBandLabel(band) {
-  if (!band) return EM_DASH
+  if (!band) {
+    return EM_DASH
+  }
   return TONNAGE_BAND_LABELS[band] ?? band
 }
 
@@ -144,7 +148,9 @@ export function buildBusinessPlanPairs(businessPlan) {
   return BUSINESS_PLAN_CATEGORIES.flatMap(({ key, label }) => {
     const percent = plan[`${key}Percent`]
     const detail = plan[`${key}Detail`]
-    if (percent == null && !detail) return []
+    if (percent == null && !detail) {
+      return []
+    }
     return [
       {
         label,
@@ -187,8 +193,12 @@ function fileViewModel(file, workItemId) {
 }
 
 function scanTagClass(scanStatus) {
-  if (scanStatus === 'Clean') return 'govuk-tag--green'
-  if (scanStatus === 'Infected') return 'govuk-tag--red'
+  if (scanStatus === 'Clean') {
+    return 'govuk-tag--green'
+  }
+  if (scanStatus === 'Infected') {
+    return 'govuk-tag--red'
+  }
   return 'govuk-tag--grey'
 }
 
@@ -295,9 +305,15 @@ export function isFlaggedNew(value) {
  * absent field. Only the new-flags use strict-true-or-nothing.
  */
 export function toDisplayLines(value) {
-  if (value == null) return []
-  if (Array.isArray(value)) return value.flatMap(toDisplayLines)
-  if (typeof value === 'boolean') return [value ? 'Yes' : 'No']
+  if (value == null) {
+    return []
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(toDisplayLines)
+  }
+  if (typeof value === 'boolean') {
+    return [value ? 'Yes' : 'No']
+  }
   if (typeof value === 'number') {
     return Number.isFinite(value) ? [String(value)] : []
   }
@@ -395,7 +411,9 @@ function overseasSiteAddressLines(site) {
   }
 
   const flat = toDisplayLines(site.siteAddress)
-  if (flat.length === 0) return [...structured, ...country]
+  if (flat.length === 0) {
+    return [...structured, ...country]
+  }
 
   // Flat string leads. Structured parts and the country are each measured
   // against the FLAT STRING's segments only — never against one another.
@@ -535,7 +553,9 @@ function buildDetails(fields, site) {
  * @returns {object|null} null when the ORS has no interim site.
  */
 export function buildInterimSite(site) {
-  if (site == null || typeof site !== 'object') return null
+  if (site == null || typeof site !== 'object') {
+    return null
+  }
   return {
     siteName: firstLineOr(site.siteName, EM_DASH),
     isNew: isFlaggedNew(site.isNewSite),

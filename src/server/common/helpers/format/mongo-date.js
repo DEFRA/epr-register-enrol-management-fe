@@ -13,8 +13,12 @@
  * @returns {string|null} the ISO string, or null for absent / unexpected shapes.
  */
 export function unwrapMongoDate(value) {
-  if (!value) return null
-  if (typeof value === 'string') return value
+  if (!value) {
+    return null
+  }
+  if (typeof value === 'string') {
+    return value
+  }
   if (typeof value === 'object' && typeof value.$date === 'string') {
     return value.$date
   }

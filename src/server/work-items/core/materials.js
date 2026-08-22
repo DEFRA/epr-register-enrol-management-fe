@@ -55,11 +55,15 @@ const GLASS_RECYCLING_PROCESS_SUFFIX = new Map([
  * @returns {string|null}
  */
 export function materialLabel(token, glassRecyclingProcess) {
-  if (token == null || token === '') return null
+  if (token == null || token === '') {
+    return null
+  }
   const label =
     DISPLAY_LABEL_BY_BACKEND_TOKEN.get(String(token).toLowerCase()) ?? token
 
-  if (String(token).toLowerCase() !== 'glass') return label
+  if (String(token).toLowerCase() !== 'glass') {
+    return label
+  }
 
   const suffix = GLASS_RECYCLING_PROCESS_SUFFIX.get(glassRecyclingProcess)
   return suffix ? `${label} - ${suffix}` : label

@@ -17,6 +17,7 @@
 
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
@@ -50,7 +51,9 @@ function flashBanner(request, banner) {
 
 function findSite(workItem, siteId) {
   const sites = workItem?.payload?.overseasSites?.sites
-  if (!Array.isArray(sites)) return null
+  if (!Array.isArray(sites)) {
+    return null
+  }
   // The route param is always a string, but the operator backend's
   // OverseasSiteModel.SiteId is a C# int, which round-trips through JSON as
   // a number — a strict === here would never match real seeded/production
@@ -73,7 +76,7 @@ function siteNotFoundResponse(h, id) {
         { text: 'Not found' }
       ]
     })
-    .code(404)
+    .code(statusCodes.notFound)
 }
 
 /** AC9: only the codes applicable to the application's material type are offered. */
@@ -147,11 +150,15 @@ export function makeShowRecyclingOperationsEditController() {
       const result = await getWorkItem({ workItemId: id, user })
 
       const errorResponse = renderWorkItemFetchError({ h, result, id })
-      if (errorResponse) return errorResponse
+      if (errorResponse) {
+        return errorResponse
+      }
 
       const workItem = result.workItem
       const site = findSite(workItem, siteId)
-      if (!site) return siteNotFoundResponse(h, id)
+      if (!site) {
+        return siteNotFoundResponse(h, id)
+      }
 
       // AC9: pre-populated with the site's current selection.
       const codes = Array.isArray(site.operationCodes)
@@ -180,11 +187,15 @@ export function makeSubmitRecyclingOperationsEditController({
       const result = await getWorkItem({ workItemId: id, user })
 
       const errorResponse = renderWorkItemFetchError({ h, result, id })
-      if (errorResponse) return errorResponse
+      if (errorResponse) {
+        return errorResponse
+      }
 
       const workItem = result.workItem
       const site = findSite(workItem, siteId)
-      if (!site) return siteNotFoundResponse(h, id)
+      if (!site) {
+        return siteNotFoundResponse(h, id)
+      }
 
       const applicableCodes = applicableCodesForMaterialType(
         workItem.payload?.material

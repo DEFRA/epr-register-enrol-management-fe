@@ -33,9 +33,13 @@ export function formatDate(value, formattedDateStr = 'EEE do MMMM yyyy') {
  *   {{ item.submittedAt | formatDateTimeGds }}
  */
 export function formatDateTimeGds(value) {
-  if (!value) return ''
+  if (!value) {
+    return ''
+  }
   const date = isDate(value) ? value : parseISO(value)
-  if (isNaN(date.getTime())) return ''
+  if (isNaN(date.getTime())) {
+    return ''
+  }
   return format(date, "d MMMM yyyy 'at' h:mmaaa", { in: tz(UK_TIMEZONE) })
 }
 
@@ -50,8 +54,12 @@ export function formatDateTimeGds(value) {
  * surrounding guard.
  */
 export function formatDateGds(value) {
-  if (!value) return ''
+  if (!value) {
+    return ''
+  }
   const date = isDate(value) ? value : parseISO(value)
-  if (isNaN(date.getTime())) return ''
+  if (isNaN(date.getTime())) {
+    return ''
+  }
   return format(date, 'd MMMM yyyy', { in: tz(UK_TIMEZONE) })
 }

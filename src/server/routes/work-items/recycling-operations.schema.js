@@ -62,7 +62,9 @@ export const CODES_REQUIRING_ACCOMPANIMENT = new Set(['R12', 'R13'])
  * frontend's own fallback, rather than showing no options at all.
  */
 export function applicableCodesForMaterialType(materialType) {
-  if (typeof materialType !== 'string') return ALL_CODES
+  if (typeof materialType !== 'string') {
+    return ALL_CODES
+  }
   return CODES_BY_MATERIAL_TYPE[materialType.toLowerCase()] ?? ALL_CODES
 }
 
@@ -151,6 +153,29 @@ export function buildErrorSummary(fieldErrors) {
   return items.length === 0 ? null : { titleText: 'There is a problem', items }
 }
 
+// AC9-AC11, checked in order (first match wins) - split out of
+// validateRecyclingOperationsForm to keep that function's own cyclomatic
+// complexity under the lint threshold.
+function codesFieldError(codes, { applicableCodes, hasInterimSite }) {
+  // AC9: a code outside the application's material-type set is invalid,
+  // same message as "select at least one" since the form never offered it.
+  if (codes.length > 0 && !codes.every((c) => applicableCodes.includes(c))) {
+    return SELECT_CODES_MESSAGE
+  }
+
+  // AC10: R12/R13 alone, with no R3/R4/R5 alongside.
+  if (requiresAccompanyingCode(codes)) {
+    return ACCOMPANYING_CODE_MESSAGE
+  }
+
+  // AC11: R12/R13 for a site with no associated interim site.
+  if (!hasInterimSite && requiresInterimSite(codes)) {
+    return INTERIM_SITE_REQUIRED_MESSAGE
+  }
+
+  return null
+}
+
 /**
  * Validate a raw Hapi payload for the Recycling operations edit form.
  *
@@ -180,24 +205,14 @@ export function validateRecyclingOperationsForm(
 
   const fieldErrors = error ? joiDetailsToFieldErrors(error.details) : {}
 
-  // AC9: a code outside the application's material-type set is invalid,
-  // same message as "select at least one" since the form never offered it.
-  if (
-    !fieldErrors.codes &&
-    codes.length > 0 &&
-    !codes.every((c) => applicableCodes.includes(c))
-  ) {
-    fieldErrors.codes = SELECT_CODES_MESSAGE
-  }
-
-  // AC10: R12/R13 alone, with no R3/R4/R5 alongside.
-  if (!fieldErrors.codes && requiresAccompanyingCode(codes)) {
-    fieldErrors.codes = ACCOMPANYING_CODE_MESSAGE
-  }
-
-  // AC11: R12/R13 for a site with no associated interim site.
-  if (!fieldErrors.codes && !hasInterimSite && requiresInterimSite(codes)) {
-    fieldErrors.codes = INTERIM_SITE_REQUIRED_MESSAGE
+  if (!fieldErrors.codes) {
+    const codesError = codesFieldError(codes, {
+      applicableCodes,
+      hasInterimSite
+    })
+    if (codesError) {
+      fieldErrors.codes = codesError
+    }
   }
 
   if (Object.keys(fieldErrors).length > 0) {
