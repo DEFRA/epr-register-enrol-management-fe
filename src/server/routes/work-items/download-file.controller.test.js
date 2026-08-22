@@ -18,7 +18,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   setWorkItemTaskStatus: vi.fn(),
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
-  raiseWorkItemQuery: vi.fn()
+  raiseWorkItemQuery: vi.fn(),
+  updateRecyclingOperations: vi.fn()
 }))
 
 vi.mock('#/server/common/helpers/s3-client.js', () => ({

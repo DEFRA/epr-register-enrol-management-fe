@@ -21,7 +21,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
   approveReAccreditation: vi.fn(),
-  continueReviewReAccreditation: vi.fn()
+  continueReviewReAccreditation: vi.fn(),
+  updateRecyclingOperations: vi.fn()
 }))
 
 import { createServer } from '#/server/server.js'

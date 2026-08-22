@@ -104,9 +104,12 @@ export function buildRecyclingOperationsSite(site, workItemId) {
         }
       : null,
     lastEdited: lastEditedOf(site),
+    // RA-469 8pi's task explicitly names the edit route
+    // `/work-items/{id}/recycling-operations/{siteId}` (GET+POST) — no
+    // `/edit` suffix, unlike the sla/query GET-interstitial routes.
     editHref:
       site?.siteId != null
-        ? `/work-items/${encodeURIComponent(workItemId)}/recycling-operations/${encodeURIComponent(site.siteId)}/edit`
+        ? `/work-items/${encodeURIComponent(workItemId)}/recycling-operations/${encodeURIComponent(site.siteId)}`
         : null
   }
 }

@@ -297,7 +297,7 @@ describe('#workItemRecyclingOperationsController', () => {
     })
 
     expect(result).toMatch(
-      /<a[^>]*href="\/work-items\/[^"]+\/recycling-operations\/site-1\/edit"[^>]*data-testid="recycling-operations-site-change-site-1"/
+      /<a[^>]*href="\/work-items\/[^"]+\/recycling-operations\/site-1"[^>]*data-testid="recycling-operations-site-change-site-1"/
     )
   })
 
@@ -358,9 +358,7 @@ describe('buildRecyclingOperationsSite', () => {
 
   test('builds an edit href from the work item and site ids', () => {
     const view = buildRecyclingOperationsSite({ siteId: 'site-1' }, ID)
-    expect(view.editHref).toBe(
-      `/work-items/${ID}/recycling-operations/site-1/edit`
-    )
+    expect(view.editHref).toBe(`/work-items/${ID}/recycling-operations/site-1`)
   })
 
   test('null editHref when the site has no id', () => {

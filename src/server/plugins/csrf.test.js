@@ -13,7 +13,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getWorkItem: vi.fn(),
   getWorkItems: vi.fn(),
   applyWorkItemAction: vi.fn(),
-  addWorkItemNote: vi.fn()
+  addWorkItemNote: vi.fn(),
+  updateRecyclingOperations: vi.fn()
 }))
 
 const { assignWorkItem, getWorkItem } =
