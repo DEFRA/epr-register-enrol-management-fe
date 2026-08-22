@@ -138,6 +138,37 @@ describe('GET /work-items/{id}/recycling-operations/{siteId}', () => {
     )
   })
 
+  test('finds the site when payload.siteId is a real int, not just the fixture-shaped string', async () => {
+    // epr-register-enrol-backend's OverseasSiteModel.SiteId is a C# int,
+    // which round-trips through JSON as a number — the route param is
+    // always a string, so a strict === on the raw value would 404 every
+    // real site (this repo's own fixtures use string siteIds throughout,
+    // which never exercised that mismatch).
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: {
+            sites: [anOrsSite({ siteId: 1, operationCodes: ['R5'] })]
+          }
+        }
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations/1`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toMatch(
+      /name="codes"\s+type="checkbox"\s+value="R5"\s+checked/
+    )
+  })
+
   test('offers all five codes for a material with no restriction (unrecognised token)', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({

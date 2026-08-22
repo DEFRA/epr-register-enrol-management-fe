@@ -51,7 +51,15 @@ function flashBanner(request, banner) {
 function findSite(workItem, siteId) {
   const sites = workItem?.payload?.overseasSites?.sites
   if (!Array.isArray(sites)) return null
-  return sites.find((site) => site?.siteId === siteId) ?? null
+  // The route param is always a string, but the operator backend's
+  // OverseasSiteModel.SiteId is a C# int, which round-trips through JSON as
+  // a number — a strict === here would never match real seeded/production
+  // data (only ever matched the test suite's own string-typed fixtures).
+  return (
+    sites.find(
+      (site) => site?.siteId != null && String(site.siteId) === siteId
+    ) ?? null
+  )
 }
 
 function siteNotFoundResponse(h, id) {
