@@ -56,18 +56,22 @@ export function realOperatorSubmissionPayload() {
       authorisers: [{ fullName: 'Bob Jones', email: 'bob@example.com' }]
     },
     businessPlan: {
-      newInfrastructurePercent: 20,
-      priceSupportPercent: 20,
-      businessCollectionsPercent: 20,
-      communicationsPercent: 20,
+      // RA-456 added a 7th "Other" category — percentages rebalanced across
+      // all seven fields so the set still sums to 100.
+      newInfrastructurePercent: 15,
+      priceSupportPercent: 15,
+      businessCollectionsPercent: 15,
+      communicationsPercent: 15,
       newMarketsPercent: 10,
       newUsesPercent: 10,
+      otherPercent: 20,
       newInfrastructureDetail: 'New sorting line',
       priceSupportDetail: 'Subsidised collection',
       businessCollectionsDetail: 'Kerbside expansion',
       communicationsDetail: 'Customer newsletter',
       newMarketsDetail: 'Export contracts',
-      newUsesDetail: 'Recycled packaging'
+      newUsesDetail: 'Recycled packaging',
+      otherDetail: 'Community recycling outreach'
     },
     samplingPlan: {
       files: [
