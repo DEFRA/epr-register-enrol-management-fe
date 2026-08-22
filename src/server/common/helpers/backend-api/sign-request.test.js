@@ -26,6 +26,8 @@ describe('signRequestHeaders', () => {
       'frontend',
       'user-123',
       'Alice Example',
+      '',
+      '',
       timestamp,
       nonce
     ].join('\n')
@@ -40,7 +42,7 @@ describe('signRequestHeaders', () => {
     // bugs that would change both sides of the dynamic assertion equally.
     // Computed with: printf 'v3\n...' | openssl dgst -sha256 -hmac '...' -binary | base64
     expect(result['x-cdp-auth-signature']).toBe(
-      '1kJl6yZuv2+UeuyUZxjM0wqCAoi9x092HnWdP3+AkEU='
+      '6hYzUib9X2d4DdQJPKWjtePnCqk4uuPMVD3gdSM12kU='
     )
   })
 
@@ -55,14 +57,73 @@ describe('signRequestHeaders', () => {
       nonce
     })
 
-    const expectedPayload = ['v3', 'frontend', '', '', timestamp, nonce].join(
-      '\n'
-    )
+    const expectedPayload = [
+      'v3',
+      'frontend',
+      '',
+      '',
+      '',
+      '',
+      timestamp,
+      nonce
+    ].join('\n')
     const expectedSig = createHmac('sha256', SECRET)
       .update(expectedPayload, 'utf8')
       .digest('base64')
 
     expect(result['x-cdp-auth-signature']).toBe(expectedSig)
+  })
+
+  test('includes role/nation in the signed payload when present (RA-469)', () => {
+    // PR review (masante): role/nation must be signed, not just forwarded,
+    // or a party able to alter the headers after signing could bypass
+    // management-be's AC17 authorization gate while the signature still
+    // validates. This proves the two fields actually change the signature.
+    const headers = {
+      'x-cdp-client-id': 'frontend',
+      'x-cdp-user-id': 'user-123',
+      'x-cdp-user-name': 'Alice Example',
+      'x-cdp-user-role': 'standard',
+      'x-cdp-user-nation': 'Wales'
+    }
+    const timestamp = '2026-05-18T10:00:00Z'
+    const nonce = 'abc123def456ghi7'
+
+    const result = signRequestHeaders(headers, {
+      sharedSecret: SECRET,
+      timestamp,
+      nonce
+    })
+
+    const expectedPayload = [
+      'v3',
+      'frontend',
+      'user-123',
+      'Alice Example',
+      'standard',
+      'Wales',
+      timestamp,
+      nonce
+    ].join('\n')
+    const expectedSig = createHmac('sha256', SECRET)
+      .update(expectedPayload, 'utf8')
+      .digest('base64')
+
+    expect(result['x-cdp-auth-signature']).toBe(expectedSig)
+    // A signature computed without role/nation (the pre-fix payload shape)
+    // must NOT match — this is what closes the tampering gap.
+    const preFixPayload = [
+      'v3',
+      'frontend',
+      'user-123',
+      'Alice Example',
+      timestamp,
+      nonce
+    ].join('\n')
+    const preFixSig = createHmac('sha256', SECRET)
+      .update(preFixPayload, 'utf8')
+      .digest('base64')
+    expect(result['x-cdp-auth-signature']).not.toBe(preFixSig)
   })
 
   test('timestamp is a fresh ISO-8601 UTC instant without milliseconds', () => {

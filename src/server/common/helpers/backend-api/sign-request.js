@@ -13,9 +13,16 @@ const SIGNATURE_HEADER = 'x-cdp-auth-signature'
  * lets the backend verify the trust headers originated from this BFF.
  * Returns an empty object when no shared secret is configured (local dev).
  *
- * v3 dropped the role-membership field carried by v2 — authorization is
- * entirely this BFF's concern now, so role membership is never forwarded
- * to the backend (see epr-register-enrol-management-be ADR-0005).
+ * v3 originally dropped the role-membership field carried by v2 (see
+ * epr-register-enrol-management-be ADR-0005) — authorization was entirely
+ * this BFF's concern. RA-469 puts role (and nation) back into the signed
+ * payload: management-be's recycling-operations endpoint enforces AC17
+ * authorization server-side too, using the x-cdp-user-role/x-cdp-user-nation
+ * headers as its claims, so those two headers need the same signed-integrity
+ * guarantee as user-id/user-name — otherwise something able to alter them
+ * on an already-signed request could bypass that authorization while the
+ * signature still validates. Both fields default to '' when absent, same
+ * as user-id/user-name, so every other caller of this function is unaffected.
  *
  * @param {Record<string,string>} headers - assembled outbound headers
  * @param {object} [opts]
@@ -40,6 +47,8 @@ export function signRequestHeaders(
     headers['x-cdp-client-id'] ?? '',
     headers['x-cdp-user-id'] ?? '',
     headers['x-cdp-user-name'] ?? '',
+    headers['x-cdp-user-role'] ?? '',
+    headers['x-cdp-user-nation'] ?? '',
     timestamp,
     nonce
   ].join('\n')
