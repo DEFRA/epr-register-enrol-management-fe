@@ -189,6 +189,25 @@ describe('GET /work-items/{id}/recycling-operations/{siteId}', () => {
 
     expect(statusCode).toBe(statusCodes.notFound)
   })
+
+  // RA-323: GET routes only require an authenticated session — the POST
+  // route below is what actually enforces requireStandard (AC14/RA-335).
+  // A support-readonly session can still open the form to review the
+  // current selection; its Save button is disabled by user.isReadOnly and
+  // the POST route rejects a crafted submission regardless.
+  test('a support-readonly session can still view the form (only POST is gated)', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: EDIT_HREF,
+      headers: { 'x-test-user-role': 'support-readonly' }
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('disabled')
+  })
 })
 
 describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {

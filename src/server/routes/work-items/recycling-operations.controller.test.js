@@ -470,6 +470,11 @@ describe('#workItemRecyclingOperationsController search and pagination (RA-469 8
 
     expect(result).toContain('recycling-operations-search-form')
     expect(result).toContain('Find a site by name')
+    // AC4: a plain GET, full page reload — no client-side JavaScript, and
+    // no method="post" that would need a CSRF crumb.
+    expect(result).toMatch(
+      /<form method="get" action="\/work-items\/[^"]+\/recycling-operations"[^>]*data-testid="recycling-operations-search-form"/
+    )
   })
 
   test('AC5: pagination is absent when the result set is exactly 20', async () => {
