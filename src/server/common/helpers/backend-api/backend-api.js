@@ -972,7 +972,11 @@ export async function updateRecyclingOperations({
   timeoutMs = config.get('backendApi.timeoutMs'),
   fetchImpl = fetch
 }) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/overseas-sites/${encodeURIComponent(siteId)}/recycling-operations`
+  // management-be registers this route under its /work-items/re-accreditation
+  // group (ReAccreditationEndpoints.cs), not a bare /work-items/{id} path -
+  // omitting the type segment 404s at the routing layer before any handler
+  // runs (confirmed against a real docker-compose run of both services).
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/overseas-sites/${encodeURIComponent(siteId)}/recycling-operations`
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 

@@ -1981,7 +1981,7 @@ describe('#updateRecyclingOperations (RA-469)', () => {
     })
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      'http://backend:8085/work-items/wi-1/overseas-sites/site-1/recycling-operations',
+      'http://backend:8085/work-items/re-accreditation/wi-1/overseas-sites/site-1/recycling-operations',
       expect.objectContaining({
         method: 'PATCH',
         signal: expect.any(AbortSignal)
@@ -2028,7 +2028,7 @@ describe('#updateRecyclingOperations (RA-469)', () => {
     })
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      'http://backend:8085/work-items/wi%2F1/overseas-sites/site%201/recycling-operations',
+      'http://backend:8085/work-items/re-accreditation/wi%2F1/overseas-sites/site%201/recycling-operations',
       expect.anything()
     )
   })
