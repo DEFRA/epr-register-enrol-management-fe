@@ -2033,6 +2033,75 @@ describe('#updateRecyclingOperations (RA-469)', () => {
     )
   })
 
+  test('AC17: sends x-cdp-user-role and x-cdp-user-nation for a standard England user', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      user: {
+        id: 'u-1',
+        name: 'Alice',
+        roles: ['standard', 'role:nation-england']
+      },
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers['x-cdp-user-role']).toBe('standard')
+    expect(init.headers['x-cdp-user-nation']).toBe('England')
+  })
+
+  test('AC17: sends x-cdp-user-role=support-readonly and no nation header when the user has no nation role', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      user: { id: 'u-1', name: 'Alice', roles: ['support-readonly'] },
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers['x-cdp-user-role']).toBe('support-readonly')
+    expect(init.headers['x-cdp-user-nation']).toBeUndefined()
+  })
+
+  test('AC17: sends neither header when no user is supplied', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await updateRecyclingOperations({
+      workItemId: 'wi-1',
+      siteId: 'site-1',
+      operationCodes: ['R3'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers['x-cdp-user-role']).toBeUndefined()
+    expect(init.headers['x-cdp-user-nation']).toBeUndefined()
+  })
+
   test('returns invalid on 400', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,

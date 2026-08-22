@@ -3,12 +3,19 @@ import { fetch } from 'undici'
 import { config } from '#/config/config.js'
 import { createLogger } from '../logging/logger.js'
 import { signRequestHeaders } from './sign-request.js'
+import {
+  NATION_ROLE_MAP,
+  ROLE_STANDARD,
+  ROLE_SUPPORT_READONLY
+} from '../auth/auth-scopes.js'
 
 const logger = createLogger()
 
 const CLIENT_ID_HEADER = 'x-cdp-client-id'
 const USER_ID_HEADER = 'x-cdp-user-id'
 const USER_NAME_HEADER = 'x-cdp-user-name'
+const USER_ROLE_HEADER = 'x-cdp-user-role'
+const USER_NATION_HEADER = 'x-cdp-user-nation'
 
 /**
  * Defence-in-depth guard against HTTP header injection (CRLF). User-supplied
@@ -66,6 +73,37 @@ function buildHeaders(extra = {}, user = null) {
     }
   }
   return { ...headers, ...signRequestHeaders(headers) }
+}
+
+/**
+ * RA-469 AC17: unlike every other backend call in this file, management-be's
+ * recycling-operations endpoint enforces role/nation authorization
+ * server-side (deliberately, per the ticket - "not just in the UI"), so it
+ * needs the caller's role/nation forwarded as headers, which the general
+ * {@link buildHeaders} contract otherwise deliberately omits. Kept as a
+ * narrow, call-site-scoped exception rather than changing buildHeaders'
+ * default behaviour for every other endpoint.
+ */
+function recyclingOperationsAuthHeaders(user) {
+  const roles = user?.roles ?? []
+  const role = roles.includes(ROLE_SUPPORT_READONLY)
+    ? ROLE_SUPPORT_READONLY
+    : roles.includes(ROLE_STANDARD)
+      ? ROLE_STANDARD
+      : null
+  const nationRole = roles.find((r) => r in NATION_ROLE_MAP)
+  const nation = nationRole ? NATION_ROLE_MAP[nationRole] : null
+
+  const headers = {}
+  if (role) {
+    assertSafeHeaderValue(role)
+    headers[USER_ROLE_HEADER] = role
+  }
+  if (nation) {
+    assertSafeHeaderValue(nation)
+    headers[USER_NATION_HEADER] = nation
+  }
+  return headers
 }
 
 /**
@@ -946,12 +984,14 @@ export async function raiseWorkItemQuery({
  * Update the recycling operation codes on one overseas reprocessing site
  * (RA-469).
  *
- * Wraps `PATCH /work-items/{id}/overseas-sites/{siteId}/recycling-operations`.
+ * Wraps `PATCH /work-items/re-accreditation/{id}/overseas-sites/{siteId}/recycling-operations`.
  * Body: { operationCodes: string[] }. The endpoint enforces AC10-AC12
- * (accompanying-code, interim-site, zero-codes) and nation-scoping (AC14)
- * server-side — this client just forwards the request and translates the
- * response, using the same shared {@link REASON_BY_STATUS} translation every
- * other type-specific POST/PATCH client here uses.
+ * (accompanying-code, interim-site, zero-codes) and role/nation-scoping
+ * (AC14/AC17) server-side — this client forwards the caller's role/nation
+ * as headers (see {@link recyclingOperationsAuthHeaders}) for that check to
+ * have anything to check against, then translates the response, using the
+ * same shared {@link REASON_BY_STATUS} translation every other
+ * type-specific POST/PATCH client here uses.
  *
  * Result shape mirrors {@link extendWorkItemSla}:
  *  - 200 → { ok: true, workItem }
@@ -985,7 +1025,11 @@ export async function updateRecyclingOperations({
       method: 'PATCH',
       signal: controller.signal,
       headers: buildHeaders(
-        { 'content-type': 'application/json', accept: 'application/json' },
+        {
+          'content-type': 'application/json',
+          accept: 'application/json',
+          ...recyclingOperationsAuthHeaders(user)
+        },
         user
       ),
       body: JSON.stringify({ operationCodes })
