@@ -93,12 +93,12 @@ export function stubLoginPostController(request, h) {
   request.yar.reset()
 
   if (loginAs === 'support') {
-    const user = {
+    const supportUser = {
       ...STUB_SUPPORT_USER,
       roles: [ROLE_SUPPORT_READONLY],
       scope: [ROLE_SUPPORT_READONLY]
     }
-    request.yar.set('user', user)
+    request.yar.set('user', supportUser)
     return h.redirect(redirectTo)
   }
 
