@@ -30,6 +30,10 @@ import {
 } from './recycling-operations-edit.controller.js'
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
 
+// The single content type every form on these pages posts as (all forms are
+// plain HTML forms with no JavaScript enhancement).
+const FORM_URLENCODED = 'application/x-www-form-urlencoded'
+
 /**
  * Routes for the cross-type work item list (RA-93) plus the detail view,
  * task progression, action endpoints (RA-94) and assignment (RA-95). All
@@ -127,7 +131,7 @@ export const workItems = {
             ...requireStandard,
             payload: {
               parse: true,
-              allow: 'application/x-www-form-urlencoded',
+              allow: FORM_URLENCODED,
               maxBytes: 10 * 1024
             }
           },
@@ -179,7 +183,7 @@ export const workItems = {
             ...requireStandard,
             payload: {
               parse: true,
-              allow: 'application/x-www-form-urlencoded',
+              allow: FORM_URLENCODED,
               maxBytes: 32 * 1024
             }
           },
@@ -239,7 +243,7 @@ export const workItems = {
             ...requireStandard,
             payload: {
               parse: true,
-              allow: 'application/x-www-form-urlencoded',
+              allow: FORM_URLENCODED,
               maxBytes: 10 * 1024
             }
           },
@@ -259,7 +263,7 @@ export const workItems = {
             ...requireStandard,
             payload: {
               parse: true,
-              allow: 'application/x-www-form-urlencoded',
+              allow: FORM_URLENCODED,
               maxBytes: 10 * 1024
             }
           },

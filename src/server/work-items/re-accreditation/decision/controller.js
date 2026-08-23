@@ -32,8 +32,10 @@ import { createDecisionService, DECISION_NOTE_MAX_LENGTH } from './service.js'
 const VIEW_PATH = 're-accreditation/decision/index'
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
+const WORK_ITEMS_HREF = '/work-items'
 
 const PAGE_TITLE = 'Make determination for this application'
+const DECISION_FAILED_TITLE = 'Could not log a decision'
 
 // The GOV.UK error-summary link must target the FIRST radio in the group,
 // which is the id govuk-frontend generates for the first item — not the
@@ -60,13 +62,13 @@ function ineligibleBanner(reason) {
   if (reason === 'terminal-state') {
     return {
       type: 'error',
-      title: 'Could not log a decision',
+      title: DECISION_FAILED_TITLE,
       text: 'A decision has already been recorded for this application.'
     }
   }
   return {
     type: 'error',
-    title: 'Could not log a decision',
+    title: DECISION_FAILED_TITLE,
     text: 'A decision cannot be logged for this application from its current state.'
   }
 }
@@ -81,7 +83,7 @@ function decisionHref(id) {
 
 function breadcrumbs(id, ref) {
   return [
-    { text: 'Work items', href: '/work-items' },
+    { text: 'Work items', href: WORK_ITEMS_HREF },
     { text: ref ?? 'Work item', href: detailHref(id) },
     { text: 'Log decision' }
   ]
@@ -98,7 +100,7 @@ function renderNotFound(h, id) {
       heading: 'Application not found',
       workItemId: id,
       breadcrumbs: [
-        { text: 'Applications', href: '/work-items' },
+        { text: 'Applications', href: WORK_ITEMS_HREF },
         { text: 'Not found' }
       ]
     })
@@ -112,7 +114,7 @@ function renderUnavailable(h, id, result) {
       heading: 'Work item unavailable',
       workItemId: id,
       error: result.error ?? `Backend returned ${result.status}`,
-      breadcrumbs: [{ text: 'Work items', href: '/work-items' }, { text: id }]
+      breadcrumbs: [{ text: 'Work items', href: WORK_ITEMS_HREF }, { text: id }]
     })
     .code(502)
 }
@@ -193,7 +195,7 @@ export function makeSubmitDecisionController({
         )
         flashBanner(request, {
           type: 'error',
-          title: 'Could not log a decision',
+          title: DECISION_FAILED_TITLE,
           text: 'There was a problem recording this decision. Try again.'
         })
         return h.redirect(detailHref(id))
@@ -354,13 +356,13 @@ function bannerForFailure(result) {
   if (result.outcome === 'conflict') {
     return {
       type: 'error',
-      title: 'Could not log a decision',
+      title: DECISION_FAILED_TITLE,
       text: 'This application has changed since you opened it. Refresh and try again.'
     }
   }
   return {
     type: 'error',
-    title: 'Could not log a decision',
+    title: DECISION_FAILED_TITLE,
     text: 'There was a problem recording this decision. Try again.'
   }
 }

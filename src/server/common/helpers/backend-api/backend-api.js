@@ -18,6 +18,11 @@ const USER_NAME_HEADER = 'x-cdp-user-name'
 const USER_ROLE_HEADER = 'x-cdp-user-role'
 const USER_NATION_HEADER = 'x-cdp-user-nation'
 
+const CONFIG_BACKEND_API_URL = 'backendApi.url'
+const CONFIG_BACKEND_API_TIMEOUT_MS = 'backendApi.timeoutMs'
+const REQUEST_TIMED_OUT = 'Request timed out'
+const REQUEST_FAILED = 'Request failed'
+
 /**
  * Defence-in-depth guard against HTTP header injection (CRLF). User-supplied
  * data (id, name) flows from the session into outbound headers via
@@ -125,8 +130,8 @@ function recyclingOperationsAuthHeaders(user) {
  *  - { ok: false, error }           when the request fails or times out
  */
 export async function getBackendHealth({
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 } = {}) {
   const url = `${baseUrl.replace(/\/$/, '')}/health`
@@ -149,7 +154,7 @@ export async function getBackendHealth({
     logger.warn({ err: error, url }, 'Backend API health check failed')
     return {
       ok: false,
-      error: error.name === 'AbortError' ? 'Request timed out' : error.message
+      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -192,8 +197,8 @@ export async function getWorkItems({
   page,
   pageSize,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 } = {}) {
   const url = buildWorkItemsUrl(baseUrl, {
@@ -237,7 +242,7 @@ export async function getWorkItems({
     logger.warn({ err: error, url }, 'Backend API getWorkItems failed')
     return {
       ok: false,
-      error: error.name === 'AbortError' ? 'Request timed out' : error.message
+      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -379,8 +384,8 @@ function parseWorkItemsBody(body) {
 export async function getWorkItem({
   workItemId,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}`
@@ -410,7 +415,7 @@ export async function getWorkItem({
     logger.warn({ err: error, url }, 'Backend API getWorkItem failed')
     return {
       ok: false,
-      error: error.name === 'AbortError' ? 'Request timed out' : error.message
+      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -425,8 +430,8 @@ export async function applyWorkItemAction({
   workItemId,
   actionId,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/actions/${encodeURIComponent(actionId)}`
@@ -453,8 +458,8 @@ export async function assignWorkItem({
   assigneeId,
   assigneeName,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/assign`
@@ -471,8 +476,8 @@ export async function assignWorkItem({
 export async function unassignWorkItem({
   workItemId,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/unassign`
@@ -500,8 +505,8 @@ export async function addWorkItemNote({
   workItemId,
   text,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/notes`
@@ -546,7 +551,7 @@ export async function addWorkItemNote({
 export async function approveReAccreditation({
   workItemId,
   user = null,
-  baseUrl = config.get('backendApi.url'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
   timeoutMs = config.get('backendApi.approveTimeoutMs'),
   fetchImpl = fetch
 }) {
@@ -586,7 +591,7 @@ export async function approveReAccreditation({
     return {
       ok: false,
       reason: 'network',
-      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+      message: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -628,8 +633,8 @@ const REASON_BY_STATUS = {
 export async function continueReviewReAccreditation({
   workItemId,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/continue-review`
@@ -651,7 +656,7 @@ export async function continueReviewReAccreditation({
     return {
       ok: false,
       reason: 'network',
-      message: result.error ?? 'Request failed'
+      message: result.error ?? REQUEST_FAILED
     }
   }
 
@@ -692,8 +697,8 @@ export async function dulyMakeReAccreditation({
   workItemId,
   paymentDate,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/duly-make`
@@ -716,7 +721,7 @@ export async function dulyMakeReAccreditation({
     return {
       ok: false,
       reason: 'network',
-      message: result.error ?? 'Request failed'
+      message: result.error ?? REQUEST_FAILED
     }
   }
 
@@ -763,7 +768,7 @@ export async function recordReAccreditationDecision({
   workItemId,
   outcome,
   user = null,
-  baseUrl = config.get('backendApi.url'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
   // NOT the shared backendApi.timeoutMs. The backend gates this atomic
   // decision on an operator-journey push it retries up to 5 times (~28s
   // worst case) before committing anything, so this call has its own,
@@ -793,7 +798,7 @@ export async function recordReAccreditationDecision({
     return {
       ok: false,
       reason: 'network',
-      message: result.error ?? 'Request failed'
+      message: result.error ?? REQUEST_FAILED
     }
   }
 
@@ -823,8 +828,8 @@ export async function extendWorkItemSla({
   reason,
   additionalDuration,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/sla/extend`
@@ -863,7 +868,7 @@ export async function extendWorkItemSla({
     return {
       ok: false,
       reason: 'network',
-      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+      message: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -882,8 +887,8 @@ export async function overrideWorkItemSla({
   newTargetDuration,
   newStartedAt,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/sla/override`
@@ -922,7 +927,7 @@ export async function overrideWorkItemSla({
     return {
       ok: false,
       reason: 'network',
-      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+      message: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -952,8 +957,8 @@ export async function raiseWorkItemQuery({
   sections,
   reason,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/query`
@@ -991,7 +996,7 @@ export async function raiseWorkItemQuery({
     return {
       ok: false,
       reason: 'network',
-      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+      message: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -1026,8 +1031,8 @@ export async function updateRecyclingOperations({
   siteId,
   operationCodes,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   // management-be registers this route under its /work-items/re-accreditation
@@ -1076,7 +1081,7 @@ export async function updateRecyclingOperations({
     return {
       ok: false,
       reason: 'network',
-      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+      message: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -1126,8 +1131,8 @@ export async function createWorkItem({
   payload,
   source = null,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items`
@@ -1193,7 +1198,7 @@ export async function createWorkItem({
     return {
       ok: false,
       reason: 'network',
-      message: error.name === 'AbortError' ? 'Request timed out' : error.message
+      message: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -1215,8 +1220,8 @@ export async function createWorkItem({
 export async function getReAccreditationPriorYear({
   workItemId,
   user = null,
-  baseUrl = config.get('backendApi.url'),
-  timeoutMs = config.get('backendApi.timeoutMs'),
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/prior-year`
@@ -1249,7 +1254,7 @@ export async function getReAccreditationPriorYear({
     )
     return {
       ok: false,
-      error: error.name === 'AbortError' ? 'Request timed out' : error.message
+      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
@@ -1306,7 +1311,7 @@ async function postJson({
     logger.warn({ err: error, url }, `Backend API ${label} failed`)
     return {
       ok: false,
-      error: error.name === 'AbortError' ? 'Request timed out' : error.message
+      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
