@@ -43,7 +43,17 @@ const BUSINESS_PLAN_CATEGORIES = [
   { key: 'businessCollections', label: 'Business collections' },
   { key: 'communications', label: 'Communications' },
   { key: 'newMarkets', label: 'New markets' },
-  { key: 'newUses', label: 'New uses' }
+  { key: 'newUses', label: 'New uses' },
+  // RA-456. A regulator flagged that applicants cannot lawfully be
+  // restricted to a fixed list of PRN-income categories, so this 7th
+  // category is a catch-all for spend that does not fit the other six. The
+  // other six labels are the actual regulatory category names, not
+  // shortened forms of something longer, so this one is named the same way
+  // — its full official wording, not a paraphrase.
+  {
+    key: 'other',
+    label: 'Activities or investment not covered by the other categories'
+  }
 ]
 
 /**
