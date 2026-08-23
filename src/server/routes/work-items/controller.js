@@ -764,7 +764,7 @@ function formatArchivedAt(value) {
     return null
   }
   const d = new Date(iso)
-  if (isNaN(d.getTime())) {
+  if (Number.isNaN(d.getTime())) {
     return null
   }
   return d.toLocaleDateString('en-GB', {

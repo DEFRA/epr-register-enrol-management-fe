@@ -37,7 +37,7 @@ export function formatDateTimeGds(value) {
     return ''
   }
   const date = isDate(value) ? value : parseISO(value)
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return ''
   }
   return format(date, "d MMMM yyyy 'at' h:mmaaa", { in: tz(UK_TIMEZONE) })
@@ -58,7 +58,7 @@ export function formatDateGds(value) {
     return ''
   }
   const date = isDate(value) ? value : parseISO(value)
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return ''
   }
   return format(date, 'd MMMM yyyy', { in: tz(UK_TIMEZONE) })
