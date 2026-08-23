@@ -205,6 +205,27 @@ describe('#buildBusinessPlanPairs', () => {
     expect(buildBusinessPlanPairs(null)).toEqual([])
     expect(buildBusinessPlanPairs({})).toEqual([])
   })
+
+  // RA-456. A regulator flagged that applicants cannot lawfully be
+  // restricted to a fixed list of PRN-income categories, so a 7th
+  // catch-all category was added — last in declared order, after the
+  // original six.
+  test('RA-456: emits the "other" category last, alongside the original six', () => {
+    expect(
+      buildBusinessPlanPairs({
+        newUsesPercent: 10,
+        otherPercent: 5,
+        otherDetail: 'Community outreach'
+      })
+    ).toEqual([
+      { label: 'New uses', percent: '10% of PRN income', detail: null },
+      {
+        label: 'Activities or investment not covered by the other categories',
+        percent: '5% of PRN income',
+        detail: 'Community outreach'
+      }
+    ])
+  })
 })
 
 describe('#isExporterApplication (RA-412: real wasteProcessingType field)', () => {
@@ -731,17 +752,23 @@ describe('real operator submission payload contract', () => {
       '/work-items/w-1/files/file-sampling-001/download'
     )
 
-    // All six business-plan categories are emitted by the adapter, each with
-    // a percentage AND a narrative.
+    // All seven business-plan categories are emitted by the adapter,
+    // including RA-456's "Other" catch-all, each with a percentage AND a
+    // narrative.
     const pairs = row(rows, 'business-plan').pairs
-    expect(pairs).toHaveLength(6)
+    expect(pairs).toHaveLength(7)
     expect(pairs.every((p) => p.percent !== null && p.detail !== null)).toBe(
       true
     )
     expect(pairs[0]).toEqual({
       label: 'New infrastructure',
-      percent: '20% of PRN income',
+      percent: '15% of PRN income',
       detail: 'New sorting line'
+    })
+    expect(pairs[6]).toEqual({
+      label: 'Activities or investment not covered by the other categories',
+      percent: '20% of PRN income',
+      detail: 'Community recycling outreach'
     })
 
     // A reprocessor submission carries `overseasSites` present-and-EMPTY, so

@@ -3555,6 +3555,36 @@ describe('RA-295 individual work item page', () => {
     expect(result).toContain('80% of PRN income')
   })
 
+  // RA-456. A regulator flagged that applicants cannot lawfully be
+  // restricted to a fixed list of PRN-income categories, so a 7th "Other"
+  // catch-all category was added, matching the pattern of the original six.
+  test('RA-456: renders the "Other" business plan category for the current year', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        payload: {
+          businessPlan: {
+            newInfrastructurePercent: 80,
+            newInfrastructureDetail: 'Sorting line investment',
+            otherPercent: 20,
+            otherDetail: 'Community recycling outreach'
+          }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(detailRow(result, 'business-plan')).toContain(
+      'Activities or investment not covered by the other categories'
+    )
+    expect(result).toContain('20% of PRN income')
+    expect(result).toContain('Community recycling outreach')
+  })
+
   test('AC02: lists EVERY supporting document, with the S&I updated-by metadata', async () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
 
@@ -3806,6 +3836,42 @@ describe('RA-295 individual work item page', () => {
     expect(result).toContain('Prior Person')
     expect(result).toContain('p@example.com')
     expect(result).toContain('40% of PRN income')
+  })
+
+  // RA-456. The prior-year business plan renders through the same
+  // `buildBusinessPlanPairs` as the current year, so the new "Other"
+  // category must appear there too.
+  test('RA-456: renders the "Other" business plan category for the prior year', async () => {
+    getReAccreditationPriorYear.mockResolvedValue({
+      ok: true,
+      priorYear: {
+        year: 2025,
+        businessPlan: {
+          priceSupportPercent: 40,
+          otherPercent: 15,
+          otherDetail: 'Prior-year community outreach'
+        }
+      }
+    })
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    const priorYearStart = result.indexOf(
+      'data-testid="prior-year-business-plan"'
+    )
+    const priorYearBusinessPlan = result.slice(
+      priorYearStart,
+      result.indexOf('</dd>', priorYearStart)
+    )
+    expect(priorYearBusinessPlan).toContain(
+      'Activities or investment not covered by the other categories'
+    )
+    expect(priorYearBusinessPlan).toContain('15% of PRN income')
+    expect(priorYearBusinessPlan).toContain('Prior-year community outreach')
   })
 
   test('RA-254: an empty previous year still renders, with em dashes', async () => {
