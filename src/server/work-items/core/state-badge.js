@@ -1,3 +1,7 @@
+// The neutral grey tag. Used both by the states that deliberately render grey
+// and as the fallback for an unrecognised state id (see `stateTagClass`).
+const DEFAULT_STATE_TAG_CLASS = 'govuk-tag--grey'
+
 /**
  * Single source of truth for work-item status badge colours (RA-324, AC08).
  *
@@ -32,7 +36,7 @@
 // and .../accreditation/task-list/controller.js, both `Updated: { tagClass:
 // 'govuk-tag--turquoise' }`).
 const STATE_TAG_CLASSES = {
-  submitted: 'govuk-tag--grey', // Not started
+  submitted: DEFAULT_STATE_TAG_CLASS, // Not started
   'duly-made': 'govuk-tag--purple', // Duly made
   'assessment-in-progress': 'govuk-tag--blue', // Updated
   'awaiting-decision': 'govuk-tag--light-blue', // Awaiting decision (distinct)
@@ -40,10 +44,8 @@ const STATE_TAG_CLASSES = {
   updated: 'govuk-tag--turquoise', // Updated (RA-311 turquoise parity with OJ)
   approved: 'govuk-tag--green', // Granted
   rejected: 'govuk-tag--red', // Refused
-  withdrawn: 'govuk-tag--grey' // Withdrawn
+  withdrawn: DEFAULT_STATE_TAG_CLASS // Withdrawn
 }
-
-const DEFAULT_STATE_TAG_CLASS = 'govuk-tag--grey'
 
 /**
  * Resolve the `govuk-tag--*` class for a work-item state id. Falls back to

@@ -15,6 +15,10 @@ const EXTEND_VIEW = 'work-items/sla-extend'
 const OVERRIDE_VIEW = 'work-items/sla-override'
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
+const WORK_ITEMS_HREF = '/work-items'
+const WORK_ITEMS_BREADCRUMB = 'Work items'
+const NOT_FOUND_TITLE = 'Application not found'
+const UNAVAILABLE_TITLE = 'Work item unavailable'
 
 // RA-447 CM6. The `govukDateInput` id / name prefix for the new
 // determination deadline, and the error-summary anchor (the DAY box, so
@@ -39,7 +43,7 @@ function flashBanner(request, banner) {
 
 function breadcrumbs(id, action, ref) {
   return [
-    { text: 'Work items', href: '/work-items' },
+    { text: WORK_ITEMS_BREADCRUMB, href: WORK_ITEMS_HREF },
     { text: ref ?? 'Work item', href: detailHref(id) },
     { text: action }
   ]
@@ -60,11 +64,11 @@ async function loadWorkItemForExtend(request, h, id) {
     return {
       response: h
         .view(NOT_FOUND_VIEW, {
-          pageTitle: 'Application not found',
-          heading: 'Application not found',
+          pageTitle: NOT_FOUND_TITLE,
+          heading: NOT_FOUND_TITLE,
           workItemId: id,
           breadcrumbs: [
-            { text: 'Applications', href: '/work-items' },
+            { text: 'Applications', href: WORK_ITEMS_HREF },
             { text: 'Not found' }
           ]
         })
@@ -76,12 +80,12 @@ async function loadWorkItemForExtend(request, h, id) {
     return {
       response: h
         .view(UNAVAILABLE_VIEW, {
-          pageTitle: 'Work item unavailable',
-          heading: 'Work item unavailable',
+          pageTitle: UNAVAILABLE_TITLE,
+          heading: UNAVAILABLE_TITLE,
           workItemId: id,
           error: result.error ?? `Backend returned ${result.status}`,
           breadcrumbs: [
-            { text: 'Work items', href: '/work-items' },
+            { text: WORK_ITEMS_BREADCRUMB, href: WORK_ITEMS_HREF },
             { text: 'Work item' }
           ]
         })
@@ -226,11 +230,11 @@ export function makeShowOverrideController() {
       if (result.ok === false && result.status === 404) {
         return h
           .view(NOT_FOUND_VIEW, {
-            pageTitle: 'Application not found',
-            heading: 'Application not found',
+            pageTitle: NOT_FOUND_TITLE,
+            heading: NOT_FOUND_TITLE,
             workItemId: id,
             breadcrumbs: [
-              { text: 'Applications', href: '/work-items' },
+              { text: 'Applications', href: WORK_ITEMS_HREF },
               { text: 'Not found' }
             ]
           })
@@ -240,12 +244,12 @@ export function makeShowOverrideController() {
       if (!result.ok) {
         return h
           .view(UNAVAILABLE_VIEW, {
-            pageTitle: 'Work item unavailable',
-            heading: 'Work item unavailable',
+            pageTitle: UNAVAILABLE_TITLE,
+            heading: UNAVAILABLE_TITLE,
             workItemId: id,
             error: result.error ?? `Backend returned ${result.status}`,
             breadcrumbs: [
-              { text: 'Work items', href: '/work-items' },
+              { text: WORK_ITEMS_BREADCRUMB, href: WORK_ITEMS_HREF },
               { text: 'Work item' }
             ]
           })
