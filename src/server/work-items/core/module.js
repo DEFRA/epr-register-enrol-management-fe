@@ -33,7 +33,7 @@ export function assertValidWorkItemModule(mod) {
   const typeId = type.id
 
   if (typeof mod.register !== 'function') {
-    throw new Error(
+    throw new TypeError(
       `Work item module "${typeId}" must export an async \`register(server)\` function`
     )
   }
@@ -84,7 +84,7 @@ export function assertValidWorkItemModule(mod) {
   }
 
   if (!Array.isArray(type.transitions)) {
-    throw new Error(
+    throw new TypeError(
       `Work item type "${typeId}" must declare a \`transitions\` array`
     )
   }

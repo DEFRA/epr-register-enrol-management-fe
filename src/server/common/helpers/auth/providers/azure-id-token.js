@@ -36,7 +36,7 @@ export async function verifyAzureIdToken(
     audience
   })
   if (typeof payload.iat !== 'number') {
-    throw new Error('id_token missing iat claim')
+    throw new TypeError('id_token missing iat claim')
   }
   if (!expectedNonce || payload.nonce !== expectedNonce) {
     throw new Error('id_token nonce mismatch')

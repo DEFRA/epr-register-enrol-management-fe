@@ -22,8 +22,8 @@ function base64url(buf) {
   return buf
     .toString('base64')
     .replace(/=+$/, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
 }
 
 function defaultRandomToken(bytes = 32) {
@@ -50,7 +50,7 @@ export function createAuthControllers({
   randomToken = defaultRandomToken,
   getProviderConfig = () => getAzureEntraIdConfig(config)
 } = {}) {
-  function regulatorLoginController(request, h) {
+  function regulatorLogin(request, h) {
     confirmPostLoginRedirect(request)
 
     const provider = getProviderConfig()
@@ -85,7 +85,7 @@ export function createAuthControllers({
     return h.redirect(`${provider.authUrl}?${params}`)
   }
 
-  async function regulatorCallbackController(request, h) {
+  async function regulatorCallback(request, h) {
     const { code, state } = request.query
     const storedState = request.yar.get('oauthState')
     const storedNonce = request.yar.get('oauthNonce')
@@ -231,13 +231,13 @@ export function createAuthControllers({
 
     // Stored so it can be passed as id_token_hint at federated logout —
     // stub users (no real Entra ID id_token) simply won't have one, and
-    // logoutController falls back to a local-only sign-out for them.
+    // `logout` falls back to a local-only sign-out for them.
     request.yar.set('idToken', idToken)
     request.yar.set('user', user)
     return h.redirect(redirectTo)
   }
 
-  function logoutController(request, h) {
+  function logout(request, h) {
     const idToken = request.yar.get('idToken')
 
     // RA-306 (AC01/AC02): destroy the whole session rather than clearing
@@ -283,9 +283,9 @@ export function createAuthControllers({
   }
 
   return {
-    regulatorLoginController,
-    regulatorCallbackController,
-    logoutController
+    regulatorLoginController: regulatorLogin,
+    regulatorCallbackController: regulatorCallback,
+    logoutController: logout
   }
 }
 
