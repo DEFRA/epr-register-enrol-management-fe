@@ -28,11 +28,21 @@ import { buildDulyMakingRoutes } from './duly-making/routes.js'
 // so no templateVersion bump is required for the rename itself. Note the
 // intentional collision: both `assessment-in-progress` and `updated` display
 // as "Updated" (literal AC06, confirmed with the backend — do not reconcile).
+
+// State ids shared with the backend's `ReAccreditationType` — never renamed.
+const STATE_ASSESSMENT_IN_PROGRESS = 'assessment-in-progress'
+const STATE_AWAITING_DECISION = 'awaiting-decision'
+
+// Shared task display name and the single detail template every current
+// template version renders with.
+const CONTINUE_REVIEW_DISPLAY_NAME = 'Continue review'
+const DETAIL_TEMPLATE_V1 = 're-accreditation/detail-v1'
+
 const STATES = [
   { id: 'submitted', displayName: 'Not started' },
   { id: 'duly-made', displayName: 'Duly made' },
-  { id: 'assessment-in-progress', displayName: 'Updated' },
-  { id: 'awaiting-decision', displayName: 'Awaiting decision' },
+  { id: STATE_ASSESSMENT_IN_PROGRESS, displayName: 'Updated' },
+  { id: STATE_AWAITING_DECISION, displayName: 'Awaiting decision' },
   // RA-211 / RA-291. Deliberately NOT terminal: a queried application is
   // paused awaiting the operator's resubmission, after which it re-enters
   // assessment. Added here so the state label resolves — the detail view,
@@ -93,7 +103,7 @@ const TRANSITIONS = [
     actionId: 'payment-received',
     displayName: 'Payment received',
     fromStateId: 'duly-made',
-    toStateId: 'assessment-in-progress',
+    toStateId: STATE_ASSESSMENT_IN_PROGRESS,
     startsOnSelfAssign: true
   },
   {
@@ -104,8 +114,8 @@ const TRANSITIONS = [
     // in step with the page's own wording anyway, for anyone reading the
     // action registry as documentation.
     displayName: 'Extend determination deadline',
-    fromStateId: 'assessment-in-progress',
-    toStateId: 'assessment-in-progress'
+    fromStateId: STATE_ASSESSMENT_IN_PROGRESS,
+    toStateId: STATE_ASSESSMENT_IN_PROGRESS
   },
   // RA-351. A queried application can ALSO Extend SLA (and, on the same
   // `canChangeDueDate` flag, Override the due date) — management-be projects
@@ -140,8 +150,8 @@ const TRANSITIONS = [
   {
     actionId: 'submit-for-decision',
     displayName: 'Submit for decision',
-    fromStateId: 'assessment-in-progress',
-    toStateId: 'awaiting-decision',
+    fromStateId: STATE_ASSESSMENT_IN_PROGRESS,
+    toStateId: STATE_AWAITING_DECISION,
     callerInvocable: false
   },
   // ⚠ RA-346. This entry is FRONTEND-ONLY. Unlike every other transition
@@ -173,7 +183,7 @@ const TRANSITIONS = [
   {
     actionId: 'approve',
     displayName: 'Approve',
-    fromStateId: 'awaiting-decision',
+    fromStateId: STATE_AWAITING_DECISION,
     toStateId: 'approved',
     callerInvocable: false
   },
@@ -188,7 +198,7 @@ const TRANSITIONS = [
   {
     actionId: 'reject',
     displayName: 'Reject',
-    fromStateId: 'awaiting-decision',
+    fromStateId: STATE_AWAITING_DECISION,
     toStateId: 'rejected',
     callerInvocable: false
   },
@@ -207,13 +217,13 @@ const TRANSITIONS = [
   {
     actionId: 'withdraw-during-assessment',
     displayName: 'Withdraw',
-    fromStateId: 'assessment-in-progress',
+    fromStateId: STATE_ASSESSMENT_IN_PROGRESS,
     toStateId: 'withdrawn'
   },
   {
     actionId: 'withdraw-during-decision',
     displayName: 'Withdraw',
-    fromStateId: 'awaiting-decision',
+    fromStateId: STATE_AWAITING_DECISION,
     toStateId: 'withdrawn'
   },
   {
@@ -249,13 +259,13 @@ const TRANSITIONS = [
   {
     actionId: 'query-during-assessment',
     displayName: 'Query',
-    fromStateId: 'assessment-in-progress',
+    fromStateId: STATE_ASSESSMENT_IN_PROGRESS,
     toStateId: 'queried'
   },
   {
     actionId: 'query-during-decision',
     displayName: 'Query',
-    fromStateId: 'awaiting-decision',
+    fromStateId: STATE_AWAITING_DECISION,
     toStateId: 'queried'
   },
   // RA-311/MBE-1. The inverse of the four `query-during-*` above: an
@@ -314,30 +324,30 @@ const TRANSITIONS = [
   // out of `availableActions` rather than rendering four buttons.
   {
     actionId: 'continue-review-during-duly-making',
-    displayName: 'Continue review',
+    displayName: CONTINUE_REVIEW_DISPLAY_NAME,
     fromStateId: 'updated',
     toStateId: 'submitted',
     callerInvocable: false
   },
   {
     actionId: 'continue-review-during-duly-made',
-    displayName: 'Continue review',
+    displayName: CONTINUE_REVIEW_DISPLAY_NAME,
     fromStateId: 'updated',
     toStateId: 'duly-made',
     callerInvocable: false
   },
   {
     actionId: 'continue-review-during-assessment',
-    displayName: 'Continue review',
+    displayName: CONTINUE_REVIEW_DISPLAY_NAME,
     fromStateId: 'updated',
-    toStateId: 'assessment-in-progress',
+    toStateId: STATE_ASSESSMENT_IN_PROGRESS,
     callerInvocable: false
   },
   {
     actionId: 'continue-review-during-decision',
-    displayName: 'Continue review',
+    displayName: CONTINUE_REVIEW_DISPLAY_NAME,
     fromStateId: 'updated',
-    toStateId: 'awaiting-decision',
+    toStateId: STATE_AWAITING_DECISION,
     callerInvocable: false
   }
 ]
@@ -418,19 +428,19 @@ export const reAccreditationModule = {
     // invoked from `core/plugin.js`); the older entries stay registered
     // so historical items keep rendering exactly as they were assessed.
     registerModuleDetailTemplates('re-accreditation', {
-      v1: 're-accreditation/detail-v1',
-      v2: 're-accreditation/detail-v1',
-      v3: 're-accreditation/detail-v1',
-      v4: 're-accreditation/detail-v1',
-      v5: 're-accreditation/detail-v1',
-      v6: 're-accreditation/detail-v1',
-      v7: 're-accreditation/detail-v1',
-      v8: 're-accreditation/detail-v1',
-      v9: 're-accreditation/detail-v1',
-      v10: 're-accreditation/detail-v1',
-      v11: 're-accreditation/detail-v1',
-      v12: 're-accreditation/detail-v1',
-      v13: 're-accreditation/detail-v1'
+      v1: DETAIL_TEMPLATE_V1,
+      v2: DETAIL_TEMPLATE_V1,
+      v3: DETAIL_TEMPLATE_V1,
+      v4: DETAIL_TEMPLATE_V1,
+      v5: DETAIL_TEMPLATE_V1,
+      v6: DETAIL_TEMPLATE_V1,
+      v7: DETAIL_TEMPLATE_V1,
+      v8: DETAIL_TEMPLATE_V1,
+      v9: DETAIL_TEMPLATE_V1,
+      v10: DETAIL_TEMPLATE_V1,
+      v11: DETAIL_TEMPLATE_V1,
+      v12: DETAIL_TEMPLATE_V1,
+      v13: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

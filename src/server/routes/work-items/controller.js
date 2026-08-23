@@ -132,8 +132,12 @@ const EXPORTER_TYPE_FILTER = {
 // items with no `wasteProcessingType` field (Mongo's `$not` on a `$regex`
 // already matches a missing field).
 const REPROCESSOR_WASTE_PROCESSING_TYPE = 'Reprocessor'
+
+// The only work item typeId that exists on the backend today (see the
+// APPLICATION_TYPE_FILTER_OPTIONS comment below).
+const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
 const TYPE_FILTER_OPTIONS = [
-  { value: 're-accreditation', text: 'Reprocessor reaccreditation' },
+  { value: RE_ACCREDITATION_TYPE_ID, text: 'Reprocessor reaccreditation' },
   { value: EXPORTER_TYPE_FILTER.typeIdToken, text: 'Exporter reaccreditation' }
 ]
 const ALLOWED_TYPE_IDS = new Set(TYPE_FILTER_OPTIONS.map((o) => o.value))
@@ -153,7 +157,7 @@ const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
 // correctly return zero results via the backend's `builder.In(w => w.TypeId,
 // typeIds)` until those work item types exist.
 const APPLICATION_TYPE_FILTER_OPTIONS = [
-  { value: 're-accreditation', text: 'Re-accreditation' },
+  { value: RE_ACCREDITATION_TYPE_ID, text: 'Re-accreditation' },
   { value: 'accreditation', text: 'Accreditation' },
   { value: 'registration-application', text: 'Registration application' },
   {
@@ -424,7 +428,7 @@ export const workItemListController = {
  */
 function toBackendTypeIds(typeIds) {
   return typeIds.map((id) =>
-    id === EXPORTER_TYPE_FILTER.typeIdToken ? 're-accreditation' : id
+    id === EXPORTER_TYPE_FILTER.typeIdToken ? RE_ACCREDITATION_TYPE_ID : id
   )
 }
 
@@ -451,7 +455,7 @@ function readFilters(query, user) {
   // combined "either applicant type" selection down to one kind — the
   // opposite of GDS checkbox-group OR semantics.
   const exporterSelected = typeIds.includes(EXPORTER_TYPE_FILTER.typeIdToken)
-  const reprocessorSelected = typeIds.includes('re-accreditation')
+  const reprocessorSelected = typeIds.includes(RE_ACCREDITATION_TYPE_ID)
   const wasteProcessingTypes =
     exporterSelected === reprocessorSelected
       ? []
