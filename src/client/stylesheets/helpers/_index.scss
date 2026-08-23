@@ -1,1 +1,5 @@
-@forward "links";
+// No custom SASS helpers are currently defined. The previous
+// `app-link-style` mixin in `_links.scss` was unused example scaffolding
+// (never `@include`d anywhere) and was removed — its `&:hover`/`&:focus`
+// nesting with no real selector context tripped SonarCloud's css:S8776
+// "Nesting selectors should have a scoping root" check.

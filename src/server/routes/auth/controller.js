@@ -21,7 +21,7 @@ const LOGGED_OUT_PATH = '/auth/logged-out'
 function base64url(buf) {
   return buf
     .toString('base64')
-    .replace(/=+$/, '')
+    .replace(/={1,2}$/, '')
     .replaceAll('+', '-')
     .replaceAll('/', '_')
 }
