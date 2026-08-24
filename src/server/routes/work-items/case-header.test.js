@@ -158,9 +158,9 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
 })
 
 describe('#buildCaseTabs (RA-295, RA-434, RA-469)', () => {
-  // RA-469 follow-up: the tab is currently hidden (HIDE_RECYCLING_OPERATIONS_TAB
-  // in case-header.js) at product's request, pending a reword — these three
-  // tabs are what actually renders today.
+  // RA-469 follow-up: the tab is currently hidden (its key is in
+  // HIDDEN_TAB_KEYS in case-header.js) at product's request, pending a
+  // reword — these three tabs are what actually renders today.
   test('marks the summary tab active and links the other two visible tabs to their pages', () => {
     const tabs = buildCaseTabs({ workItemId: 'w 1', active: 'summary' })
 
