@@ -158,7 +158,10 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
 })
 
 describe('#buildCaseTabs (RA-295, RA-434, RA-469)', () => {
-  test('marks the summary tab active and links the other three tabs to their pages', () => {
+  // RA-469 follow-up: the tab is currently hidden (its key is in
+  // HIDDEN_TAB_KEYS in case-header.js) at product's request, pending a
+  // reword — these three tabs are what actually renders today.
+  test('marks the summary tab active and links the other two visible tabs to their pages', () => {
     const tabs = buildCaseTabs({ workItemId: 'w 1', active: 'summary' })
 
     expect(tabs).toEqual([
@@ -167,12 +170,6 @@ describe('#buildCaseTabs (RA-295, RA-434, RA-469)', () => {
         text: 'Application summary',
         href: '/work-items/w%201',
         active: true
-      },
-      {
-        key: 'recycling-operations',
-        text: 'Recycling operations',
-        href: '/work-items/w%201/recycling-operations',
-        active: false
       },
       {
         key: 'application-history',
@@ -189,26 +186,27 @@ describe('#buildCaseTabs (RA-295, RA-434, RA-469)', () => {
     ])
   })
 
-  // RA-469. Positioned second — right after Application summary — even
-  // though the source ticket described it as sitting between the (then
-  // only two) existing tabs; see the block comment on buildCaseTabs.
-  test('marks the recycling operations tab active on its page and keeps it second (RA-469)', () => {
+  // The route/page still exist (see the comment on HIDE_RECYCLING_OPERATIONS_TAB),
+  // so a direct visit still calls buildCaseTabs with active: 'recycling-operations'
+  // — it just never matches a tab, since that tab is filtered out. No tab is
+  // marked active in that case, which is fine: there's nothing in the bar to
+  // highlight for a hidden page.
+  test('omits the recycling operations tab even when it is the active page (RA-469 follow-up)', () => {
     const tabs = buildCaseTabs({
       workItemId: 'w-1',
       active: 'recycling-operations'
     })
     expect(tabs.map((t) => t.key)).toEqual([
       'application-summary',
-      'recycling-operations',
       'application-history',
       'additional-information'
     ])
-    expect(tabs.map((t) => t.active)).toEqual([false, true, false, false])
+    expect(tabs.every((t) => t.active === false)).toBe(true)
   })
 
   test('marks the history tab active on the audit log page', () => {
     const tabs = buildCaseTabs({ workItemId: 'w-1', active: 'history' })
-    expect(tabs.map((t) => t.active)).toEqual([false, false, true, false])
+    expect(tabs.map((t) => t.active)).toEqual([false, true, false])
   })
 
   test('marks the additional information tab active on its page (RA-434)', () => {
@@ -216,6 +214,6 @@ describe('#buildCaseTabs (RA-295, RA-434, RA-469)', () => {
       workItemId: 'w-1',
       active: 'additional-information'
     })
-    expect(tabs.map((t) => t.active)).toEqual([false, false, false, true])
+    expect(tabs.map((t) => t.active)).toEqual([false, false, true])
   })
 })
