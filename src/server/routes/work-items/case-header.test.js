@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'vitest'
 
-import { buildCaseHeader, buildCaseTabs, formatDueOn } from './case-header.js'
+import {
+  buildCaseHeader,
+  buildCaseTabs,
+  filterHiddenTabs,
+  formatDueOn
+} from './case-header.js'
 
 const EM_DASH = '—'
 
@@ -154,6 +159,25 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(
       metaValue(buildCaseHeader({ workItem: { payload: {} } }), 'assigned-to')
     ).toBe('Unassigned')
+  })
+})
+
+describe('#filterHiddenTabs (RA-469 follow-up)', () => {
+  const tabs = [
+    { key: 'application-summary', text: 'Application summary' },
+    { key: 'recycling-operations', text: 'Recycling operations' },
+    { key: 'application-history', text: 'Application history' }
+  ]
+
+  test('drops the recycling operations tab when hide is true', () => {
+    expect(filterHiddenTabs(tabs, true).map((t) => t.key)).toEqual([
+      'application-summary',
+      'application-history'
+    ])
+  })
+
+  test('keeps every tab, including recycling operations, when hide is false', () => {
+    expect(filterHiddenTabs(tabs, false)).toEqual(tabs)
   })
 })
 

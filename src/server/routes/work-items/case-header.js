@@ -121,6 +121,23 @@ export function buildCaseHeader({ workItem, assignment = null }) {
 // product confirms the tab is ready to show again.
 const HIDE_RECYCLING_OPERATIONS_TAB = true
 
+// Single source of truth for the tab's key (SonarCloud S1192 — the string
+// was repeated three times across the tab definition, the active check, and
+// the filter below).
+const RECYCLING_OPERATIONS_TAB_KEY = 'recycling-operations'
+
+// Split out from buildCaseTabs and parameterised (rather than reading the
+// module-level HIDE_RECYCLING_OPERATIONS_TAB directly) purely so both
+// branches are independently testable — the constant itself is hardcoded,
+// so a test can never flip it, which left the "shown" branch uncovered on
+// SonarCloud's new-code coverage check. buildCaseTabs always calls this
+// with the real flag; only the tests exercise the `hide: false` case.
+export function filterHiddenTabs(tabs, hide = HIDE_RECYCLING_OPERATIONS_TAB) {
+  return hide
+    ? tabs.filter((tab) => tab.key !== RECYCLING_OPERATIONS_TAB_KEY)
+    : tabs
+}
+
 /**
  * The four tabs every individual work item page carries (RA-295, RA-434,
  * RA-469). "Application summary" is the detail page itself; "Recycling
@@ -151,10 +168,10 @@ export function buildCaseTabs({ workItemId, active }) {
       active: active === 'summary'
     },
     {
-      key: 'recycling-operations',
+      key: RECYCLING_OPERATIONS_TAB_KEY,
       text: 'Recycling operations',
       href: `${base}/recycling-operations`,
-      active: active === 'recycling-operations'
+      active: active === RECYCLING_OPERATIONS_TAB_KEY
     },
     {
       key: 'application-history',
@@ -169,7 +186,5 @@ export function buildCaseTabs({ workItemId, active }) {
       active: active === 'additional-information'
     }
   ]
-  return HIDE_RECYCLING_OPERATIONS_TAB
-    ? tabs.filter((tab) => tab.key !== 'recycling-operations')
-    : tabs
+  return filterHiddenTabs(tabs)
 }
