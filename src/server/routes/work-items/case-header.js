@@ -113,37 +113,32 @@ export function buildCaseHeader({ workItem, assignment = null }) {
   }
 }
 
-// RA-469 follow-up. Product asked for the "Recycling operations" tab to be
-// hidden for now — the copy may be reworded before it's shown again. This
-// only suppresses its entry in the tab bar below; the route, controller,
-// and page it points to are untouched and still work for anyone who has the
-// URL. Flip this back to false (or delete it and the filter below) once
-// product confirms the tab is ready to show again.
-const HIDE_RECYCLING_OPERATIONS_TAB = true
-
 // Single source of truth for the tab's key (SonarCloud S1192 — the string
 // was repeated three times across the tab definition, the active check, and
 // the filter below).
 const RECYCLING_OPERATIONS_TAB_KEY = 'recycling-operations'
 
-// Split out from buildCaseTabs and parameterised (rather than reading the
-// module-level HIDE_RECYCLING_OPERATIONS_TAB directly) purely so both
-// branches are independently testable — the constant itself is hardcoded,
-// so a test can never flip it, which left the "shown" branch uncovered on
-// SonarCloud's new-code coverage check. buildCaseTabs always calls this
-// with the real flag; only the tests exercise the `hide: false` case.
-export function filterHiddenTabs(tabs, hide = HIDE_RECYCLING_OPERATIONS_TAB) {
-  return hide
-    ? tabs.filter((tab) => tab.key !== RECYCLING_OPERATIONS_TAB_KEY)
-    : tabs
-}
+// RA-469 follow-up. Product asked for the "Recycling operations" tab to be
+// hidden for now — the copy may be reworded before it's shown again. This
+// only suppresses its entry in the tab bar below (via the filter in
+// buildCaseTabs); the route, controller, and page it points to are
+// untouched and still work for anyone who has the URL. Remove the key (or
+// empty the set) once product confirms the tab is ready to show again.
+//
+// Deliberately a set of hidden keys, not a boolean "hide" flag on a shared
+// function — SonarCloud's S2301 flags the latter ("provide multiple
+// methods instead of using a flag to determine which action to take"), and
+// a data-driven filter has no dead branch to leave uncovered in the first
+// place: the same tabs.filter() call below exercises both the "excluded"
+// and "included" outcomes across the four tabs in every existing test.
+const HIDDEN_TAB_KEYS = new Set([RECYCLING_OPERATIONS_TAB_KEY])
 
 /**
  * The four tabs every individual work item page carries (RA-295, RA-434,
  * RA-469). "Application summary" is the detail page itself; "Recycling
  * operations" (RA-469) lists each overseas reprocessing site's recycling
- * operation codes — currently hidden, see HIDE_RECYCLING_OPERATIONS_TAB
- * above; "Application history" is the audit log page; "Additional
+ * operation codes — currently hidden, see HIDDEN_TAB_KEYS above;
+ * "Application history" is the audit log page; "Additional
  * information" (RA-434) is the six-field summary list re-ex/CM data that
  * has nowhere else to live.
  *
@@ -186,5 +181,5 @@ export function buildCaseTabs({ workItemId, active }) {
       active: active === 'additional-information'
     }
   ]
-  return filterHiddenTabs(tabs)
+  return tabs.filter((tab) => !HIDDEN_TAB_KEYS.has(tab.key))
 }
