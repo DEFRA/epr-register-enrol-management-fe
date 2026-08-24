@@ -113,13 +113,22 @@ export function buildCaseHeader({ workItem, assignment = null }) {
   }
 }
 
+// RA-469 follow-up. Product asked for the "Recycling operations" tab to be
+// hidden for now — the copy may be reworded before it's shown again. This
+// only suppresses its entry in the tab bar below; the route, controller,
+// and page it points to are untouched and still work for anyone who has the
+// URL. Flip this back to false (or delete it and the filter below) once
+// product confirms the tab is ready to show again.
+const HIDE_RECYCLING_OPERATIONS_TAB = true
+
 /**
  * The four tabs every individual work item page carries (RA-295, RA-434,
  * RA-469). "Application summary" is the detail page itself; "Recycling
  * operations" (RA-469) lists each overseas reprocessing site's recycling
- * operation codes; "Application history" is the audit log page;
- * "Additional information" (RA-434) is the six-field summary list re-ex/CM
- * data that has nowhere else to live.
+ * operation codes — currently hidden, see HIDE_RECYCLING_OPERATIONS_TAB
+ * above; "Application history" is the audit log page; "Additional
+ * information" (RA-434) is the six-field summary list re-ex/CM data that
+ * has nowhere else to live.
  *
  * RA-469 deliberately positions "Recycling operations" SECOND — immediately
  * after "Application summary" — even though the ticket's own text was
@@ -134,7 +143,7 @@ export function buildCaseHeader({ workItem, assignment = null }) {
  */
 export function buildCaseTabs({ workItemId, active }) {
   const base = `/work-items/${encodeURIComponent(workItemId)}`
-  return [
+  const tabs = [
     {
       key: 'application-summary',
       text: 'Application summary',
@@ -160,4 +169,7 @@ export function buildCaseTabs({ workItemId, active }) {
       active: active === 'additional-information'
     }
   ]
+  return HIDE_RECYCLING_OPERATIONS_TAB
+    ? tabs.filter((tab) => tab.key !== 'recycling-operations')
+    : tabs
 }
