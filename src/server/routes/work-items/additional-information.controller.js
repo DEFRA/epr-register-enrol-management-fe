@@ -15,10 +15,9 @@ const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
  * Site name, Site address, Permit numbers, Contact full name, Contact email,
  * Contact phone, Contact job title.
  *
- * Missing values are OMITTED rather than rendered as a placeholder — the
- * same row-omission behaviour the Application summary tab's reference
- * footer already uses (`buildCaseFooterRows`), so a pre-RA-434 work item
- * with none of these fields simply renders a shorter list.
+ * Missing values are OMITTED rather than rendered as a placeholder, so a
+ * pre-RA-434 work item with none of these fields simply renders a shorter
+ * list.
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
