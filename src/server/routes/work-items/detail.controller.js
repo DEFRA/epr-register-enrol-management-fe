@@ -31,7 +31,6 @@ import {
   authoriserName,
   buildApplicationSummary,
   buildBusinessPlanPairs,
-  buildCaseFooterRows,
   tonnageBandLabel
 } from './application-summary.js'
 
@@ -489,7 +488,6 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       caseHeader: buildCaseHeader({ workItem: enriched, assignment }),
       caseTabs: buildCaseTabs({ workItemId: enriched.id, active: 'summary' }),
       applicationDetails,
-      caseFooterRows: buildCaseFooterRows({ workItem: enriched }),
       priorYear,
       workItem: enriched,
       assignment,

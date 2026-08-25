@@ -279,9 +279,9 @@ describe('#workItemDetailController', () => {
     expect(result.slice(badgeIdx - 120, badgeIdx)).toContain('govuk-tag--green')
   })
 
-  // RA-196: the caption, "Application ref" summary row and the final
-  // breadcrumb show the user-facing application reference, while the
-  // assign/tasks/audit-log routes keep using the internal id.
+  // RA-196: the caption and the final breadcrumb show the user-facing
+  // application reference, while the assign/tasks/audit-log routes keep using
+  // the internal id.
   test('Shows the application reference in the caption and summary, keeping the id in routes', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
@@ -298,7 +298,6 @@ describe('#workItemDetailController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(expect.stringContaining('Work item RA-987654321'))
-    expect(result).toEqual(expect.stringContaining('Application ref'))
     expect(result).toEqual(expect.stringContaining('RA-987654321'))
     // Internal id must not appear as the caption text but still drives routes.
     expect(result).not.toEqual(expect.stringContaining(`Work item ${ID}`))
@@ -309,75 +308,6 @@ describe('#workItemDetailController', () => {
     )
     expect(result).toEqual(
       expect.stringContaining(`/work-items/${ID}/audit-log`)
-    )
-  })
-
-  // RA-223: regulators need the Registration ID visible on the detail page.
-  // It is the operator's EPR registration id, forwarded by the backend as
-  // payload.operatorRegistrationId (NOT payload.registrationNumber, which is
-  // the Companies House company number).
-  test('RA-223: Shows the Registration ID summary row from payload.operatorRegistrationId', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        payload: {
-          applicantName: 'Acme',
-          applicationReference: 'RA-987654321',
-          operatorRegistrationId: 'REG-100023'
-        }
-      })
-    })
-
-    const { result, statusCode } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    // RA-295 moved this row into the reference block at the bottom of the
-    // page and relabelled it "Operator registration ID", to disambiguate it
-    // from the "Registration number" the case header now shows. Scope the
-    // assertion to that row's value cell so it cannot pass against the value
-    // of an unrelated row.
-    expect(result).toMatch(
-      /Operator registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-100023\s*<\/dd>/
-    )
-  })
-
-  test('RA-223: Omits the Operator registration ID row when absent, never falling back to registrationNumber', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        payload: {
-          applicantName: 'Acme',
-          applicationReference: 'RA-987654321',
-          // The Companies House company number must NOT leak into the
-          // Registration ID row when operatorRegistrationId is absent.
-          registrationNumber: 'REG-987654321'
-        }
-      })
-    })
-
-    const { result, statusCode } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    // RA-295: the reference block omits rows with no value rather than
-    // rendering an em dash, so the row must not appear at all...
-    expect(result).not.toMatch(/Operator registration ID\s*<\/dt>/)
-    // ...and in particular the Companies House registration number must
-    // never leak into it (guards the RA-223 regression).
-    expect(result).not.toMatch(
-      /Operator registration ID\s*<\/dt>\s*<dd[^>]*>\s*REG-987654321\s*<\/dd>/
-    )
-    // The registration number itself still renders — in the case header,
-    // where it belongs (AC01).
-    expect(result).toMatch(
-      /data-testid="case-header-registration-number">\s*REG-987654321\s*</
     )
   })
 
@@ -1076,15 +1006,12 @@ describe('#workItemDetailController', () => {
           'No actions panel in the rendered page — a scoped assertion against it would pass vacuously.'
         )
       }
-      // RA-410. The tasks panel used to bound this slice; it is gone, so the
-      // reference footer (the next thing after the right-hand panels) is the
-      // boundary now. Keeping a real boundary rather than slicing to the end
-      // of the document matters — an unbounded slice would silently widen the
-      // assertion to the whole page.
-      const end = html.indexOf(
-        'data-testid="work-item-application-ref-footer"',
-        start
-      )
+      // RA-504. The reference footer that used to bound this slice is gone, so
+      // the page's GOV.UK layout footer (the next thing after the right-hand
+      // panels) is the boundary now. Keeping a real boundary rather than
+      // slicing to the end of the document matters — an unbounded slice would
+      // silently widen the assertion to the whole page.
+      const end = html.indexOf('<footer class="govuk-template__footer"', start)
       return html.slice(start, end === -1 ? undefined : end)
     }
 
@@ -3279,87 +3206,6 @@ describe('#workItemDetailController', () => {
     expect(result).toMatch(
       new RegExp(`data-testid="case-header-accreditation-ref">${ID}<`)
     )
-  })
-
-  // RA-249: a field LABELLED "Application reference" must show the human RA-*
-  // reference or NOTHING — never the work-item Guid. RA-295 moved that row
-  // into the reference block at the bottom of the page, which omits absent
-  // values rather than rendering them, so the row must not appear at all.
-  test('RA-249: the Application reference row is absent (never the id) when applicationReference is missing', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        payload: { applicantName: 'Acme' } // No applicationReference
-      })
-    })
-
-    const { result, statusCode } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).not.toMatch(
-      /data-testid="work-item-reference-row-application-reference"/
-    )
-    // The id is still available for debugging, under its own honest label.
-    expect(result).toMatch(/data-testid="work-item-reference-row-work-item-id"/)
-  })
-
-  // RA-249: when applicationReference IS present, the reference row shows it
-  // (and not the id).
-  test('RA-249: the Application reference row shows the reference when present', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        payload: {
-          applicantName: 'Acme',
-          applicationReference: 'RA-987654321'
-        }
-      })
-    })
-
-    const { result, statusCode } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    const match = result.match(
-      /data-testid="work-item-reference-row-application-reference">[\s\S]*?<dd class="govuk-summary-list__value">([\s\S]*?)<\/dd>/
-    )
-    expect(match).not.toBeNull()
-    expect(match[1].trim()).toBe('RA-987654321')
-  })
-
-  // RA-295: the retained reference block is at the BOTTOM — after the
-  // application details — per the Jira note.
-  test('RA-295: the retained application reference renders after the application details', async () => {
-    registerReaccreditation()
-    getWorkItem.mockResolvedValue({
-      ok: true,
-      workItem: aWorkItem({
-        payload: {
-          applicantName: 'Acme',
-          applicationReference: 'RA-987654321'
-        }
-      })
-    })
-
-    const { result, statusCode } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}`
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    const detailsIdx = result.indexOf('data-testid="application-details"')
-    const footerIdx = result.indexOf(
-      'data-testid="work-item-application-ref-footer"'
-    )
-    expect(detailsIdx).toBeGreaterThan(-1)
-    expect(footerIdx).toBeGreaterThan(detailsIdx)
   })
 })
 

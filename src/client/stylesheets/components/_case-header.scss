@@ -235,11 +235,3 @@
     }
   }
 }
-
-// The retained application ref / provenance block at the very bottom of the
-// page (RA-295 keeps it for debugging but demotes it).
-.app-case-footer {
-  padding-top: govuk-spacing(4);
-  margin-top: govuk-spacing(6);
-  border-top: 1px solid $govuk-border-colour;
-}

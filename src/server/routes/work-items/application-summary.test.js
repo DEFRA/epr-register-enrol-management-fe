@@ -6,7 +6,6 @@ import {
   buildApplicationSummary,
   buildAuthorityToIssueContacts,
   buildBusinessPlanPairs,
-  buildCaseFooterRows,
   buildInterimSite,
   buildOverseasSite,
   buildSiteAddressLines,
@@ -594,115 +593,6 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
   })
 })
 
-describe('#buildCaseFooterRows (RA-295: reference retained at the bottom)', () => {
-  test('emits the application reference and work item id first', () => {
-    const rows = buildCaseFooterRows({ workItem: REPROCESSOR })
-    expect(rows.slice(0, 2)).toEqual([
-      {
-        key: 'application-reference',
-        label: 'Application reference',
-        value: 'RA-2026-00001'
-      },
-      { key: 'work-item-id', label: 'Work item ID', value: 'w-1' }
-    ])
-  })
-
-  // RA-447 CM3. `paymentReference` is only ever populated once management-be
-  // stamps it at work-item creation, so this row follows the rest of the
-  // footer's convention and omits itself until then.
-  test('shows the payment reference, between application reference and work item id, when present', () => {
-    const rows = buildCaseFooterRows({
-      workItem: {
-        ...REPROCESSOR,
-        payload: { ...REPROCESSOR.payload, paymentReference: 'PAY-00042' }
-      }
-    })
-    expect(rows.slice(0, 3)).toEqual([
-      {
-        key: 'application-reference',
-        label: 'Application reference',
-        value: 'RA-2026-00001'
-      },
-      {
-        key: 'payment-reference',
-        label: 'Payment reference',
-        value: 'PAY-00042'
-      },
-      { key: 'work-item-id', label: 'Work item ID', value: 'w-1' }
-    ])
-  })
-
-  test('omits the payment reference row when absent, rather than a placeholder', () => {
-    const rows = buildCaseFooterRows({ workItem: REPROCESSOR })
-    expect(rows.map((r) => r.key)).not.toContain('payment-reference')
-  })
-
-  test('omits rows with no value rather than rendering an em dash', () => {
-    const rows = buildCaseFooterRows({ workItem: { payload: {} } })
-    expect(rows.map((r) => r.key)).not.toContain('application-reference')
-    expect(rows.map((r) => r.key)).not.toContain('operator-email')
-  })
-
-  test('keeps a zero compliance-issues count — 0 is a real answer', () => {
-    const rows = buildCaseFooterRows({
-      workItem: { payload: { complianceIssuesReported: 0 } }
-    })
-    expect(rows).toEqual([
-      {
-        key: 'compliance-issues-reported',
-        label: 'Compliance issues reported',
-        value: '0'
-      }
-    ])
-  })
-
-  test('joins the submitted-by declaration into one line, skipping blanks', () => {
-    const rows = buildCaseFooterRows({
-      workItem: {
-        payload: {
-          submittedBy: { fullName: 'Priya Sharma', email: 'priya@example.com' }
-        }
-      }
-    })
-    expect(rows).toContainEqual({
-      key: 'declaration',
-      label: 'Declaration',
-      value: 'Priya Sharma, priya@example.com'
-    })
-  })
-
-  test('omits the declaration entirely when submittedBy carries nothing', () => {
-    const rows = buildCaseFooterRows({
-      workItem: { payload: { submittedBy: {} } }
-    })
-    expect(rows.map((r) => r.key)).not.toContain('declaration')
-  })
-
-  test('formats the envelope timestamps', () => {
-    const rows = buildCaseFooterRows({
-      workItem: {
-        submittedAt: '2026-04-27T09:00:00Z',
-        lastModifiedAt: '2026-04-27T09:05:00Z',
-        payload: {}
-      }
-    })
-    expect(rows).toContainEqual({
-      key: 'submitted-at',
-      label: 'Submitted at',
-      value: '27 April 2026 at 10:00am'
-    })
-    expect(rows).toContainEqual({
-      key: 'last-modified',
-      label: 'Last modified',
-      value: '27 April 2026 at 10:05am'
-    })
-  })
-
-  test('tolerates an absent work item', () => {
-    expect(buildCaseFooterRows({})).toEqual([])
-  })
-})
-
 // ---------------------------------------------------------------------
 // Consumer contract (ported from the deleted application-details
 // controller test by RA-295).
@@ -794,27 +684,6 @@ describe('real operator submission payload contract', () => {
         expect(r.values).not.toContain(EM_DASH)
       }
     }
-  })
-
-  test('the reference block resolves every envelope and operator field', () => {
-    const rows = buildCaseFooterRows({ workItem })
-    const byKey = Object.fromEntries(rows.map((r) => [r.key, r.value]))
-
-    expect(byKey['work-item-id']).toBe('w-1')
-    expect(byKey['registration-number']).toBe('EPR-100023')
-    expect(byKey['accreditation-year']).toBe('2026')
-    expect(byKey['previous-accreditation-year']).toBe('2025')
-    expect(byKey['compliance-issues-reported']).toBe('0')
-    expect(byKey['operator-application-id']).toBe('app-001')
-    expect(byKey['operator-organisation-id']).toBe('12345')
-    expect(byKey['operator-registration-id']).toBe('reg-001')
-    expect(byKey['operator-email']).toBe('jane@example.com')
-    expect(byKey.declaration).toBe(
-      'Jane Smith, Operations Manager, jane@example.com'
-    )
-    expect(byKey['submitted-by']).toBe('stub-portal-client')
-    expect(byKey['submitted-at']).toBe('5 January 2026 at 10:00am')
-    expect(byKey['last-modified']).toBe('6 January 2026 at 10:00am')
   })
 
   test('the case header resolves org, material and registration number', () => {

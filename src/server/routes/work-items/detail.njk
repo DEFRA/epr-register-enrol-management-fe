@@ -637,27 +637,4 @@
 
     </div>
   </div>
-
-  {# ------------------------- Reference footer ------------------------- #}
-  {# RA-295. The application ref / work item id are retained for debugging #}
-  {# but demoted to the bottom of the page, together with the envelope and #}
-  {# operator-reference fields that used to live on the standalone         #}
-  {# application-details page — so folding that page in loses no data.     #}
-  <div class="govuk-grid-row">
-    <div class="govuk-grid-column-two-thirds">
-      <div class="app-case-footer">
-        <h2 class="govuk-heading-s">Reference</h2>
-        <dl class="govuk-summary-list app-summary-list--borderless govuk-!-font-size-16"
-            data-testid="work-item-application-ref-footer">
-          {% for row in caseFooterRows %}
-            <div class="govuk-summary-list__row"
-                 data-testid="work-item-reference-row-{{ row.key }}">
-              <dt class="govuk-summary-list__key">{{ row.label }}</dt>
-              <dd class="govuk-summary-list__value">{{ row.value }}</dd>
-            </div>
-          {% endfor %}
-        </dl>
-      </div>
-    </div>
-  </div>
 {% endblock %}
