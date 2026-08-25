@@ -72,7 +72,11 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
       'company-registered-address',
       // 'site-name' omitted — no producer field for it today.
       'site-address',
-      'permit-numbers'
+      'permit-numbers',
+      'contact-full-name',
+      'contact-email',
+      'contact-phone',
+      'contact-job-title'
     ])
     expect(row(rows, 'organisation-name').value).toBe('Acme Recycling Ltd')
     expect(row(rows, 'companies-house-number').value).toBe('01234567')
@@ -80,6 +84,25 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
       '1 Example Street, London, EC1A 1BB'
     )
     expect(row(rows, 'permit-numbers').value).toBe('WML123456, PPC456789')
+    expect(row(rows, 'contact-full-name').value).toBe('Barton Deckow')
+    expect(row(rows, 'contact-email').value).toBe(
+      'REEXServiceTeam@defra.gov.uk'
+    )
+    expect(row(rows, 'contact-phone').value).toBe('0111 478 4919')
+    expect(row(rows, 'contact-job-title').value).toBe(
+      'Human Infrastructure Architect'
+    )
+  })
+
+  test('omits the contact rows when submitterContactDetails is absent from the payload', () => {
+    const payload = realOperatorSubmissionPayload()
+    delete payload.submitterContactDetails
+    const rows = buildAdditionalInformationRows({ workItem: { payload } })
+
+    expect(row(rows, 'contact-full-name')).toBeUndefined()
+    expect(row(rows, 'contact-email')).toBeUndefined()
+    expect(row(rows, 'contact-phone')).toBeUndefined()
+    expect(row(rows, 'contact-job-title')).toBeUndefined()
   })
 
   test('omits the Site name row entirely — there is no producer field for it', () => {
@@ -230,6 +253,14 @@ describe('GET /work-items/{id}/additional-information (RA-434)', () => {
     expect(result).toEqual(expect.stringContaining('Acme Recycling Ltd'))
     expect(result).toEqual(expect.stringContaining('01234567'))
     expect(result).toEqual(expect.stringContaining('WML123456, PPC456789'))
+    expect(result).toEqual(expect.stringContaining('Barton Deckow'))
+    expect(result).toEqual(
+      expect.stringContaining('REEXServiceTeam@defra.gov.uk')
+    )
+    expect(result).toEqual(expect.stringContaining('0111 478 4919'))
+    expect(result).toEqual(
+      expect.stringContaining('Human Infrastructure Architect')
+    )
     // Provides a way back to the detail page.
     expect(result).toEqual(expect.stringContaining(`/work-items/${ID}`))
   })

@@ -3,12 +3,13 @@
 {# ---------------------------------------------------------------- #}
 {# Standalone "Additional information" page for a work item (RA-434). #}
 {#                                                                   #}
-{# Six rows built by `buildAdditionalInformationRows`: Registered     #}
-{# name, Companies house number, Registered address, Site name,      #}
-{# Site address, Permit numbers — in that fixed order. Missing rows   #}
-{# are OMITTED upstream, so there is no null test here — the same     #}
-{# borderless govuk-summary-list style as the Application summary     #}
-{# tab's "Reference" footer.                                          #}
+{# Rows built by `buildAdditionalInformationRows` (RA-434, RA-480):    #}
+{# Registered name, Companies house number, Registered address,       #}
+{# Site name, Site address, Permit numbers, Contact full name,        #}
+{# Contact email, Contact phone, Contact job title — in that fixed    #}
+{# order. Missing rows are OMITTED upstream, so there is no null      #}
+{# test here — the same borderless govuk-summary-list style as the    #}
+{# Application summary tab's "Reference" footer.                      #}
 {# ---------------------------------------------------------------- #}
 
 {% block content %}

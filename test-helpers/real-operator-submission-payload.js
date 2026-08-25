@@ -51,6 +51,15 @@ export function realOperatorSubmissionPayload() {
       jobTitle: 'Operations Manager',
       email: 'jane@example.com'
     },
+    // RA-480. The original registration submitter's contact details, as
+    // captured by ReEx at registration time — distinct from `submittedBy`
+    // above (captured at CM submit time, a different person).
+    submitterContactDetails: {
+      fullName: 'Barton Deckow',
+      email: 'REEXServiceTeam@defra.gov.uk',
+      phone: '0111 478 4919',
+      jobTitle: 'Human Infrastructure Architect'
+    },
     prns: {
       plannedTonnageBand: 'UpTo5000',
       authorisers: [{ fullName: 'Bob Jones', email: 'bob@example.com' }]
