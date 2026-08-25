@@ -10,9 +10,10 @@ import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
 const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
 
 /**
- * RA-434. The "Additional information" tab's six-row view model, in the
+ * RA-434 / RA-480. The "Additional information" tab's row view model, in the
  * fixed order: Registered name, Companies house number, Registered address,
- * Site name, Site address, Permit numbers.
+ * Site name, Site address, Permit numbers, Contact full name, Contact email,
+ * Contact phone, Contact job title.
  *
  * Missing values are OMITTED rather than rendered as a placeholder — the
  * same row-omission behaviour the Application summary tab's reference
@@ -65,6 +66,18 @@ export function buildAdditionalInformationRows({ workItem }) {
       // Comma-joined on one line, matching the mockup's "[xxxx], [xxxx]" —
       // the fuller permit metadata is not shown, only the numbers.
       permitNumbers.length > 0 ? permitNumbers.join(', ') : null
+    ],
+    [
+      'contact-full-name',
+      'Contact full name',
+      payload.submitterContactDetails?.fullName
+    ],
+    ['contact-email', 'Contact email', payload.submitterContactDetails?.email],
+    ['contact-phone', 'Contact phone', payload.submitterContactDetails?.phone],
+    [
+      'contact-job-title',
+      'Contact job title',
+      payload.submitterContactDetails?.jobTitle
     ]
   ]
 
