@@ -363,6 +363,12 @@ export const config = convict({
       default: 'http://localhost:3000',
       env: 'AUTH_CALLBACK_BASE_URL'
     },
+    assignableUserInactivityDays: {
+      doc: "RA-446. Days since last login before an entry in the real-Entra-ID assignable-users directory (src/server/common/helpers/auth/assignable-users-store.js) is pruned. Checked live on every read against each entry's lastLoginAt (not a per-key TTL), so changing this value takes effect immediately rather than only for entries written afterwards. Refreshed on every login by a user holding the regulator role; TBC pending an access-review policy decision.",
+      format: 'nat',
+      default: 90,
+      env: 'ASSIGNABLE_USER_INACTIVITY_DAYS'
+    },
     azureEntraId: {
       clientId: {
         format: String,

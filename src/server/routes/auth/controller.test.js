@@ -69,12 +69,19 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function buildOk({ verifyIdToken, fetchImpl } = {}) {
+function buildOk({
+  verifyIdToken,
+  fetchImpl,
+  syncAssignableUser = vi.fn(async () => {}),
+  desyncAssignableUser = vi.fn(async () => {})
+} = {}) {
   return createAuthControllers({
     fetchImpl,
     verifyIdToken,
     randomToken,
-    getProviderConfig: () => provider
+    getProviderConfig: () => provider,
+    syncAssignableUser,
+    desyncAssignableUser
   })
 }
 
@@ -354,6 +361,90 @@ describe('regulatorCallbackController', () => {
     )
   })
 
+  // RA-446: the neither-role branch is the normal shape of an offboarding
+  // / access-review revocation (the app role removed outright, not swapped
+  // for the support-user role) — without desyncing here too, a caller who
+  // loses access this way stays in the assignable-users directory for the
+  // full inactivity window despite failing login on every attempt.
+  test('removes the caller from the assignable-users directory when neither role is present', async () => {
+    const { request } = makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { id_token: 't' }
+      },
+      async text() {
+        return ''
+      }
+    }))
+    const verifyIdToken = vi.fn(async () => ({
+      oid: 'oid-1',
+      preferred_username: 'r@d',
+      name: 'Reg',
+      roles: ['SomeOtherRole']
+    }))
+    const syncAssignableUser = vi.fn(async () => {})
+    const desyncAssignableUser = vi.fn(async () => {})
+    const { regulatorCallbackController } = buildOk({
+      fetchImpl,
+      verifyIdToken,
+      syncAssignableUser,
+      desyncAssignableUser
+    })
+
+    const result = await regulatorCallbackController(request, h)
+
+    expect(result.statusCode).toBe(403)
+    expect(desyncAssignableUser).toHaveBeenCalledWith('oid-1')
+    expect(syncAssignableUser).not.toHaveBeenCalled()
+  })
+
+  test('still returns the access-denied page when the directory desync fails on a neither-role login', async () => {
+    const { request, logger } = makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { id_token: 't' }
+      },
+      async text() {
+        return ''
+      }
+    }))
+    const verifyIdToken = vi.fn(async () => ({
+      oid: 'oid-1',
+      preferred_username: 'r@d',
+      name: 'Reg',
+      roles: ['SomeOtherRole']
+    }))
+    const desyncAssignableUser = vi.fn(async () => {
+      throw new Error('redis unavailable')
+    })
+    const { regulatorCallbackController } = buildOk({
+      fetchImpl,
+      verifyIdToken,
+      desyncAssignableUser
+    })
+
+    const result = await regulatorCallbackController(request, h)
+
+    expect(result.viewPath).toBe('error/index')
+    expect(result.statusCode).toBe(403)
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: expect.objectContaining({ message: 'redis unavailable' })
+      }),
+      expect.stringContaining('assignable-user directory sync failed')
+    )
+  })
+
   test('grants a support-readonly session when the id_token roles claim has the support user role', async () => {
     const { request, yar } = makeRequest({
       query: { code: 'c', state: 's' },
@@ -389,6 +480,124 @@ describe('regulatorCallbackController', () => {
         id: 'oid-support',
         roles: ['support-readonly']
       })
+    )
+  })
+
+  // RA-446: keep the real-Entra-ID assignable-users directory in sync with
+  // the same role check login already performs.
+  test('upserts the caller into the assignable-users directory on a regulator-role login', async () => {
+    const { request } = makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { id_token: 't' }
+      },
+      async text() {
+        return ''
+      }
+    }))
+    const verifyIdToken = vi.fn(async () => ({
+      oid: 'oid-1',
+      preferred_username: 'r@d',
+      name: 'Reg',
+      roles: [REQUIRED_ROLE]
+    }))
+    const syncAssignableUser = vi.fn(async () => {})
+    const desyncAssignableUser = vi.fn(async () => {})
+    const { regulatorCallbackController } = buildOk({
+      fetchImpl,
+      verifyIdToken,
+      syncAssignableUser,
+      desyncAssignableUser
+    })
+
+    await regulatorCallbackController(request, h)
+
+    expect(syncAssignableUser).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'oid-1', email: 'r@d', name: 'Reg' })
+    )
+    expect(desyncAssignableUser).not.toHaveBeenCalled()
+  })
+
+  test('removes the caller from the assignable-users directory on a support-readonly login', async () => {
+    const { request } = makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { id_token: 't' }
+      },
+      async text() {
+        return ''
+      }
+    }))
+    const verifyIdToken = vi.fn(async () => ({
+      oid: 'oid-support',
+      preferred_username: 's@d',
+      name: 'Support',
+      roles: [SUPPORT_ROLE]
+    }))
+    const syncAssignableUser = vi.fn(async () => {})
+    const desyncAssignableUser = vi.fn(async () => {})
+    const { regulatorCallbackController } = buildOk({
+      fetchImpl,
+      verifyIdToken,
+      syncAssignableUser,
+      desyncAssignableUser
+    })
+
+    await regulatorCallbackController(request, h)
+
+    expect(desyncAssignableUser).toHaveBeenCalledWith('oid-support')
+    expect(syncAssignableUser).not.toHaveBeenCalled()
+  })
+
+  test('login still succeeds when the assignable-users directory write fails', async () => {
+    const { request, yar, logger } = makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { id_token: 't' }
+      },
+      async text() {
+        return ''
+      }
+    }))
+    const verifyIdToken = vi.fn(async () => ({
+      oid: 'oid-1',
+      preferred_username: 'r@d',
+      name: 'Reg',
+      roles: [REQUIRED_ROLE]
+    }))
+    const syncAssignableUser = vi.fn(async () => {
+      throw new Error('redis unavailable')
+    })
+    const { regulatorCallbackController } = buildOk({
+      fetchImpl,
+      verifyIdToken,
+      syncAssignableUser
+    })
+
+    const result = await regulatorCallbackController(request, h)
+
+    expect(result.redirected).toBe('/work-items')
+    expect(yar.set).toHaveBeenCalledWith('user', expect.anything())
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: expect.objectContaining({ message: 'redis unavailable' })
+      }),
+      expect.stringContaining('assignable-user directory sync failed')
     )
   })
 
