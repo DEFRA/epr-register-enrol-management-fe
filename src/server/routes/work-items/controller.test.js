@@ -297,7 +297,10 @@ describe('#workItemListController', () => {
             payload: {
               material: 'plastic',
               organisationName: 'Acme Recycling',
-              operatorOrganisationId: 'ORG-4242',
+              // RA-503: operatorOrgNumber is the operator/regulator-safe value; see
+              // case-header.test.js's "organisation id resolution" tests for the
+              // ObjectId-vs-6-digit shape-detection fallback coverage.
+              operatorOrgNumber: 424242,
               // RA-434-processortype.
               wasteProcessingType: 'reprocessor'
             }
@@ -319,7 +322,7 @@ describe('#workItemListController', () => {
     expect(result).not.toContain('data-testid="material">plastic</span>')
     expect(result).toContain('data-testid="application-org"')
     expect(result).toContain('data-testid="org-name">Acme Recycling</span>')
-    expect(result).toContain('data-testid="org-id">ORG-4242</span>')
+    expect(result).toContain('data-testid="org-id">424242</span>')
     // RA-370. The org line comes BEFORE the material/applicant-type title,
     // and within the title material comes before applicant type.
     expect(result.indexOf('data-testid="application-org"')).toBeLessThan(
@@ -1013,7 +1016,8 @@ describe('#workItemListController', () => {
             payload: {
               applicationReference: 'RA-100',
               organisationName: 'Acme Recycling',
-              operatorOrganisationId: 'ORG-4242',
+              // RA-503: operatorOrgNumber is the operator/regulator-safe value.
+              operatorOrgNumber: 424242,
               registrationNumber: 'EPR-100999',
               material: 'plastic'
             }
