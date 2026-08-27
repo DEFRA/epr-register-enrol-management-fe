@@ -3260,7 +3260,9 @@ describe('RA-295 individual work item page', () => {
       payload: {
         applicationReference: 'RA-2026-00001',
         organisationName: 'GreenLoop Recovery',
-        operatorOrganisationId: 'ORG-123-001',
+        // RA-503: operatorOrgNumber is the operator/regulator-safe value now displayed; see
+        // case-header.test.js's "organisation id resolution" tests for the fallback coverage.
+        operatorOrgNumber: 123001,
         registrationNumber: 'EPR-100999',
         material: 'plastic',
         siteAddress: '2 Wyld Court, Addingrove, AA3 1AA',
@@ -3314,7 +3316,7 @@ describe('RA-295 individual work item page', () => {
     expect(header).toContain('Applications')
     expect(header).toMatch(/case-header-accreditation-ref">RA-2026-00001</)
     expect(header).toMatch(/case-header-org-name">GreenLoop Recovery</)
-    expect(header).toMatch(/case-header-org-id">ORG-123-001</)
+    expect(header).toMatch(/case-header-org-id">123001</)
     expect(header).toContain('data-testid="case-header-material"')
     expect(header).toContain('Plastic')
     expect(header).toContain('data-testid="case-header-status"')

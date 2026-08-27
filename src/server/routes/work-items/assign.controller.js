@@ -93,6 +93,7 @@ export function makeShowAssignController() {
 
       const workItem = loaded.workItem
       const applicationRef = workItem.payload?.applicationReference ?? null
+      const assignableUsers = await getAssignableUsers()
 
       return h.view(ASSIGN_VIEW, {
         pageTitle: 'Reassign the application',
@@ -104,7 +105,7 @@ export function makeShowAssignController() {
           workItem.assignedToName ?? workItem.assignedToId ?? null,
         formAction: `${detailHref(id)}/assign`,
         cancelHref: detailHref(id),
-        assignableUsers: getAssignableUsers().map((u) => ({
+        assignableUsers: assignableUsers.map((u) => ({
           value: u.id,
           text: u.name ?? u.id,
           selected: u.id === workItem.assignedToId
