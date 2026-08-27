@@ -12,6 +12,10 @@ import {
   confirmPostLoginRedirect,
   popPostLoginRedirect
 } from '#/server/common/helpers/auth/auth-redirect.js'
+import {
+  removeAssignableUser,
+  upsertAssignableUser
+} from '#/server/common/helpers/auth/assignable-users-store.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 
 const LOGIN_PATH = '/auth/regulator/login'
@@ -41,6 +45,23 @@ function logWarn(request, msg, data) {
 }
 
 /**
+ * RA-446: best-effort assignable-users directory write. A failure here must
+ * never affect the auth outcome (login success/failure, access-denied
+ * response) — it's only logged. Pulled out of regulatorCallback to keep
+ * that function's cognitive complexity down; the two call sites cover the
+ * "granted access" and "denied outright" paths respectively.
+ */
+async function syncAssignableUserDirectory(request, action) {
+  try {
+    await action()
+  } catch (err) {
+    logWarn(request, 'oauth callback: assignable-user directory sync failed', {
+      err
+    })
+  }
+}
+
+/**
  * Build the auth controllers. Dependencies are injected so tests can swap
  * fetch and the id_token verifier without monkey-patching globals.
  */
@@ -48,7 +69,9 @@ export function createAuthControllers({
   fetchImpl = undiciFetch,
   verifyIdToken = verifyAzureIdToken,
   randomToken = defaultRandomToken,
-  getProviderConfig = () => getAzureEntraIdConfig(config)
+  getProviderConfig = () => getAzureEntraIdConfig(config),
+  syncAssignableUser = upsertAssignableUser,
+  desyncAssignableUser = removeAssignableUser
 } = {}) {
   function regulatorLogin(request, h) {
     confirmPostLoginRedirect(request)
@@ -197,6 +220,17 @@ export function createAuthControllers({
           supportUserRole
         }
       )
+
+      // RA-446: this is the normal shape of an offboarding/access-review
+      // revocation (the app role is removed outright, not swapped for the
+      // support-user role) — without this, a caller who loses access this
+      // way would stay in the assignable-users directory for the full
+      // inactivity window despite failing login on every subsequent
+      // attempt.
+      await syncAssignableUserDirectory(request, () =>
+        desyncAssignableUser(claims.oid ?? claims.sub)
+      )
+
       // RA-428: a caller with neither role must see an explicit
       // access-denied page rather than being silently bounced back to
       // login, which looked indistinguishable from a transient sign-in
@@ -217,6 +251,17 @@ export function createAuthControllers({
       name: claims.name ?? null,
       roles: [internalRole]
     }
+
+    // RA-446: reuse the role check above to keep the real-Entra-ID
+    // assignable-users directory in sync — upsert on every regulator-role
+    // login (refreshes their inactivity TTL), remove otherwise (catches a
+    // caseworker whose role was revoked but who kept using the app under
+    // the support-user role, or via a token that no longer carries it).
+    await syncAssignableUserDirectory(request, () =>
+      internalRole === ROLE_STANDARD
+        ? syncAssignableUser(user)
+        : desyncAssignableUser(user.id)
+    )
 
     const redirectTo = popPostLoginRedirect(
       request,

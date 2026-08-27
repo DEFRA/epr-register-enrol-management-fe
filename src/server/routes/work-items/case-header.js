@@ -46,6 +46,37 @@ export function formatDueOn(value) {
   return formatted === '' ? EM_DASH : formatted
 }
 
+// RA-503: operatorOrganisationId means two different things depending on how the work item was
+// created. Real operator submissions (epr-register-enrol-backend's HttpCaseWorkingApiAdapter)
+// send ReEx's internal Mongo ObjectId — never safe to show an operator or regulator. The
+// case-management admin "create work item" form (re-accreditation/create/schema.js) instead
+// validates it as a genuine 6-digit organisation number before submission (RA-448), so for THOSE
+// items it's already the correct value. A 24-char hex ObjectId can never match this pattern, so
+// shape alone tells the two apart.
+const SIX_DIGIT_ORG_NUMBER = /^\d{6}$/
+
+/**
+ * Resolve the operator/regulator-safe organisation id to display in the case header.
+ *
+ * Prefers `operatorOrgNumber` (the numeric value HttpCaseWorkingApiAdapter now sends for real
+ * operator submissions). Falls back to `operatorOrganisationId` only when it is itself
+ * genuinely 6-digit numeric — i.e. an admin-created work item, not ReEx's ObjectId — so this
+ * never reintroduces the ObjectId leak RA-503 fixes.
+ */
+export function resolveOrganisationId(payload) {
+  if (
+    payload.operatorOrgNumber !== undefined &&
+    payload.operatorOrgNumber !== null
+  ) {
+    return payload.operatorOrgNumber
+  }
+  const organisationId = payload.operatorOrganisationId
+  return typeof organisationId === 'string' &&
+    SIX_DIGIT_ORG_NUMBER.test(organisationId)
+    ? organisationId
+    : null
+}
+
 /**
  * @param {object} args
  * @param {object} args.workItem decorated work item (see detail.controller.js)
@@ -62,7 +93,7 @@ export function buildCaseHeader({ workItem, assignment = null }) {
     // back to the work item id when the human RA-* reference is absent.
     applicationRef: payload.applicationReference ?? workItem?.id ?? EM_DASH,
     organisationName: payload.organisationName || EM_DASH,
-    organisationId: payload.operatorOrganisationId || null,
+    organisationId: resolveOrganisationId(payload),
     meta: [
       {
         key: 'material',

@@ -51,6 +51,38 @@ either the value configured by `ENTRA_REGULATOR_ROLE_VALUE` (caseworker) or
 with neither is bounced back to the login page rather than granted a
 session.
 
+## Assignable-users directory (RA-446)
+
+The "assign to" / "reassign" work item picker and the work items list's
+"specific officer" filter are backed by
+`src/server/work-items/core/assignees.js`. In stub-auth environments this
+reuses the stub login user list; in real (Entra ID) environments it reads
+`src/server/common/helpers/auth/assignable-users-store.js`, a Redis-backed
+directory populated incrementally as regulator-role users sign in (there's
+no Graph API access to enumerate app-role group membership directly, so the
+role check the OAuth callback already performs is reused instead of a
+second source of truth):
+
+- on every login where the `roles` claim includes
+  `ENTRA_REGULATOR_ROLE_VALUE`, the caller's id/name/email/last-login are
+  upserted (stored in a single Redis hash — production runs Redis Cluster,
+  where a per-user-key design breaks `KEYS` fan-out and `MGET` across
+  slots);
+- on every login where it doesn't (including a caller who now only holds
+  the support-user role, or neither role at all) any existing entry for
+  that caller is removed — catches an active user whose role was revoked;
+- every read also excludes and prunes any entry whose last login exceeds
+  `ASSIGNABLE_USER_INACTIVITY_DAYS` (default 90), computed live rather than
+  via a per-entry TTL, so lowering the value takes effect on the next read
+  rather than only for entries written afterwards — catches a
+  departed/revoked user who never signs in again to trigger the removal
+  above.
+
+A directory read or write failure is logged but degrades gracefully
+(empty directory / lookup miss) rather than failing sign-in or the
+work-items list. A user who holds the role but has never logged in since
+this shipped won't appear as assignable until their first login.
+
 Use the helpers from `src/server/common/helpers/auth/auth-scopes.js` to
 require a role at the framework level:
 
@@ -70,16 +102,17 @@ server.route({
 
 ## Environment variables
 
-| Variable                        | Description                                                                                                                                                  | Default                      |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
-| `ENVIRONMENT`                   | Deployment environment name                                                                                                                                  | `local`                      |
-| `AUTH_STUB_ENABLED`             | Enable stub auth. Defaults `true` when `ENVIRONMENT != prod`                                                                                                 | `true`                       |
-| `AUTH_CALLBACK_BASE_URL`        | Base URL used to build OAuth callback redirect URI. Must be set to this environment's public URL outside local dev — boot fails otherwise (see `config.js`). | `http://localhost:3000`      |
-| `ENTRA_CLIENT_ID`               | Azure Entra ID client ID                                                                                                                                     | _(empty)_                    |
-| `ENTRA_CLIENT_SECRET`           | Azure Entra ID client secret                                                                                                                                 | _(empty)_                    |
-| `ENTRA_TENANT_ID`               | Azure Entra ID tenant ID                                                                                                                                     | _(empty)_                    |
-| `ENTRA_REGULATOR_ROLE_VALUE`    | RA-323. App role a signed-in user must hold to be treated as a caseworker. Unconfirmed pending sign-off.                                                     | `Waste.Regulator.Standard`   |
-| `ENTRA_SUPPORT_USER_ROLE_VALUE` | RA-335. App role a signed-in user must hold to be treated as a read-only support user.                                                                       | `Waste.SupportUser.ReadOnly` |
+| Variable                          | Description                                                                                                                                                    | Default                      |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `ENVIRONMENT`                     | Deployment environment name                                                                                                                                    | `local`                      |
+| `AUTH_STUB_ENABLED`               | Enable stub auth. Defaults `true` when `ENVIRONMENT != prod`                                                                                                   | `true`                       |
+| `AUTH_CALLBACK_BASE_URL`          | Base URL used to build OAuth callback redirect URI. Must be set to this environment's public URL outside local dev — boot fails otherwise (see `config.js`).   | `http://localhost:3000`      |
+| `ENTRA_CLIENT_ID`                 | Azure Entra ID client ID                                                                                                                                       | _(empty)_                    |
+| `ENTRA_CLIENT_SECRET`             | Azure Entra ID client secret                                                                                                                                   | _(empty)_                    |
+| `ENTRA_TENANT_ID`                 | Azure Entra ID tenant ID                                                                                                                                       | _(empty)_                    |
+| `ENTRA_REGULATOR_ROLE_VALUE`      | RA-323. App role a signed-in user must hold to be treated as a caseworker. Unconfirmed pending sign-off.                                                       | `Waste.Regulator.Standard`   |
+| `ENTRA_SUPPORT_USER_ROLE_VALUE`   | RA-335. App role a signed-in user must hold to be treated as a read-only support user.                                                                         | `Waste.SupportUser.ReadOnly` |
+| `ASSIGNABLE_USER_INACTIVITY_DAYS` | RA-446. Days since last login before an entry in the real-Entra-ID assignable-users directory is pruned on read. TBC pending an access-review policy decision. | `90`                         |
 
 ## Routes
 
