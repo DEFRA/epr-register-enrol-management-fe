@@ -689,7 +689,9 @@ describe('real operator submission payload contract', () => {
   test('the case header resolves org, material and registration number', () => {
     const header = buildCaseHeader({ workItem })
     expect(header.organisationName).toBe('Acme Recycling Ltd')
-    expect(header.organisationId).toBe('12345')
+    // RA-503: operatorOrgNumber (the operator/regulator-safe value) now wins over the fixture's
+    // legacy operatorOrganisationId placeholder ('12345').
+    expect(header.organisationId).toBe(500500)
     expect(header.meta.find((m) => m.key === 'material').value).toBe('Plastic')
     expect(header.meta.find((m) => m.key === 'registration-number').value).toBe(
       'EPR-100023'

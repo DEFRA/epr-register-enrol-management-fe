@@ -44,6 +44,9 @@ export function realOperatorSubmissionPayload() {
     siteAddressPostcode: 'SW1A 1AA',
     operatorApplicationId: 'app-001',
     operatorOrganisationId: '12345',
+    // RA-503. The operator/regulator-safe numeric organisation number, added alongside the
+    // existing (internal-only) operatorOrganisationId - see HttpCaseWorkingApiAdapter.BuildPayload.
+    operatorOrgNumber: 500500,
     operatorRegistrationId: 'reg-001',
     operatorEmail: 'jane@example.com',
     submittedBy: {

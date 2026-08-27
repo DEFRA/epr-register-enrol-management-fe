@@ -426,7 +426,10 @@ describe('#workItemAuditLogController', () => {
         payload: {
           applicantName: 'Acme',
           applicationReference: 'AP27EA5CB21WO2',
-          operatorOrganisationId: 'ORG-999-XYZ'
+          // RA-503: operatorOrgNumber is the operator/regulator-safe value; see
+          // case-header.test.js's dedicated "organisation id resolution" tests for the
+          // ObjectId-vs-6-digit shape-detection fallback coverage.
+          operatorOrgNumber: 999999
         },
         auditLog: [
           {
@@ -453,7 +456,7 @@ describe('#workItemAuditLogController', () => {
       .slice(result.indexOf('Org ID</dt>'))
       .match(/Org ID<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/)
     expect(orgIdCell).not.toBeNull()
-    expect(orgIdCell[1]).toContain('ORG-999-XYZ')
+    expect(orgIdCell[1]).toContain('999999')
     expect(orgIdCell[1]).not.toContain('AP27EA5CB21WO2')
   })
 
