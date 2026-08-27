@@ -3,7 +3,11 @@ import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { decorateAuditLog } from '#/server/work-items/core/audit-log.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
-import { buildCaseHeader, buildCaseTabs } from './case-header.js'
+import {
+  buildCaseHeader,
+  buildCaseTabs,
+  resolveOrganisationId
+} from './case-header.js'
 import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
 
 const AUDIT_LOG_VIEW = 'work-items/audit-log'
@@ -40,7 +44,11 @@ export const workItemAuditLogController = {
     const stateDisplayName = resolveStateDisplayName(workItem.stateId)
 
     const workItemSnapshot = {
-      orgId: workItem.payload?.operatorOrganisationId ?? null,
+      // RA-503: operatorOrganisationId is ReEx's internal ObjectId for a real operator
+      // submission — never safe to show. resolveOrganisationId prefers operatorOrgNumber and
+      // only falls back to operatorOrganisationId when it is itself genuinely 6-digit numeric
+      // (an admin-created work item). See case-header.js.
+      orgId: resolveOrganisationId(workItem.payload ?? {}),
       typeDisplayName,
       submittedAt: workItem.submittedAt ?? null,
       submittedBy: workItem.submittedBy ?? null,
