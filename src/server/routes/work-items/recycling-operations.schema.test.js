@@ -5,7 +5,6 @@ import {
   ALL_CODES,
   CODES_BY_MATERIAL_TYPE,
   CODES_REQUIRING_ACCOMPANIMENT,
-  INTERIM_SITE_REQUIRED_MESSAGE,
   RECYCLING_OPERATION_LABELS,
   SELECT_CODES_MESSAGE,
   applicableCodesForMaterialType,
@@ -14,7 +13,6 @@ import {
   normaliseCodes,
   recyclingOperationLabel,
   requiresAccompanyingCode,
-  requiresInterimSite,
   validateRecyclingOperationsForm
 } from './recycling-operations.schema.js'
 
@@ -99,18 +97,6 @@ describe('requiresAccompanyingCode', () => {
   })
 })
 
-describe('requiresInterimSite', () => {
-  test('true whenever R12 or R13 is present', () => {
-    expect(requiresInterimSite(['R12'])).toBe(true)
-    expect(requiresInterimSite(['R3', 'R13'])).toBe(true)
-  })
-
-  test('false when neither R12 nor R13 is present', () => {
-    expect(requiresInterimSite(['R3', 'R4', 'R5'])).toBe(false)
-    expect(requiresInterimSite([])).toBe(false)
-  })
-})
-
 describe('CODES_REQUIRING_ACCOMPANIMENT', () => {
   test('is exactly R12 and R13', () => {
     expect(CODES_REQUIRING_ACCOMPANIMENT.has('R12')).toBe(true)
@@ -182,58 +168,49 @@ describe('validateRecyclingOperationsForm', () => {
   test('rejects a code outside the applicable set for the material type', () => {
     const result = validateRecyclingOperationsForm(
       { codes: ['R4'] },
-      { applicableCodes: ['R5', 'R12', 'R13'], hasInterimSite: true }
+      { applicableCodes: ['R5', 'R12', 'R13'] }
     )
     expect(result.ok).toBe(false)
     expect(result.fieldErrors.codes).toBe(SELECT_CODES_MESSAGE)
   })
 
   test('AC10: rejects R12/R13 without an accompanying R3/R4/R5', () => {
-    const result = validateRecyclingOperationsForm(
-      { codes: ['R12'] },
-      { hasInterimSite: true }
-    )
+    const result = validateRecyclingOperationsForm({ codes: ['R12'] })
     expect(result.ok).toBe(false)
     expect(result.fieldErrors.codes).toBe(ACCOMPANYING_CODE_MESSAGE)
   })
 
-  test('AC11: rejects R12/R13 for a site with no associated interim site', () => {
-    const result = validateRecyclingOperationsForm(
-      { codes: ['R3', 'R12'] },
-      { hasInterimSite: false }
-    )
-    expect(result.ok).toBe(false)
-    expect(result.fieldErrors.codes).toBe(INTERIM_SITE_REQUIRED_MESSAGE)
+  // RA-486: R12/R13 no longer require an associated interim site — that
+  // coupling moved to the interim site's own (display-only, on this side)
+  // codes. The ORS's own R12/R13 is accepted as long as it is not alone.
+  test('RA-486: accepts R12/R13 alongside R3/R4/R5 with no interim site at all', () => {
+    const result = validateRecyclingOperationsForm({ codes: ['R3', 'R12'] })
+    expect(result.ok).toBe(true)
+    expect(result.value).toEqual({ codes: ['R3', 'R12'] })
   })
 
-  test('accepts R3/R4/R5-only codes with no interim site required', () => {
-    const result = validateRecyclingOperationsForm(
-      { codes: ['R3', 'R4'] },
-      { hasInterimSite: false }
-    )
+  test('accepts R3/R4/R5-only codes', () => {
+    const result = validateRecyclingOperationsForm({ codes: ['R3', 'R4'] })
     expect(result.ok).toBe(true)
     expect(result.value).toEqual({ codes: ['R3', 'R4'] })
   })
 
-  test('accepts R12/R13 alongside R3/R4/R5 when an interim site exists', () => {
+  test('accepts R12/R13 alongside R3/R4/R5', () => {
     const result = validateRecyclingOperationsForm(
       { codes: ['R5', 'R12', 'R13'] },
-      { applicableCodes: ['R5', 'R12', 'R13'], hasInterimSite: true }
+      { applicableCodes: ['R5', 'R12', 'R13'] }
     )
     expect(result.ok).toBe(true)
     expect(result.value).toEqual({ codes: ['R5', 'R12', 'R13'] })
   })
 
   test('normalises a single checked checkbox posted as a bare string', () => {
-    const result = validateRecyclingOperationsForm(
-      { codes: 'R3' },
-      { hasInterimSite: false }
-    )
+    const result = validateRecyclingOperationsForm({ codes: 'R3' })
     expect(result.ok).toBe(true)
     expect(result.value).toEqual({ codes: ['R3'] })
   })
 
-  test('defaults applicableCodes to the full set and hasInterimSite to false', () => {
+  test('defaults applicableCodes to the full set', () => {
     const result = validateRecyclingOperationsForm({ codes: ['R3'] })
     expect(result.ok).toBe(true)
   })

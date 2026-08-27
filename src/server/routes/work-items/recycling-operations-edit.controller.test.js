@@ -9,7 +9,6 @@ import {
 } from '#/server/work-items/core/registry.js'
 import {
   ACCOMPANYING_CODE_MESSAGE,
-  INTERIM_SITE_REQUIRED_MESSAGE,
   SELECT_CODES_MESSAGE
 } from './recycling-operations.schema.js'
 
@@ -297,7 +296,11 @@ describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {
     expect(updateRecyclingOperations).not.toHaveBeenCalled()
   })
 
-  test('AC11: R12 on a site with no interim site re-renders with a distinct clear error', async () => {
+  // RA-486: R12/R13 no longer require an associated interim site — that
+  // coupling moved to the interim site's own (display-only, on this side)
+  // codes. Submitting R12/R13 on an ORS with NO interim site at all is now
+  // accepted, as long as it is not alone (AC10 still applies).
+  test('RA-486: accepts R12 on a site with no interim site at all', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
@@ -310,12 +313,17 @@ describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {
         }
       })
     })
+    updateRecyclingOperations.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem()
+    })
 
-    const { statusCode, result } = await postCodes(server, ['R5', 'R12'])
+    const { statusCode } = await postCodes(server, ['R5', 'R12'])
 
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toContain(INTERIM_SITE_REQUIRED_MESSAGE)
-    expect(updateRecyclingOperations).not.toHaveBeenCalled()
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(updateRecyclingOperations).toHaveBeenCalledWith(
+      expect.objectContaining({ operationCodes: ['R5', 'R12'] })
+    )
   })
 
   test('accepts R12 when the site has an associated interim site', async () => {

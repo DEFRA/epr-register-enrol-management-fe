@@ -1047,7 +1047,11 @@ describe('#buildInterimSite (RA-292 AC02 + AC04)', () => {
     postcode: '2030',
     contactName: 'Marieke Peeters',
     contactEmail: 'marieke@example.com',
-    contactPhone: '+32 3 555 0100'
+    contactPhone: '+32 3 555 0100',
+    // RA-486: the interim site now carries its own recycling operation
+    // codes (mandatory R12/R13, optional R3/R4/R5, inherited material),
+    // display-only on the regulator side.
+    operationCode: 'R12'
   }
 
   test('AC02: flags an interim site whose isNewSite is true', () => {
@@ -1081,8 +1085,20 @@ describe('#buildInterimSite (RA-292 AC02 + AC04)', () => {
       ['site-number', ['INT-001']],
       ['contact-name', ['Marieke Peeters']],
       ['contact-email', ['marieke@example.com']],
-      ['contact-phone', ['+32 3 555 0100']]
+      ['contact-phone', ['+32 3 555 0100']],
+      ['operation-code', ['R12']]
     ])
+  })
+
+  // RA-486: mirrors the ORS's own 'operation-code' field/testid pattern
+  // (`overseas-site-operation-code`) — this one renders as
+  // `interim-site-operation-code`. Display-only: there is no edit route for
+  // the interim site's codes on the regulator side.
+  test('RA-486: omits the operation code row when the interim site has none', () => {
+    const site = buildInterimSite({ ...INTERIM, operationCode: undefined })
+    expect(
+      site.details.find((detail) => detail.key === 'operation-code')
+    ).toBeUndefined()
   })
 
   test('skips an address line the interim site does not carry', () => {

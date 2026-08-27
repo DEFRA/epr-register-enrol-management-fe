@@ -519,10 +519,14 @@ const ORS_DETAIL_FIELDS = [
 ]
 
 /**
- * AC04, interim half. A shorter list than the ORS one because the interim
- * site carries no operation/waste codes — it is a staging point, not a
- * reprocessor. It does carry `stateOrRegion` and `postcode`, which the ORS
- * shape does not.
+ * AC04, interim half. Shorter than the ORS list, but RA-486 gives the
+ * interim site its own operation codes (mandatory R12/R13, optional
+ * R3/R4/R5, inherited material) — mirrored here as a single display-only
+ * `operation-code` field, same key/label/reader shape as the ORS list's own
+ * entry. There is no edit capability for these on the regulator side (see
+ * `recycling-operations.controller.js`'s `hasAccompanimentCode` removal) —
+ * this tab only ever displays whatever the interim site carries. It does
+ * carry `stateOrRegion` and `postcode`, which the ORS shape does not.
  */
 const INTERIM_DETAIL_FIELDS = [
   // `address` is deliberately absent — like the ORS, it renders as its own
@@ -539,6 +543,11 @@ const INTERIM_DETAIL_FIELDS = [
     'contact-phone',
     'Contact phone',
     (site) => toDisplayLines(site.contactPhone)
+  ],
+  [
+    'operation-code',
+    'Operation code',
+    (site) => toDisplayLines(site.operationCode)
   ]
 ]
 

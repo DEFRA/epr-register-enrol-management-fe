@@ -202,7 +202,11 @@ describe('#workItemRecyclingOperationsController', () => {
     expect(result).toContain('Interim Depot')
   })
 
-  test('does not show an interim site when only R3/R4/R5 are set', async () => {
+  // RA-486: R12/R13 are no longer coupled to an interim site — the ORS's own
+  // codes and the interim site's existence are now independent, so the
+  // interim-site line is shown whenever the ORS HAS an associated interim
+  // site, regardless of which codes the ORS itself carries.
+  test('RA-486: shows the associated interim site even when only R3/R4/R5 are set', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -214,7 +218,7 @@ describe('#workItemRecyclingOperationsController', () => {
             sites: [
               anOrsSite({
                 operationCodes: ['R5'],
-                interimSite: { siteName: 'Should Not Render' }
+                interimSite: { siteName: 'Should Render' }
               })
             ]
           }
@@ -227,7 +231,7 @@ describe('#workItemRecyclingOperationsController', () => {
       url: `/work-items/${ID}/recycling-operations`
     })
 
-    expect(result).not.toContain('Should Not Render')
+    expect(result).toContain('Should Render')
   })
 
   test('AC7: a site with zero codes states this clearly', async () => {
@@ -336,6 +340,23 @@ describe('buildRecyclingOperationsSite', () => {
       ID
     )
     expect(view.interimSite).toBeNull()
+  })
+
+  // RA-486: showing the interim site is now keyed purely on its presence,
+  // not on the ORS's own codes.
+  test('RA-486: shows the interim site when present, regardless of the ORS codes', () => {
+    const view = buildRecyclingOperationsSite(
+      {
+        siteId: 's1',
+        operationCodes: ['R5'],
+        interimSite: { siteName: 'Interim Depot' }
+      },
+      ID
+    )
+    expect(view.interimSite).toEqual({
+      siteName: 'Interim Depot',
+      addressLine: null
+    })
   })
 
   test('omits the audit line when neither updatedBy nor updatedAt is present', () => {
