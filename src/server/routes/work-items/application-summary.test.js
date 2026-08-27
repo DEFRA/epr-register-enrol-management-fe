@@ -1333,3 +1333,105 @@ describe('RA-292 backwards compatibility (pre-story work items)', () => {
     ])
   })
 })
+
+describe('#buildApplicationSummary removed overseas sites (RA-483)', () => {
+  // The operator journey "removes" an ORS by DESELECTING it — the site stays
+  // in the payload with `selected: false` — so CM kept rendering it, with
+  // nothing to say it was gone. Both the BES row and the ORS row read the
+  // same filtered list, so neither can drift back into showing one.
+  function summariseSites(sites) {
+    const { rows } = buildApplicationSummary({
+      workItem: {
+        payload: { wasteProcessingType: 'exporter', overseasSites: { sites } }
+      }
+    })
+    return {
+      bes: row(rows, 'bes').sites.map((site) => site.siteName),
+      ors: row(rows, 'ors').sites.map((site) => site.siteName)
+    }
+  }
+
+  test('AC1: a deselected site is absent from BOTH the ORS and the BES row', () => {
+    // Mirrors the management-be fixture on the `full-payload-verification`
+    // seed item, which the e2e suite asserts against.
+    const { bes, ors } = summariseSites([
+      {
+        siteId: 1,
+        siteName: 'Full Payload Verification Overseas Site',
+        country: 'Netherlands',
+        selected: true
+      },
+      {
+        siteId: 2,
+        siteName: 'Removed Overseas Site',
+        country: 'Germany',
+        selected: false
+      }
+    ])
+
+    expect(ors).toEqual(['Full Payload Verification Overseas Site'])
+    expect(bes).toEqual(['Full Payload Verification Overseas Site'])
+  })
+
+  test('renders empty rows, not a crash, when every site was removed', () => {
+    const { bes, ors } = summariseSites([
+      { siteName: 'Bremen', selected: false },
+      { siteName: 'Hamburg', selected: false }
+    ])
+
+    expect(ors).toEqual([])
+    expect(bes).toEqual([])
+  })
+
+  test('still renders a legacy payload whose sites carry no selected flag', () => {
+    // Every work item submitted before the flag existed has no such field.
+    // Absent must NOT be read as removed, or historical cases go blank.
+    const { bes, ors } = summariseSites([
+      { siteName: 'Rotterdam' },
+      { siteName: 'Antwerp' }
+    ])
+
+    expect(ors).toEqual(['Rotterdam', 'Antwerp'])
+    expect(bes).toEqual(['Rotterdam', 'Antwerp'])
+  })
+
+  test.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a non-boolean', 'yes']
+  ])(
+    'treats a selected of %s as still selected — only an explicit false removes',
+    (_label, selected) => {
+      expect(summariseSites([{ siteName: 'Rotterdam', selected }]).ors).toEqual(
+        ['Rotterdam']
+      )
+    }
+  )
+
+  test('drops a removed site from the BES row even when it carries evidence files', () => {
+    const { rows } = buildApplicationSummary({
+      workItem: {
+        id: 'w-1',
+        payload: {
+          wasteProcessingType: 'exporter',
+          overseasSites: {
+            sites: [
+              {
+                siteName: 'Removed Overseas Site',
+                selected: false,
+                besEvidence: {
+                  files: [
+                    { fileId: 'f-1', fileName: 'bes.pdf', scanStatus: 'Clean' }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    })
+
+    expect(row(rows, 'bes').sites).toEqual([])
+    expect(JSON.stringify(rows)).not.toContain('bes.pdf')
+  })
+})
