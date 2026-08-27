@@ -14,6 +14,7 @@ import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { config } from '#/config/config.js'
 import { isExporterApplication } from './application-summary.js'
+import { resolveOrganisationId } from './case-header.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -731,7 +732,11 @@ function decorate(item) {
     // `item.id`, so dropping the id fallback here loses no navigation.
     applicationRef: item.payload?.applicationReference ?? null,
     orgName: item.payload?.organisationName ?? null,
-    orgId: item.payload?.operatorOrganisationId ?? null,
+    // RA-503: operatorOrganisationId is ReEx's internal ObjectId for a real operator
+    // submission — never safe to show. resolveOrganisationId prefers operatorOrgNumber and only
+    // falls back to operatorOrganisationId when it is itself genuinely 6-digit numeric (an
+    // admin-created work item). See case-header.js.
+    orgId: resolveOrganisationId(item.payload ?? {}),
     // RA-295 AC06. The operator's registration number on each card. NOTE:
     // this is `registrationNumber` (e.g. "EPR-100999") — deliberately NOT
     // `operatorRegistrationId` (e.g. "reg-008", RA-223's "Registration ID"),
