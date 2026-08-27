@@ -128,9 +128,12 @@ export async function listAssignableUsers() {
   const users = []
   for (const [id, json] of Object.entries(raw)) {
     const entry = parseEntry(id, json)
-    if (entry && isExpired(entry)) {
+    if (!entry) {
+      continue
+    }
+    if (isExpired(entry)) {
       expiredIds.push(id)
-    } else if (entry) {
+    } else {
       users.push(entry)
     }
   }
