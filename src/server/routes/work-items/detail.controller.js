@@ -190,7 +190,7 @@ export function makeAssignController({
         })
       }
 
-      const directoryEntry = findAssignableUser(rawAssigneeId)
+      const directoryEntry = await findAssignableUser(rawAssigneeId)
       const assigneeName =
         directoryEntry?.name ??
         (typeof payload.assigneeName === 'string' &&
