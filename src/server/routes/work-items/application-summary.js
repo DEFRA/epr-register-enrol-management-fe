@@ -4,6 +4,7 @@ import {
   getSitePostcode
 } from '#/server/common/helpers/format/site-address.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
+import { overseasSitesOf } from './overseas-sites.js'
 
 /**
  * Application information view model (RA-295 AC02).
@@ -136,11 +137,6 @@ export function deriveSiteAddressLines(payload, registeredAddress) {
 export function deriveSiteAddress(payload, registeredAddress) {
   const lines = deriveSiteAddressLines(payload, registeredAddress)
   return lines.length > 0 ? lines.join(', ') : null
-}
-
-function overseasSitesOf(workItem) {
-  const sites = workItem?.payload?.overseasSites?.sites
-  return Array.isArray(sites) ? sites : []
 }
 
 export function tonnageBandLabel(band) {
@@ -640,6 +636,8 @@ export function buildApplicationSummary({ workItem }) {
   const samplingFiles = Array.isArray(payload.samplingPlan?.files)
     ? payload.samplingPlan.files
     : []
+  // RA-483: operator-removed (deselected) sites are excluded here, so BOTH
+  // the BES row and the ORS row below skip them — see `overseas-sites.js`.
   const overseasSites = overseasSitesOf(workItem)
   // CM2. Mirrors the "Additional information" tab's registered-address
   // computation, so both tabs' site-address rows resolve to exactly the

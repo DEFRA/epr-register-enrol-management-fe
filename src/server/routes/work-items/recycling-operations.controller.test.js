@@ -644,4 +644,71 @@ describe('#workItemRecyclingOperationsController search and pagination (RA-469 8
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toContain('Site 01')
   })
+
+  test('RA-483: an operator-removed (deselected) site is not listed or editable', async () => {
+    // Removal in the operator journey is a deselect, not a delete: the site
+    // is still in the payload. It must not appear here, and with no row
+    // rendered there is no "Change" link to its edit form either.
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: {
+            sites: [
+              anOrsSite({
+                siteId: 's1',
+                siteName: 'Kept Site',
+                selected: true
+              }),
+              anOrsSite({
+                siteId: 's2',
+                siteName: 'Removed Overseas Site',
+                selected: false
+              })
+            ]
+          }
+        }
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('Kept Site')
+    expect(result).not.toContain('Removed Overseas Site')
+    expect(result).not.toContain(`/recycling-operations/s2`)
+  })
+
+  test('RA-483: a legacy payload with no selected flag still lists every site', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: {
+            sites: [
+              anOrsSite({ siteId: 's1', siteName: 'Alpha Site' }),
+              anOrsSite({ siteId: 's2', siteName: 'Beta Site' })
+            ]
+          }
+        }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/recycling-operations`
+    })
+
+    expect(result).toContain('Alpha Site')
+    expect(result).toContain('Beta Site')
+  })
 })
