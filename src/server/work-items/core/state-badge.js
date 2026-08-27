@@ -33,7 +33,7 @@ const DEFAULT_STATE_TAG_CLASS = 'govuk-tag--grey'
 // Registration & Accreditation service. `queried` (awaiting operator
 // response) is deliberately left as-is; only `updated` (resubmitted,
 // awaiting re-assessment) is recoloured to turquoise here, for parity with
-// the Registration & Accreditation service FE's equivalent state (see
+// the Registration & Accreditation service frontend's equivalent state (see
 // epr-register-enrol-frontend/src/server/operator-accreditation/controller.js
 // and .../accreditation/task-list/controller.js, both `Updated: { tagClass:
 // 'govuk-tag--turquoise' }`).
