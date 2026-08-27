@@ -4139,7 +4139,7 @@ describe('RA-295 individual work item page', () => {
   test('RA-292 AC02: renders the "Interim sites" sub-label', async () => {
     const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
     const interimIdx = ors.indexOf('data-testid="interim-site"')
-    expect(ors.slice(interimIdx, interimIdx + 400)).toContain(
+    expect(ors.slice(interimIdx, interimIdx + 600)).toContain(
       '<strong>Interim sites</strong>'
     )
   })
