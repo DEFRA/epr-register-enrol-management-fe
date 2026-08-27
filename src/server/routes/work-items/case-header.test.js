@@ -40,7 +40,12 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     payload: {
       applicationReference: 'RA-2026-00001',
       organisationName: 'GreenLoop Recovery',
-      operatorOrganisationId: 'ORG-123-001',
+      // RA-503: operatorOrganisationId is ReEx's internal ObjectId (deliberately ObjectId-shaped
+      // here, not the 6-digit admin-created shape) — operatorOrgNumber is the value that must
+      // actually be displayed. See the #resolveOrganisationId describe block below for the
+      // fallback-shape coverage.
+      operatorOrganisationId: '6a74a6a12b7c39b0cc15ca55',
+      operatorOrgNumber: 500500,
       material: 'plastic',
       registrationNumber: 'EPR-100999'
     }
@@ -56,7 +61,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(header.backText).toBe('Applications')
     expect(header.applicationRef).toBe('RA-2026-00001')
     expect(header.organisationName).toBe('GreenLoop Recovery')
-    expect(header.organisationId).toBe('ORG-123-001')
+    expect(header.organisationId).toBe(500500)
     expect(metaValue(header, 'material')).toBe('Plastic')
     expect(metaValue(header, 'status')).toBe('Duly made')
     expect(metaValue(header, 'assigned-to')).toBe('Alice Example')
@@ -154,6 +159,53 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(
       metaValue(buildCaseHeader({ workItem: { payload: {} } }), 'assigned-to')
     ).toBe('Unassigned')
+  })
+
+  // RA-503: operatorOrganisationId means two different things depending on how the work item
+  // was created — ReEx's internal ObjectId for a real operator submission (never safe to show),
+  // or a genuine 6-digit organisation number for a case-management admin-created item (RA-448
+  // validates this shape before submission, see re-accreditation/create/schema.js). Shape alone
+  // tells the two apart: an ObjectId can never match ^\d{6}$.
+  describe('organisation id resolution (RA-503)', () => {
+    test('prefers operatorOrgNumber when present, even alongside an ObjectId-shaped operatorOrganisationId', () => {
+      const header = buildCaseHeader({
+        workItem: {
+          payload: {
+            operatorOrganisationId: '6a74a6a12b7c39b0cc15ca55',
+            operatorOrgNumber: 500500
+          }
+        }
+      })
+      expect(header.organisationId).toBe(500500)
+    })
+
+    test('falls back to operatorOrganisationId when it is genuinely 6-digit numeric (admin-created work item)', () => {
+      const header = buildCaseHeader({
+        workItem: { payload: { operatorOrganisationId: '500001' } }
+      })
+      expect(header.organisationId).toBe('500001')
+    })
+
+    test('does not fall back to an ObjectId-shaped operatorOrganisationId', () => {
+      const header = buildCaseHeader({
+        workItem: {
+          payload: { operatorOrganisationId: '6a74a6a12b7c39b0cc15ca55' }
+        }
+      })
+      expect(header.organisationId).toBeNull()
+    })
+
+    test('does not fall back to a non-numeric operatorOrganisationId of any other shape', () => {
+      const header = buildCaseHeader({
+        workItem: { payload: { operatorOrganisationId: 'ORG-123-001' } }
+      })
+      expect(header.organisationId).toBeNull()
+    })
+
+    test('is null when neither field is present', () => {
+      const header = buildCaseHeader({ workItem: { payload: {} } })
+      expect(header.organisationId).toBeNull()
+    })
   })
 })
 
