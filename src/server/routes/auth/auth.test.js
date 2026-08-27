@@ -136,7 +136,8 @@ describe('auth', () => {
   // enforces it at request time (runtime) — the two are not the same
   // guarantee, and this is the regression the fix exists to prevent.
   // RA-317: the withdraw confirmation POST route was removed (withdraw is an
-  // operator-only action, not available in CM), so it is no longer part of
+  // operator-only action, not available in the Case Management service), so
+  // it is no longer part of
   // this set.
   test.each([
     ['self-assign', '/work-items/some-id/self-assign'],

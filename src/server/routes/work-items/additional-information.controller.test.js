@@ -172,7 +172,8 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
       }
     })
     // Intentional per RA-434: for an exporter, Site address == Registered
-    // address, matching OJ's own header.
+    // address, matching the Registration & Accreditation service's own
+    // header.
     expect(row(rows, 'site-address').value).toBe(
       '1 Example Street, London, EC1A 1BB'
     )

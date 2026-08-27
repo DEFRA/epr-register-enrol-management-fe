@@ -1787,11 +1787,12 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
     expect(result).toEqual({ ok: true, workItem })
   })
 
-  // The OJ-unreachable case: management-be exhausts its retries and returns a
-  // generic ProblemDetails 500 with NO errorCode and NO state change. fe must
-  // surface it as the generic 'server' outcome so the controller shows its
-  // catch-all "try again" banner — never a field-bound error.
-  test('maps a generic 500 (OJ unreachable) to reason server with a null errorCode', async () => {
+  // The Registration & Accreditation service-unreachable case: management-be
+  // exhausts its retries and returns a generic ProblemDetails 500 with NO
+  // errorCode and NO state change. fe must surface it as the generic
+  // 'server' outcome so the controller shows its catch-all "try again"
+  // banner — never a field-bound error.
+  test('maps a generic 500 (Registration & Accreditation service unreachable) to reason server with a null errorCode', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,

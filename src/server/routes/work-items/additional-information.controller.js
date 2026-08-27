@@ -52,7 +52,8 @@ export function buildAdditionalInformationRows({ workItem }) {
     ['company-registered-address', 'Registered address', registeredAddress],
     // No producer field exists for a site NAME anywhere in the chain today
     // — always absent, kept here so the row-omission below applies the
-    // moment re-ex (or a manual CM work item) can supply one.
+    // moment re-ex (or a manual Case Management service work item) can
+    // supply one.
     ['site-name', 'Site name', null],
     [
       'site-address',

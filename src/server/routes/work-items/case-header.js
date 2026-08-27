@@ -170,8 +170,8 @@ const HIDDEN_TAB_KEYS = new Set([RECYCLING_OPERATIONS_TAB_KEY])
  * operations" (RA-469) lists each overseas reprocessing site's recycling
  * operation codes — currently hidden, see HIDDEN_TAB_KEYS above;
  * "Application history" is the audit log page; "Additional
- * information" (RA-434) is the six-field summary list re-ex/CM data that
- * has nowhere else to live.
+ * information" (RA-434) is the six-field summary list re-ex/Case Management
+ * service data that has nowhere else to live.
  *
  * RA-469 deliberately positions "Recycling operations" SECOND — immediately
  * after "Application summary" — even though the ticket's own text was

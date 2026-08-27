@@ -101,15 +101,17 @@ export function buildSiteAddressLines(payload) {
 /**
  * RA-434 / RA-447 (CM2). re-ex's site address exists only for reprocessors
  * (`SiteDto.Address` lives on `ReprocessorRegistrationDto.Site`) — exporters
- * carry none. Mirrors the fallback the OJ frontend's `applicationHeader.js`
- * already applies to its own "Site" header row: the registered address
- * stands in for an exporter's site address, and an absent
- * `wasteProcessingType` (e.g. a work item created manually through CM's
- * "create work item" form) defaults to the reprocessor branch rather than
- * the exporter one.
+ * carry none. Mirrors the fallback the Registration & Accreditation
+ * service frontend's `applicationHeader.js` already applies to its own
+ * "Site" header row: the registered address stands in for an exporter's
+ * site address, and an absent `wasteProcessingType` (e.g. a work item
+ * created manually through the Case Management service's "create work
+ * item" form) defaults to the reprocessor branch rather than the exporter
+ * one.
  *
  * For an exporter this deliberately makes Site address equal Registered
- * address — matches OJ's own header, not a bug.
+ * address — matches the Registration & Accreditation service's own header,
+ * not a bug.
  *
  * Shared by both the Application summary and Additional information tabs
  * (CM2) so the two rows can never disagree on which applications get the

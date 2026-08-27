@@ -64,10 +64,12 @@ export function decorateAuditLog(
  *
  * The status-push actions matter especially: their `New state` row reads
  * `details.toStateDisplayName ?? details.toStateId`, the vocabulary the
- * push hook recorded for OJ, while the context row would resolve
- * `entry.stateId` through the CM `type.states` display names. Left
- * unsuppressed, one entry could show `New state: <OJ label>` alongside
- * `State: <CM label>` for the same state.
+ * push hook recorded for the Registration & Accreditation service, while
+ * the context row would resolve `entry.stateId` through the Case
+ * Management service's `type.states` display names. Left unsuppressed, one
+ * entry could show `New state: <Registration & Accreditation service
+ * label>` alongside `State: <Case Management service label>` for the same
+ * state.
  *
  * Every other action — assignment, notes, notifications, and the retired
  * `task-completed` / `task-status-changed` entries — carries no state in
@@ -189,14 +191,17 @@ const ACTION_DISPLAY_NAMES = {
   [ACTION_NOTIFICATION_SENT]: 'Notification sent',
   [ACTION_NOTIFICATION_SKIPPED]: 'Notification not sent',
   [ACTION_NOTIFICATION_FAILED]: 'Notification failed',
-  [ACTION_STATUS_PUSH_SENT]: 'Status sent to OJ',
-  [ACTION_STATUS_PUSH_SKIPPED]: 'Status not sent to OJ (disabled)',
-  [ACTION_STATUS_PUSH_FAILED]: 'Status failed to send to OJ'
+  [ACTION_STATUS_PUSH_SENT]:
+    'Status sent to the Registration & Accreditation service',
+  [ACTION_STATUS_PUSH_SKIPPED]:
+    'Status not sent to the Registration & Accreditation service (disabled)',
+  [ACTION_STATUS_PUSH_FAILED]:
+    'Status failed to send to the Registration & Accreditation service'
 }
 
 /**
  * Audit actions that record a failed regulator notification or a failed
- * OJ status push. These render in a visually distinct (error-styled) way
+ * Registration & Accreditation service status push. These render in a visually distinct (error-styled) way
  * on the audit-log page (RA-234, RA-368) so failures are obviously
  * displayed rather than buried as another grey timeline row.
  */
@@ -476,14 +481,18 @@ function notificationDetailRows(entry, details) {
 }
 
 /**
- * Project the structured details of an OJ status-push audit entry (RA-368).
+ * Project the structured details of a Registration & Accreditation service
+ * status-push audit entry (RA-368).
  *
  * The backend's `WorkItemStatusPushHook` stamps these fields onto the
  * entry's `details` dictionary for every generic action/transition it
- * pushes on to the operator journey (OJ):
- *   - `actionId` / `actionDisplayName` — the CM action that fired the push.
- *   - `fromStateId` / `toStateId`      — the CM state transition.
- *   - `toStateDisplayName`             — the state OJ was told about.
+ * pushes on to the Registration & Accreditation service:
+ *   - `actionId` / `actionDisplayName` — the Case Management service action
+ *     that fired the push.
+ *   - `fromStateId` / `toStateId`      — the Case Management service state
+ *     transition.
+ *   - `toStateDisplayName`             — the state the Registration &
+ *     Accreditation service was told about.
  *   - `reason`                         — why a push was skipped (skipped
  *                                        only, e.g. push disabled).
  *   - `errorMessage`                   — the error text (failed only).

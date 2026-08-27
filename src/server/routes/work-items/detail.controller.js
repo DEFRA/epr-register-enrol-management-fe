@@ -98,9 +98,11 @@ export const workItemDetailController = {
 // Unlike every OTHER action id (which the apply-action route deliberately
 // forwards to the backend as authoritative — see its docstring below), this
 // is not moving an authorisation decision into the wrong tier: the whole
-// ACTION CATEGORY is absent from CM, so refusing it here is the correct place.
+// ACTION CATEGORY is absent from the Case Management service, so refusing it
+// here is the correct place.
 // Kept as a local helper rather than importing the now-deleted
-// withdraw.service.js, so the removed CM withdraw journey leaves no dead code.
+// withdraw.service.js, so the removed Case Management service withdraw
+// journey leaves no dead code.
 const WITHDRAW_ACTION_PREFIX = 'withdraw'
 
 function isWithdrawActionId(actionId) {
@@ -903,7 +905,8 @@ function decorate(workItem) {
     // in the template loops would reintroduce the exact RA-364 anti-pattern:
     // a state whose ONLY action was withdraw would render an empty
     // `work-item-actions` container instead of the "No actions" empty state.
-    // Withdraw is an operator action, never a CM affordance in any state.
+    // Withdraw is an operator action, never a Case Management service
+    // affordance in any state.
     availableActions: projectedActions.filter(
       (action) =>
         action?.actionId !== SLA_EXTEND_ACTION_ID &&

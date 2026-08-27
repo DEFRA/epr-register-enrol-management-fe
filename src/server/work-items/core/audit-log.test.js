@@ -616,13 +616,14 @@ describe('decorateAuditLog — per-entry State row (epr-rr9s)', () => {
     expect(applied.detailRows.filter((r) => r.key === 'State')).toHaveLength(0)
   })
 
-  test('suppresses the context State row on OJ status-push actions', () => {
+  test('suppresses the context State row on Registration & Accreditation service status-push actions', () => {
     // statusPushDetailRows already emits Previous state / New state for all
     // three status-push actions, so the context-block State row would be a
     // second, differently-worded state on the same entry: New state reads
-    // details.toStateDisplayName (the label the push hook recorded for OJ)
-    // while the context row resolves entry.stateId through the CM state
-    // definitions. One entry must not show both.
+    // details.toStateDisplayName (the label the push hook recorded for the
+    // Registration & Accreditation service) while the context row resolves
+    // entry.stateId through the Case Management service state definitions.
+    // One entry must not show both.
     const entries = decorateAuditLog(
       ['status-push-sent', 'status-push-skipped', 'status-push-failed'].map(
         (action, i) => ({
@@ -643,7 +644,8 @@ describe('decorateAuditLog — per-entry State row (epr-rr9s)', () => {
 
     for (const entry of entries) {
       expect(entry.detailRows.filter((r) => r.key === 'State')).toHaveLength(0)
-      // The entry's own New state row still carries the OJ vocabulary.
+      // The entry's own New state row still carries the Registration &
+      // Accreditation service vocabulary.
       expect(entry.detailRows.find((r) => r.key === 'New state')?.value).toBe(
         'DULY_MADE'
       )
@@ -993,29 +995,33 @@ describe('notification audit entries (RA-234)', () => {
   })
 })
 
-describe('OJ status-push audit entries (RA-368)', () => {
+describe('Registration & Accreditation service status-push audit entries (RA-368)', () => {
   describe('actionDisplayNameFor fallbacks', () => {
-    test('status-push-sent falls back to "Status sent to OJ"', () => {
+    test('status-push-sent falls back to "Status sent to the Registration & Accreditation service"', () => {
       const [decorated] = decorateAuditLog([
         { action: 'status-push-sent', details: {} }
       ])
-      expect(decorated.actionDisplayName).toBe('Status sent to OJ')
+      expect(decorated.actionDisplayName).toBe(
+        'Status sent to the Registration & Accreditation service'
+      )
     })
 
-    test('status-push-skipped falls back to "Status not sent to OJ (disabled)"', () => {
+    test('status-push-skipped falls back to "Status not sent to the Registration & Accreditation service (disabled)"', () => {
       const [decorated] = decorateAuditLog([
         { action: 'status-push-skipped', details: {} }
       ])
       expect(decorated.actionDisplayName).toBe(
-        'Status not sent to OJ (disabled)'
+        'Status not sent to the Registration & Accreditation service (disabled)'
       )
     })
 
-    test('status-push-failed falls back to "Status failed to send to OJ"', () => {
+    test('status-push-failed falls back to "Status failed to send to the Registration & Accreditation service"', () => {
       const [decorated] = decorateAuditLog([
         { action: 'status-push-failed', details: {} }
       ])
-      expect(decorated.actionDisplayName).toBe('Status failed to send to OJ')
+      expect(decorated.actionDisplayName).toBe(
+        'Status failed to send to the Registration & Accreditation service'
+      )
     })
   })
 
@@ -1051,9 +1057,11 @@ describe('OJ status-push audit entries (RA-368)', () => {
       expect(
         summariseAuditEntry({
           action: 'status-push-failed',
-          details: { errorMessage: 'OJ returned 500' }
+          details: {
+            errorMessage: 'Registration & Accreditation service returned 500'
+          }
         })
-      ).toBe('OJ returned 500')
+      ).toBe('Registration & Accreditation service returned 500')
     })
   })
 
@@ -1103,7 +1111,8 @@ describe('OJ status-push audit entries (RA-368)', () => {
           details: {
             actionId: 'approve',
             toStateId: 'approved',
-            errorMessage: 'OJ returned 500\nstatus: ServiceUnavailable'
+            errorMessage:
+              'Registration & Accreditation service returned 500\nstatus: ServiceUnavailable'
           }
         })
       ).toEqual([
@@ -1111,7 +1120,8 @@ describe('OJ status-push audit entries (RA-368)', () => {
         { key: 'New state', value: 'approved' },
         {
           key: 'Error',
-          value: 'OJ returned 500\nstatus: ServiceUnavailable',
+          value:
+            'Registration & Accreditation service returned 500\nstatus: ServiceUnavailable',
           multiline: true
         }
       ])

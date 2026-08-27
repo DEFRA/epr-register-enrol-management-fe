@@ -1073,8 +1073,9 @@ describe('#workItemDetailController', () => {
     // AC3. The reported bug, exactly as screenshotted: a queried
     // re-accreditation showed four green "Resume" buttons over a Withdraw
     // link. The Resume buttons are non-invocable and must not render.
-    // RA-317: Withdraw is an operator action and must not render in CM
-    // either, so a queried item whose only actions are Resume + Withdraw
+    // RA-317: Withdraw is an operator action and must not render in the Case
+    // Management service either, so a queried item whose only actions are
+    // Resume + Withdraw
     // renders NO action affordances at all.
     test('a queried item renders no Resume buttons and no Withdraw link', async () => {
       registerWorkItemType(reAccreditationType)
@@ -1103,8 +1104,9 @@ describe('#workItemDetailController', () => {
 
     // AC4. Same defect, different state and label. Unreachable from the
     // browser, so this is the only place it is pinned. RA-317: Withdraw is
-    // gone from CM too, so an updated item whose only actions are Continue
-    // review + Withdraw renders NO action affordances.
+    // gone from the Case Management service too, so an updated item whose
+    // only actions are Continue review + Withdraw renders NO action
+    // affordances.
     test('an updated item renders no Continue review controls and no Withdraw link', async () => {
       registerWorkItemType(reAccreditationType)
       getWorkItem.mockResolvedValue({
@@ -2637,7 +2639,8 @@ describe('#workItemDetailController', () => {
     test('still renders actions the declaration does NOT mark non-invocable', async () => {
       // Guards against the filter over-reaching into a vacuous pass: the
       // Query link must survive alongside the suppressed decision actions.
-      // RA-317: withdraw is no longer a CM affordance, so the query link is
+      // RA-317: withdraw is no longer a Case Management service affordance,
+      // so the query link is
       // now the survivor that proves the filter does not over-reach.
       registerReaccreditation()
       getWorkItem.mockResolvedValue({
@@ -2784,7 +2787,8 @@ describe('#workItemDetailController', () => {
     // markup, and the "no tasks" message is gone.
 
     // RA-317: the updated-state item's only projected action is Withdraw,
-    // which must NOT render in CM. The Continue review CTA still renders
+    // which must NOT render in the Case Management service. The Continue
+    // review CTA still renders
     // (it is a type-specific affordance, not a projected action), so this
     // now pins "CTA present, withdraw absent".
     test('renders the CTA and does not render the Withdraw link', async () => {

@@ -164,8 +164,8 @@ export const workItems = {
         // RA-317. The withdraw confirmation interstitial (RA-188) GET/POST
         // `/actions/{actionId}/confirm` routes were REMOVED: withdraw is an
         // operator-only action and must not be reachable from Case
-        // Management. They existed solely for the now-deleted CM withdraw
-        // journey. The generic apply-action route above additionally rejects
+        // Management. They existed solely for the now-deleted Case
+        // Management service withdraw journey. The generic apply-action route above additionally rejects
         // any `withdraw`/`withdraw-*` action id server-side (see
         // makeApplyActionController), so a crafted POST cannot withdraw.
         {
