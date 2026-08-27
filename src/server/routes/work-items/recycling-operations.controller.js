@@ -17,6 +17,7 @@ import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { buildCaseHeader, buildCaseTabs } from './case-header.js'
 import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
 import { recyclingOperationLabel } from './recycling-operations.schema.js'
+import { overseasSitesOf } from './overseas-sites.js'
 
 const VIEW = 'work-items/recycling-operations'
 const EM_DASH = '—'
@@ -28,11 +29,6 @@ const EM_DASH = '—'
  * than two separate arbitrary cut-offs.
  */
 const PAGE_SIZE = 20
-
-function overseasSitesOf(workItem) {
-  const sites = workItem?.payload?.overseasSites?.sites
-  return Array.isArray(sites) ? sites : []
-}
 
 /**
  * An overseas site's associated interim site has no legacy flat-address

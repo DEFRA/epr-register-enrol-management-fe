@@ -239,6 +239,50 @@ describe('GET /work-items/{id}/recycling-operations/{siteId}', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toContain('disabled')
   })
+  test('RA-483: returns 404 for a site the operator removed (deselected)', async () => {
+    // The site is still in the payload but is no longer part of the
+    // application, so the edit form must not be reachable by URL — writing
+    // codes back onto a removed site would resurrect it in CM.
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: [anOrsSite({ selected: false })] }
+        }
+      })
+    })
+
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: EDIT_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.notFound)
+  })
+
+  test('RA-483: still serves the form for a site with no selected flag at all', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: [anOrsSite({ operationCodes: ['R5'] })] }
+        }
+      })
+    })
+
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: EDIT_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+  })
 })
 
 describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {

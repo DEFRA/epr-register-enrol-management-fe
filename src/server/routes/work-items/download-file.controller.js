@@ -32,6 +32,13 @@ function findFile(payload, fileId) {
     return fromSamplingPlan
   }
 
+  // RA-483 deliberately does NOT filter deselected sites out here. This is a
+  // lookup by `fileId`, reachable only from a link the summary renders — and
+  // the summary no longer renders a removed site's BES evidence, so no link
+  // to one is offered. Excluding them here would only break any already-
+  // issued link to a file that was legitimately part of the submission, and
+  // buys no access control: per ADR-0005 every caseworker may read every
+  // case's files regardless.
   const sites = payload?.overseasSites?.sites
   if (!Array.isArray(sites)) {
     return undefined
