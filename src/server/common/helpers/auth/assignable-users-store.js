@@ -128,14 +128,11 @@ export async function listAssignableUsers() {
   const users = []
   for (const [id, json] of Object.entries(raw)) {
     const entry = parseEntry(id, json)
-    if (!entry) {
-      continue
-    }
-    if (isExpired(entry)) {
+    if (entry && isExpired(entry)) {
       expiredIds.push(id)
-      continue
+    } else if (entry) {
+      users.push(entry)
     }
-    users.push(entry)
   }
   pruneInBackground(expiredIds)
   return users.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))
