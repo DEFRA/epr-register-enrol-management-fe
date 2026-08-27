@@ -197,4 +197,33 @@ describe('assignable-users-store', () => {
       expect(await findAssignableUserInStore('oid-1')).toBeNull()
     })
   })
+
+  describe('corrupt entries', () => {
+    test('listAssignableUsers skips a corrupt entry and still returns the rest', async () => {
+      fakeClient.hash.set('oid-corrupt', 'not-json{')
+      await upsertAssignableUser({ id: 'oid-good', name: 'Good' })
+
+      const users = await listAssignableUsers()
+
+      expect(users.map((u) => u.id)).toEqual(['oid-good'])
+    })
+
+    test('listAssignableUsers prunes a corrupt entry rather than leaving it to fail every read', async () => {
+      fakeClient.hash.set('oid-corrupt', 'not-json{')
+
+      await listAssignableUsers()
+      await Promise.resolve()
+
+      expect(fakeClient.hdel).toHaveBeenCalledWith(
+        'assignable-users',
+        'oid-corrupt'
+      )
+    })
+
+    test('findAssignableUserInStore returns null for a corrupt entry instead of throwing', async () => {
+      fakeClient.hash.set('oid-corrupt', 'not-json{')
+
+      await expect(findAssignableUserInStore('oid-corrupt')).resolves.toBeNull()
+    })
+  })
 })

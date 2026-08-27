@@ -1,6 +1,9 @@
 import { config } from '#/config/config.js'
 import { buildRedisClient } from '#/server/common/helpers/redis-client.js'
 import { ROLE_STANDARD } from '#/server/common/helpers/auth/auth-scopes.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
+
+const logger = createLogger()
 
 /**
  * RA-446. Real-Entra-ID replacement for the stub assignable-user directory.
@@ -41,6 +44,17 @@ const HASH_KEY = 'assignable-users'
 
 let sharedClient
 
+/**
+ * Opens its own connection rather than reusing the one Hapi's session
+ * cache builds (`cache-engine.js`): that client is constructed once at
+ * server startup and handed to Catbox, which owns its connect/disconnect
+ * lifecycle tied to `server.start()`/`server.stop()` — and it only exists
+ * at all when `session.cache.engine` is `'redis'` (a memory cache engine,
+ * the non-prod default, builds no client). Sharing it properly means
+ * exporting a client from server.js and threading it through both call
+ * sites; a second connection to the same cluster is an accepted tradeoff
+ * for now rather than that larger refactor.
+ */
 function getClient() {
   if (!sharedClient) {
     sharedClient = buildRedisClient(config.get('redis'))
@@ -70,6 +84,22 @@ function pruneInBackground(ids) {
     .catch(() => {})
 }
 
+/**
+ * Parse one hash entry, or `null` on corrupt JSON. A single unparseable
+ * entry must not blank the whole directory for every other user — logged
+ * and pruned (it's unusable garbage, not a legitimate value worth keeping
+ * around to re-fail on every subsequent read) rather than thrown.
+ */
+function parseEntry(id, json) {
+  try {
+    return JSON.parse(json)
+  } catch (err) {
+    logger.warn({ err, id }, 'assignable-users directory entry is corrupt')
+    pruneInBackground([id])
+    return null
+  }
+}
+
 /** Upsert the caller as assignable, refreshing their inactivity window. */
 export async function upsertAssignableUser({ id, name, email, roles }) {
   const entry = {
@@ -97,7 +127,10 @@ export async function listAssignableUsers() {
   const expiredIds = []
   const users = []
   for (const [id, json] of Object.entries(raw)) {
-    const entry = JSON.parse(json)
+    const entry = parseEntry(id, json)
+    if (!entry) {
+      continue
+    }
     if (isExpired(entry)) {
       expiredIds.push(id)
       continue
@@ -108,13 +141,16 @@ export async function listAssignableUsers() {
   return users.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))
 }
 
-/** A single directory entry by id, or `null` if not present/expired. */
+/** A single directory entry by id, or `null` if not present/expired/corrupt. */
 export async function findAssignableUserInStore(id) {
   const raw = await getClient().hget(HASH_KEY, id)
   if (!raw) {
     return null
   }
-  const entry = JSON.parse(raw)
+  const entry = parseEntry(id, raw)
+  if (!entry) {
+    return null
+  }
   if (isExpired(entry)) {
     pruneInBackground([id])
     return null
