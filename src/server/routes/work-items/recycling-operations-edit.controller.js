@@ -30,6 +30,7 @@ import {
   validateRecyclingOperationsForm
 } from './recycling-operations.schema.js'
 import { createRecyclingOperationsService } from './recycling-operations-edit.service.js'
+import { isSiteSelected } from './overseas-sites.js'
 
 const VIEW_PATH = 'work-items/recycling-operations-edit'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -58,9 +59,16 @@ function findSite(workItem, siteId) {
   // OverseasSiteModel.SiteId is a C# int, which round-trips through JSON as
   // a number — a strict === here would never match real seeded/production
   // data (only ever matched the test suite's own string-typed fixtures).
+  // RA-483: a site the operator removed is not on the list this form is
+  // reached from, so it must not be editable by URL either — treat it as
+  // not found rather than serving a form that would write codes back onto
+  // a site no longer part of the application.
   return (
     sites.find(
-      (site) => site?.siteId != null && String(site.siteId) === siteId
+      (site) =>
+        site?.siteId != null &&
+        String(site.siteId) === siteId &&
+        isSiteSelected(site)
     ) ?? null
   )
 }
