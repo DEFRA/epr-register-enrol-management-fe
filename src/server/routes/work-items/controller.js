@@ -14,6 +14,7 @@ import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { config } from '#/config/config.js'
 import { isExporterApplication } from './application-summary.js'
+import { resolveOrganisationId } from './case-header.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -318,6 +319,7 @@ export const workItemListController = {
     }
 
     const filters = readFilters(effectiveQuery, user)
+    const assignableUsers = await getAssignableUsers()
 
     const result = await getWorkItems({
       // RA-299 AC01/15. "Applicant type" and "Application type" are two
@@ -395,10 +397,13 @@ export const workItemListController = {
       sortOptions: buildSortOptions(filters.sort),
       nationOptions: buildNationOptions(filters.nations),
       assigneeFilterOptions: buildAssigneeFilterOptions(filters),
-      assigneeUserOptions: buildAssigneeUserOptions(filters.assigneeUserId),
+      assigneeUserOptions: buildAssigneeUserOptions(
+        filters.assigneeUserId,
+        assignableUsers
+      ),
       // Active-filters block (removable tags) + counts for the collapsible
       // section summaries.
-      activeFilters: buildActiveFilters(filters),
+      activeFilters: buildActiveFilters(filters, assignableUsers),
       filterCounts: buildFilterCounts(filters),
       totalCount,
       page,
@@ -727,7 +732,11 @@ function decorate(item) {
     // `item.id`, so dropping the id fallback here loses no navigation.
     applicationRef: item.payload?.applicationReference ?? null,
     orgName: item.payload?.organisationName ?? null,
-    orgId: item.payload?.operatorOrganisationId ?? null,
+    // RA-503: operatorOrganisationId is ReEx's internal ObjectId for a real operator
+    // submission — never safe to show. resolveOrganisationId prefers operatorOrgNumber and only
+    // falls back to operatorOrganisationId when it is itself genuinely 6-digit numeric (an
+    // admin-created work item). See case-header.js.
+    orgId: resolveOrganisationId(item.payload ?? {}),
     // RA-295 AC06. The operator's registration number on each card. NOTE:
     // this is `registrationNumber` (e.g. "EPR-100999") — deliberately NOT
     // `operatorRegistrationId` (e.g. "reg-008", RA-223's "Registration ID"),
@@ -852,11 +861,11 @@ function buildAssigneeFilterOptions(filters) {
   ]
 }
 
-function buildAssigneeUserOptions(selectedUserId) {
+function buildAssigneeUserOptions(selectedUserId, assignableUsers) {
   const items = [
     { value: '', text: 'Select a user', selected: !selectedUserId }
   ]
-  for (const u of getAssignableUsers()) {
+  for (const u of assignableUsers) {
     items.push({
       value: u.id,
       text: u.name ?? u.id,
@@ -1000,8 +1009,8 @@ function hasActiveFilters(filters) {
   )
 }
 
-function assigneeUserName(userId) {
-  return getAssignableUsers().find((u) => u.id === userId)?.name ?? userId
+function assigneeUserName(userId, assignableUsers) {
+  return assignableUsers.find((u) => u.id === userId)?.name ?? userId
 }
 
 /**
@@ -1058,7 +1067,24 @@ function withoutFilter(filters, key, value) {
  * can revert to the default order without JavaScript (there is no explicit
  * "default" sort radio).
  */
-function buildActiveFilters(filters) {
+/** The "Active filters" chip label for the assignment section, or `null`. */
+function buildAssignmentChipLabel(filters, assignableUsers) {
+  if (!filters.assigneeModeExplicit) {
+    return null
+  }
+  if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
+    return 'Your applications'
+  }
+  if (filters.assigneeMode === ASSIGNEE_FILTER_UNASSIGNED) {
+    return 'Unassigned'
+  }
+  if (filters.assigneeMode === ASSIGNEE_FILTER_USER && filters.assigneeUserId) {
+    return assigneeUserName(filters.assigneeUserId, assignableUsers)
+  }
+  return null
+}
+
+function buildActiveFilters(filters, assignableUsers) {
   // Every value below has already been validated by readFilters against its
   // option list, so the label lookups always resolve — no `?? value` fallback.
   const chips = []
@@ -1096,17 +1122,9 @@ function buildActiveFilters(filters) {
   // selection — the silent "mine" default must not appear as a removable
   // chip (there'd be nothing meaningful to "remove" back to; the user just
   // wouldn't see a chip for the view they're already on).
-  if (filters.assigneeModeExplicit) {
-    if (filters.assigneeMode === ASSIGNEE_FILTER_MINE) {
-      add('assignment', null, 'Your applications')
-    } else if (filters.assigneeMode === ASSIGNEE_FILTER_UNASSIGNED) {
-      add('assignment', null, 'Unassigned')
-    } else if (
-      filters.assigneeMode === ASSIGNEE_FILTER_USER &&
-      filters.assigneeUserId
-    ) {
-      add('assignment', null, assigneeUserName(filters.assigneeUserId))
-    }
+  const assignmentChipLabel = buildAssignmentChipLabel(filters, assignableUsers)
+  if (assignmentChipLabel) {
+    add('assignment', null, assignmentChipLabel)
   }
   if (filters.organisation) {
     add('organisation', filters.organisation, filters.organisation)
