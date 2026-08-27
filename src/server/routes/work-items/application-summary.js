@@ -496,7 +496,7 @@ const ORS_DETAIL_FIELDS = [
   [
     'operation-code',
     'Operation code',
-    (site) => toDisplayLines(site.operationCode)
+    (site) => toDisplayLines(site.operationCodes)
   ],
   ['waste-codes', 'Basel/OECD codes', wasteCodeLines],
   [
@@ -547,7 +547,7 @@ const INTERIM_DETAIL_FIELDS = [
   [
     'operation-code',
     'Operation code',
-    (site) => toDisplayLines(site.operationCode)
+    (site) => toDisplayLines(site.operationCodes)
   ]
 ]
 
