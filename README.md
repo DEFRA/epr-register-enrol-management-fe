@@ -105,42 +105,106 @@ when running in environments that require it.
 
 ## Configuration
 
-Configuration is managed via [`convict`](https://github.com/mozilla/node-convict).
-Notable environment variables for local integration:
+Configuration is managed via [`convict`](https://github.com/mozilla/node-convict) —
+see [`src/config/config.js`](src/config/config.js) for the full schema, and
+[`docs/cdp-deployment.md`](docs/cdp-deployment.md) for the full
+per-environment required-secrets reference.
 
-| Variable                 | Default                 | Description                                                                                                                                                                |
-| ------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                   | `3000`                  | Frontend HTTP port                                                                                                                                                         |
-| `BACKEND_API_URL`        | `http://localhost:8085` | Base URL of the case management backend                                                                                                                                    |
-| `BACKEND_API_TIMEOUT_MS` | `5000`                  | Backend request timeout                                                                                                                                                    |
-| `SESSION_CACHE_ENGINE`   | `memory` (dev)          | `memory` or `redis`. Memory is ephemeral.                                                                                                                                  |
-| `REDIS_HOST`             | `127.0.0.1`             | Used when `SESSION_CACHE_ENGINE=redis`                                                                                                                                     |
-| `AUTH_BASIC_ENABLED`     | `false`                 | Gate the whole app behind HTTP basic auth (e.g. for a preview environment). Requires `BASIC_USER` and `BASIC_PASSWD` — boot fails loudly if either is empty while enabled. |
-| `BASIC_USER`             | _(none)_                | Username for HTTP basic auth                                                                                                                                               |
-| `BASIC_PASSWD`           | _(none)_                | Password for HTTP basic auth                                                                                                                                               |
+### Backend integration
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `3000` | Frontend HTTP port |
+| `BACKEND_API_URL` | `http://localhost:8085` | Base URL of the case management backend |
+| `BACKEND_API_CLIENT_ID` | `frontend` | Sent as `x-cdp-client-id` on every request to the backend |
+| `BACKEND_API_SHARED_SECRET` | _(blank)_ | **Secret.** HMAC-SHA256 key this app signs its outbound calls to `epr-register-enrol-management-be` with — must match management-be's `AUTH_SHARED_SECRET__MANAGEMENT_FE` exactly, and must be *distinct* from `epr-register-enrol-backend`'s own management-be secret (RA-345). Blank locally means signing is a no-op |
+| `BACKEND_API_TIMEOUT_MS` | `5000` | Default backend request timeout |
+| `BACKEND_API_DECISION_TIMEOUT_MS` | `60000` | Timeout for the re-accreditation decision call specifically (RA-410) |
+| `BACKEND_API_APPROVE_TIMEOUT_MS` | `25000` | Timeout for the re-accreditation approve call specifically (RA-448) |
+
+### Session and cache
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SESSION_CACHE_ENGINE` | `memory` (dev) | `memory` or `redis`. Memory is ephemeral |
+| `REDIS_HOST` | `127.0.0.1` | Used when `SESSION_CACHE_ENGINE=redis` |
+| `REDIS_TLS` | `false` | Enables TLS for the Redis connection |
+| `REDIS_USERNAME` | _(none)_ | Required (with `REDIS_PASSWORD`) whenever `REDIS_TLS=true` or `NODE_ENV=production` |
+| `REDIS_PASSWORD` | _(none)_ | **Secret.** Required alongside `REDIS_USERNAME` under the same condition — boot fails loudly if `REDIS_HOST` is still localhost/blank, or either is blank, once that condition applies |
 
 > Session storage uses CatboxMemory by default in development; Redis is
 > only required for production-style local runs (e.g. via Compose). Both
 > are intentionally ephemeral — the frontend holds no persistent data.
 
-> **Production secrets.** `SESSION_COOKIE_PASSWORD` must be set to a
-> unique ≥32-char secret per environment (provisioned via AWS Secrets
-> Manager — see [`docs/cdp-deployment.md`](docs/cdp-deployment.md)). The
-> public placeholder default ships only for local dev convenience; boot
-> fails loudly if it is still in use when `NODE_ENV=production` or
-> `SESSION_COOKIE_SECURE=true`. Likewise, `AUTH_STUB_ENABLED` must be
-> `false` when `ENVIRONMENT=prod` — the stub auth provider auto-authenticates
-> every request and bypasses real OAuth, so boot fails loudly if stub auth is
-> enabled in that environment. It may be set to `true` in other deployed
-> environments (e.g. `dev`, `test`) while real OAuth is being wired up.
+**Production secrets.** `SESSION_COOKIE_PASSWORD` must be set to a
+unique ≥32-char secret per environment (provisioned via AWS Secrets
+Manager — see [`docs/cdp-deployment.md`](docs/cdp-deployment.md)). The
+public placeholder default ships only for local dev convenience; boot
+fails loudly if it is still in use when `NODE_ENV=production` or
+`SESSION_COOKIE_SECURE=true`.
 
-> **HTTP basic auth.** When `AUTH_BASIC_ENABLED=true`, every request must
-> carry an `Authorization: Basic` header matching `BASIC_USER`/`BASIC_PASSWD`,
-> except `/health`, `/favicon.ico`, `/public/**` and the OAuth callback route
-> — see [`basic-auth-plugin.js`](src/server/common/helpers/auth/basic-auth-plugin.js)
-> for the exact exclusion list. This sits in front of, and is independent
-> from, the app's own OAuth/stub auth — it's intended for gating access to a
-> whole preview environment rather than replacing user sign-in.
+### Entra ID (regulator/case-worker sign-in)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ENTRA_CLIENT_ID` | _(blank)_ | **Secret.** Azure Entra ID app registration client ID |
+| `ENTRA_CLIENT_SECRET` | _(blank)_ | **Secret.** Paired client secret |
+| `ENTRA_TENANT_ID` | _(blank)_ | Azure AD tenant ID |
+| `AUTH_CALLBACK_BASE_URL` | `http://localhost:3000` | Base URL used to build the Entra ID OAuth `redirect_uri`. Boot fails loudly outside `environment=local` if this is still the localhost default |
+| `AUTH_STUB_ENABLED` | `true` (non-prod) | Bypasses real OAuth, auto-authenticates as a fixed stub case-worker |
+
+All three Entra values are required at boot in production whenever
+`AUTH_STUB_ENABLED=false`; leave blank for a local run under stub auth.
+Likewise, `AUTH_STUB_ENABLED` must be `false` when `ENVIRONMENT=prod` — the
+stub auth provider auto-authenticates every request and bypasses real
+OAuth, so boot fails loudly if stub auth is enabled in that environment. It
+may be set to `true` in other deployed environments (e.g. `dev`, `test`)
+while real OAuth is being wired up.
+
+### HTTP Basic Auth (preview-environment gate)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `AUTH_BASIC_ENABLED` | `false` | Gate the whole app behind HTTP basic auth (e.g. for a preview environment). Requires `BASIC_USER` and `BASIC_PASSWD` — boot fails loudly if either is empty while enabled |
+| `BASIC_USER` | _(none)_ | Username for HTTP basic auth |
+| `BASIC_PASSWD` | _(none)_ | **Secret.** Password for HTTP basic auth |
+
+**HTTP basic auth.** When `AUTH_BASIC_ENABLED=true`, every request must
+carry an `Authorization: Basic` header matching `BASIC_USER`/`BASIC_PASSWD`,
+except `/health`, `/favicon.ico`, `/public/**` and the OAuth callback route
+— see [`basic-auth-plugin.js`](src/server/common/helpers/auth/basic-auth-plugin.js)
+for the exact exclusion list. This sits in front of, and is independent
+from, the app's own OAuth/stub auth — it's intended for gating access to a
+whole preview environment rather than replacing user sign-in.
+
+### File download and feature flags
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `FILE_UPLOAD_S3_BUCKET` | `epr-register-enrol-file-uploads` | S3 bucket sampling-plan/BES-evidence files are downloaded from — fallback used only when an individual file record has no bucket of its own. Must match `epr-register-enrol-frontend`'s own `FILE_UPLOAD_S3_BUCKET` |
+| `WORK_ITEM_CREATION_ENABLED` | `true` | Feature flag (RA-127) gating the demo "create a work item" form and button. When off, those routes aren't mounted (404) |
+
+> `WORK_ITEM_CREATION_ENABLED` currently defaults to `true` in **every**
+> environment, including production — [`docs/cdp-deployment.md`](docs/cdp-deployment.md)
+> currently states it defaults to `false` in production, which no longer
+> matches `src/config/config.js` (there's no environment-conditional branch
+> there). Worth reconciling that doc against the code: as written today the
+> demo flow is on in prod unless something outside this repo's visibility
+> (AWS Secrets Manager) overrides it.
+
+### Example local/testing values
+
+```bash
+BACKEND_API_SHARED_SECRET=local-dev-backend-shared-secret-not-real
+ENTRA_CLIENT_ID=local-dev-entra-client-id
+ENTRA_CLIENT_SECRET=local-dev-fake-entra-secret
+ENTRA_TENANT_ID=00000000-0000-0000-0000-000000000000
+SESSION_COOKIE_PASSWORD=the-password-must-be-at-least-32-characters-long
+FILE_UPLOAD_S3_BUCKET=epr-register-enrol-file-uploads
+```
+
+`AUTH_STUB_ENABLED=true` (the local default) makes the Entra ID values
+above irrelevant for a plain local run.
 
 See [`src/config/config.js`](src/config/config.js) for the full schema.
 
