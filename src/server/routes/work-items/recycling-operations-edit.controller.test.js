@@ -9,7 +9,6 @@ import {
 } from '#/server/work-items/core/registry.js'
 import {
   ACCOMPANYING_CODE_MESSAGE,
-  INTERIM_SITE_REQUIRED_MESSAGE,
   SELECT_CODES_MESSAGE
 } from './recycling-operations.schema.js'
 
@@ -239,6 +238,50 @@ describe('GET /work-items/{id}/recycling-operations/{siteId}', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toContain('disabled')
   })
+  test('RA-483: returns 404 for a site the operator removed (deselected)', async () => {
+    // The site is still in the payload but is no longer part of the
+    // application, so the edit form must not be reachable by URL — writing
+    // codes back onto a removed site would resurrect it in CM.
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: [anOrsSite({ selected: false })] }
+        }
+      })
+    })
+
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: EDIT_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.notFound)
+  })
+
+  test('RA-483: still serves the form for a site with no selected flag at all', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        payload: {
+          applicationReference: 'RA-000000001',
+          material: 'glass',
+          overseasSites: { sites: [anOrsSite({ operationCodes: ['R5'] })] }
+        }
+      })
+    })
+
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: EDIT_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+  })
 })
 
 describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {
@@ -297,7 +340,11 @@ describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {
     expect(updateRecyclingOperations).not.toHaveBeenCalled()
   })
 
-  test('AC11: R12 on a site with no interim site re-renders with a distinct clear error', async () => {
+  // RA-486: R12/R13 no longer require an associated interim site — that
+  // coupling moved to the interim site's own (display-only, on this side)
+  // codes. Submitting R12/R13 on an ORS with NO interim site at all is now
+  // accepted, as long as it is not alone (AC10 still applies).
+  test('RA-486: accepts R12 on a site with no interim site at all', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
@@ -310,12 +357,17 @@ describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {
         }
       })
     })
+    updateRecyclingOperations.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem()
+    })
 
-    const { statusCode, result } = await postCodes(server, ['R5', 'R12'])
+    const { statusCode } = await postCodes(server, ['R5', 'R12'])
 
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toContain(INTERIM_SITE_REQUIRED_MESSAGE)
-    expect(updateRecyclingOperations).not.toHaveBeenCalled()
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(updateRecyclingOperations).toHaveBeenCalledWith(
+      expect.objectContaining({ operationCodes: ['R5', 'R12'] })
+    )
   })
 
   test('accepts R12 when the site has an associated interim site', async () => {

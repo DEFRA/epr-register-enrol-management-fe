@@ -4,6 +4,7 @@ import {
   getSitePostcode
 } from '#/server/common/helpers/format/site-address.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
+import { overseasSitesOf } from './overseas-sites.js'
 
 /**
  * Application information view model (RA-295 AC02).
@@ -134,11 +135,6 @@ export function deriveSiteAddressLines(payload, registeredAddress) {
 export function deriveSiteAddress(payload, registeredAddress) {
   const lines = deriveSiteAddressLines(payload, registeredAddress)
   return lines.length > 0 ? lines.join(', ') : null
-}
-
-function overseasSitesOf(workItem) {
-  const sites = workItem?.payload?.overseasSites?.sites
-  return Array.isArray(sites) ? sites : []
 }
 
 export function tonnageBandLabel(band) {
@@ -496,7 +492,7 @@ const ORS_DETAIL_FIELDS = [
   [
     'operation-code',
     'Operation code',
-    (site) => toDisplayLines(site.operationCode)
+    (site) => toDisplayLines(site.operationCodes)
   ],
   ['waste-codes', 'Basel/OECD codes', wasteCodeLines],
   [
@@ -519,10 +515,14 @@ const ORS_DETAIL_FIELDS = [
 ]
 
 /**
- * AC04, interim half. A shorter list than the ORS one because the interim
- * site carries no operation/waste codes — it is a staging point, not a
- * reprocessor. It does carry `stateOrRegion` and `postcode`, which the ORS
- * shape does not.
+ * AC04, interim half. Shorter than the ORS list, but RA-486 gives the
+ * interim site its own operation codes (mandatory R12/R13, optional
+ * R3/R4/R5, inherited material) — mirrored here as a single display-only
+ * `operation-code` field, same key/label/reader shape as the ORS list's own
+ * entry. There is no edit capability for these on the regulator side (see
+ * `recycling-operations.controller.js`'s `hasAccompanimentCode` removal) —
+ * this tab only ever displays whatever the interim site carries. It does
+ * carry `stateOrRegion` and `postcode`, which the ORS shape does not.
  */
 const INTERIM_DETAIL_FIELDS = [
   // `address` is deliberately absent — like the ORS, it renders as its own
@@ -539,6 +539,11 @@ const INTERIM_DETAIL_FIELDS = [
     'contact-phone',
     'Contact phone',
     (site) => toDisplayLines(site.contactPhone)
+  ],
+  [
+    'operation-code',
+    'Operation code',
+    (site) => toDisplayLines(site.operationCodes)
   ]
 ]
 
@@ -638,6 +643,8 @@ export function buildApplicationSummary({ workItem }) {
   const samplingFiles = Array.isArray(payload.samplingPlan?.files)
     ? payload.samplingPlan.files
     : []
+  // RA-483: operator-removed (deselected) sites are excluded here, so BOTH
+  // the BES row and the ORS row below skip them — see `overseas-sites.js`.
   const overseasSites = overseasSitesOf(workItem)
   // CM2. Mirrors the "Additional information" tab's registered-address
   // computation, so both tabs' site-address rows resolve to exactly the

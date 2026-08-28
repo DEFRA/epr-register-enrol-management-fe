@@ -17,6 +17,7 @@ import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { buildCaseHeader, buildCaseTabs } from './case-header.js'
 import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
 import { recyclingOperationLabel } from './recycling-operations.schema.js'
+import { overseasSitesOf } from './overseas-sites.js'
 
 const VIEW = 'work-items/recycling-operations'
 const EM_DASH = '—'
@@ -28,11 +29,6 @@ const EM_DASH = '—'
  * than two separate arbitrary cut-offs.
  */
 const PAGE_SIZE = 20
-
-function overseasSitesOf(workItem) {
-  const sites = workItem?.payload?.overseasSites?.sites
-  return Array.isArray(sites) ? sites : []
-}
 
 /**
  * An overseas site's associated interim site has no legacy flat-address
@@ -75,20 +71,14 @@ function lastEditedOf(site) {
   }
 }
 
-/**
- * AC6: the interim site's name is shown only when the site carries R12 or
- * R13 — those two codes are the only ones that describe an operation
- * performed in relation to an associated interim site (see
- * `recycling-operations.schema.js`'s `CODES_REQUIRING_ACCOMPANIMENT`).
- */
-function hasAccompanimentCode(codes) {
-  return codes.some((code) => code === 'R12' || code === 'R13')
-}
-
 /** One overseas site's Recycling operations row view model. */
 export function buildRecyclingOperationsSite(site, workItemId) {
   const codes = Array.isArray(site?.operationCodes) ? site.operationCodes : []
-  const showInterimSite = hasAccompanimentCode(codes) && site?.interimSite
+  // RA-486: R12/R13 are no longer coupled to an interim site — an ORS can
+  // carry R12/R13 without one, and an interim site now carries its own
+  // codes independently. So the interim-site line is shown whenever the
+  // site HAS an associated interim site, regardless of the ORS's own codes.
+  const showInterimSite = Boolean(site?.interimSite)
 
   return {
     siteId: site?.siteId ?? null,

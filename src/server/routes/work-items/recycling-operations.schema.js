@@ -50,9 +50,13 @@ export const CODES_BY_MATERIAL_TYPE = {
 }
 
 /**
- * R12/R13 describe an operation performed in relation to an associated
- * interim site and can never be selected without at least one of R3/R4/R5
- * (an operation performed at the ORS itself) alongside them.
+ * RA-486: R3/R4/R5 (whichever apply to the site's material type) are the
+ * ORS's own mandatory codes; R12/R13 are optional additions and can never be
+ * selected without at least one of R3/R4/R5 alongside them. Previously R12/
+ * R13 also required an associated interim site (AC11) — RA-486 decouples
+ * that: an interim site now carries its own mandatory R12/R13 independently,
+ * display-only on this (regulator-facing) side, so the ORS's own R12/R13 no
+ * longer needs one. This set only drives the "not alone" rule below.
  */
 export const CODES_REQUIRING_ACCOMPANIMENT = new Set(['R12', 'R13'])
 
@@ -81,11 +85,6 @@ export function requiresAccompanyingCode(codes) {
   return hasAccompanimentCode && !hasOtherCode
 }
 
-/** AC11: true when the submitted codes include R12/R13 but the site has no interim site. */
-export function requiresInterimSite(codes) {
-  return codes.some((c) => CODES_REQUIRING_ACCOMPANIMENT.has(c))
-}
-
 /**
  * A checkbox group posts a bare string when one box is ticked and an array
  * when several are, and nothing at all when none are. Normalise defensively
@@ -104,8 +103,6 @@ export function normaliseCodes(raw) {
 export const SELECT_CODES_MESSAGE = 'Select at least one recycling operation'
 export const ACCOMPANYING_CODE_MESSAGE =
   'R12 and R13 cannot be selected on their own — select at least one other applicable recycling operation as well'
-export const INTERIM_SITE_REQUIRED_MESSAGE =
-  'R12 and R13 can only be selected for a site with an associated interim site'
 
 export const recyclingOperationsFormSchema = Joi.object({
   codes: Joi.array()
@@ -153,10 +150,15 @@ export function buildErrorSummary(fieldErrors) {
   return items.length === 0 ? null : { titleText: 'There is a problem', items }
 }
 
-// AC9-AC11, checked in order (first match wins) - split out of
+// AC9-AC10, checked in order (first match wins) - split out of
 // validateRecyclingOperationsForm to keep that function's own cyclomatic
 // complexity under the lint threshold.
-function codesFieldError(codes, { applicableCodes, hasInterimSite }) {
+//
+// RA-486 removed the former AC11 check here ("R12/R13 for a site with no
+// associated interim site") — R12/R13 are no longer coupled to an interim
+// site on the ORS's own codes; an interim site now carries its own separate
+// R12/R13, display-only on this (regulator-facing) side.
+function codesFieldError(codes, { applicableCodes }) {
   // AC9: a code outside the application's material-type set is invalid,
   // same message as "select at least one" since the form never offered it.
   if (codes.length > 0 && !codes.every((c) => applicableCodes.includes(c))) {
@@ -166,11 +168,6 @@ function codesFieldError(codes, { applicableCodes, hasInterimSite }) {
   // AC10: R12/R13 alone, with no R3/R4/R5 alongside.
   if (requiresAccompanyingCode(codes)) {
     return ACCOMPANYING_CODE_MESSAGE
-  }
-
-  // AC11: R12/R13 for a site with no associated interim site.
-  if (!hasInterimSite && requiresInterimSite(codes)) {
-    return INTERIM_SITE_REQUIRED_MESSAGE
   }
 
   return null
@@ -183,17 +180,15 @@ function codesFieldError(codes, { applicableCodes, hasInterimSite }) {
  * @param {object} [options]
  * @param {string[]} [options.applicableCodes] - the codes offered for this
  *   application's material type (AC9). Defaults to the full set when
- *   omitted. A submitted code outside this set is rejected (AC10-AC12 sit
- *   downstream of this — a code the form never offered cannot reach them).
- * @param {boolean} [options.hasInterimSite=false] - AC11: whether the site
- *   has an associated interim site. R12/R13 are rejected without one.
+ *   omitted. A submitted code outside this set is rejected (AC10 sits
+ *   downstream of this — a code the form never offered cannot reach it).
  * @returns {{ ok: true, value: { codes: string[] } }
  *          | { ok: false, fieldErrors: Record<string,string>,
  *              values: { codes: string[] } }}
  */
 export function validateRecyclingOperationsForm(
   payload,
-  { applicableCodes = ALL_CODES, hasInterimSite = false } = {}
+  { applicableCodes = ALL_CODES } = {}
 ) {
   const codes = normaliseCodes(payload?.codes)
   const values = { codes }
@@ -206,10 +201,7 @@ export function validateRecyclingOperationsForm(
   const fieldErrors = error ? joiDetailsToFieldErrors(error.details) : {}
 
   if (!fieldErrors.codes) {
-    const codesError = codesFieldError(codes, {
-      applicableCodes,
-      hasInterimSite
-    })
+    const codesError = codesFieldError(codes, { applicableCodes })
     if (codesError) {
       fieldErrors.codes = codesError
     }
