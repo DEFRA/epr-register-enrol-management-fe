@@ -112,25 +112,25 @@ per-environment required-secrets reference.
 
 ### Backend integration
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `PORT` | `3000` | Frontend HTTP port |
-| `BACKEND_API_URL` | `http://localhost:8085` | Base URL of the case management backend |
-| `BACKEND_API_CLIENT_ID` | `frontend` | Sent as `x-cdp-client-id` on every request to the backend |
-| `BACKEND_API_SHARED_SECRET` | _(blank)_ | **Secret.** HMAC-SHA256 key this app signs its outbound calls to `epr-register-enrol-management-be` with — must match management-be's `AUTH_SHARED_SECRET__MANAGEMENT_FE` exactly, and must be *distinct* from `epr-register-enrol-backend`'s own management-be secret (RA-345). Blank locally means signing is a no-op |
-| `BACKEND_API_TIMEOUT_MS` | `5000` | Default backend request timeout |
-| `BACKEND_API_DECISION_TIMEOUT_MS` | `60000` | Timeout for the re-accreditation decision call specifically (RA-410) |
-| `BACKEND_API_APPROVE_TIMEOUT_MS` | `25000` | Timeout for the re-accreditation approve call specifically (RA-448) |
+| Variable                          | Default                 | Description                                                                                                                                                                                                                                                                                                             |
+| --------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                            | `3000`                  | Frontend HTTP port                                                                                                                                                                                                                                                                                                      |
+| `BACKEND_API_URL`                 | `http://localhost:8085` | Base URL of the case management backend                                                                                                                                                                                                                                                                                 |
+| `BACKEND_API_CLIENT_ID`           | `frontend`              | Sent as `x-cdp-client-id` on every request to the backend                                                                                                                                                                                                                                                               |
+| `BACKEND_API_SHARED_SECRET`       | _(blank)_               | **Secret.** HMAC-SHA256 key this app signs its outbound calls to `epr-register-enrol-management-be` with — must match management-be's `AUTH_SHARED_SECRET__MANAGEMENT_FE` exactly, and must be _distinct_ from `epr-register-enrol-backend`'s own management-be secret (RA-345). Blank locally means signing is a no-op |
+| `BACKEND_API_TIMEOUT_MS`          | `5000`                  | Default backend request timeout                                                                                                                                                                                                                                                                                         |
+| `BACKEND_API_DECISION_TIMEOUT_MS` | `60000`                 | Timeout for the re-accreditation decision call specifically (RA-410)                                                                                                                                                                                                                                                    |
+| `BACKEND_API_APPROVE_TIMEOUT_MS`  | `25000`                 | Timeout for the re-accreditation approve call specifically (RA-448)                                                                                                                                                                                                                                                     |
 
 ### Session and cache
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `SESSION_CACHE_ENGINE` | `memory` (dev) | `memory` or `redis`. Memory is ephemeral |
-| `REDIS_HOST` | `127.0.0.1` | Used when `SESSION_CACHE_ENGINE=redis` |
-| `REDIS_TLS` | `false` | Enables TLS for the Redis connection |
-| `REDIS_USERNAME` | _(none)_ | Required (with `REDIS_PASSWORD`) whenever `REDIS_TLS=true` or `NODE_ENV=production` |
-| `REDIS_PASSWORD` | _(none)_ | **Secret.** Required alongside `REDIS_USERNAME` under the same condition — boot fails loudly if `REDIS_HOST` is still localhost/blank, or either is blank, once that condition applies |
+| Variable               | Default        | Description                                                                                                                                                                            |
+| ---------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SESSION_CACHE_ENGINE` | `memory` (dev) | `memory` or `redis`. Memory is ephemeral                                                                                                                                               |
+| `REDIS_HOST`           | `127.0.0.1`    | Used when `SESSION_CACHE_ENGINE=redis`                                                                                                                                                 |
+| `REDIS_TLS`            | `false`        | Enables TLS for the Redis connection                                                                                                                                                   |
+| `REDIS_USERNAME`       | _(none)_       | Required (with `REDIS_PASSWORD`) whenever `REDIS_TLS=true` or `NODE_ENV=production`                                                                                                    |
+| `REDIS_PASSWORD`       | _(none)_       | **Secret.** Required alongside `REDIS_USERNAME` under the same condition — boot fails loudly if `REDIS_HOST` is still localhost/blank, or either is blank, once that condition applies |
 
 > Session storage uses CatboxMemory by default in development; Redis is
 > only required for production-style local runs (e.g. via Compose). Both
@@ -145,13 +145,13 @@ fails loudly if it is still in use when `NODE_ENV=production` or
 
 ### Entra ID (regulator/case-worker sign-in)
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `ENTRA_CLIENT_ID` | _(blank)_ | **Secret.** Azure Entra ID app registration client ID |
-| `ENTRA_CLIENT_SECRET` | _(blank)_ | **Secret.** Paired client secret |
-| `ENTRA_TENANT_ID` | _(blank)_ | Azure AD tenant ID |
+| Variable                 | Default                 | Description                                                                                                                                    |
+| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ENTRA_CLIENT_ID`        | _(blank)_               | **Secret.** Azure Entra ID app registration client ID                                                                                          |
+| `ENTRA_CLIENT_SECRET`    | _(blank)_               | **Secret.** Paired client secret                                                                                                               |
+| `ENTRA_TENANT_ID`        | _(blank)_               | Azure AD tenant ID                                                                                                                             |
 | `AUTH_CALLBACK_BASE_URL` | `http://localhost:3000` | Base URL used to build the Entra ID OAuth `redirect_uri`. Boot fails loudly outside `environment=local` if this is still the localhost default |
-| `AUTH_STUB_ENABLED` | `true` (non-prod) | Bypasses real OAuth, auto-authenticates as a fixed stub case-worker |
+| `AUTH_STUB_ENABLED`      | `true` (non-prod)       | Bypasses real OAuth, auto-authenticates as a fixed stub case-worker                                                                            |
 
 All three Entra values are required at boot in production whenever
 `AUTH_STUB_ENABLED=false`; leave blank for a local run under stub auth.
@@ -163,11 +163,11 @@ while real OAuth is being wired up.
 
 ### HTTP Basic Auth (preview-environment gate)
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `AUTH_BASIC_ENABLED` | `false` | Gate the whole app behind HTTP basic auth (e.g. for a preview environment). Requires `BASIC_USER` and `BASIC_PASSWD` — boot fails loudly if either is empty while enabled |
-| `BASIC_USER` | _(none)_ | Username for HTTP basic auth |
-| `BASIC_PASSWD` | _(none)_ | **Secret.** Password for HTTP basic auth |
+| Variable             | Default  | Description                                                                                                                                                               |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_BASIC_ENABLED` | `false`  | Gate the whole app behind HTTP basic auth (e.g. for a preview environment). Requires `BASIC_USER` and `BASIC_PASSWD` — boot fails loudly if either is empty while enabled |
+| `BASIC_USER`         | _(none)_ | Username for HTTP basic auth                                                                                                                                              |
+| `BASIC_PASSWD`       | _(none)_ | **Secret.** Password for HTTP basic auth                                                                                                                                  |
 
 **HTTP basic auth.** When `AUTH_BASIC_ENABLED=true`, every request must
 carry an `Authorization: Basic` header matching `BASIC_USER`/`BASIC_PASSWD`,
@@ -179,10 +179,10 @@ whole preview environment rather than replacing user sign-in.
 
 ### File download and feature flags
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `FILE_UPLOAD_S3_BUCKET` | `epr-register-enrol-file-uploads` | S3 bucket sampling-plan/BES-evidence files are downloaded from — fallback used only when an individual file record has no bucket of its own. Must match `epr-register-enrol-frontend`'s own `FILE_UPLOAD_S3_BUCKET` |
-| `WORK_ITEM_CREATION_ENABLED` | `true` | Feature flag (RA-127) gating the demo "create a work item" form and button. When off, those routes aren't mounted (404) |
+| Variable                     | Default                           | Description                                                                                                                                                                                                         |
+| ---------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FILE_UPLOAD_S3_BUCKET`      | `epr-register-enrol-file-uploads` | S3 bucket sampling-plan/BES-evidence files are downloaded from — fallback used only when an individual file record has no bucket of its own. Must match `epr-register-enrol-frontend`'s own `FILE_UPLOAD_S3_BUCKET` |
+| `WORK_ITEM_CREATION_ENABLED` | `true`                            | Feature flag (RA-127) gating the demo "create a work item" form and button. When off, those routes aren't mounted (404)                                                                                             |
 
 > `WORK_ITEM_CREATION_ENABLED` currently defaults to `true` in **every**
 > environment, including production — [`docs/cdp-deployment.md`](docs/cdp-deployment.md)
