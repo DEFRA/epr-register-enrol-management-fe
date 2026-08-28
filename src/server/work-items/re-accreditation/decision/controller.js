@@ -85,7 +85,11 @@ function breadcrumbs(id, ref) {
   return [
     { text: 'Work items', href: WORK_ITEMS_HREF },
     { text: ref ?? 'Work item', href: detailHref(id) },
-    { text: 'Log decision' }
+    // RA-505: the current-page crumb mirrors the page's H1 ("Make
+    // determination for this application"), NOT the "Log decision" CTA on the
+    // detail page that navigates here. Both renders of this page — the initial
+    // GET and the validation-error re-render — share this single helper.
+    { text: 'Make determination' }
   ]
 }
 
