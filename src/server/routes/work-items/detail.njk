@@ -324,54 +324,63 @@
                 {# an ORS rather than standing beside it, and the nesting is  #}
                 {# what tells a regulator which ORS a given interim site      #}
                 {# serves when an application declares several.               #}
+                {# Wrapped in a native <details> per site (collapsed by       #}
+                {# default) so a regulator scanning an application with many  #}
+                {# sites sees just the name list first, expanding one at a    #}
+                {# time rather than scrolling past every field of every site. #}
                 {% for site in row.sites %}
-                  <div class="govuk-!-margin-bottom-4" data-testid="overseas-site">
-                    {# Name line then address line — the design's shape. The  #}
-                    {# `NEW:` prefix is nested INSIDE the name element, so    #}
-                    {# that element's text is the full "NEW: <name>" string   #}
-                    {# and a prefix assertion scoped to it cannot be          #}
-                    {# satisfied by a nested interim site's prefix.           #}
-                    <p class="govuk-body govuk-!-margin-bottom-1"
-                       data-testid="overseas-site-name">
-                      <strong>{% if site.isNew %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>
-                    </p>
-                    {# One flowing comma-separated line, per the design — and #}
-                    {# ONE element, so an e2e assertion reads the whole       #}
-                    {# address rather than silently matching its first part.  #}
-                    {# The parts stay an array until here precisely so the    #}
-                    {# de-duplication can work segment-wise; see              #}
-                    {# `appendUnseen` in application-summary.js.              #}
-                    {% if site.addressLines.length %}
-                      <p class="govuk-body govuk-!-margin-bottom-1"
-                         data-testid="overseas-site-address">{{ site.addressLines | join(', ') }}</p>
-                    {% endif %}
-                    {{ siteDetails(site.details, 'overseas-site') }}
-                    {% if site.interimSite %}
-                      <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-0"
-                           data-testid="interim-site">
-                        {# Sub-label per the design, on its own line above  #}
-                        {# the site name. The PLURAL is deliberate and        #}
-                        {# matches the mockup, confirmed with Tom, even       #}
-                        {# though the data model allows at most one interim   #}
-                        {# site per ORS and it reads slightly oddly with a    #}
-                        {# single child. Do not "correct" it to singular.     #}
-                        {# It carries no testid: the e2e suite reads          #}
-                        {# `interim-site-name` for the name line, and putting #}
-                        {# the label inside that element would push `NEW: `   #}
-                        {# off position 0 and break its prefix check.         #}
-                        <p class="govuk-body govuk-!-margin-bottom-1"><strong>Interim sites</strong></p>
+                  <details class="govuk-details govuk-!-margin-bottom-2" data-testid="overseas-site">
+                    <summary class="govuk-details__summary">
+                      {# Name line — the design's shape, now doubling as the  #}
+                      {# details summary. The `NEW:` prefix is nested INSIDE  #}
+                      {# the name element, so that element's text is the full #}
+                      {# "NEW: <name>" string and a prefix assertion scoped   #}
+                      {# to it cannot be satisfied by a nested interim site's #}
+                      {# prefix.                                              #}
+                      <p class="govuk-details__summary-text govuk-!-margin-bottom-0"
+                         data-testid="overseas-site-name">
+                        <strong>{% if site.isNew %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>
+                      </p>
+                    </summary>
+                    <div class="govuk-details__text">
+                      {# One flowing comma-separated line, per the design — and #}
+                      {# ONE element, so an e2e assertion reads the whole       #}
+                      {# address rather than silently matching its first part.  #}
+                      {# The parts stay an array until here precisely so the    #}
+                      {# de-duplication can work segment-wise; see              #}
+                      {# `appendUnseen` in application-summary.js.              #}
+                      {% if site.addressLines.length %}
                         <p class="govuk-body govuk-!-margin-bottom-1"
-                           data-testid="interim-site-name">
-                          <strong>{% if site.interimSite.isNew %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ site.interimSite.siteName }}</strong>
-                        </p>
-                        {% if site.interimSite.addressLines.length %}
+                           data-testid="overseas-site-address">{{ site.addressLines | join(', ') }}</p>
+                      {% endif %}
+                      {{ siteDetails(site.details, 'overseas-site') }}
+                      {% if site.interimSite %}
+                        <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-0"
+                             data-testid="interim-site">
+                          {# Sub-label per the design, on its own line above  #}
+                          {# the site name. The PLURAL is deliberate and        #}
+                          {# matches the mockup, confirmed with Tom, even       #}
+                          {# though the data model allows at most one interim   #}
+                          {# site per ORS and it reads slightly oddly with a    #}
+                          {# single child. Do not "correct" it to singular.     #}
+                          {# It carries no testid: the e2e suite reads          #}
+                          {# `interim-site-name` for the name line, and putting #}
+                          {# the label inside that element would push `NEW: `   #}
+                          {# off position 0 and break its prefix check.         #}
+                          <p class="govuk-body govuk-!-margin-bottom-1"><strong>Interim sites</strong></p>
                           <p class="govuk-body govuk-!-margin-bottom-1"
-                             data-testid="interim-site-address">{{ site.interimSite.addressLines | join(', ') }}</p>
-                        {% endif %}
-                        {{ siteDetails(site.interimSite.details, 'interim-site') }}
-                      </div>
-                    {% endif %}
-                  </div>
+                             data-testid="interim-site-name">
+                            <strong>{% if site.interimSite.isNew %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ site.interimSite.siteName }}</strong>
+                          </p>
+                          {% if site.interimSite.addressLines.length %}
+                            <p class="govuk-body govuk-!-margin-bottom-1"
+                               data-testid="interim-site-address">{{ site.interimSite.addressLines | join(', ') }}</p>
+                          {% endif %}
+                          {{ siteDetails(site.interimSite.details, 'interim-site') }}
+                        </div>
+                      {% endif %}
+                    </div>
+                  </details>
                 {% else %}
                   —
                 {% endfor %}
