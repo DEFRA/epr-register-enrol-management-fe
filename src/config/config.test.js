@@ -361,7 +361,8 @@ describe('config production hardening', () => {
 describe('config backend API decision timeout (RA-410)', () => {
   const originalEnv = process.env
 
-  // be's worst-case OJ-push retry budget, in ms. The default decision
+  // be's worst-case Registration & Accreditation service-push retry budget,
+  // in ms. The default decision
   // timeout MUST clear this with margin.
   const BE_WORST_CASE_RETRY_BUDGET_MS = 28000
 

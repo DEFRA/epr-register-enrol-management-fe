@@ -1352,7 +1352,7 @@ describe('RA-292 backwards compatibility (pre-story work items)', () => {
 
 describe('#buildApplicationSummary removed overseas sites (RA-483)', () => {
   // The operator journey "removes" an ORS by DESELECTING it — the site stays
-  // in the payload with `selected: false` — so CM kept rendering it, with
+  // in the payload with `selected: false` — so the Case Management service kept rendering it, with
   // nothing to say it was gone. Both the BES row and the ORS row read the
   // same filtered list, so neither can drift back into showing one.
   function summariseSites(sites) {

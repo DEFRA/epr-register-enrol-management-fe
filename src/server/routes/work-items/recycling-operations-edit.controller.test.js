@@ -241,7 +241,7 @@ describe('GET /work-items/{id}/recycling-operations/{siteId}', () => {
   test('RA-483: returns 404 for a site the operator removed (deselected)', async () => {
     // The site is still in the payload but is no longer part of the
     // application, so the edit form must not be reachable by URL — writing
-    // codes back onto a removed site would resurrect it in CM.
+    // codes back onto a removed site would resurrect it in the Case Management service.
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,

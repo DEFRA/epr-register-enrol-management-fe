@@ -56,7 +56,8 @@ export function realOperatorSubmissionPayload() {
     },
     // RA-480. The original registration submitter's contact details, as
     // captured by ReEx at registration time — distinct from `submittedBy`
-    // above (captured at CM submit time, a different person).
+    // above (captured at Case Management service submit time, a different
+    // person).
     submitterContactDetails: {
       fullName: 'Barton Deckow',
       email: 'REEXServiceTeam@defra.gov.uk',
