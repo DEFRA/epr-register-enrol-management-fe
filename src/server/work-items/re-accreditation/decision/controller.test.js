@@ -41,6 +41,17 @@ beforeEach(() => {
 const DETAIL_HREF = '/work-items/wi-1'
 const DECISION_HREF = '/work-items/re-accreditation/wi-1/decision'
 
+// RA-505. The final crumb mirrors this page's H1 ("Make determination for this
+// application"), NOT the "Log decision" CTA on the detail page that navigates
+// here — those are deliberately different strings. Asserted on EVERY render of
+// the page (initial GET and validation-error re-render) so the two cannot
+// drift apart.
+const EXPECTED_BREADCRUMBS = [
+  { text: 'Work items', href: '/work-items' },
+  { text: 'RA-REF-001', href: DETAIL_HREF },
+  { text: 'Make determination' }
+]
+
 function aDecidableWorkItem(overrides = {}) {
   return {
     id: 'wi-1',
@@ -87,7 +98,8 @@ describe('makeShowDecisionController', () => {
         formAction: DECISION_HREF,
         cancelHref: DETAIL_HREF,
         values: { decision: null, decisionNote: '' },
-        errorSummary: null
+        errorSummary: null,
+        breadcrumbs: EXPECTED_BREADCRUMBS
       })
     )
   })
@@ -261,6 +273,9 @@ describe('makeSubmitDecisionController', () => {
       expect.objectContaining({
         // The note must come back — it is the thing they need to shorten.
         values: { decision: 'approved', decisionNote: longNote },
+        // RA-505: the re-render is still the same page, so it keeps the same
+        // trail — this is the path a regression is most likely to miss.
+        breadcrumbs: EXPECTED_BREADCRUMBS,
         errorSummary: {
           titleText: 'There is a problem',
           items: [

@@ -71,20 +71,14 @@ function lastEditedOf(site) {
   }
 }
 
-/**
- * AC6: the interim site's name is shown only when the site carries R12 or
- * R13 — those two codes are the only ones that describe an operation
- * performed in relation to an associated interim site (see
- * `recycling-operations.schema.js`'s `CODES_REQUIRING_ACCOMPANIMENT`).
- */
-function hasAccompanimentCode(codes) {
-  return codes.some((code) => code === 'R12' || code === 'R13')
-}
-
 /** One overseas site's Recycling operations row view model. */
 export function buildRecyclingOperationsSite(site, workItemId) {
   const codes = Array.isArray(site?.operationCodes) ? site.operationCodes : []
-  const showInterimSite = hasAccompanimentCode(codes) && site?.interimSite
+  // RA-486: R12/R13 are no longer coupled to an interim site — an ORS can
+  // carry R12/R13 without one, and an interim site now carries its own
+  // codes independently. So the interim-site line is shown whenever the
+  // site HAS an associated interim site, regardless of the ORS's own codes.
+  const showInterimSite = Boolean(site?.interimSite)
 
   return {
     siteId: site?.siteId ?? null,

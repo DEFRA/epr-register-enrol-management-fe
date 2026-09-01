@@ -3949,7 +3949,7 @@ describe('RA-295 individual work item page', () => {
     contactName: 'Johan de Vries',
     contactEmail: 'johan@example.com',
     contactPhone: '+31 10 123 4567',
-    operationCode: 'R3',
+    operationCodes: ['R3'],
     code1: 'B3011',
     code2: 'GH013',
     code3: 'Y48',
@@ -4145,7 +4145,7 @@ describe('RA-295 individual work item page', () => {
   test('RA-292 AC02: renders the "Interim sites" sub-label', async () => {
     const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
     const interimIdx = ors.indexOf('data-testid="interim-site"')
-    expect(ors.slice(interimIdx, interimIdx + 400)).toContain(
+    expect(ors.slice(interimIdx, interimIdx + 600)).toContain(
       '<strong>Interim sites</strong>'
     )
   })
