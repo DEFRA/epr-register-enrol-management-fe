@@ -390,9 +390,21 @@ const TRANSITIONS = [
   // transition's `toStateId`. Delete it and the backend stops being able to
   // report the origin at all — which is the single discriminator this
   // whole CTA matrix keys off (see `isPaymentAwaitingWaypoint` and
-  // `isPreDulyMadeWaypoint`). The button below would silently stop
-  // rendering, and Duly make with it. It is closer to a fixture than to a
-  // feature. Confirmed with the management-be owner, who pins it with two
+  // `isPreDulyMadeWaypoint`). The button below would stop rendering, and
+  // Duly make with it. It is closer to a fixture than to a feature.
+  //
+  // That failure is CAUGHT, but only by the branch-matched e2e stack —
+  // nothing in this repo, and nothing in a unit test in either repo, would
+  // notice. The mgmt-tests journey suite
+  // (`ra-523-assignee-start-control.e2e.js`) asserts both the forward CTA
+  // and its label on a `duly-made`-origin item, and Duly make on a
+  // `submitted`-origin one; with no origin reported, both gates go false
+  // and both assertions fail in the same run. So a tidy-up that deleted the
+  // transition takes out two named journey assertions rather than quietly
+  // dropping a button — but only if the stack is branch-matched when it
+  // runs.
+  //
+  // Confirmed with the management-be owner, who pins it with two
   // committed tests (live type + frozen snapshots) so its removal turns
   // management-be red before it could ever reach this repo.
   //
