@@ -8,6 +8,7 @@ import {
   assertSafeHeaderValue,
   assignWorkItem,
   continueReviewReAccreditation,
+  paymentReceivedReAccreditation,
   createWorkItem,
   extendWorkItemSla,
   getBackendHealth,
@@ -2285,5 +2286,135 @@ describe('#updateRecyclingOperations (RA-469)', () => {
       reason: 'network',
       message: 'ECONNREFUSED'
     })
+  })
+})
+
+describe('#paymentReceivedReAccreditation (RA-523)', () => {
+  test('POSTs to the type-specific payment-received endpoint with NO body and returns the work item on 200', async () => {
+    const workItem = {
+      id: 'wi-1',
+      stateId: 'assessment-in-progress',
+      originStateId: null
+    }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await paymentReceivedReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    // The route deliberately did NOT follow the label change: it and the
+    // action id are structural (they name the transition this is a sibling
+    // of), while the DisplayName is the human-facing string. Confirmed with
+    // the management-be owner.
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi-1/payment-received',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          accept: 'application/json',
+          'x-cdp-user-id': 'u-1',
+          'x-cdp-user-name': 'Alice'
+        })
+      })
+    )
+    // No body, and no payment date in particular: it was captured at
+    // duly-make and already sits on the payload. Two dates describing one
+    // payment is worse than none.
+    const [, requestInit] = fetchImpl.mock.calls[0]
+    expect(requestInit.body).toBeUndefined()
+    expect(requestInit.headers['content-type']).toBeUndefined()
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('percent-encodes the work item id into the path', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'a/b' })
+    })
+
+    await paymentReceivedReAccreditation({
+      workItemId: 'a/b',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/a%2Fb/payment-received',
+      expect.anything()
+    )
+  })
+
+  // The 409 is the interesting failure and the one the UI copy is written
+  // for: the backend answers it when the item is not in `updated`, when its
+  // origin is not `duly-made`, or when its template snapshot predates v14.
+  // All three mean "not from here".
+  test('maps a 409 to a conflict reason and surfaces the ProblemDetails detail', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () =>
+        Promise.resolve({
+          title: 'Could not record re-accreditation payment received',
+          detail: 'Work item is not in a state this action can be applied from'
+        })
+    })
+
+    const result = await paymentReceivedReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      message: 'Work item is not in a state this action can be applied from'
+    })
+  })
+
+  test('maps a 404 to not-found', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ title: 'Not found' })
+    })
+
+    const result = await paymentReceivedReAccreditation({
+      workItemId: 'missing',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({ ok: false, reason: 'not-found', status: 404 })
+    )
+  })
+
+  test('reports a transport failure as a network reason with no status', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('socket hang up'))
+
+    const result = await paymentReceivedReAccreditation({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.reason).toBe('network')
+    expect(result.status).toBeUndefined()
   })
 })

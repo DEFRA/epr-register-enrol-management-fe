@@ -16,7 +16,9 @@ import {
 import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
 import {
   isContinueReviewState,
-  isPreDulyMadeWaypoint
+  isPaymentAwaitingWaypoint,
+  isPreDulyMadeWaypoint,
+  resolvePaymentReceivedAction
 } from './re-accreditation-cta.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import {
@@ -764,9 +766,36 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
   // to resume — i.e. the query was raised from `duly-made` /
   // `assessment-in-progress` / `awaiting-decision`, never from `submitted`.
   // Suppress it for the pre-duly-made waypoint so only Duly make shows.
+  // RA-523. A THIRD origin is now carved out of Continue review. An item
+  // queried while it awaited payment goes straight to assessment instead
+  // of back to `duly-made`, so on that origin Continue review is REPLACED
+  // rather than accompanied — rendering both would offer two forward paths
+  // to different states and invite the case worker to pick the wrong one.
+  //
+  // The two exclusions are deliberately independent tests against the SAME
+  // discriminator (`originStateId`) rather than one if/else chain: they
+  // answer different questions ("never duly made" vs "duly made, awaiting
+  // payment"), they arrived with different tickets, and the remaining two
+  // origins — `assessment-in-progress` and `awaiting-decision` — must fall
+  // through to Continue review untouched. That fall-through is the whole
+  // regression risk on this ticket and is covered per-origin in the tests.
+  const isPaymentAwaitingOrigin = isPaymentAwaitingWaypoint(
+    source?.originStateId
+  )
   const canContinueReview =
     isContinueReviewState(source?.stateId) &&
-    !isPreDulyMadeWaypoint(source?.originStateId)
+    !isPreDulyMadeWaypoint(source?.originStateId) &&
+    !isPaymentAwaitingOrigin
+
+  // Gated on the item being in `updated` as well as on the origin, not on
+  // the origin alone: a live `duly-made` item also reports an origin, and
+  // it must keep offering the assignment panel's own start control rather
+  // than this one. `null` when the transition is not registered, so an
+  // unmigrated type renders no button instead of one the route refuses.
+  const paymentReceivedAction =
+    isContinueReviewState(source?.stateId) && isPaymentAwaitingOrigin
+      ? resolvePaymentReceivedAction()
+      : null
 
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
@@ -783,6 +812,8 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     dulyMakeHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/duly-make`,
     canContinueReview,
     continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
+    paymentReceivedAction,
+    paymentReceivedHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/payment-received`,
     isReadOnlyState,
     stateTagClasses,
     decisionMetadata

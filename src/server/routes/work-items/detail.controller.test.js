@@ -191,6 +191,38 @@ function registerReaccreditation() {
         fromStateId: 'updated',
         toStateId: 'assessment-in-progress',
         callerInvocable: false
+      },
+      // RA-523. The origin matrix needs a continue-review declaration for
+      // EVERY origin it asserts on, not just one: `isContinueReviewState`
+      // answers "is this item in the state those transitions leave from",
+      // so one declaration would satisfy it — but a test that claims the
+      // `awaiting-decision` origin still gets Continue review is worthless
+      // unless that origin is actually declared.
+      {
+        actionId: 'continue-review-during-decision',
+        displayName: 'Continue review',
+        fromStateId: 'updated',
+        toStateId: 'awaiting-decision',
+        callerInvocable: false
+      },
+      {
+        actionId: 'continue-review-during-duly-made',
+        displayName: 'Continue review',
+        fromStateId: 'updated',
+        toStateId: 'duly-made',
+        callerInvocable: false
+      },
+      // RA-523. The transition under test. Declared with the REAL label
+      // management-be settled on — deliberately NOT "Payment received",
+      // because on the `updated` waypoint no payment event has occurred.
+      // The button reads this declaration rather than a literal, so a
+      // wording change here must move the rendered button.
+      {
+        actionId: 'payment-received-during-duly-made',
+        displayName: 'Start assessment',
+        fromStateId: 'updated',
+        toStateId: 'assessment-in-progress',
+        callerInvocable: false
       }
     ]
   })
@@ -2968,6 +3000,160 @@ describe('#workItemDetailController', () => {
   // backend and therefore never appear in `availableActions`, so the
   // generic action loop cannot render them — hence a bespoke CTA posting to
   // the type-specific endpoint.
+
+  // ---------------------------------------------------------------------
+  // RA-523 (second half). An application queried while it sat in
+  // `duly-made` was waiting for one thing: payment. Continuing its review
+  // used to send it BACK to `duly-made`, dropping the case worker on a
+  // screen whose only forward control was the payment button they had
+  // skipped in the first place. Tom's call: the operator's response carries
+  // the payment, so the item goes STRAIGHT to assessment.
+  //
+  // The whole regression risk on this ticket is the OTHER three origins.
+  // `originStateId` is one discriminator now feeding three different CTAs,
+  // so these tests are written as a matrix over every origin rather than as
+  // a single happy-path test — a change that accidentally widened the new
+  // gate would otherwise show up as a passing suite and a broken journey.
+  // ---------------------------------------------------------------------
+  describe('RA-523: the `updated` screen routes each query origin to its own CTA', () => {
+    const PAYMENT_CTA = 'data-testid="re-accreditation-payment-received-cta"'
+    const PAYMENT_BUTTON =
+      'data-testid="action-payment-received-during-duly-made"'
+    const CONTINUE_CTA = 'data-testid="re-accreditation-continue-review-cta"'
+    const DULY_MAKE_CTA = 'data-testid="re-accreditation-duly-make-cta"'
+
+    async function renderUpdated(originStateId) {
+      registerReaccreditation()
+      // These CTAs live in the TYPE-SPECIFIC detail template, so without
+      // this registration every item falls back to the generic one and
+      // every assertion below passes vacuously.
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'updated', originStateId })
+      })
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      return result
+    }
+
+    test('a `duly-made` origin offers the new forward hop, and NOT Continue review', async () => {
+      const result = await renderUpdated('duly-made')
+
+      expect(result).toContain(PAYMENT_CTA)
+      expect(result).toContain(PAYMENT_BUTTON)
+      // Posts to the bespoke module endpoint with no action id in the URL.
+      // That is a security boundary, not a style choice: the transition
+      // shares `fromStateId: 'updated'` with all four continue-review hops,
+      // so a caller-named action could send a `submitted`-origin item
+      // straight past duly making, its payment date and its SLA clock.
+      expect(result).toContain(
+        `action="/work-items/re-accreditation/${ID}/payment-received"`
+      )
+      expect(result).not.toContain(
+        `/work-items/${ID}/actions/payment-received-during-duly-made`
+      )
+      // REPLACES Continue review rather than joining it — two forward
+      // buttons landing in different states would let the case worker pick
+      // the wrong stage.
+      expect(result).not.toContain(CONTINUE_CTA)
+      expect(result).not.toContain(DULY_MAKE_CTA)
+    })
+
+    test('the button renders the label management-be declared, not "Payment received"', async () => {
+      const result = await renderUpdated('duly-made')
+
+      // The label is read from the transition declaration. It is
+      // deliberately NOT the `duly-made` hop's "Payment received": on this
+      // waypoint no payment event has occurred — the operator answered a
+      // query — and a button asserting payment there would be the same
+      // class of lying control RA-523 exists to remove from this page.
+      const cta = result.slice(
+        result.indexOf(PAYMENT_CTA),
+        result.indexOf('</form>', result.indexOf(PAYMENT_CTA))
+      )
+      expect(cta).toContain('Start assessment')
+      expect(cta).not.toContain('Payment received')
+    })
+
+    // The regression guard the whole ticket turns on. Each of these origins
+    // must be EXACTLY as it was before RA-523.
+    test.each([
+      [
+        'submitted',
+        'Duly make (RA-454) — never the new hop, which would skip duly making entirely',
+        DULY_MAKE_CTA
+      ],
+      ['assessment-in-progress', 'Continue review', CONTINUE_CTA],
+      ['awaiting-decision', 'Continue review', CONTINUE_CTA]
+    ])(
+      'a `%s` origin still gets %s',
+      async (originStateId, _label, expectedCta) => {
+        const result = await renderUpdated(originStateId)
+
+        expect(result).toContain(expectedCta)
+        expect(result).not.toContain(PAYMENT_CTA)
+        expect(result).not.toContain(PAYMENT_BUTTON)
+      }
+    )
+
+    // `originStateId` is always present on the wire (see
+    // `duly-making/eligibility.js`), but an item that never took a query
+    // waypoint reports its own state — so `updated` here, which matches no
+    // transition's `fromStateId` and must produce no origin-specific CTA.
+    test('an `updated` item that never took a waypoint gets no origin CTA at all', async () => {
+      const result = await renderUpdated('updated')
+
+      expect(result).not.toContain(PAYMENT_CTA)
+      expect(result).not.toContain(DULY_MAKE_CTA)
+      // Continue review DOES still render — it is gated on the item's state,
+      // and only the two carved-out origins suppress it. Asserted positively
+      // so this test cannot pass merely because the panel stopped rendering.
+      expect(result).toContain(CONTINUE_CTA)
+    })
+
+    // The origin alone must not be enough. A live `duly-made` item also
+    // reports an origin, and it belongs to the assignment panel's own start
+    // control (the first half of RA-523), not to this CTA.
+    test('a live `duly-made` item does not get the `updated` CTA', async () => {
+      registerReaccreditation()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'duly-made',
+          originStateId: 'duly-made',
+          assignedToId: TEST_STANDARD_USER.id,
+          assignedToName: 'Test Caseworker'
+        })
+      })
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toContain(PAYMENT_CTA)
+      // The two controls are separable by testid AND by wording — a control
+      // that kept its id while changing its label is the defect QA reported,
+      // so the journey suite asserts both and so does this.
+      expect(result).toContain('data-testid="start-work-submit"')
+      expect(result).toContain('Payment received')
+      expect(result).not.toContain('Start assessment')
+    })
+  })
+
   describe('RA-372 Continue review CTA (canContinueReview)', () => {
     function registerReaccreditationWithDetailV1() {
       registerReaccreditation()

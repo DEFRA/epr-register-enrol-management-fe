@@ -4,6 +4,7 @@ import { buildContinueReviewRoutes } from './continue-review/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
 import { buildDecisionRoutes } from './decision/routes.js'
 import { buildDulyMakingRoutes } from './duly-making/routes.js'
+import { buildPaymentReceivedRoutes } from './payment-received/routes.js'
 
 /**
  * Re-accreditation work item module (RA-98).
@@ -36,6 +37,22 @@ const STATE_AWAITING_DECISION = 'awaiting-decision'
 // Shared task display name and the single detail template every current
 // template version renders with.
 const CONTINUE_REVIEW_DISPLAY_NAME = 'Continue review'
+// RA-523. DELIBERATELY NOT the same label as `payment-received` above,
+// and the difference is the whole point.
+//
+// An earlier ruling had both hops read "Payment received" on the grounds
+// that they are one act deferred. That was withdrawn, correctly: on the
+// `updated` waypoint NO PAYMENT EVENT HAS HAPPENED. The operator answered
+// a query. What the case worker is being asked to assert there is "this
+// response is good enough to assess", not "money arrived" — and a button
+// claiming payment where no payment occurred is the same class of lying
+// control RA-523 exists to remove from this page.
+//
+// Mirrors management-be's own constant, which carries the matching
+// "deliberately not the payment-received label" comment. Confirmed with the
+// management-be owner. Change it HERE and the button text, the mirror and
+// the tests all move together — nothing hardcodes the string.
+const START_ASSESSMENT_DISPLAY_NAME = 'Start assessment'
 const DETAIL_TEMPLATE_V1 = 're-accreditation/detail-v1'
 
 const STATES = [
@@ -349,6 +366,42 @@ const TRANSITIONS = [
     fromStateId: 'updated',
     toStateId: STATE_AWAITING_DECISION,
     callerInvocable: false
+  },
+  // RA-523. The FIFTH way out of `updated`, and the reason there is no
+  // longer a "Continue review" CTA for a `duly-made` origin.
+  //
+  // An application queried while it sat in `duly-made` was waiting for one
+  // thing: payment. Continuing its review sent it BACK to `duly-made` —
+  // technically right (that IS where the query was raised) but it dropped
+  // the case worker on a screen whose only forward control was "Payment
+  // received", one click further from where they started. Tom's call: an
+  // operator's response to a query on a duly-made item carries the
+  // payment, so the item goes STRAIGHT to assessment.
+  //
+  // `continue-review-during-duly-made` above is deliberately NOT removed
+  // and the backend still honours it. This does not replace that
+  // transition, it replaces the CTA that offered it — historical items
+  // that already took that hop must keep rendering as they were assessed.
+  //
+  // `callerInvocable: false` for exactly the reason the four above are: it
+  // shares `fromStateId: 'updated'` with all of them, so letting a caller
+  // name the action would let them choose which stage the application
+  // lands in. The backend refuses it (409) when the item's origin is not
+  // `duly-made`, and the UI posts to the type-specific `/payment-received`
+  // endpoint rather than the generic `/actions/{actionId}` route.
+  //
+  // ⚠ NO `startsOnSelfAssign` MARKER — deliberately, and permanently.
+  // `resolveSelfAssignTransition` matches that marker against the item's
+  // CURRENT state, so marking this one would make RA-523's split-out start
+  // control fire on `updated` items: the exact defect this ticket fixed,
+  // reproduced in a new state. The `duly-made` -> assessment transition
+  // above is the only one that carries it, and it should stay that way.
+  {
+    actionId: 'payment-received-during-duly-made',
+    displayName: START_ASSESSMENT_DISPLAY_NAME,
+    fromStateId: 'updated',
+    toStateId: STATE_ASSESSMENT_IN_PROGRESS,
+    callerInvocable: false
   }
 ]
 
@@ -358,7 +411,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v13',
+  templateVersion: 'v14',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -440,7 +493,8 @@ export const reAccreditationModule = {
       v10: DETAIL_TEMPLATE_V1,
       v11: DETAIL_TEMPLATE_V1,
       v12: DETAIL_TEMPLATE_V1,
-      v13: DETAIL_TEMPLATE_V1
+      v13: DETAIL_TEMPLATE_V1,
+      v14: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once
@@ -450,6 +504,17 @@ export const reAccreditationModule = {
     // see the TRANSITIONS comment above. Always mounted; the CTA only
     // renders for a work item actually in `updated`.
     server.route(buildContinueReviewRoutes())
+
+    // RA-523. The onward path out of `updated` for an item queried while
+    // it awaited payment: straight to assessment, instead of Continue
+    // review's hop back to `duly-made`. A bespoke route rather than the
+    // generic action route BY DESIGN — the transition is declared
+    // `callerInvocable: false` so management-be's generic endpoint refuses
+    // it, which is what stops a caller applying it to a
+    // `submitted`-origin item and skipping duly making (and its payment
+    // date, and therefore its SLA clock) altogether. Always mounted; the
+    // CTA only renders for an item whose origin is `duly-made`.
+    server.route(buildPaymentReceivedRoutes())
 
     // RA-316. Duly-making flow: the payment-date page and its POST
     // handler. Hits the type-specific backend endpoint because

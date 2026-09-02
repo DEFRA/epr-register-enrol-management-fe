@@ -672,6 +672,69 @@ export async function continueReviewReAccreditation({
 }
 
 /**
+ * Record that a query response carried the payment for a duly-made
+ * re-accreditation work item (RA-523).
+ *
+ * Wraps `POST /work-items/re-accreditation/{id}/payment-received`.
+ * EMPTY BODY, exactly like `continueReviewReAccreditation` — the payment
+ * date was captured at duly-make and already sits on the payload. Do not
+ * add one here: two dates describing one payment is worse than none.
+ *
+ * ⚠ This bespoke endpoint is the ONLY way to apply
+ * `payment-received-during-duly-made`. That transition is declared
+ * `callerInvocable: false`, so management-be filters it out of
+ * `availableActions` and its generic action endpoint refuses it. See the
+ * controller for why that is a security boundary rather than a style
+ * choice.
+ *
+ * Failure reasons mirror the other type-specific clients: 404 not found,
+ * 409 invalid transition (wrong state, origin is not `duly-made`, or the
+ * item's template snapshot predates v14), 401 without an acting user.
+ * Unlike `dulyMakeReAccreditation` there is no `errorCode` to surface —
+ * there is no user input to bind a field error to.
+ */
+export async function paymentReceivedReAccreditation({
+  workItemId,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/payment-received`
+
+  const result = await postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'paymentReceivedReAccreditation'
+  })
+
+  if (result.ok) {
+    return { ok: true, workItem: result.workItem }
+  }
+
+  // `postJson` reports transport failures without a status.
+  if (result.status == null) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: result.error ?? REQUEST_FAILED
+    }
+  }
+
+  return {
+    ok: false,
+    reason: REASON_BY_STATUS[result.status] ?? 'server',
+    status: result.status,
+    message:
+      result.problem?.detail ??
+      result.problem?.title ??
+      `Backend returned ${result.status}`
+  }
+}
+
+/**
  * Duly make a re-accreditation work item (RA-316).
  *
  * Wraps `POST /work-items/re-accreditation/{id}/duly-make`.
