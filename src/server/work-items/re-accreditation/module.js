@@ -378,10 +378,23 @@ const TRANSITIONS = [
   // operator's response to a query on a duly-made item carries the
   // payment, so the item goes STRAIGHT to assessment.
   //
-  // `continue-review-during-duly-made` above is deliberately NOT removed
-  // and the backend still honours it. This does not replace that
-  // transition, it replaces the CTA that offered it — historical items
-  // that already took that hop must keep rendering as they were assessed.
+  // ⚠ `continue-review-during-duly-made` above MUST NOT BE DELETED, and the
+  // reason is stronger than it looks. This does not replace that
+  // transition, it replaces the CTA that offered it, so the obvious
+  // argument for retention is that historical items which already took the
+  // hop must keep rendering as they were assessed — true, but that one
+  // expires as those items age out.
+  //
+  // The load-bearing reason does not expire: management-be's
+  // `ResolveOriginatingStateId` derives `originStateId` from THAT
+  // transition's `toStateId`. Delete it and the backend stops being able to
+  // report the origin at all — which is the single discriminator this
+  // whole CTA matrix keys off (see `isPaymentAwaitingWaypoint` and
+  // `isPreDulyMadeWaypoint`). The button below would silently stop
+  // rendering, and Duly make with it. It is closer to a fixture than to a
+  // feature. Confirmed with the management-be owner, who pins it with two
+  // committed tests (live type + frozen snapshots) so its removal turns
+  // management-be red before it could ever reach this repo.
   //
   // `callerInvocable: false` for exactly the reason the four above are: it
   // shares `fromStateId: 'updated'` with all of them, so letting a caller
