@@ -443,10 +443,10 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
     case ACTION_NATION_CORRECTED: {
       // RA-526: ReAccreditationNationCorrectionMigration stamps `from`/`to`
       // (and `reason`) onto this entry's details when it corrects a nation
-      // that was wrongly derived by the pre-RA-526 postcode-based hook. This
-      // is the one visible record of the correction — the team running the
-      // migration has no access to its logs, so this entry is the review
-      // trail, not just an audit nicety.
+      // that was wrongly derived by the pre-RA-526 postcode-based hook. The
+      // migration applies corrections directly rather than a separate
+      // dry-run pass, so this entry is the review trail for each one, not
+      // just an audit nicety.
       const rows = []
       if (details.from) {
         rows.push({ key: 'Previous nation', value: details.from })
