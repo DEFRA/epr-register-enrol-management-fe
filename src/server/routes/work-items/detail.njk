@@ -516,6 +516,31 @@
           </form>
         {% endif %}
 
+        {# RA-523. The START half of "Assign to yourself and start", on its   #}
+        {# own, for a caller who ALREADY holds the item. Mutually exclusive   #}
+        {# with the button above by construction: `canSelfAssign` requires    #}
+        {# the caller NOT to be the assignee and `startAction` requires that  #}
+        {# they ARE, so the panel never shows two primary buttons.           #}
+        {#                                                                    #}
+        {# The label comes from the module's own transition declaration, so   #}
+        {# this control names the action it applies instead of offering to    #}
+        {# assign an item the caller already has — the RA-523 defect. It      #}
+        {# posts to the generic action route (one operation, one request) and #}
+        {# the backend remains the authority on whether it is allowed.        #}
+        {% if assignment.startAction %}
+          <form method="post"
+                action="/work-items/{{ workItem.id }}/actions/{{ assignment.startAction.actionId }}"
+                novalidate>
+            <input type="hidden" name="crumb" value="{{ crumb }}" />
+            {{ govukButton({
+              text: assignment.startAction.displayName,
+              classes: "app-case-panel__primary-action govuk-!-margin-bottom-0",
+              disabled: user.isReadOnly,
+              attributes: { "data-testid": "start-work-submit" }
+            }) }}
+          </form>
+        {% endif %}
+
         <hr class="app-case-panel__divider">
 
         {# RA-335: rendered via appActionLink so a read-only support user's   #}

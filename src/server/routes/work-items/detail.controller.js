@@ -340,14 +340,20 @@ export function makeSelfAssignController({
         // message names BOTH halves — the user must not read this as "the
         // assignment failed" and go looking for it, nor as a generic error
         // that leaves them unsure what landed.
+        //
+        // RA-523. The retry it points at is now the separate start control,
+        // named from the module declaration — the page it renders onto shows
+        // that button, NOT "Assign to yourself and start", because the assign
+        // half succeeded and the caller is now the assignee. Naming the old
+        // button here would send them looking for a control that is no longer
+        // on the page.
         return renderDetailFromResult({
           request,
           h,
           id,
           result: {
             ...transitionResult,
-            message:
-              'This application has been assigned to you, but it could not be started. Select "Assign to yourself and start" again to retry.'
+            message: `This application has been assigned to you, but it could not be started. Select "${startTransition.displayName ?? startTransition.actionId}" to try again.`
           },
           actionLabel: 'start work item'
         })
@@ -597,20 +603,48 @@ function buildAssignmentViewModel({ workItem, user }) {
     // `canSelfAssign` because the template needs to distinguish "no button
     // because you already hold it" from "no controls because it is closed".
     isClosed,
-    // RA-410. The `|| selfAssignStartsWork` clause is the recovery path, not
-    // a loosening. "Assign to yourself and start" is two operations, and if
-    // the assign lands but the transition does not, `callerIsAssignee`
-    // flips to true and the ONLY control that performs the transition would
-    // disappear — leaving the caller holding an item they cannot start, with
-    // the old "Payment received" button now filtered out of the actions
-    // list. Keeping the button while the item still sits in a
-    // `startsOnSelfAssign` state makes the retry reachable. Both halves are
-    // idempotent (management-be: re-assigning the same user is a no-op that
-    // writes no audit entry), so pressing it again is safe.
-    canSelfAssign:
-      user?.id != null &&
-      !isClosed &&
-      (!callerIsAssignee || workItem.selfAssignStartsWork === true)
+    // RA-523. Strictly "you do not already hold this". The RA-410
+    // `|| selfAssignStartsWork` clause that used to sit here is GONE — see
+    // `startAction` below for where its job went, and do not reinstate it.
+    //
+    // Why it had to go: `selfAssignStartsWork` is true for ANY item sitting
+    // in a `startsOnSelfAssign` state, which for re-accreditation means
+    // EVERY `duly-made` item. It could not tell "the assign half landed and
+    // the transition half did not" (the recovery case it was written for)
+    // from "assigned, and legitimately sitting in duly-made", so it fired
+    // unconditionally for the assignee. Both of RA-523's QA routes converge
+    // on exactly that: a query self-assigns the item, and either Continue
+    // review (queried from `duly-made`) or Duly make (queried from
+    // `submitted`) returns it to `duly-made` still assigned — where the page
+    // offered to assign the caller an item they already held.
+    canSelfAssign: user?.id != null && !isClosed && !callerIsAssignee,
+    // RA-523. The honest half of "Assign to yourself and start", on its own.
+    //
+    // The RA-410 concern is real and unchanged: that button is TWO
+    // operations, and if the assign lands while the transition does not,
+    // `callerIsAssignee` flips true and the only control that starts the
+    // work would vanish — the old "Payment received" button having been
+    // filtered out of the actions list. So the start half still has to be
+    // reachable for a caller who holds a not-yet-started item.
+    //
+    // It is now a separate control that performs ONE operation and says so,
+    // rather than a two-operation button whose label lies about the half
+    // that is already done. That is what makes it safe to render whenever
+    // the caller holds an item in a `startsOnSelfAssign` state, without
+    // needing to distinguish HOW it got there — which is the distinction the
+    // old clause could not draw. It covers strictly more than the clause did:
+    // an item a COLLEAGUE assigned to you in `duly-made` previously offered
+    // "Assign to yourself and start" (a lie — you already held it) and now
+    // offers the start action honestly.
+    //
+    // Posts to the generic action route, so the backend stays the single
+    // authority on whether the transition is allowed; the module declaration
+    // supplies the id and the label, so the generic layer learns nothing
+    // about re-accreditation.
+    startAction:
+      user?.id != null && !isClosed && callerIsAssignee
+        ? (workItem.selfAssignStart ?? null)
+        : null
     // RA-295 removed `isUnassigned`, `canUnassign` and `assignableUsers`
     // from this model: the reassign / unassign links are unconditional
     // WITHIN the active lifecycle (AC03, as narrowed by RA-358 above) and
@@ -838,6 +872,27 @@ function selfAssignActionIds(type) {
   )
 }
 
+// RA-523. Project the `startsOnSelfAssign` transition leaving the item's
+// CURRENT state down to the two fields the assignment panel needs: the id it
+// posts to the generic action route, and the label it renders.
+//
+// Falls back to the action id when a module declares no `displayName`, so a
+// sloppy declaration produces an ugly button rather than an unlabelled one.
+// Returns `null` — and therefore renders no control at all — whenever
+// `resolveSelfAssignTransition` does: a terminal state, an unregistered type,
+// a type marking no such transition, or an item not sitting in its
+// `fromStateId`.
+function buildSelfAssignStart(type, workItem) {
+  const transition = resolveSelfAssignTransition(type, workItem)
+  if (transition == null) {
+    return null
+  }
+  return {
+    actionId: transition.actionId,
+    displayName: transition.displayName ?? transition.actionId
+  }
+}
+
 // RA-410. Actions the MODULE DECLARATION says the caller may not invoke.
 //
 // `isCallerInvocable` (core/engine.js) covers the same ground by reading the
@@ -914,14 +969,18 @@ function decorate(workItem) {
         !selfAssignActions.has(action?.actionId) &&
         !declaredNonInvocable.has(action?.actionId)
     ),
-    // RA-410. True when self-assigning would ALSO move the item on — i.e.
-    // the item is in the state a `startsOnSelfAssign` transition leaves
-    // from. Read by `buildAssignmentViewModel` so the primary button keeps
-    // rendering for a caller who already holds a not-yet-started item, which
-    // is the recovery path when the assign half succeeded and the transition
-    // half did not. Generic: the marker and the state both come from the
-    // module declaration.
-    selfAssignStartsWork: resolveSelfAssignTransition(type, workItem) != null,
+    // RA-410, reshaped by RA-523. The `startsOnSelfAssign` transition
+    // leaving the item's CURRENT state, projected to just the id and label
+    // the assignment panel needs — or `null` when there is none.
+    //
+    // RA-410 exposed this as a bare boolean (`selfAssignStartsWork`) whose
+    // only job was to keep "Assign to yourself and start" rendering for a
+    // caller who already held a not-yet-started item. RA-523 replaced that
+    // clause with a separately labelled start control, which needs the
+    // action's own id and display name, so the flag became the thing it was
+    // derived from. Generic either way: the marker, the state and the label
+    // all come from the module declaration.
+    selfAssignStart: buildSelfAssignStart(type, workItem),
     // RA-295. Gates BOTH due-date links in the assignment panel. The backend
     // is NOT a backstop here: SlaService.ExtendAsync validates the actor,
     // reason, duration bounds and the existence of the item and its clock,
