@@ -154,6 +154,18 @@
           errorMessage: { text: fieldErrors["tonnageBand"] } if fieldErrors["tonnageBand"] else null
         }) }}
 
+        {# RA-526: management-be's ReAccreditationNationRoutingHook no longer #}
+        {# derives Nation from the site address postcode above - it routes   #}
+        {# on this field directly, defaulting to England if it's ever        #}
+        {# missing. #}
+        {{ govukSelect({
+          id: "field-nation",
+          name: "nation",
+          label: { text: "Nation", classes: "govuk-label--s" },
+          items: nationOptions,
+          errorMessage: { text: fieldErrors["nation"] } if fieldErrors["nation"] else null
+        }) }}
+
         {# RA-316. Optional passthrough. A REAL input rather than a hidden #}
         {# one: this form is the tool people use to build test cases, and  #}
         {# a charge you cannot see or change is a worse tool. It is also   #}

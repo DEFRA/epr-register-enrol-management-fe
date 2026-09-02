@@ -40,7 +40,8 @@ const validForm = () =>
     'siteAddressTown=Town',
     'siteAddressPostcode=AB1%202CD',
     'material=plastic',
-    'tonnageBand=500-5000'
+    'tonnageBand=500-5000',
+    'nation=England'
   ].join('&')
 
 describe('Re-accreditation create-work-item routes (RA-127, flag on)', () => {
