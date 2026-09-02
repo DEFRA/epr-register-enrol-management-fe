@@ -24,24 +24,33 @@
  * from the item's own audit history and refuses anything that is not
  * `duly-made`. Confirmed with the management-be owner.
  *
- * Every branch PRG-redirects back to the work item detail page with a flash
- * banner, so a refresh never re-posts and the user always lands on the page
- * showing the (backend-resolved) new state.
+ * Redirect and banner mechanics live in `../onward-hop.js`, shared with
+ * Continue review. Only the copy is here.
  */
 
-import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { makeOnwardHopHandler } from '../onward-hop.js'
 
 import { createPaymentReceivedService } from './service.js'
 
-const logger = createLogger()
-
-function detailHref(id) {
-  return `/work-items/${encodeURIComponent(id)}`
-}
-
-function flashBanner(request, banner) {
-  request.yar?.flash?.('flashBanner', banner)
+// Names the destination, unlike the Continue review banner, which
+// deliberately does not: there the backend resolves one of four possible
+// target states from audit history, so the copy would have to guess. Here
+// there is exactly one target, so saying it is both safe and necessary —
+// `assessment-in-progress` and `updated` share the display name "Updated"
+// (RA-324 AC06), so the state tag will NOT visibly change when the button
+// is pressed, and this banner is the only feedback that anything happened.
+const BANNERS = {
+  success: {
+    type: 'success',
+    title: 'Payment received',
+    text: 'The application has moved to assessment.'
+  },
+  failureTitle: 'Could not record payment received',
+  conflict:
+    'This application can no longer be moved on from its current state. Refresh and try again.',
+  notFound: 'This application could not be found.',
+  fallback:
+    'There was a problem recording the payment for this application. Try again.'
 }
 
 /**
@@ -52,70 +61,10 @@ export function makePaymentReceivedController({
   service = createPaymentReceivedService()
 } = {}) {
   return {
-    async handler(request, h) {
-      const id = request.params.id
-      const user = getUser(request)
-
-      const result = await service.recordPaymentReceived({
-        workItemId: id,
-        user
-      })
-
-      if (result.ok) {
-        flashBanner(request, SUCCESS_BANNER)
-        return h.redirect(detailHref(id))
-      }
-
-      // Log every non-success outcome so an unexpected 5xx still leaves a
-      // breadcrumb even though the user only sees a generic banner.
-      logger.warn(
-        {
-          workItemId: id,
-          outcome: result.outcome,
-          status: result.status,
-          message: result.message
-        },
-        'Re-accreditation payment received failed'
-      )
-      flashBanner(request, bannerForFailure(result))
-      return h.redirect(detailHref(id))
-    }
-  }
-}
-
-// Names the destination, unlike the Continue review banner, which
-// deliberately does not: there the backend resolves one of four possible
-// target states from audit history, so the copy would have to guess. Here
-// there is exactly one target, so saying it is both safe and useful — the
-// state TAG will not tell the case worker, since `assessment-in-progress`
-// and `updated` share the display name "Updated" (RA-324 AC06), so the
-// page's own status will not visibly change when they press it.
-const SUCCESS_BANNER = {
-  type: 'success',
-  title: 'Payment received',
-  text: 'The application has moved to assessment.'
-}
-
-const FAILURE_TITLE = 'Could not record payment received'
-
-function bannerForFailure(result) {
-  if (result.outcome === 'conflict') {
-    return {
-      type: 'error',
-      title: FAILURE_TITLE,
-      text: 'This application can no longer be moved on from its current state. Refresh and try again.'
-    }
-  }
-  if (result.outcome === 'not-found') {
-    return {
-      type: 'error',
-      title: FAILURE_TITLE,
-      text: 'This application could not be found.'
-    }
-  }
-  return {
-    type: 'error',
-    title: FAILURE_TITLE,
-    text: 'There was a problem recording the payment for this application. Try again.'
+    handler: makeOnwardHopHandler({
+      apply: (args) => service.recordPaymentReceived(args),
+      banners: BANNERS,
+      logMessage: 'Re-accreditation payment received failed'
+    })
   }
 }
