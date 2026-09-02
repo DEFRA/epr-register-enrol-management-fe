@@ -527,6 +527,17 @@
         {# assign an item the caller already has — the RA-523 defect. It      #}
         {# posts to the generic action route (one operation, one request) and #}
         {# the backend remains the authority on whether it is allowed.        #}
+        {#                                                                    #}
+        {# `start-work-submit` and the rendered label are BOTH an external    #}
+        {# contract consumed by the mgmt-tests journey suite; renaming        #}
+        {# either breaks those specs. The suite asserts them separately on    #}
+        {# purpose — a control that keeps its id while changing its label is  #}
+        {# precisely the defect RA-523 reported.                              #}
+        {#                                                                    #}
+        {# ⚠ The RA-523 pair is SPLIT ACROSS TEMPLATES. Its sibling — the     #}
+        {# forward control on the `updated` screen — lives in                 #}
+        {# `re-accreditation/detail-v1.njk`, NOT here. A contract check that  #}
+        {# greps only this file will conclude one of them has vanished.       #}
         {% if assignment.startAction %}
           <form method="post"
                 action="/work-items/{{ workItem.id }}/actions/{{ assignment.startAction.actionId }}"

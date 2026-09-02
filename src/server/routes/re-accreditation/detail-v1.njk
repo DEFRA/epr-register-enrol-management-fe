@@ -151,7 +151,8 @@
     {# `data-testid` hooks here are an EXTERNAL CONTRACT consumed by the    #}
     {# mgmt-tests journey suite; renaming one breaks those specs. This      #}
     {# control is deliberately DISTINCT from the assignment panel's         #}
-    {# `start-work-submit`: the suite asserts identity and wording          #}
+    {# `start-work-submit` (in `work-items/detail.njk` — the pair is split  #}
+    {# across two templates): the suite asserts identity and wording        #}
     {# separately, because a control that keeps its testid while changing   #}
     {# its label is precisely the defect RA-523 reported.                   #}
     {% if workItem.paymentReceivedAction %}
