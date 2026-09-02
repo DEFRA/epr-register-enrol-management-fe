@@ -95,6 +95,7 @@ const ACTION_NOTIFICATION_FAILED = 'notification-failed'
 const ACTION_STATUS_PUSH_SENT = 'status-push-sent'
 const ACTION_STATUS_PUSH_SKIPPED = 'status-push-skipped'
 const ACTION_STATUS_PUSH_FAILED = 'status-push-failed'
+const ACTION_ROUTED_TO_NATION = 'routed-to-nation'
 
 const STATE_BEARING_ACTIONS = new Set([
   ACTION_WORK_ITEM_SUBMITTED,
@@ -196,7 +197,8 @@ const ACTION_DISPLAY_NAMES = {
   [ACTION_STATUS_PUSH_SKIPPED]:
     'Status not sent to the Registration & Accreditation service (disabled)',
   [ACTION_STATUS_PUSH_FAILED]:
-    'Status failed to send to the Registration & Accreditation service'
+    'Status failed to send to the Registration & Accreditation service',
+  [ACTION_ROUTED_TO_NATION]: 'Routed to nation'
 }
 
 /**
@@ -422,6 +424,20 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
     case ACTION_STATUS_PUSH_SKIPPED:
     case ACTION_STATUS_PUSH_FAILED:
       return statusPushDetailRows(entry, details)
+    case ACTION_ROUTED_TO_NATION: {
+      // RA-125: ReAccreditationNationRoutingHook stamps `nation` (and
+      // `derivedFrom`, always "site-address" today) onto this entry's
+      // details. This case was missing entirely, so a "Routed to nation"
+      // entry rendered with no detail rows at all.
+      const rows = []
+      if (details.nation) {
+        rows.push({ key: 'Nation', value: details.nation })
+      }
+      if (details.derivedFrom) {
+        rows.push({ key: 'Derived from', value: details.derivedFrom })
+      }
+      return rows
+    }
     default:
       return []
   }
