@@ -368,6 +368,33 @@ describe('detailRowsForAuditEntry', () => {
       })
     ).toEqual([])
   })
+
+  test('projects the nation and derivedFrom for a routed-to-nation entry', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'routed-to-nation',
+        details: { nation: 'England', derivedFrom: 'site-address' }
+      })
+    ).toEqual([
+      { key: 'Nation', value: 'England' },
+      { key: 'Derived from', value: 'site-address' }
+    ])
+  })
+
+  test('omits the derivedFrom row for a routed-to-nation entry with no derivedFrom', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'routed-to-nation',
+        details: { nation: 'England' }
+      })
+    ).toEqual([{ key: 'Nation', value: 'England' }])
+  })
+
+  test('returns an empty array for a routed-to-nation entry with no nation', () => {
+    expect(
+      detailRowsForAuditEntry({ action: 'routed-to-nation', details: {} })
+    ).toEqual([])
+  })
 })
 
 describe('decorateAuditLog — workItemSnapshot rows', () => {
