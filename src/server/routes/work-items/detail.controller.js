@@ -584,6 +584,27 @@ async function loadPriorYear({ workItem, id, user }) {
  * ("no further action is needed") directly above three controls that
  * contradicted it.
  */
+// RA-523. WHO holds the work item, normalised for display — split out from
+// the affordance gates below because they are two different questions and
+// were only ever adjacent, not related. This half restates facts the backend
+// already decided; `buildAssignmentViewModel` decides what the CALLER may do
+// about them. Keeping them in one function meant a change to either had to
+// be read against the other.
+//
+// Every field is normalised to `null` rather than left `undefined` so the
+// template's `{% if %}` checks and the mgmt-tests assertions see one absent
+// value, not two.
+function buildAssignmentIdentity(workItem) {
+  return {
+    assignedToId: workItem.assignedToId ?? null,
+    // Falls back to the raw id when the backend has no display name for the
+    // assignee, so the panel names SOMEBODY rather than rendering blank.
+    assignedToName: workItem.assignedToName ?? workItem.assignedToId ?? null,
+    assignedAt: workItem.assignedAt ?? null,
+    assignedBy: workItem.assignedBy ?? null
+  }
+}
+
 function buildAssignmentViewModel({ workItem, user }) {
   const callerIsAssignee = user?.id != null && workItem.assignedToId === user.id
   // Reuses the single TERMINAL_STATE_IDS list that also drives the
@@ -591,12 +612,15 @@ function buildAssignmentViewModel({ workItem, user }) {
   // Unlike that one this is NOT type-scoped: any registered type reaching
   // one of these states gets the gate, which is the desired behaviour.
   const isClosed = TERMINAL_STATE_IDS.has(workItem.stateId)
+  // RA-523. The precondition BOTH affordances share: we know who the caller
+  // is, and the case is still open. Naming it once is what makes the two
+  // gates below differ in exactly one term — `callerIsAssignee` — which is
+  // the whole point: they are mutually exclusive by construction, so the
+  // panel can never render two primary buttons.
+  const canActOnAssignment = user?.id != null && !isClosed
 
   return {
-    assignedToId: workItem.assignedToId ?? null,
-    assignedToName: workItem.assignedToName ?? workItem.assignedToId ?? null,
-    assignedAt: workItem.assignedAt ?? null,
-    assignedBy: workItem.assignedBy ?? null,
+    ...buildAssignmentIdentity(workItem),
     callerIsAssignee,
     // RA-358. Drives the "This application is closed" line in place of the
     // affordances. Kept as its own flag rather than being folded into
@@ -617,7 +641,7 @@ function buildAssignmentViewModel({ workItem, user }) {
     // review (queried from `duly-made`) or Duly make (queried from
     // `submitted`) returns it to `duly-made` still assigned — where the page
     // offered to assign the caller an item they already held.
-    canSelfAssign: user?.id != null && !isClosed && !callerIsAssignee,
+    canSelfAssign: canActOnAssignment && !callerIsAssignee,
     // RA-523. The honest half of "Assign to yourself and start", on its own.
     //
     // The RA-410 concern is real and unchanged: that button is TWO
@@ -641,10 +665,12 @@ function buildAssignmentViewModel({ workItem, user }) {
     // authority on whether the transition is allowed; the module declaration
     // supplies the id and the label, so the generic layer learns nothing
     // about re-accreditation.
+    // `decorate` always sets `selfAssignStart` (to the projected transition
+    // or to `null`), and `enriched` is the only thing ever passed in here,
+    // so there is deliberately no `?? null` guard: it would only hide a
+    // caller that skipped the decorator, which is a bug worth seeing.
     startAction:
-      user?.id != null && !isClosed && callerIsAssignee
-        ? (workItem.selfAssignStart ?? null)
-        : null
+      canActOnAssignment && callerIsAssignee ? workItem.selfAssignStart : null
     // RA-295 removed `isUnassigned`, `canUnassign` and `assignableUsers`
     // from this model: the reassign / unassign links are unconditional
     // WITHIN the active lifecycle (AC03, as narrowed by RA-358 above) and
