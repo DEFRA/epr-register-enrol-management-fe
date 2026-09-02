@@ -20,7 +20,8 @@ const validForm = () => ({
     postcode: 'AB1 2CD'
   },
   material: 'plastic',
-  tonnageBand: '500-5000'
+  tonnageBand: '500-5000',
+  nation: 'England'
 })
 
 describe('#createReAccreditationSchema (RA-127, RA-219)', () => {
@@ -231,7 +232,8 @@ describe('#createReAccreditationSchema (RA-127, RA-219)', () => {
       'Organisation name must be 200 characters or fewer'
     ],
     ['material', 'gold', 'Select a material from the list'],
-    ['tonnageBand', 'huge', 'Select a tonnage band from the list']
+    ['tonnageBand', 'huge', 'Select a tonnage band from the list'],
+    ['nation', 'Atlantis', 'Select a nation from the list']
   ])('rejects %s = %j with %s', (field, value, message) => {
     const form = validForm()
     form[field] = value

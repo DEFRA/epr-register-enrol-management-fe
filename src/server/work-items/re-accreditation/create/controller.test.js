@@ -87,6 +87,10 @@ describe('#makeCreateWorkItemController (RA-127, RA-219)', () => {
       captured.viewModel.tonnageBandOptions.find((o) => o.value === '500-5000')
         .selected
     ).toBe(true)
+    expect(
+      captured.viewModel.nationOptions.find((o) => o.value === 'England')
+        .selected
+    ).toBe(true)
     expect(captured.viewModel.fieldErrors).toEqual({})
     expect(captured.viewModel.errorSummary).toBeNull()
   })
@@ -119,7 +123,8 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
         siteAddressTown: 'Town',
         siteAddressPostcode: 'AB1 2CD',
         material: 'plastic',
-        tonnageBand: '500-5000'
+        tonnageBand: '500-5000',
+        nation: 'Wales'
       }
     })
     const { h, captured } = makeH()
@@ -135,6 +140,8 @@ describe('#makeSubmitCreateWorkItemController (RA-127)', () => {
       town: 'Town',
       postcode: 'AB1 2CD'
     })
+    // RA-526: guards reshapeFormPayload's allow-list against dropping nation.
+    expect(call.formValues.nation).toBe('Wales')
     // RA-219: the BFF never sends an application reference to the service.
     expect(call.formValues.applicationReference).toBeUndefined()
 
