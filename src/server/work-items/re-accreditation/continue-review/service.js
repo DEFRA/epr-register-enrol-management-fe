@@ -12,13 +12,17 @@
  * the target state.
  *
  * RA-523 note: this no longer serves the `duly-made` origin. An item
- * queried while it awaited payment now goes straight to assessment via
- * `../payment-received/`. The transition is untouched and the backend
- * still honours it — only the CTA moved — so this service is unchanged in
- * behaviour and still handles the other three origins.
+ * queried while it awaited payment is now retargeted by the backend's
+ * `resume-during-duly-made` transition straight to
+ * `assessment-in-progress`, so it never reaches `updated` and needs no FE
+ * onward hop at all — it arrives decision-ready. This service is unchanged
+ * in behaviour and still handles the other three origins.
  *
- * The behaviour lives in `../onward-hop.js`, shared with that flow; what
- * stays here is what differs.
+ * This flow used to share its mechanics with a second "payment received"
+ * onward hop via a `../onward-hop.js` factory. RA-523 deleted that second
+ * flow (the behaviour moved into the backend resume transition), leaving
+ * the factory with a single consumer; it has been folded back here where
+ * it can be read at a glance.
  *
  * Result shape — controllers branch on `outcome` rather than parsing HTTP
  * status codes:
@@ -31,7 +35,7 @@
  * call without mocking `undici`.
  */
 
-import { createOnwardHopCall } from '../onward-hop.js'
+import { toOutcome } from '../../core/backend-outcome.js'
 
 async function defaultContinueReview(args) {
   const mod = await import('#/server/common/helpers/backend-api/backend-api.js')
@@ -41,16 +45,28 @@ async function defaultContinueReview(args) {
 export function createContinueReviewService({
   continueReview = defaultContinueReview
 } = {}) {
-  const apply = createOnwardHopCall({
-    call: continueReview,
-    failureMessage: 'Continue review failed'
-  })
-
   return {
     /**
      * Move a re-accreditation work item on from `updated` to the state its
      * query was raised from.
      */
-    continueReviewOfWorkItem: apply
+    async continueReviewOfWorkItem({ workItemId, user = null }) {
+      if (typeof workItemId !== 'string' || workItemId.trim() === '') {
+        throw new Error('workItemId must be a non-empty string')
+      }
+
+      const result = await continueReview({ workItemId, user })
+
+      if (result.ok) {
+        return { ok: true, workItem: result.workItem }
+      }
+
+      return {
+        ok: false,
+        outcome: toOutcome(result.reason),
+        status: result.status,
+        message: result.message ?? 'Continue review failed'
+      }
+    }
   }
 }

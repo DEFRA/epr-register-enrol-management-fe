@@ -125,49 +125,6 @@
         </form>
       </div>
     {% endif %}
-    {# RA-523. The onward path out of `updated` for an application queried  #}
-    {# while it awaited payment. REPLACES Continue review on that ONE       #}
-    {# origin — `canContinueReview` excludes it — rather than sitting       #}
-    {# beside it: two forward buttons landing in different states would let #}
-    {# the case worker pick the wrong stage.                                #}
-    {#                                                                      #}
-    {# Same shape as Continue review above, for the same reason: the        #}
-    {# underlying transition is non-caller-invocable, so it never reaches   #}
-    {# `availableActions` and cannot ride the generic action loop in        #}
-    {# `super()`. The POST carries no action id — the ENDPOINT is the       #}
-    {# action, and that is a security boundary, not a style choice: the     #}
-    {# transition shares `fromStateId: 'updated'` with all four             #}
-    {# continue-review hops, so a caller-named action would let a           #}
-    {# `submitted`-origin item skip duly making, its payment date and its   #}
-    {# SLA clock.                                                           #}
-    {#                                                                      #}
-    {# The LABEL is read from the module's transition declaration, never    #}
-    {# hardcoded here. management-be deliberately gives this transition a   #}
-    {# DIFFERENT DisplayName from the `duly-made` "Payment received" hop,   #}
-    {# because on this waypoint no payment event has occurred — the         #}
-    {# operator answered a query. Rendering the declared name keeps the     #}
-    {# button honest and lets the wording move in one place.                #}
-    {#                                                                      #}
-    {# `data-testid` hooks here are an EXTERNAL CONTRACT consumed by the    #}
-    {# mgmt-tests journey suite; renaming one breaks those specs. This      #}
-    {# control is deliberately DISTINCT from the assignment panel's         #}
-    {# `start-work-submit` (in `work-items/detail.njk` — the pair is split  #}
-    {# across two templates): the suite asserts identity and wording        #}
-    {# separately, because a control that keeps its testid while changing   #}
-    {# its label is precisely the defect RA-523 reported.                   #}
-    {% if workItem.paymentReceivedAction %}
-      <div data-testid="re-accreditation-payment-received-cta">
-        <form method="post" action="{{ workItem.paymentReceivedHref }}" novalidate>
-          <input type="hidden" name="crumb" value="{{ crumb }}" />
-          {{ govukButton({
-            text: workItem.paymentReceivedAction.displayName,
-            classes: "app-case-panel__primary-action",
-            disabled: user.isReadOnly,
-            attributes: { "data-testid": "action-payment-received-during-duly-made" }
-          }) }}
-        </form>
-      </div>
-    {% endif %}
     {# RA-410. "Make Determination" — the final step, replacing the RA-132 #}
     {# Approve CTA. ONE green button for BOTH outcomes: it opens a page    #}
     {# carrying an Approved / Refused radio which posts a single call.     #}

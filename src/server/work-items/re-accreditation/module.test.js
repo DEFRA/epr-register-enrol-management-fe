@@ -180,7 +180,7 @@ describe('reAccreditationModule', () => {
   // mismatch: dropping the flag from any of the eight would make the
   // mirror advertise a set of same-from-state transitions as caller-
   // choosable, i.e. as if the user could pick the destination state.
-  test('flags exactly the twelve server-resolved transitions the backend does', () => {
+  test('flags exactly the eleven server-resolved transitions the backend does', () => {
     const serverResolved = reAccreditationType.transitions
       .filter((t) => t.callerInvocable === false)
       .map((t) => t.actionId)
@@ -199,15 +199,6 @@ describe('reAccreditationModule', () => {
       // duly making carries a payment date that the generic
       // `/actions/{actionId}` route has nowhere to put.
       'duly-make',
-      // RA-523. Non-invocable for the SHARPEST reason on this list, and
-      // the one worth not softening: it shares `fromStateId: 'updated'`
-      // with all four continue-review hops, so the engine's from-state
-      // guard cannot separate them. Were it invocable, a caller holding a
-      // `submitted`-origin item in `updated` could fire it and skip duly
-      // making — no payment date captured, so no SLA clock ever started.
-      // management-be resolves the origin from audit history and refuses
-      // anything that is not `duly-made`.
-      'payment-received-during-duly-made',
       // RA-410. Same reasoning as `approve` above.
       'reject',
       'resume-during-assessment',
@@ -285,7 +276,6 @@ describe('reAccreditationModule', () => {
       'continue-review-during-duly-making',
       'duly-make',
       'payment-received',
-      'payment-received-during-duly-made',
       'query-during-assessment',
       'query-during-decision',
       'query-during-duly-made',
@@ -395,8 +385,10 @@ describe('reAccreditationModule', () => {
       await reAccreditationModule.register(server)
       // Approval (RA-132), continue-review (RA-372) and duly-making
       // (RA-316) routes are always mounted; create routes (RA-127) are
-      // only mounted when the flag is on.
-      expect(server.route).toHaveBeenCalledTimes(5)
+      // only mounted when the flag is on. RA-523 removed the bespoke
+      // payment-received route, dropping the always-on count from four
+      // to three.
+      expect(server.route).toHaveBeenCalledTimes(4)
       const createCall = server.route.mock.calls.find(([routes]) =>
         routes.some((r) => r.path === '/work-items/re-accreditation/new')
       )
@@ -433,7 +425,7 @@ describe('reAccreditationModule', () => {
       await reAccreditationModule.register(server)
       // Only the always-on decision (RA-410), continue-review (RA-372) and
       // duly-making (RA-316) routes are mounted.
-      expect(server.route).toHaveBeenCalledTimes(4)
+      expect(server.route).toHaveBeenCalledTimes(3)
       expect(
         server.route.mock.calls.every(([routes]) =>
           routes.every((r) => r.path !== '/work-items/re-accreditation/new')

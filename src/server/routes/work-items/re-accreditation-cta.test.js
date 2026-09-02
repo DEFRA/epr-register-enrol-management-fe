@@ -4,9 +4,7 @@ import {
 } from '#/server/work-items/core/registry.js'
 import {
   isContinueReviewState,
-  isPaymentAwaitingWaypoint,
-  isPreDulyMadeWaypoint,
-  resolvePaymentReceivedAction
+  isPreDulyMadeWaypoint
 } from './re-accreditation-cta.js'
 
 // Minimal re-accreditation type carrying only the transitions these two
@@ -35,24 +33,6 @@ function registerReaccreditation() {
       {
         actionId: 'continue-review-during-assessment',
         displayName: 'Continue review',
-        fromStateId: 'updated',
-        toStateId: 'assessment-in-progress',
-        callerInvocable: false
-      },
-      // RA-523. `isPaymentAwaitingWaypoint` derives the origin it keys on
-      // from THIS declaration's `fromStateId`, so the `'duly-made'`
-      // literal stays in `module.js` — the same discipline
-      // `isPreDulyMadeWaypoint` follows for `submitted`.
-      {
-        actionId: 'payment-received',
-        displayName: 'Payment received',
-        fromStateId: 'duly-made',
-        toStateId: 'assessment-in-progress',
-        startsOnSelfAssign: true
-      },
-      {
-        actionId: 'payment-received-during-duly-made',
-        displayName: 'Start assessment',
         fromStateId: 'updated',
         toStateId: 'assessment-in-progress',
         callerInvocable: false
@@ -113,85 +93,6 @@ describe('re-accreditation-cta helpers', () => {
     // not registered.
     it('returns false when the re-accreditation type is not registered', () => {
       expect(isPreDulyMadeWaypoint('submitted')).toBe(false)
-    })
-  })
-
-  // RA-523 -------------------------------------------------------------
-  describe('isPaymentAwaitingWaypoint', () => {
-    test('is true for the origin the payment-received transition leaves from', () => {
-      registerReaccreditation()
-
-      expect(isPaymentAwaitingWaypoint('duly-made')).toBe(true)
-    })
-
-    test.each([
-      ['submitted'],
-      ['assessment-in-progress'],
-      ['awaiting-decision'],
-      ['updated']
-    ])(
-      'is false for the %s origin, which keeps its existing CTA',
-      (originStateId) => {
-        registerReaccreditation()
-
-        expect(isPaymentAwaitingWaypoint(originStateId)).toBe(false)
-      }
-    )
-
-    test.each([[null], [undefined]])('is false for a %p origin', (origin) => {
-      registerReaccreditation()
-
-      expect(isPaymentAwaitingWaypoint(origin)).toBe(false)
-    })
-
-    // Fails CLOSED, matching isPreDulyMadeWaypoint: an unknown wire shape
-    // leaves Continue review in place rather than silently swapping in a
-    // control the route would refuse.
-    test('is false when the type is not registered at all', () => {
-      expect(isPaymentAwaitingWaypoint('duly-made')).toBe(false)
-    })
-  })
-
-  describe('resolvePaymentReceivedAction', () => {
-    test('projects the transition to the id and the DECLARED label', () => {
-      registerReaccreditation()
-
-      expect(resolvePaymentReceivedAction()).toEqual({
-        actionId: 'payment-received-during-duly-made',
-        // Deliberately NOT "Payment received" — the label of the duly-made
-        // hop. On the `updated` waypoint no payment event has occurred, so
-        // a button asserting one would be a lying control. Reading it from
-        // the declaration is what lets management-be's wording move the
-        // button without a code change here.
-        displayName: 'Start assessment'
-      })
-    })
-
-    test('is null when the transition is not registered', () => {
-      expect(resolvePaymentReceivedAction()).toBeNull()
-    })
-
-    test('falls back to the action id when a declaration omits displayName', () => {
-      clearWorkItemRegistry()
-      registerWorkItemType({
-        id: 're-accreditation',
-        displayName: 'Re-accreditation',
-        initialState: { id: 'updated', displayName: 'Updated' },
-        states: [{ id: 'updated', displayName: 'Updated' }],
-        transitions: [
-          {
-            actionId: 'payment-received-during-duly-made',
-            fromStateId: 'updated',
-            toStateId: 'assessment-in-progress',
-            callerInvocable: false
-          }
-        ]
-      })
-
-      // An ugly button beats an unlabelled one.
-      expect(resolvePaymentReceivedAction().displayName).toBe(
-        'payment-received-during-duly-made'
-      )
     })
   })
 })

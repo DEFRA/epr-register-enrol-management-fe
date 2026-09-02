@@ -11,17 +11,26 @@
  * user input, and it is neither destructive nor a determination.
  *
  * RA-523 note: the CTA no longer renders for a `duly-made` origin, which
- * now gets the straight-to-assessment hop instead. The ROUTE is unchanged
- * and still accepts every origin the backend does — only what the page
- * offers changed.
+ * the backend now retargets straight to assessment (it never reaches
+ * `updated`). The ROUTE is unchanged and still accepts every origin the
+ * backend does — only what the page offers changed.
  *
- * Redirect and banner mechanics live in `../onward-hop.js`, shared with
- * that flow. Only the copy is here.
+ * Redirect and banner mechanics used to live in a shared `../onward-hop.js`
+ * factory. RA-523 deleted the sibling flow that shared it, so it has been
+ * folded back here as a plain handler.
+ *
+ * Every branch PRG-redirects to the detail page, so a refresh never
+ * re-posts and the caller always lands on the page showing the
+ * (backend-resolved) new state — including on failure, where a dead-end
+ * error page would lose them the item they were working on.
  */
 
-import { makeOnwardHopHandler } from '../onward-hop.js'
+import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
 import { createContinueReviewService } from './service.js'
+
+const logger = createLogger()
 
 // The backend does NOT tell us which state the item landed in ahead of
 // time (it is resolved from audit history), and the redirect target
@@ -40,6 +49,20 @@ const BANNERS = {
   fallback: 'There was a problem continuing this review. Try again.'
 }
 
+function detailHref(id) {
+  return `/work-items/${encodeURIComponent(id)}`
+}
+
+function bannerForFailure(result) {
+  const text =
+    {
+      conflict: BANNERS.conflict,
+      'not-found': BANNERS.notFound
+    }[result.outcome] ?? BANNERS.fallback
+
+  return { type: 'error', title: BANNERS.failureTitle, text }
+}
+
 /**
  * POST — continue the review. Always redirects to the detail page.
  */
@@ -47,10 +70,33 @@ export function makeContinueReviewController({
   service = createContinueReviewService()
 } = {}) {
   return {
-    handler: makeOnwardHopHandler({
-      apply: (args) => service.continueReviewOfWorkItem(args),
-      banners: BANNERS,
-      logMessage: 'Re-accreditation continue review failed'
-    })
+    async handler(request, h) {
+      const id = request.params.id
+      const user = getUser(request)
+
+      const result = await service.continueReviewOfWorkItem({
+        workItemId: id,
+        user
+      })
+
+      if (result.ok) {
+        request.yar?.flash?.('flashBanner', BANNERS.success)
+        return h.redirect(detailHref(id))
+      }
+
+      // Log every non-success outcome so an unexpected 5xx still leaves a
+      // breadcrumb even though the user only sees a generic banner.
+      logger.warn(
+        {
+          workItemId: id,
+          outcome: result.outcome,
+          status: result.status,
+          message: result.message
+        },
+        'Re-accreditation continue review failed'
+      )
+      request.yar?.flash?.('flashBanner', bannerForFailure(result))
+      return h.redirect(detailHref(id))
+    }
   }
 }
