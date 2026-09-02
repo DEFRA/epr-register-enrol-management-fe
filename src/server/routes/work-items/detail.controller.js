@@ -25,9 +25,8 @@ import {
   isCallerInvocable,
   resolveSelfAssignTransition
 } from '#/server/work-items/core/engine.js'
-import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
-import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
+import { buildDecisionMetadata } from './re-accreditation-decision-metadata.js'
 import { buildCaseHeader, buildCaseTabs } from './case-header.js'
 import {
   authoriserName,
@@ -817,60 +816,6 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     isReadOnlyState,
     stateTagClasses,
     decisionMetadata
-  }
-}
-
-function buildDecisionMetadata(workItem) {
-  if (workItem.stateId !== 'approved') {
-    return null
-  }
-
-  const payload = workItem.payload ?? {}
-  const accreditationId = payload.accreditationId ?? null
-  // RA-176: the backend stamps this as a plain ISO date string, but older
-  // work items arrive as MongoDB extended JSON (`{ $date: '...' }`), which
-  // would string-coerce to "[object Object]" in the panel if left unhandled.
-  const accreditationStartDate = unwrapMongoDate(payload.accreditationStartDate)
-  // RA-133: backend now stamps the accreditation year alongside the id
-  // and start date so the UI can display the year independently of the
-  // (locally-formatted) start date.
-  const accreditationYear =
-    typeof payload.accreditationYear === 'number'
-      ? payload.accreditationYear
-      : null
-
-  if (
-    !accreditationId &&
-    !accreditationStartDate &&
-    accreditationYear === null
-  ) {
-    return null
-  }
-
-  let accreditationStartDateFormatted = '—'
-  if (accreditationStartDate) {
-    try {
-      accreditationStartDateFormatted = formatDate(
-        accreditationStartDate,
-        'd MMMM yyyy'
-      )
-    } catch (err) {
-      // Backend produced a value we can't parse; fall back to the raw
-      // ISO string so the user still sees something rather than a
-      // template render error. Log it so ops can spot bad data.
-      logger.warn(
-        { err, accreditationStartDate, workItemId: workItem.id },
-        'Re-accreditation accreditationStartDate could not be formatted'
-      )
-      accreditationStartDateFormatted = String(accreditationStartDate)
-    }
-  }
-
-  return {
-    accreditationId: accreditationId ?? '—',
-    accreditationStartDate,
-    accreditationStartDateFormatted,
-    accreditationYear
   }
 }
 
