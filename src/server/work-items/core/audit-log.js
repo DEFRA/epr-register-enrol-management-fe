@@ -433,6 +433,9 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       if (details.nation) {
         rows.push({ key: 'Nation', value: details.nation })
       }
+      if (details.derivedFrom) {
+        rows.push({ key: 'Derived from', value: details.derivedFrom })
+      }
       return rows
     }
     default:
