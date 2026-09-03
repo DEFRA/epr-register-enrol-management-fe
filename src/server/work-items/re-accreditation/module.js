@@ -358,7 +358,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v13',
+  templateVersion: 'v14',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -440,7 +440,8 @@ export const reAccreditationModule = {
       v10: DETAIL_TEMPLATE_V1,
       v11: DETAIL_TEMPLATE_V1,
       v12: DETAIL_TEMPLATE_V1,
-      v13: DETAIL_TEMPLATE_V1
+      v13: DETAIL_TEMPLATE_V1,
+      v14: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

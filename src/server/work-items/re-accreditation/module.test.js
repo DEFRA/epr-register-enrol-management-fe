@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v13')
+    expect(reAccreditationType.templateVersion).toBe('v14')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -385,7 +385,9 @@ describe('reAccreditationModule', () => {
       await reAccreditationModule.register(server)
       // Approval (RA-132), continue-review (RA-372) and duly-making
       // (RA-316) routes are always mounted; create routes (RA-127) are
-      // only mounted when the flag is on.
+      // only mounted when the flag is on. RA-523 removed the bespoke
+      // payment-received route, dropping the always-on count from four
+      // to three.
       expect(server.route).toHaveBeenCalledTimes(4)
       const createCall = server.route.mock.calls.find(([routes]) =>
         routes.some((r) => r.path === '/work-items/re-accreditation/new')
