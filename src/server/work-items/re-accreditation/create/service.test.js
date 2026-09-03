@@ -15,7 +15,8 @@ const validForm = () => ({
     postcode: 'AB1 2CD'
   },
   material: 'plastic',
-  tonnageBand: '500-5000'
+  tonnageBand: '500-5000',
+  nation: 'England'
 })
 
 describe('#createReAccreditationService.create (RA-127, RA-219)', () => {
@@ -59,6 +60,7 @@ describe('#createReAccreditationService.create (RA-127, RA-219)', () => {
     expect(call.payload).not.toHaveProperty('applicationReference')
     expect(call.payload.operatorEmail).toBe('test@defra.gov.uk')
     expect(call.payload.siteAddress.postcode).toBe('AB1 2CD')
+    expect(call.payload.nation).toBe('England')
 
     // The reference comes back from the created work item's payload.
     expect(result).toEqual({

@@ -68,6 +68,7 @@ function form(overrides = {}) {
     siteAddressPostcode: 'BS1 4DJ',
     material: 'plastic',
     tonnageBand: '500-5000',
+    nation: 'England',
     ...overrides
   }
   return Object.entries(fields)
@@ -220,7 +221,17 @@ describe('the create form POST', () => {
         postcode: 'BS1 4DJ'
       },
       material: 'plastic',
-      tonnageBand: '500-5000'
+      tonnageBand: '500-5000',
+      nation: 'England'
     })
+  })
+
+  // RA-526: this is the layer that would have caught the officer-assignment/
+  // status-push E2E regression - a Nation field present in the schema and
+  // template but missing from reshapeFormPayload's allow-list validates and
+  // renders perfectly while the value never reaches the backend.
+  test('forwards the selected nation to the backend', async () => {
+    await submit(form({ nation: 'Scotland' }))
+    expect(sentPayload()).toHaveProperty('nation', 'Scotland')
   })
 })

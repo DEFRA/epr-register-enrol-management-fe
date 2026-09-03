@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto'
 
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 
-import { MATERIAL_OPTIONS, TONNAGE_BAND_OPTIONS } from './schema.js'
+import {
+  MATERIAL_OPTIONS,
+  TONNAGE_BAND_OPTIONS,
+  NATION_OPTIONS
+} from './schema.js'
 import { createReAccreditationService } from './service.js'
 
 const VIEW_PATH = 're-accreditation/create/index'
@@ -51,6 +55,7 @@ function renderForm(
         },
         material: values.material ?? '',
         tonnageBand: values.tonnageBand ?? '',
+        nation: values.nation ?? '',
         // RA-316 passthrough. Echoed back on re-render so a validation
         // error elsewhere on the form does not silently discard it.
         chargeAmountPence: values.chargeAmountPence ?? ''
@@ -58,7 +63,11 @@ function renderForm(
       fieldErrors,
       errorSummary,
       materialOptions: buildOptions(values.material, MATERIAL_OPTIONS),
-      tonnageBandOptions: buildOptions(values.tonnageBand, TONNAGE_BAND_OPTIONS)
+      tonnageBandOptions: buildOptions(
+        values.tonnageBand,
+        TONNAGE_BAND_OPTIONS
+      ),
+      nationOptions: buildOptions(values.nation, NATION_OPTIONS)
     })
     .code(statusCode)
 }
@@ -75,6 +84,7 @@ const FIELD_ORDER = [
   'siteAddress.postcode',
   'material',
   'tonnageBand',
+  'nation',
   // RA-316 passthrough fields, last so they do not reorder the existing
   // error summary.
   'chargeAmountPence',
@@ -116,7 +126,10 @@ const DEMO_VALUES = {
     postcode: 'BS1 4DJ'
   },
   material: 'plastic',
-  tonnageBand: '500-5000'
+  tonnageBand: '500-5000',
+  // RA-526: a sensible demo default - matches every other default-to-England
+  // fallback in this ecosystem when nation data is otherwise unavailable.
+  nation: 'England'
   // RA-316. `chargeAmountPence` is deliberately NOT prefilled here, and
   // adding a figure would be a regression rather than a convenience.
   //
@@ -194,7 +207,8 @@ function reshapeFormPayload(payload) {
       postcode: p.siteAddressPostcode
     },
     material: p.material,
-    tonnageBand: p.tonnageBand
+    tonnageBand: p.tonnageBand,
+    nation: p.nation
   }
 
   // An empty box posts `''`, which `Joi.number()` would reject. Empty is

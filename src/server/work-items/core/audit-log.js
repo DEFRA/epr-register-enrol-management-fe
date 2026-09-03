@@ -95,6 +95,8 @@ const ACTION_NOTIFICATION_FAILED = 'notification-failed'
 const ACTION_STATUS_PUSH_SENT = 'status-push-sent'
 const ACTION_STATUS_PUSH_SKIPPED = 'status-push-skipped'
 const ACTION_STATUS_PUSH_FAILED = 'status-push-failed'
+const ACTION_ROUTED_TO_NATION = 'routed-to-nation'
+const ACTION_NATION_CORRECTED = 'nation-corrected'
 
 const STATE_BEARING_ACTIONS = new Set([
   ACTION_WORK_ITEM_SUBMITTED,
@@ -196,7 +198,9 @@ const ACTION_DISPLAY_NAMES = {
   [ACTION_STATUS_PUSH_SKIPPED]:
     'Status not sent to the Registration & Accreditation service (disabled)',
   [ACTION_STATUS_PUSH_FAILED]:
-    'Status failed to send to the Registration & Accreditation service'
+    'Status failed to send to the Registration & Accreditation service',
+  [ACTION_ROUTED_TO_NATION]: 'Routed to nation',
+  [ACTION_NATION_CORRECTED]: 'Nation corrected'
 }
 
 /**
@@ -422,6 +426,39 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
     case ACTION_STATUS_PUSH_SKIPPED:
     case ACTION_STATUS_PUSH_FAILED:
       return statusPushDetailRows(entry, details)
+    case ACTION_ROUTED_TO_NATION: {
+      // RA-125: ReAccreditationNationRoutingHook stamps `nation` (and
+      // `derivedFrom`, always "site-address" today) onto this entry's
+      // details. This case was missing entirely, so a "Routed to nation"
+      // entry rendered with no detail rows at all.
+      const rows = []
+      if (details.nation) {
+        rows.push({ key: 'Nation', value: details.nation })
+      }
+      if (details.derivedFrom) {
+        rows.push({ key: 'Derived from', value: details.derivedFrom })
+      }
+      return rows
+    }
+    case ACTION_NATION_CORRECTED: {
+      // RA-526: ReAccreditationNationCorrectionMigration stamps `from`/`to`
+      // (and `reason`) onto this entry's details when it corrects a nation
+      // that was wrongly derived by the pre-RA-526 postcode-based hook. The
+      // migration applies corrections directly rather than a separate
+      // dry-run pass, so this entry is the review trail for each one, not
+      // just an audit nicety.
+      const rows = []
+      if (details.from) {
+        rows.push({ key: 'Previous nation', value: details.from })
+      }
+      if (details.to) {
+        rows.push({ key: 'Corrected nation', value: details.to })
+      }
+      if (details.reason) {
+        rows.push({ key: 'Reason', value: details.reason, multiline: true })
+      }
+      return rows
+    }
     default:
       return []
   }

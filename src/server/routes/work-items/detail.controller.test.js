@@ -191,6 +191,26 @@ function registerReaccreditation() {
         fromStateId: 'updated',
         toStateId: 'assessment-in-progress',
         callerInvocable: false
+      },
+      // RA-523. The origin matrix needs a continue-review declaration for
+      // EVERY origin it asserts on, not just one: `isContinueReviewState`
+      // answers "is this item in the state those transitions leave from",
+      // so one declaration would satisfy it — but a test that claims the
+      // `awaiting-decision` origin still gets Continue review is worthless
+      // unless that origin is actually declared.
+      {
+        actionId: 'continue-review-during-decision',
+        displayName: 'Continue review',
+        fromStateId: 'updated',
+        toStateId: 'awaiting-decision',
+        callerInvocable: false
+      },
+      {
+        actionId: 'continue-review-during-duly-made',
+        displayName: 'Continue review',
+        fromStateId: 'updated',
+        toStateId: 'duly-made',
+        callerInvocable: false
       }
     ]
   })
@@ -1568,6 +1588,285 @@ describe('#workItemDetailController', () => {
     })
   })
 
+  // ---------------------------------------------------------------------
+  // RA-523. QA: "when the user does not assign the work item to themselves
+  // in the first instance on a duly made work item, and then queries it,
+  // then after the query has been responded to, you get into this weird
+  // state where it offers for you to start and assign to yourself, but it
+  // should already be assigned"; and "if the work item is not duly made,
+  // then on duly making an 'updated' ticket will then recreate the same
+  // faulty state."
+  //
+  // The assignment is NOT lost — three rounds of backend investigation
+  // proved the data is intact end to end. What QA is looking at is the
+  // ASSIGNMENT PANEL offering "Assign to yourself and start" on an item
+  // the caller already holds, whose label reads as though it were
+  // unassigned.
+  //
+  // These tests pin the STATE the button appears in, because that is what
+  // separates the real diagnosis from a plausible wrong one: both of QA's
+  // routes converge on `duly-made`, the one state a `startsOnSelfAssign`
+  // transition (`payment-received`) leaves from, which is what makes
+  // `selfAssignStartsWork` true and fires the RA-410 recovery clause in
+  // `buildAssignmentViewModel` unconditionally for the assignee.
+  // ---------------------------------------------------------------------
+  describe('RA-523: an item the caller already holds must not offer "Assign to yourself and start"', () => {
+    const ME = TEST_STANDARD_USER.id
+
+    function applied(actionId, fromStateId, toStateId, at) {
+      return {
+        id: `audit-${actionId}`,
+        action: 'action-applied',
+        details: { actionId, fromStateId, toStateId },
+        stateId: toStateId,
+        createdAt: at,
+        createdBy: ME,
+        createdByName: 'Test Caseworker'
+      }
+    }
+
+    function assigned(at) {
+      return {
+        id: 'audit-assigned',
+        action: 'assigned',
+        details: { assigneeId: ME, assigneeName: 'Test Caseworker' },
+        createdAt: at,
+        createdBy: ME,
+        createdByName: 'Test Caseworker'
+      }
+    }
+
+    const SUBMITTED = {
+      id: 'audit-submitted',
+      action: 'work-item-submitted',
+      details: { stateId: 'submitted' },
+      stateId: 'submitted',
+      createdAt: '2026-04-27T10:00:00Z',
+      createdBy: 'frontend'
+    }
+
+    // QA route 1: an UNASSIGNED duly-made item is queried (raising a query
+    // self-assigns it — see query.controller.js's AC04 notice), the
+    // operator responds, the item resumes into `updated` and Continue
+    // review returns it to `duly-made`, still assigned to the caller.
+    const ROUTE_1_AUDIT = [
+      SUBMITTED,
+      applied('duly-make', 'submitted', 'duly-made', '2026-04-27T11:00:00Z'),
+      assigned('2026-04-27T12:00:00Z'),
+      applied(
+        'query-during-duly-made',
+        'duly-made',
+        'queried',
+        '2026-04-27T12:00:01Z'
+      ),
+      applied(
+        'resume-during-duly-made',
+        'queried',
+        'updated',
+        '2026-04-28T09:00:00Z'
+      ),
+      applied(
+        'continue-review-during-duly-made',
+        'updated',
+        'duly-made',
+        '2026-04-28T10:00:00Z'
+      )
+    ]
+
+    // QA route 2: a NOT-yet-duly-made (`submitted`) item is queried, which
+    // likewise self-assigns it; the operator responds, the item resumes
+    // into `updated` with `originStateId: 'submitted'` (so RA-454 offers
+    // Duly make rather than Continue review), and duly making it lands it
+    // in `duly-made` — still assigned to the caller.
+    const ROUTE_2_AUDIT = [
+      SUBMITTED,
+      assigned('2026-04-27T12:00:00Z'),
+      applied(
+        'query-during-duly-making',
+        'submitted',
+        'queried',
+        '2026-04-27T12:00:01Z'
+      ),
+      applied(
+        'resume-during-duly-making',
+        'queried',
+        'updated',
+        '2026-04-28T09:00:00Z'
+      ),
+      applied('duly-make', 'updated', 'duly-made', '2026-04-28T10:00:00Z')
+    ]
+
+    async function render(workItem) {
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({ ok: true, workItem })
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      // Positive hook first: asserting only the ABSENCE of the button would
+      // pass vacuously if the whole panel stopped rendering.
+      expect(result).toContain('data-testid="case-assignment-panel"')
+      return result
+    }
+
+    test.each([
+      ['route 1 — queried from duly-made, then Continue review', ROUTE_1_AUDIT],
+      ['route 2 — queried from submitted, then Duly make', ROUTE_2_AUDIT]
+    ])('does not offer self-assign after QA %s', async (_label, auditLog) => {
+      const result = await render(
+        aWorkItem({
+          stateId: 'duly-made',
+          assignedToId: ME,
+          assignedToName: 'Test Caseworker',
+          auditLog
+        })
+      )
+
+      expect(result).toContain('Assigned to you')
+      expect(result).not.toContain('data-testid="self-assign-submit"')
+      expect(result).not.toContain('Assign to yourself and start')
+      // The item genuinely still has to be started, so the START half is
+      // offered — under its own name, and posting one action rather than
+      // re-running an assignment the caller already holds.
+      expect(result).toContain('data-testid="start-work-submit"')
+      expect(result).toContain('Payment received')
+      expect(result).toContain(
+        `action="/work-items/${ID}/actions/payment-received"`
+      )
+    })
+
+    // The state the button appears in is load-bearing for the diagnosis.
+    // In `updated` there IS no `startsOnSelfAssign` transition, so the
+    // clause cannot fire there — if this test ever fails, the cause is
+    // something other than `selfAssignStartsWork`.
+    test('an assigned item sitting in `updated` never offered it in the first place', async () => {
+      const result = await render(
+        aWorkItem({
+          stateId: 'updated',
+          originStateId: 'duly-made',
+          assignedToId: ME,
+          assignedToName: 'Test Caseworker',
+          auditLog: ROUTE_1_AUDIT.slice(0, -1)
+        })
+      )
+
+      expect(result).toContain('Assigned to you')
+      expect(result).not.toContain('data-testid="self-assign-submit"')
+    })
+
+    // The gate must stay a gate on the CALLER, not on the state: an
+    // unassigned duly-made item, and one held by a colleague, both still
+    // offer the button.
+    test.each([
+      ['unassigned', { assignedToId: null, assignedToName: null }],
+      [
+        'assigned to a colleague',
+        { assignedToId: 'someone-else', assignedToName: 'Someone Else' }
+      ]
+    ])(
+      'still offers self-assign on a duly-made item that is %s',
+      async (_l, who) => {
+        const result = await render(
+          aWorkItem({ stateId: 'duly-made', auditLog: ROUTE_1_AUDIT, ...who })
+        )
+
+        expect(result).toContain('data-testid="self-assign-submit"')
+        expect(result).toContain('Assign to yourself and start')
+        // …and only the assign-and-start button. The start control is for a
+        // caller who already holds the item; offering both would put two
+        // primary buttons in the panel.
+        expect(result).not.toContain('data-testid="start-work-submit"')
+      }
+    )
+
+    // ------------------------------------------------------------------
+    // The RA-410 case the deleted `|| selfAssignStartsWork` clause existed
+    // for. "Assign to yourself and start" is two operations; if the assign
+    // lands and the transition does not, `callerIsAssignee` flips true and
+    // the caller must STILL have a way to start the work. A fix for RA-523
+    // that reintroduces the stranded caller is not a fix.
+    // ------------------------------------------------------------------
+    test('RA-410: a caller stranded by a failed start transition is left with a working start control', async () => {
+      registerReaccreditation()
+      // The pre-read the handler does BEFORE assigning still sees the item
+      // unassigned; every later read (including the in-place re-render) sees
+      // the assignment that landed.
+      getWorkItem.mockResolvedValueOnce({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'duly-made',
+          assignedToId: null,
+          assignedToName: null
+        })
+      })
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'duly-made',
+          assignedToId: ME,
+          assignedToName: 'Test Caseworker'
+        })
+      })
+      assignWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'duly-made', assignedToId: ME })
+      })
+      // The start half fails — the whole point of the scenario.
+      applyWorkItemAction.mockResolvedValue({
+        ok: false,
+        reason: 'conflict',
+        status: statusCodes.conflict,
+        message: 'Transition not allowed'
+      })
+
+      const { statusCode, result } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/${ID}/self-assign`,
+        payload: {}
+      })
+
+      // Rendered in place (not redirected) and carrying the failure's own
+      // status, so the caller lands on the item they now hold.
+      expect(statusCode).toBe(statusCodes.conflict)
+      expect(applyWorkItemAction).toHaveBeenCalledWith(
+        expect.objectContaining({ actionId: 'payment-received' })
+      )
+      // The banner must name a control that is actually on the page. It used
+      // to say "Select 'Assign to yourself and start' again" — a button that
+      // is now (correctly) gone, because the assign half succeeded.
+      expect(result).toContain(
+        'This application has been assigned to you, but it could not be started.'
+      )
+      expect(result).toContain(
+        'Select &quot;Payment received&quot; to try again.'
+      )
+      expect(result).not.toContain('Assign to yourself and start')
+      // …and the control it names is reachable, so the retry is not a
+      // dead end.
+      expect(result).toContain('data-testid="start-work-submit"')
+      expect(result).toContain(
+        `action="/work-items/${ID}/actions/payment-received"`
+      )
+    })
+
+    // The RA-358 closed-case gate still wins: a terminal item offers no
+    // assignment affordance at all, start control included.
+    test('offers no start control on a closed case', async () => {
+      const result = await render(
+        aWorkItem({
+          stateId: 'withdrawn',
+          assignedToId: ME,
+          assignedToName: 'Test Caseworker'
+        })
+      )
+
+      expect(result).toContain('data-testid="assignment-closed"')
+      expect(result).not.toContain('data-testid="start-work-submit"')
+      expect(result).not.toContain('data-testid="self-assign-submit"')
+    })
+  })
+
   describe('RA-211 notification-failed banner', () => {
     test('renders the banner when a notification-failed audit entry is present with no later notification-sent', async () => {
       registerReaccreditation()
@@ -2689,6 +2988,165 @@ describe('#workItemDetailController', () => {
   // backend and therefore never appear in `availableActions`, so the
   // generic action loop cannot render them — hence a bespoke CTA posting to
   // the type-specific endpoint.
+
+  // ---------------------------------------------------------------------
+  // RA-523 (final). A duly-made-origin item queried while it awaited
+  // payment no longer reaches `updated`: the backend's
+  // `resume-during-duly-made` transition now retargets it straight to
+  // `assessment-in-progress`, so it arrives decision-ready with no onward
+  // CTA (its generic decision / query / withdraw affordances cover it).
+  // The forward "Start assessment" hop this repo once rendered on the
+  // `updated` screen is deleted with the transition it invoked.
+  //
+  // The whole regression risk on this ticket is the per-origin CTA
+  // fall-through for any LEGACY item still sitting in `updated`.
+  // `originStateId` is one discriminator feeding Duly make / Continue
+  // review / nothing, so these tests are written as a matrix over every
+  // origin rather than a single happy-path test.
+  // ---------------------------------------------------------------------
+  describe('RA-523: the `updated` screen routes each query origin to its own CTA', () => {
+    // The forward hop this ticket deleted. Kept here as string constants
+    // ONLY so the tests below can assert it never renders again, for any
+    // origin — there is no markup, route or transition behind them now.
+    const REMOVED_PAYMENT_CTA =
+      'data-testid="re-accreditation-payment-received-cta"'
+    const REMOVED_PAYMENT_BUTTON =
+      'data-testid="action-payment-received-during-duly-made"'
+    const CONTINUE_CTA = 'data-testid="re-accreditation-continue-review-cta"'
+    const DULY_MAKE_CTA = 'data-testid="re-accreditation-duly-make-cta"'
+
+    async function renderUpdated(originStateId) {
+      registerReaccreditation()
+      // These CTAs live in the TYPE-SPECIFIC detail template, so without
+      // this registration every item falls back to the generic one and
+      // every assertion below passes vacuously.
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'updated', originStateId })
+      })
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      return result
+    }
+
+    // The deleted forward hop must never render again, for ANY origin.
+    // The behaviour moved into the backend resume transition; nothing on
+    // this screen posts to `payment-received` any more.
+    test.each([
+      ['duly-made'],
+      ['submitted'],
+      ['assessment-in-progress'],
+      ['awaiting-decision'],
+      ['updated']
+    ])(
+      'the removed "Start assessment" forward hop never renders (%s origin)',
+      async (originStateId) => {
+        const result = await renderUpdated(originStateId)
+
+        expect(result).not.toContain(REMOVED_PAYMENT_CTA)
+        expect(result).not.toContain(REMOVED_PAYMENT_BUTTON)
+        expect(result).not.toContain('Start assessment')
+        expect(result).not.toContain(
+          `/work-items/re-accreditation/${ID}/payment-received`
+        )
+      }
+    )
+
+    // A duly-made-origin item that IS still in `updated` is a LEGACY item:
+    // a pre-v14 snapshot whose `resume-during-duly-made` still targeted
+    // `updated`. It gets Continue review — the retained legacy escape back
+    // to `duly-made` (`continue-review-during-duly-made`) — exactly like
+    // the other review origins. New items never reach this screen.
+    test('a `duly-made` origin gets Continue review (legacy escape), not Duly make', async () => {
+      const result = await renderUpdated('duly-made')
+
+      expect(result).toContain(CONTINUE_CTA)
+      expect(result).not.toContain(DULY_MAKE_CTA)
+    })
+
+    // The regression guard the whole ticket turns on. Each of these origins
+    // resolves to exactly one CTA, unchanged by RA-523's deletion.
+    test.each([
+      [
+        'submitted',
+        'Duly make (RA-454) — Continue review is suppressed so only Duly make shows',
+        DULY_MAKE_CTA,
+        CONTINUE_CTA
+      ],
+      [
+        'assessment-in-progress',
+        'Continue review',
+        CONTINUE_CTA,
+        DULY_MAKE_CTA
+      ],
+      ['awaiting-decision', 'Continue review', CONTINUE_CTA, DULY_MAKE_CTA]
+    ])(
+      'a `%s` origin still gets %s',
+      async (originStateId, _label, expectedCta, absentCta) => {
+        const result = await renderUpdated(originStateId)
+
+        expect(result).toContain(expectedCta)
+        expect(result).not.toContain(absentCta)
+      }
+    )
+
+    // `originStateId` is always present on the wire (see
+    // `duly-making/eligibility.js`), but an item that never took a query
+    // waypoint reports its own state — so `updated` here, which is not the
+    // `fromStateId` of `duly-make`, so Duly make stays suppressed and
+    // Continue review (gated on the item's state) renders.
+    test('an `updated` item that never took a waypoint still gets Continue review', async () => {
+      const result = await renderUpdated('updated')
+
+      expect(result).not.toContain(DULY_MAKE_CTA)
+      // Asserted positively so this test cannot pass merely because the
+      // panel stopped rendering.
+      expect(result).toContain(CONTINUE_CTA)
+    })
+
+    // A live `duly-made` item belongs to the assignment panel's own start
+    // control (the first half of RA-523, unchanged), never to any `updated`
+    // CTA and never to the removed forward hop.
+    test('a live `duly-made` item gets the split-button start control, not the removed hop', async () => {
+      registerReaccreditation()
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'duly-made',
+          originStateId: 'duly-made',
+          assignedToId: TEST_STANDARD_USER.id,
+          assignedToName: 'Test Caseworker'
+        })
+      })
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).not.toContain(REMOVED_PAYMENT_CTA)
+      // The split-button start control is unchanged: its own testid and its
+      // "Payment received" wording, asserted together — a control that kept
+      // its id while changing its label is the defect RA-523 reported.
+      expect(result).toContain('data-testid="start-work-submit"')
+      expect(result).toContain('Payment received')
+      expect(result).not.toContain('Start assessment')
+    })
+  })
+
   describe('RA-372 Continue review CTA (canContinueReview)', () => {
     function registerReaccreditationWithDetailV1() {
       registerReaccreditation()
