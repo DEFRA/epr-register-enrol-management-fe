@@ -22,7 +22,7 @@ possible and the user is never told a second sign-in occurred.
 ### Differences from the frontend that matter
 
 1. **No per-request session hook exists.** The `yar-session` scheme is defined
-   *inline and duplicated* in `auth-plugin.js` and `stub-auth-plugin.js` (dev
+   _inline and duplicated_ in `auth-plugin.js` and `stub-auth-plugin.js` (dev
    branch); each only does `request.yar.get('user')`. There is nowhere central
    to compute the notice. Add an **`onPostAuth`** server extension (registered
    by both plugins, dev + real branches; the `NODE_ENV=test` `test-bypass`
@@ -89,27 +89,27 @@ interstitial). "If this was not you, sign out and contact your administrator."
 
 ## 3. Files to change
 
-| File | Change |
-| --- | --- |
-| `src/server/common/helpers/auth/active-session-registry.js` (+ `.test.js`) | **New.** Registry helper. |
-| `src/server/common/helpers/auth/concurrent-login-notice.js` (+ `.test.js`) | **New.** `onPostAuth` handler. |
-| `src/server/common/helpers/auth/auth-plugin.js` | Register the `onPostAuth` extension. |
-| `src/server/common/helpers/auth/stub-auth-plugin.js` | Register it in the dev (non-test) branch. |
-| `src/server/common/helpers/auth/auth-plugin.test.js` | Cover current/superseded/dismissed/store-error. |
-| `src/server/routes/auth/controller.js` | `loginAt` stamp + `recordLogin` + Info flag in `regulatorCallback`; `clear` + `async` in `logout`. |
-| `src/server/routes/auth/controller.test.js` | Assert stamp/write after reset; Info only with a prior entry; registry cleared on logout. |
-| `src/server/routes/auth/stub/controller.js` | Same stamp + `recordLogin` + Info flag; `async` or fire-and-forget. |
-| `src/server/routes/auth/stub/controller.test.js` (or equivalent) | Assert registry write on stub login. |
-| `src/server/routes/auth/session-notice/index.js` + `controller.js` (+ test) | **New.** Dismissal route. |
-| `src/server/plugins/session-cache.js` | *Recommended, separate commit:* add `maxCookieSize: 0`. |
-| `src/server/server.js` / small plugin | `server.cache({ segment: 'active-sessions', ... })` → `server.app.activeSessionRegistry`. |
-| `src/config/nunjucks/context/context.js` (+ test) | Surface `concurrentLoginNotice`. |
-| `src/server/common/components/session-notice/template.njk` + `.scss` | **New.** Banner markup. |
-| base layout `.njk` | Include the component when `concurrentLoginNotice`. |
-| client JS + SCSS (this app's `src/client/...`) | **New.** Toast PE + styles. |
-| `translation.json` (+ `cy` if required) | Toast copy. |
-| `src/config/config.js` | `SESSION_CONCURRENT_LOGIN_NOTICE_ENABLED`. |
-| `docs/authentication.md` | New section. |
+| File                                                                        | Change                                                                                             |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `src/server/common/helpers/auth/active-session-registry.js` (+ `.test.js`)  | **New.** Registry helper.                                                                          |
+| `src/server/common/helpers/auth/concurrent-login-notice.js` (+ `.test.js`)  | **New.** `onPostAuth` handler.                                                                     |
+| `src/server/common/helpers/auth/auth-plugin.js`                             | Register the `onPostAuth` extension.                                                               |
+| `src/server/common/helpers/auth/stub-auth-plugin.js`                        | Register it in the dev (non-test) branch.                                                          |
+| `src/server/common/helpers/auth/auth-plugin.test.js`                        | Cover current/superseded/dismissed/store-error.                                                    |
+| `src/server/routes/auth/controller.js`                                      | `loginAt` stamp + `recordLogin` + Info flag in `regulatorCallback`; `clear` + `async` in `logout`. |
+| `src/server/routes/auth/controller.test.js`                                 | Assert stamp/write after reset; Info only with a prior entry; registry cleared on logout.          |
+| `src/server/routes/auth/stub/controller.js`                                 | Same stamp + `recordLogin` + Info flag; `async` or fire-and-forget.                                |
+| `src/server/routes/auth/stub/controller.test.js` (or equivalent)            | Assert registry write on stub login.                                                               |
+| `src/server/routes/auth/session-notice/index.js` + `controller.js` (+ test) | **New.** Dismissal route.                                                                          |
+| `src/server/plugins/session-cache.js`                                       | _Recommended, separate commit:_ add `maxCookieSize: 0`.                                            |
+| `src/server/server.js` / small plugin                                       | `server.cache({ segment: 'active-sessions', ... })` → `server.app.activeSessionRegistry`.          |
+| `src/config/nunjucks/context/context.js` (+ test)                           | Surface `concurrentLoginNotice`.                                                                   |
+| `src/server/common/components/session-notice/template.njk` + `.scss`        | **New.** Banner markup.                                                                            |
+| base layout `.njk`                                                          | Include the component when `concurrentLoginNotice`.                                                |
+| client JS + SCSS (this app's `src/client/...`)                              | **New.** Toast PE + styles.                                                                        |
+| `translation.json` (+ `cy` if required)                                     | Toast copy.                                                                                        |
+| `src/config/config.js`                                                      | `SESSION_CONCURRENT_LOGIN_NOTICE_ENABLED`.                                                         |
+| `docs/authentication.md`                                                    | New section.                                                                                       |
 
 ## 4. Test plan (unit / integration — this repo)
 
