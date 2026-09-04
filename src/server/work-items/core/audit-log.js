@@ -220,34 +220,50 @@ function buildSnapshotRows(snapshot, entry, resolveStateDisplayName) {
   if (NO_SNAPSHOT_CONTEXT_ACTIONS.has(entry?.action)) {
     return []
   }
-  const rows = []
-  if (snapshot.orgId) {
-    rows.push({ key: 'Org ID', value: snapshot.orgId })
-  }
-  if (snapshot.typeDisplayName) {
-    rows.push({ key: 'Type', value: snapshot.typeDisplayName })
-  }
-  const stateRow = buildEntryStateRow(entry, resolveStateDisplayName)
-  if (stateRow) {
-    rows.push(stateRow)
-  }
-  const submittedAt = formatDateTimeGds(snapshot.submittedAt)
-  if (submittedAt) {
-    rows.push({ key: 'Submitted at', value: submittedAt })
-  }
-  if (snapshot.submittedBy) {
-    rows.push({ key: 'Submitted by', value: snapshot.submittedBy })
-  }
-  const lastModified = formatDateTimeGds(snapshot.lastModifiedAt)
-  if (lastModified) {
-    rows.push({ key: 'Last modified', value: lastModified })
-  }
-  rows.push({
-    key: 'Assigned to',
-    value: snapshot.assignedToName ?? 'Unassigned'
-  })
-  return rows
+  // Each row is its own pure helper (returning null when its value is
+  // absent) rather than a chain of `if`s pushing onto a shared array —
+  // keeps this function's own complexity low regardless of how many
+  // optional rows the context block grows to.
+  return [
+    orgIdRow(snapshot),
+    typeRow(snapshot),
+    buildEntryStateRow(entry, resolveStateDisplayName),
+    submittedAtRow(snapshot),
+    submittedByRow(snapshot),
+    lastModifiedRow(snapshot),
+    assignedToRow(snapshot)
+  ].filter(Boolean)
 }
+
+const orgIdRow = (snapshot) =>
+  snapshot.orgId ? { key: 'Org ID', value: snapshot.orgId } : null
+
+const typeRow = (snapshot) =>
+  snapshot.typeDisplayName
+    ? { key: 'Type', value: snapshot.typeDisplayName }
+    : null
+
+const submittedAtRow = (snapshot) => {
+  const submittedAt = formatDateTimeGds(snapshot.submittedAt)
+  return submittedAt ? { key: 'Submitted at', value: submittedAt } : null
+}
+
+const submittedByRow = (snapshot) =>
+  snapshot.submittedBy
+    ? { key: 'Submitted by', value: snapshot.submittedBy }
+    : null
+
+const lastModifiedRow = (snapshot) => {
+  const lastModified = formatDateTimeGds(snapshot.lastModifiedAt)
+  return lastModified ? { key: 'Last modified', value: lastModified } : null
+}
+
+// Unlike the rows above, this one is never absent — an unassigned item
+// still gets an explicit "Unassigned" value rather than no row at all.
+const assignedToRow = (snapshot) => ({
+  key: 'Assigned to',
+  value: snapshot.assignedToName ?? 'Unassigned'
+})
 
 /**
  * Humanised label for the audit timeline. Falls back to a per-action
