@@ -105,6 +105,42 @@ export function buildNotice(variant, otherLoginAt) {
   return { variant, otherLoginAt, at: formatLoginTime(otherLoginAt) }
 }
 
+// This session logged in while another one already existed for the identity
+// — the one-shot flag armed by markLoginAndNotifyPrevious.
+function computeInfoNotice(request, dismissedFor) {
+  const info = request.yar.get(INFO_KEY)
+  if (info?.otherLoginAt && info.otherLoginAt > dismissedFor) {
+    return buildNotice('info', info.otherLoginAt)
+  }
+  return null
+}
+
+// A newer login exists elsewhere for this identity. null on any registry
+// error or absence — the caller treats that as "no notice" (fail-open).
+async function computeAlertNotice(request, userId, dismissedFor) {
+  const registry = getRegistry(request)
+  if (!registry) {
+    return null
+  }
+
+  let latest
+  try {
+    latest = await registry.get(userId)
+  } catch (err) {
+    logWarn(request, 'concurrent-login: registry read on request failed', err)
+    return null
+  }
+
+  const sessionLoginAt = request.yar.get(LOGIN_AT_KEY) ?? 0
+  const isNewerElsewhere =
+    latest &&
+    latest.lastLoginSessionId !== request.yar.id &&
+    latest.lastLoginAt > sessionLoginAt &&
+    latest.lastLoginAt > dismissedFor
+
+  return isNewerElsewhere ? buildNotice('alert', latest.lastLoginAt) : null
+}
+
 /**
  * onPostAuth: decide whether this request's response should carry a notice,
  * and of which kind. Runs for every request; a no-op unless authenticated and
@@ -125,29 +161,12 @@ export async function concurrentLoginNoticeExt(request, h) {
 
   const dismissedFor = request.yar.get(NOTICE_DISMISSED_KEY) ?? 0
 
-  const info = request.yar.get(INFO_KEY)
-  if (info?.otherLoginAt && info.otherLoginAt > dismissedFor) {
-    request.app.concurrentLoginNotice = buildNotice('info', info.otherLoginAt)
-    return h.continue
-  }
+  const notice =
+    computeInfoNotice(request, dismissedFor) ??
+    (await computeAlertNotice(request, userId, dismissedFor))
 
-  const sessionLoginAt = request.yar.get(LOGIN_AT_KEY) ?? 0
-  const registry = getRegistry(request)
-  let latest = null
-  try {
-    latest = registry ? await registry.get(userId) : null
-  } catch (err) {
-    logWarn(request, 'concurrent-login: registry read on request failed', err)
-    return h.continue
-  }
-
-  if (
-    latest &&
-    latest.lastLoginSessionId !== request.yar.id &&
-    latest.lastLoginAt > sessionLoginAt &&
-    latest.lastLoginAt > dismissedFor
-  ) {
-    request.app.concurrentLoginNotice = buildNotice('alert', latest.lastLoginAt)
+  if (notice) {
+    request.app.concurrentLoginNotice = notice
   }
 
   return h.continue
