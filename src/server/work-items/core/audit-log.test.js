@@ -393,7 +393,7 @@ describe('detailRowsForAuditEntry', () => {
     ])
   })
 
-  test('labels the legacy site-address derivedFrom value as legacy rather than showing it verbatim', () => {
+  test('humanises the legacy site-address derivedFrom value', () => {
     expect(
       detailRowsForAuditEntry({
         action: 'routed-to-nation',
@@ -401,7 +401,7 @@ describe('detailRowsForAuditEntry', () => {
       })
     ).toEqual([
       { key: 'Nation', value: 'England' },
-      { key: 'Derived from', value: 'Site address (legacy, pre-RA-526)' }
+      { key: 'Derived from', value: 'Site address' }
     ])
   })
 
@@ -560,7 +560,7 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
   })
 
   test.each(['routed-to-nation', 'nation-corrected'])(
-    'omits every snapshot context row except Assigned to for a %s entry, unlike every other action',
+    'omits ALL snapshot context rows for a %s entry, unlike every other action',
     (action) => {
       const snapshot = {
         orgId: 'APP-001',
@@ -594,15 +594,9 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
       expect(keys).not.toContain('Submitted at')
       expect(keys).not.toContain('Submitted by')
       expect(keys).not.toContain('Last modified')
-      // Assigned to is the one context row kept — who currently owns the
-      // case is relevant regardless of why its nation was set.
-      const assignedRow = decorated.detailRows.find(
-        (r) => r.key === 'Assigned to'
-      )
-      expect(assignedRow?.value).toBe('Alice Anderson')
-      // The entry's own rows must still be there too — only the rest of the
-      // context block is suppressed.
-      expect(decorated.detailRows.length).toBeGreaterThan(1)
+      expect(keys).not.toContain('Assigned to')
+      // The entry's own rows must still be there — only the context block is suppressed.
+      expect(decorated.detailRows.length).toBeGreaterThan(0)
     }
   )
 

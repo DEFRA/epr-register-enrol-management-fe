@@ -24,9 +24,9 @@ import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
  *
  * The optional `workItemSnapshot` adds a consistent set of work-item
  * context rows (Org ID, Type, State, Submitted at, Submitted by,
- * Last modified, Assigned to) to the disclosure of every audit entry —
- * EXCEPT `routed-to-nation`/`nation-corrected`, which get only "Assigned
- * to" and none of the rest (see `NO_SNAPSHOT_CONTEXT_ACTIONS`).
+ * Last modified, Assigned to) to the disclosure of every audit entry
+ * EXCEPT `routed-to-nation`/`nation-corrected` — see
+ * `NO_SNAPSHOT_CONTEXT_ACTIONS`.
  *
  * The "State" row is special: it is per-entry, resolved from each entry's
  * OWN `stateId` (the work-item state as-of that event — epr-rr9s) via the
@@ -78,8 +78,8 @@ export function decorateAuditLog(
  * its own rows, so it DOES get the context-block State row: that is where
  * a caseworker learns which state the item was in when the event happened.
  * The two exceptions to THAT are `routed-to-nation`/`nation-corrected`,
- * which get no context-block rows at all EXCEPT "Assigned to" — see
- * `NO_SNAPSHOT_CONTEXT_ACTIONS` below, a stronger exclusion than this set.
+ * which get no context-block rows at all — see `NO_SNAPSHOT_CONTEXT_ACTIONS`
+ * below, a stronger exclusion than this set.
  *
  * RA-410 removed the task framework and purged the `task-completed` /
  * `task-status-changed` cases from `detailRowsForAuditEntry`, so those
@@ -137,7 +137,7 @@ function nationDisplayName(nation) {
 const DERIVED_FROM_DISPLAY_NAMES = {
   submitted: "Registration's regulator",
   'default-england': 'No nation provided (defaulted to England)',
-  'site-address': 'Site address (legacy, pre-RA-526)'
+  'site-address': 'Site address'
 }
 
 function derivedFromDisplayName(derivedFrom) {
@@ -153,14 +153,14 @@ const STATE_BEARING_ACTIONS = new Set([
 ])
 
 /**
- * Audit actions that get NONE of the context-block rows (Org ID, Type,
- * State, Submitted at, Submitted by, Last modified) EXCEPT "Assigned to" —
- * unlike every other action, for which that full context is exactly what a
- * caseworker needs alongside the entry. RA-526's routing/correction entries
- * are a system-derived side effect of submission rather than a workflow
- * action against the item, so most of that context is irrelevant noise on
- * these two specifically; who currently owns the case is the one thing
- * still worth showing regardless.
+ * Audit actions that get NO context-block rows at all (Org ID, Type, State,
+ * Submitted at, Submitted by, Last modified, Assigned to) — unlike every
+ * other action, for which that context is exactly what a caseworker needs
+ * alongside the entry. RA-526's routing/correction entries are a
+ * system-derived side effect of submission rather than a workflow action
+ * against the item, so none of that context — including who the item
+ * happens to be assigned to — has anything to do with why a nation was
+ * chosen or corrected.
  */
 const NO_SNAPSHOT_CONTEXT_ACTIONS = new Set([
   ACTION_ROUTED_TO_NATION,
@@ -212,35 +212,35 @@ function buildSnapshotRows(snapshot, entry, resolveStateDisplayName) {
     return []
   }
   // RA-526: routing/correction entries are a system-derived side effect of
-  // submission, not a caseworker action against the item's own workflow, so
-  // most of this context block is noise here rather than the useful "what
-  // state was this in" context it is on every other action. "Assigned to"
-  // is the one exception kept: who currently owns the case is relevant
-  // regardless of why its nation was set.
-  const skipMostContext = NO_SNAPSHOT_CONTEXT_ACTIONS.has(entry?.action)
+  // submission, not a caseworker action against the item's own workflow —
+  // none of this context block (including who the item happens to be
+  // assigned to) has anything to do with why a nation was chosen or
+  // corrected, so it is noise here rather than the useful "what state was
+  // this in" context it is on every other action.
+  if (NO_SNAPSHOT_CONTEXT_ACTIONS.has(entry?.action)) {
+    return []
+  }
   const rows = []
-  if (!skipMostContext) {
-    if (snapshot.orgId) {
-      rows.push({ key: 'Org ID', value: snapshot.orgId })
-    }
-    if (snapshot.typeDisplayName) {
-      rows.push({ key: 'Type', value: snapshot.typeDisplayName })
-    }
-    const stateRow = buildEntryStateRow(entry, resolveStateDisplayName)
-    if (stateRow) {
-      rows.push(stateRow)
-    }
-    const submittedAt = formatDateTimeGds(snapshot.submittedAt)
-    if (submittedAt) {
-      rows.push({ key: 'Submitted at', value: submittedAt })
-    }
-    if (snapshot.submittedBy) {
-      rows.push({ key: 'Submitted by', value: snapshot.submittedBy })
-    }
-    const lastModified = formatDateTimeGds(snapshot.lastModifiedAt)
-    if (lastModified) {
-      rows.push({ key: 'Last modified', value: lastModified })
-    }
+  if (snapshot.orgId) {
+    rows.push({ key: 'Org ID', value: snapshot.orgId })
+  }
+  if (snapshot.typeDisplayName) {
+    rows.push({ key: 'Type', value: snapshot.typeDisplayName })
+  }
+  const stateRow = buildEntryStateRow(entry, resolveStateDisplayName)
+  if (stateRow) {
+    rows.push(stateRow)
+  }
+  const submittedAt = formatDateTimeGds(snapshot.submittedAt)
+  if (submittedAt) {
+    rows.push({ key: 'Submitted at', value: submittedAt })
+  }
+  if (snapshot.submittedBy) {
+    rows.push({ key: 'Submitted by', value: snapshot.submittedBy })
+  }
+  const lastModified = formatDateTimeGds(snapshot.lastModifiedAt)
+  if (lastModified) {
+    rows.push({ key: 'Last modified', value: lastModified })
   }
   rows.push({
     key: 'Assigned to',
