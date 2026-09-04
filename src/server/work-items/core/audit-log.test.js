@@ -373,11 +373,62 @@ describe('detailRowsForAuditEntry', () => {
     expect(
       detailRowsForAuditEntry({
         action: 'routed-to-nation',
+        details: { nation: 'England', derivedFrom: 'submitted' }
+      })
+    ).toEqual([
+      { key: 'Nation', value: 'England' },
+      { key: 'Derived from', value: "Registration's regulator" }
+    ])
+  })
+
+  test('formats NorthernIreland with a space for a routed-to-nation entry', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'routed-to-nation',
+        details: { nation: 'NorthernIreland', derivedFrom: 'submitted' }
+      })
+    ).toEqual([
+      { key: 'Nation', value: 'Northern Ireland' },
+      { key: 'Derived from', value: "Registration's regulator" }
+    ])
+  })
+
+  test('humanises the legacy site-address derivedFrom value', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'routed-to-nation',
         details: { nation: 'England', derivedFrom: 'site-address' }
       })
     ).toEqual([
       { key: 'Nation', value: 'England' },
-      { key: 'Derived from', value: 'site-address' }
+      { key: 'Derived from', value: 'Site address' }
+    ])
+  })
+
+  test('labels the default-england derivedFrom value for a routed-to-nation entry', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'routed-to-nation',
+        details: { nation: 'England', derivedFrom: 'default-england' }
+      })
+    ).toEqual([
+      { key: 'Nation', value: 'England' },
+      {
+        key: 'Derived from',
+        value: 'No nation provided (defaulted to England)'
+      }
+    ])
+  })
+
+  test('falls back to the raw value for an unrecognised derivedFrom or nation', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'routed-to-nation',
+        details: { nation: 'Atlantis', derivedFrom: 'something-new' }
+      })
+    ).toEqual([
+      { key: 'Nation', value: 'Atlantis' },
+      { key: 'Derived from', value: 'something-new' }
     ])
   })
 
@@ -433,6 +484,18 @@ describe('detailRowsForAuditEntry', () => {
     expect(
       detailRowsForAuditEntry({ action: 'nation-corrected', details: {} })
     ).toEqual([])
+  })
+
+  test('formats NorthernIreland with a space for a nation-corrected entry', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'nation-corrected',
+        details: { from: 'NorthernIreland', to: 'England' }
+      })
+    ).toEqual([
+      { key: 'Previous nation', value: 'Northern Ireland' },
+      { key: 'Corrected nation', value: 'England' }
+    ])
   })
 })
 
@@ -495,6 +558,47 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
     expect(keys).not.toContain('Last modified')
     expect(keys).toContain('Assigned to')
   })
+
+  test.each(['routed-to-nation', 'nation-corrected'])(
+    'omits ALL snapshot context rows for a %s entry, unlike every other action',
+    (action) => {
+      const snapshot = {
+        orgId: 'APP-001',
+        typeDisplayName: 'Re-accreditation',
+        submittedAt: '2026-05-01T08:00:00Z',
+        submittedBy: 'frontend',
+        lastModifiedAt: '2026-05-01T09:00:00Z',
+        assignedToName: 'Alice Anderson'
+      }
+      const entry = {
+        id: '1',
+        action,
+        actionDisplayName: 'irrelevant here',
+        stateId: 'submitted',
+        details: {
+          nation: 'England',
+          derivedFrom: 'submitted',
+          from: 'Wales',
+          to: 'England'
+        },
+        createdAt: '2026-05-01T09:00:00Z'
+      }
+      const [decorated] = decorateAuditLog([entry], {
+        workItemSnapshot: snapshot,
+        resolveStateDisplayName
+      })
+      const keys = decorated.detailRows.map((r) => r.key)
+      expect(keys).not.toContain('Org ID')
+      expect(keys).not.toContain('Type')
+      expect(keys).not.toContain('State')
+      expect(keys).not.toContain('Submitted at')
+      expect(keys).not.toContain('Submitted by')
+      expect(keys).not.toContain('Last modified')
+      expect(keys).not.toContain('Assigned to')
+      // The entry's own rows must still be there — only the context block is suppressed.
+      expect(decorated.detailRows.length).toBeGreaterThan(0)
+    }
+  )
 
   test('appends snapshot rows after entry-specific rows', () => {
     const [decorated] = decorateAuditLog(

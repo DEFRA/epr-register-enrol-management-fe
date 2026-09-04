@@ -24,7 +24,9 @@ import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
  *
  * The optional `workItemSnapshot` adds a consistent set of work-item
  * context rows (Org ID, Type, State, Submitted at, Submitted by,
- * Last modified, Assigned to) to the disclosure of every audit entry.
+ * Last modified, Assigned to) to the disclosure of every audit entry
+ * EXCEPT `routed-to-nation`/`nation-corrected` — see
+ * `NO_SNAPSHOT_CONTEXT_ACTIONS`.
  *
  * The "State" row is special: it is per-entry, resolved from each entry's
  * OWN `stateId` (the work-item state as-of that event — epr-rr9s) via the
@@ -75,6 +77,9 @@ export function decorateAuditLog(
  * `task-completed` / `task-status-changed` entries — carries no state in
  * its own rows, so it DOES get the context-block State row: that is where
  * a caseworker learns which state the item was in when the event happened.
+ * The two exceptions to THAT are `routed-to-nation`/`nation-corrected`,
+ * which get no context-block rows at all — see `NO_SNAPSHOT_CONTEXT_ACTIONS`
+ * below, a stronger exclusion than this set.
  *
  * RA-410 removed the task framework and purged the `task-completed` /
  * `task-status-changed` cases from `detailRowsForAuditEntry`, so those
@@ -98,12 +103,68 @@ const ACTION_STATUS_PUSH_FAILED = 'status-push-failed'
 const ACTION_ROUTED_TO_NATION = 'routed-to-nation'
 const ACTION_NATION_CORRECTED = 'nation-corrected'
 
+/**
+ * Human-readable form of the `Nation` enum member names management-be sends
+ * verbatim (`England`/`Scotland`/`Wales`/`NorthernIreland`) — matches the
+ * label already used for the same values in the work-items list filter and
+ * the re-accreditation create form (`NATION_FILTER_OPTIONS`/`NATION_OPTIONS`).
+ * Falls back to the raw value for anything unrecognised so a future nation
+ * value degrades to plain text rather than disappearing.
+ */
+const NATION_DISPLAY_NAMES = {
+  England: 'England',
+  Scotland: 'Scotland',
+  Wales: 'Wales',
+  NorthernIreland: 'Northern Ireland'
+}
+
+function nationDisplayName(nation) {
+  return NATION_DISPLAY_NAMES[nation] ?? nation
+}
+
+/**
+ * Human-readable form of `routed-to-nation`'s `derivedFrom` value.
+ *
+ * RA-526: `submitted` is the current, correct path — ReAccreditationNationRoutingHook
+ * trusts the nation the caller already submitted, which the operator-facing
+ * backend derives from the REGISTRATION's own ReEx regulator
+ * (`RegulatorNationMapper`), not from any address. `site-address` is the
+ * pre-RA-526 value every historical entry still carries verbatim (audit
+ * history is never rewritten) — it named a postcode-based derivation that
+ * never actually worked on real submissions (see RA-526), so it is labelled
+ * as legacy here rather than describing a live behaviour.
+ */
+const DERIVED_FROM_DISPLAY_NAMES = {
+  submitted: "Registration's regulator",
+  'default-england': 'No nation provided (defaulted to England)',
+  'site-address': 'Site address'
+}
+
+function derivedFromDisplayName(derivedFrom) {
+  return DERIVED_FROM_DISPLAY_NAMES[derivedFrom] ?? derivedFrom
+}
+
 const STATE_BEARING_ACTIONS = new Set([
   ACTION_WORK_ITEM_SUBMITTED,
   ACTION_APPLIED,
   ACTION_STATUS_PUSH_SENT,
   ACTION_STATUS_PUSH_SKIPPED,
   ACTION_STATUS_PUSH_FAILED
+])
+
+/**
+ * Audit actions that get NO context-block rows at all (Org ID, Type, State,
+ * Submitted at, Submitted by, Last modified, Assigned to) — unlike every
+ * other action, for which that context is exactly what a caseworker needs
+ * alongside the entry. RA-526's routing/correction entries are a
+ * system-derived side effect of submission rather than a workflow action
+ * against the item, so none of that context — including who the item
+ * happens to be assigned to — has anything to do with why a nation was
+ * chosen or corrected.
+ */
+const NO_SNAPSHOT_CONTEXT_ACTIONS = new Set([
+  ACTION_ROUTED_TO_NATION,
+  ACTION_NATION_CORRECTED
 ])
 
 /**
@@ -150,34 +211,59 @@ function buildSnapshotRows(snapshot, entry, resolveStateDisplayName) {
   if (snapshot == null || typeof snapshot !== 'object') {
     return []
   }
-  const rows = []
-  if (snapshot.orgId) {
-    rows.push({ key: 'Org ID', value: snapshot.orgId })
+  // RA-526: routing/correction entries are a system-derived side effect of
+  // submission, not a caseworker action against the item's own workflow —
+  // none of this context block (including who the item happens to be
+  // assigned to) has anything to do with why a nation was chosen or
+  // corrected, so it is noise here rather than the useful "what state was
+  // this in" context it is on every other action.
+  if (NO_SNAPSHOT_CONTEXT_ACTIONS.has(entry?.action)) {
+    return []
   }
-  if (snapshot.typeDisplayName) {
-    rows.push({ key: 'Type', value: snapshot.typeDisplayName })
-  }
-  const stateRow = buildEntryStateRow(entry, resolveStateDisplayName)
-  if (stateRow) {
-    rows.push(stateRow)
-  }
-  const submittedAt = formatDateTimeGds(snapshot.submittedAt)
-  if (submittedAt) {
-    rows.push({ key: 'Submitted at', value: submittedAt })
-  }
-  if (snapshot.submittedBy) {
-    rows.push({ key: 'Submitted by', value: snapshot.submittedBy })
-  }
-  const lastModified = formatDateTimeGds(snapshot.lastModifiedAt)
-  if (lastModified) {
-    rows.push({ key: 'Last modified', value: lastModified })
-  }
-  rows.push({
-    key: 'Assigned to',
-    value: snapshot.assignedToName ?? 'Unassigned'
-  })
-  return rows
+  // Each row is its own pure helper (returning null when its value is
+  // absent) rather than a chain of `if`s pushing onto a shared array —
+  // keeps this function's own complexity low regardless of how many
+  // optional rows the context block grows to.
+  return [
+    orgIdRow(snapshot),
+    typeRow(snapshot),
+    buildEntryStateRow(entry, resolveStateDisplayName),
+    submittedAtRow(snapshot),
+    submittedByRow(snapshot),
+    lastModifiedRow(snapshot),
+    assignedToRow(snapshot)
+  ].filter(Boolean)
 }
+
+const orgIdRow = (snapshot) =>
+  snapshot.orgId ? { key: 'Org ID', value: snapshot.orgId } : null
+
+const typeRow = (snapshot) =>
+  snapshot.typeDisplayName
+    ? { key: 'Type', value: snapshot.typeDisplayName }
+    : null
+
+const submittedAtRow = (snapshot) => {
+  const submittedAt = formatDateTimeGds(snapshot.submittedAt)
+  return submittedAt ? { key: 'Submitted at', value: submittedAt } : null
+}
+
+const submittedByRow = (snapshot) =>
+  snapshot.submittedBy
+    ? { key: 'Submitted by', value: snapshot.submittedBy }
+    : null
+
+const lastModifiedRow = (snapshot) => {
+  const lastModified = formatDateTimeGds(snapshot.lastModifiedAt)
+  return lastModified ? { key: 'Last modified', value: lastModified } : null
+}
+
+// Unlike the rows above, this one is never absent — an unassigned item
+// still gets an explicit "Unassigned" value rather than no row at all.
+const assignedToRow = (snapshot) => ({
+  key: 'Assigned to',
+  value: snapshot.assignedToName ?? 'Unassigned'
+})
 
 /**
  * Humanised label for the audit timeline. Falls back to a per-action
@@ -427,16 +513,19 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
     case ACTION_STATUS_PUSH_FAILED:
       return statusPushDetailRows(entry, details)
     case ACTION_ROUTED_TO_NATION: {
-      // RA-125: ReAccreditationNationRoutingHook stamps `nation` (and
-      // `derivedFrom`, always "site-address" today) onto this entry's
-      // details. This case was missing entirely, so a "Routed to nation"
-      // entry rendered with no detail rows at all.
+      // RA-125/RA-526: ReAccreditationNationRoutingHook stamps `nation` and
+      // `derivedFrom` onto this entry's details. Both are rendered through
+      // display-name maps: raw enum/internal values (`NorthernIreland`,
+      // `submitted`) are not fit for a caseworker-facing page on their own.
       const rows = []
       if (details.nation) {
-        rows.push({ key: 'Nation', value: details.nation })
+        rows.push({ key: 'Nation', value: nationDisplayName(details.nation) })
       }
       if (details.derivedFrom) {
-        rows.push({ key: 'Derived from', value: details.derivedFrom })
+        rows.push({
+          key: 'Derived from',
+          value: derivedFromDisplayName(details.derivedFrom)
+        })
       }
       return rows
     }
@@ -449,10 +538,16 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       // just an audit nicety.
       const rows = []
       if (details.from) {
-        rows.push({ key: 'Previous nation', value: details.from })
+        rows.push({
+          key: 'Previous nation',
+          value: nationDisplayName(details.from)
+        })
       }
       if (details.to) {
-        rows.push({ key: 'Corrected nation', value: details.to })
+        rows.push({
+          key: 'Corrected nation',
+          value: nationDisplayName(details.to)
+        })
       }
       if (details.reason) {
         rows.push({ key: 'Reason', value: details.reason, multiline: true })
