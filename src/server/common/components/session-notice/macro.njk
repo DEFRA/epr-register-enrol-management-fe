@@ -1,0 +1,61 @@
+{#
+  RA-462 concurrent-login notice.
+
+  Renders only when `notice` is set (by the concurrent-login onPostAuth
+  extension, surfaced on the nunjucks context as `concurrentLoginNotice`).
+
+  Server-rendered as an in-flow GOV.UK notification banner with a "Hide"
+  form-post that works without JavaScript. src/client/javascripts/session-notice.js
+  progressively enhances it into a dismissible floating toast.
+
+  Params:
+    notice { variant: 'alert' | 'info', at: string }  - required to render
+    crumb  CSRF token for the no-JS dismiss form
+#}
+{% macro sessionNotice(notice, crumb) %}
+  {% if notice %}
+    {% set isAlert = notice.variant == 'alert' %}
+    <div
+      class="app-session-notice"
+      data-module="app-session-notice"
+      data-testid="session-notice"
+      data-variant="{{ notice.variant }}"
+      data-dismiss-url="/auth/session-notice/dismiss"
+    >
+      <div
+        class="govuk-notification-banner{{ ' govuk-notification-banner--success' if not isAlert }}"
+        role="{{ 'alert' if isAlert else 'region' }}"
+        aria-labelledby="session-notice-title"
+        data-module="govuk-notification-banner"
+      >
+        <div class="govuk-notification-banner__header">
+          <h2 class="govuk-notification-banner__title" id="session-notice-title">Important</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+          {% if isAlert %}
+            <p class="govuk-notification-banner__heading" data-testid="session-notice-heading">A new sign-in to your account was detected</p>
+            <p class="govuk-body" data-testid="session-notice-body">Someone signed in to your account at {{ notice.at }}. If this was not you, sign out and contact your administrator.</p>
+            <p class="govuk-body">
+              <a class="govuk-notification-banner__link" href="/auth/logout" data-testid="session-notice-signout">Sign out</a>
+            </p>
+          {% else %}
+            <p class="govuk-notification-banner__heading" data-testid="session-notice-heading">You are signed in on another device</p>
+            <p class="govuk-body" data-testid="session-notice-body">You were already signed in on another browser or device at {{ notice.at }}. Both sessions will stay signed in.</p>
+          {% endif %}
+          <form
+            method="post"
+            action="/auth/session-notice/dismiss"
+            class="app-session-notice__dismiss"
+          >
+            <input type="hidden" name="crumb" value="{{ crumb }}">
+            <button
+              type="submit"
+              class="govuk-link app-session-notice__dismiss-button"
+              data-testid="session-notice-dismiss"
+            >Hide</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endmacro %}

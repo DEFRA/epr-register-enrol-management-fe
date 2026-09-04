@@ -1,0 +1,41 @@
+// RA-462 concurrent-login notice.
+//
+// Server-rendered in-flow (no-JS fallback) it is just a govuk-notification-banner
+// and needs no styling of its own. session-notice.js adds
+// `app-session-notice--toast` and moves it to <body>, at which point these
+// rules turn it into a floating dismissible toast.
+
+.app-session-notice__dismiss {
+  margin-top: 10px;
+}
+
+.app-session-notice__dismiss-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.app-session-notice--toast {
+  position: fixed;
+  z-index: 100;
+  top: 15px;
+  right: 15px;
+  left: 15px;
+  max-width: 30rem;
+  margin-left: auto;
+
+  .govuk-notification-banner {
+    margin-bottom: 0;
+    box-shadow: 0 2px 8px rgba(11, 12, 12, 0.35);
+  }
+}
+
+@media (min-width: 641px) {
+  .app-session-notice--toast {
+    left: auto;
+    width: 30rem;
+  }
+}

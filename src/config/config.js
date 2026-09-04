@@ -173,6 +173,14 @@ export const config = convict({
         env: 'SESSION_CACHE_TTL'
       }
     },
+    concurrentLoginNotice: {
+      enabled: {
+        doc: 'RA-462 kill switch for the concurrent-login notification. When false, no new-sign-in toast is shown; logins are still recorded so it can be switched back on without a gap.',
+        format: Boolean,
+        default: true,
+        env: 'SESSION_CONCURRENT_LOGIN_NOTICE_ENABLED'
+      }
+    },
     cookie: {
       ttl: {
         doc: 'Session cookie ttl',

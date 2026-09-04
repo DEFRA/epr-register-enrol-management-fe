@@ -11,6 +11,7 @@ import {
   confirmPostLoginRedirect,
   popPostLoginRedirect
 } from '#/server/common/helpers/auth/auth-redirect.js'
+import { markLoginAndNotifyPrevious } from '#/server/common/helpers/auth/concurrent-login.js'
 
 /**
  * Static directory of stub assignable users. Exported for the assignee-
@@ -80,7 +81,7 @@ const STUB_SUPPORT_USER = {
   email: 'support@stub.example'
 }
 
-export function stubLoginPostController(request, h) {
+export async function stubLoginPostController(request, h) {
   const { nation, loginAs } = request.payload ?? {}
   const role = loginAs === 'support' ? ROLE_SUPPORT_READONLY : ROLE_STANDARD
 
@@ -99,6 +100,7 @@ export function stubLoginPostController(request, h) {
       scope: [ROLE_SUPPORT_READONLY]
     }
     request.yar.set('user', supportUser)
+    await markLoginAndNotifyPrevious(request, supportUser.id)
     return h.redirect(redirectTo)
   }
 
@@ -123,5 +125,6 @@ export function stubLoginPostController(request, h) {
   }
 
   request.yar.set('user', user)
+  await markLoginAndNotifyPrevious(request, user.id)
   return h.redirect(redirectTo)
 }
