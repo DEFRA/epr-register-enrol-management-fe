@@ -22,7 +22,13 @@ beforeEach(() => {
 
 describe('dismissSessionNoticeController', () => {
   test('always records the dismissal', async () => {
-    const request = { headers: {}, info: { referrer: '/work-items/1' } }
+    const request = {
+      headers: {},
+      info: {
+        referrer: 'https://service.test/work-items/1',
+        host: 'service.test'
+      }
+    }
     await dismissSessionNoticeController(request, makeH())
     expect(dismissNotice).toHaveBeenCalledWith(request)
   })
@@ -37,18 +43,39 @@ describe('dismissSessionNoticeController', () => {
     expect(h.redirect).not.toHaveBeenCalled()
   })
 
-  test('redirects back to the referrer for a no-JS form post', async () => {
+  test('redirects back to the same-host referrer path for a no-JS form post', async () => {
     const h = makeH()
     await dismissSessionNoticeController(
-      { headers: {}, info: { referrer: '/work-items/1' } },
+      {
+        headers: {},
+        info: {
+          referrer: 'https://service.test/work-items/1',
+          host: 'service.test'
+        }
+      },
       h
     )
     expect(h.redirect).toHaveBeenCalledWith('/work-items/1')
   })
 
+  test('ignores a cross-host referrer (no open redirect)', async () => {
+    const h = makeH()
+    await dismissSessionNoticeController(
+      {
+        headers: {},
+        info: { referrer: 'https://evil.example/phish', host: 'service.test' }
+      },
+      h
+    )
+    expect(h.redirect).toHaveBeenCalledWith('/work-items')
+  })
+
   test('redirects to /work-items when there is no referrer', async () => {
     const h = makeH()
-    await dismissSessionNoticeController({ headers: {}, info: {} }, h)
+    await dismissSessionNoticeController(
+      { headers: {}, info: { host: 'service.test' } },
+      h
+    )
     expect(h.redirect).toHaveBeenCalledWith('/work-items')
   })
 })

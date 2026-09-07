@@ -1,142 +1,101 @@
-# RA-462 — Concurrent logins: implementation design (caseworker app)
+# RA-462 — Concurrent-login notification (caseworker app)
 
-**Status:** Design only — not implemented. Policy chosen by product on
-2026-09-02: **allow concurrent sessions, notify the user with a dismissible
-toast** (no forced sign-out). Primary ADR + full design:
+**Status:** Implemented on `feature/RA-462-ConcurrentLogins`. Policy chosen by
+product 2026-09-02: **allow concurrent sessions, notify the user with a
+dismissible toast** (no forced sign-out). Behind
+`SESSION_CONCURRENT_LOGIN_NOTICE_ENABLED` (default on).
+
+Primary ADR + full narrative:
 `epr-register-enrol-frontend/docs/adr/0001-single-active-session-per-user.md`
 and `epr-register-enrol-frontend/docs/RA-462-concurrent-logins-design.md`.
-**Branch:** `feature/RA-462-ConcurrentLogins`
-
-This app has the same weakness; this doc records only the deltas.
+This file records only what differs in the caseworker app.
 
 ---
 
-## 1. Problem in this app
+## What shipped
 
-`src/server/routes/auth/controller.js` → `regulatorCallback` and
-`src/server/routes/auth/stub/controller.js` → `stubLoginPostController` call
-`request.yar.reset()` before `request.yar.set('user', user)`. `reset()` only
-touches the current request's session, so concurrent caseworker sessions are
-possible and the user is never told a second sign-in occurred.
+Same shape as the frontend, but **one module** instead of several:
 
-### Differences from the frontend that matter
+- **`src/server/common/helpers/auth/concurrent-login.js`** (+ `.test.js`) —
+  everything server-side: the per-identity registry (`server.cache` segment
+  `concurrent-login` on the existing `session` cache), `recordLogin` /
+  `markLoginAndNotifyPrevious` / `clearLogin` for the auth controllers, the
+  `onPostAuth` handler, `dismissNotice`, and `concurrentLoginPlugin`
+  (registered in `server.js` right after `sessionCache`).
+- **`src/config/config.js`** — `session.concurrentLoginNotice.enabled`
+  (`SESSION_CONCURRENT_LOGIN_NOTICE_ENABLED`, default `true`).
+- **`src/server/routes/auth/controller.js`** — `regulatorCallback`: `loginAt`
+  stamp + `markLoginAndNotifyPrevious`. `logout`: kept synchronous,
+  `clearLogin(...).catch(() => {})` fire-and-forget.
+- **`src/server/routes/auth/stub/controller.js`** — `stubLoginPostController`
+  made `async`; `markLoginAndNotifyPrevious` after each `yar.set('user', ...)`
+  (caseworker + support-user branches).
+- **`src/server/routes/auth/session-notice/{index,controller}.js`**
+  (+ `.test.js`) — `POST /auth/session-notice/dismiss`, auth + crumb; records
+  `noticeDismissedFor`, clears `concurrentLoginInfo`, then `204` for a `fetch`
+  or a **same-host** redirect back for the no-JS form.
+- **`src/config/nunjucks/context/context.js`** (+ `.test.js`) — surfaces
+  `concurrentLoginNotice`.
+- **`src/server/common/components/session-notice/{macro.njk,macro.test.js}`**
+  — the notice markup, with its **own** `app-session-notice__*` classes (not
+  `govuk-notification-banner`), `role="alert"` / `role="status"` by variant,
+  no-JS "Hide" form.
+- **`src/server/common/templates/layouts/page.njk`** — renders the component
+  in `beforeContent`.
+- **`src/client/javascripts/session-notice.js`** — progressive enhancement:
+  lifts it into a fixed toast, `aria-live`, Escape, `fetch` dismiss with
+  form-submit fallback. Excluded from coverage (no jsdom here) — exercised by
+  `epr-register-enrol-mgmt-tests`.
+- **`src/client/stylesheets/components/_session-notice.scss`** — reproduces
+  the notification-banner look for the custom classes.
+- **`sonar-project.properties`** — `sonar.coverage.exclusions=src/client/**`.
 
-1. **No per-request session hook exists.** The `yar-session` scheme is defined
-   _inline and duplicated_ in `auth-plugin.js` and `stub-auth-plugin.js` (dev
-   branch); each only does `request.yar.get('user')`. There is nowhere central
-   to compute the notice. Add an **`onPostAuth`** server extension (registered
-   by both plugins, dev + real branches; the `NODE_ENV=test` `test-bypass`
-   scheme excluded) — same approach the frontend design uses. Extracting a
-   shared `yarSessionAuthenticate` is still worthwhile for other reasons but is
-   **not** required for RA-462 if the `onPostAuth` route is taken.
+## Mechanism
 
-2. **yar is not pinned server-side.** `src/server/plugins/session-cache.js` does
-   not set `maxCookieSize: 0`. `loginAt`, `concurrentLoginInfo` and
-   `noticeDismissedFor` are all small, so they ride in the cookie fine — but for
-   consistency with the frontend and to keep session-storage semantics
-   predictable, add `maxCookieSize: 0` as a small separate commit on this
-   branch. Not a blocker for the feature.
+- **On login** (`markLoginAndNotifyPrevious`): stamp `loginAt` on the yar
+  session; read the prior registry entry; if one exists for a **different**
+  session, arm a one-shot `concurrentLoginInfo` flag on this new session; then
+  overwrite the registry entry with `{ lastLoginAt, lastLoginSessionId }`.
+- **On every authenticated request** (`concurrentLoginPlugin`'s **global**
+  `onPostAuth` — not per auth scheme): if the flag is on and the request is
+  authenticated with a `user.id`, compute a notice into
+  `request.app.concurrentLoginNotice`. **Alert wins over info** — a newer login
+  elsewhere (registry entry with a different `lastLoginSessionId` and
+  `lastLoginAt` past both this session's `loginAt` and its `noticeDismissedFor`)
+  is the security-relevant message; the info flag is the fallback.
+  Unauthenticated requests and `NODE_ENV=test` (`test-bypass`, no yar session
+  primed) reach the extension and return early.
+- **Fail open:** any registry read/write error is logged and swallowed — no
+  notice, session untouched.
+- **On logout** (`clearLogin`): drop the registry entry **only if it points at
+  the session logging out**, so a logout by one session doesn't blind the
+  identity's other live sessions.
+- **Dismissal:** `noticeDismissedFor = max(existing, latest login time)` on the
+  session; the notice stays gone until a still-newer sign-in.
 
-3. **Single provider.** Only `regulatorCallback` + stub login — two write sites,
-   not three. `user.id` = `claims.oid ?? claims.sub` (real) / `stub-support-user`
-   / `STUB_USERS[0].id` (stub).
+## Deviations from the frontend
 
-4. **`logout` is currently synchronous** and reads only `idToken`. Add a `user`
-   read and `await clear(registry, user.id)` before the first `yar.reset()`;
-   make the handler `async` (no behavioural change).
+- `logout` stays synchronous (RA-306 unit tests call it without `await`); the
+  registry cleanup is fire-and-forget.
+- English-only — no `translation.json`; copy is inline in the macro.
+- `session-cache.js` still lacks `maxCookieSize: 0`; the new session keys are
+  small enough to ride in the cookie. Not changed here — a possible future
+  tidy for parity with the frontend.
+- `src/client/**` is excluded from both vitest coverage and the SonarCloud
+  coverage gate (no jsdom test setup in this repo).
 
-5. **`stubLoginPostController` is synchronous.** Either make it `async` for the
-   `recordLogin` call or fire-and-forget it (dev/stub only — acceptable).
+## Not done (follow-ups)
 
-## 2. Design (deltas)
+- The `yar-session` scheme here still has no RA-461 per-request idle-timeout
+  revalidation (the frontend has it). Out of scope for RA-462; worth its own
+  ticket.
+- No "sign out all other sessions" action — the toast links to `/auth/logout`
+  for the current session only.
 
-Identical shape to the frontend design:
+## E2E
 
-- **Session stamp** `request.yar.set('loginAt', Date.now())` at both login
-  completions.
-- **Registry** `src/server/common/helpers/auth/active-session-registry.js`
-  (+ `.test.js`) — catbox segment `active-sessions` on the existing `session`
-  cache via `server.cache({ segment, expiresIn: config.get('session.cache.ttl') })`,
-  exposed on `server.app.activeSessionRegistry` from a small plugin registered
-  after `sessionCache` in `src/server/server.js`. Entry
-  `{ lastLoginAt, lastLoginSessionId }` keyed by `userId`. `recordLogin` returns
-  the previous entry; `getLatest`; `clear`. Best-effort throughout.
-- **On login**: after reset + set-user + stamp, `recordLogin(...)`; if a
-  differing prior entry existed, `request.yar.set('concurrentLoginInfo', { otherLoginAt })`.
-- **`onPostAuth`** `src/server/common/helpers/auth/concurrent-login-notice.js`
-  (+ `.test.js`): compute `request.app.concurrentLoginNotice` =
-  `{ variant: 'alert' | 'info', otherLoginAt }` using the same comparison
-  (`lastLoginAt > session loginAt`, different `sessionId`, `> noticeDismissedFor`).
-  No `yar.reset()`, no `unauthenticated`.
-- **Render**: caseworker views get context from
-  `src/config/nunjucks/context/context.js` (confirm the exact file — this app's
-  nunjucks context builder) — add `concurrentLoginNotice`. New component under
-  `src/server/common/components/session-notice/` included in this app's base
-  layout. Server-side markup = GOV.UK notification banner with a no-JS "Hide"
-  form post; PE script lifts it into a toast (`role="alert"` / `role="status"`,
-  `aria-live`, focusable close, Escape). Copy: this app's `translation.json`
-  (caseworker service has no Welsh requirement — confirm; if en-only, one
-  locale file).
-- **Dismissal route** `POST /auth/session-notice/dismiss` under
-  `src/server/routes/auth/session-notice/` — auth + crumb; sets
-  `noticeDismissedFor` (recomputed server-side), clears `concurrentLoginInfo`,
-  redirects back (no-JS) or 204 (fetch).
-- **Config** `SESSION_CONCURRENT_LOGIN_NOTICE_ENABLED` (default `true`) in
-  `src/config/config.js`.
-
-Alert copy points at this app's logout (`/auth/logout` → RA-449 logged-out
-interstitial). "If this was not you, sign out and contact your administrator."
-
-## 3. Files to change
-
-| File                                                                        | Change                                                                                             |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `src/server/common/helpers/auth/active-session-registry.js` (+ `.test.js`)  | **New.** Registry helper.                                                                          |
-| `src/server/common/helpers/auth/concurrent-login-notice.js` (+ `.test.js`)  | **New.** `onPostAuth` handler.                                                                     |
-| `src/server/common/helpers/auth/auth-plugin.js`                             | Register the `onPostAuth` extension.                                                               |
-| `src/server/common/helpers/auth/stub-auth-plugin.js`                        | Register it in the dev (non-test) branch.                                                          |
-| `src/server/common/helpers/auth/auth-plugin.test.js`                        | Cover current/superseded/dismissed/store-error.                                                    |
-| `src/server/routes/auth/controller.js`                                      | `loginAt` stamp + `recordLogin` + Info flag in `regulatorCallback`; `clear` + `async` in `logout`. |
-| `src/server/routes/auth/controller.test.js`                                 | Assert stamp/write after reset; Info only with a prior entry; registry cleared on logout.          |
-| `src/server/routes/auth/stub/controller.js`                                 | Same stamp + `recordLogin` + Info flag; `async` or fire-and-forget.                                |
-| `src/server/routes/auth/stub/controller.test.js` (or equivalent)            | Assert registry write on stub login.                                                               |
-| `src/server/routes/auth/session-notice/index.js` + `controller.js` (+ test) | **New.** Dismissal route.                                                                          |
-| `src/server/plugins/session-cache.js`                                       | _Recommended, separate commit:_ add `maxCookieSize: 0`.                                            |
-| `src/server/server.js` / small plugin                                       | `server.cache({ segment: 'active-sessions', ... })` → `server.app.activeSessionRegistry`.          |
-| `src/config/nunjucks/context/context.js` (+ test)                           | Surface `concurrentLoginNotice`.                                                                   |
-| `src/server/common/components/session-notice/template.njk` + `.scss`        | **New.** Banner markup.                                                                            |
-| base layout `.njk`                                                          | Include the component when `concurrentLoginNotice`.                                                |
-| client JS + SCSS (this app's `src/client/...`)                              | **New.** Toast PE + styles.                                                                        |
-| `translation.json` (+ `cy` if required)                                     | Toast copy.                                                                                        |
-| `src/config/config.js`                                                      | `SESSION_CONCURRENT_LOGIN_NOTICE_ENABLED`.                                                         |
-| `docs/authentication.md`                                                    | New section.                                                                                       |
-
-## 4. Test plan (unit / integration — this repo)
-
-1. Login as caseworker → cookie C1; login again same identity → C2. Protected
-   page with C1 → **200 with the alert banner**; with C2 → 200, no alert.
-2. C2's first render shows the info banner; C1's first login showed none.
-3. `POST /auth/session-notice/dismiss` with C1 → banner gone on subsequent C1
-   requests until a third login re-raises it.
-4. C1 can still perform protected actions after C2 logs in — no 302-to-login.
-5. Fail-open: registry `get` throws → C1 still 200, no banner.
-6. Kill switch off → no banner; `recordLogin` still writes.
-7. Support-user login path behaves the same.
-8. `route-scope-coverage` + RA-299 work-items filter tests still pass; if
-   `maxCookieSize: 0` added, session/`yar` tests still pass.
-9. `NODE_ENV=test` bypass suite stays green.
-
-## 5. Manual verification (EXT-TEST / management)
-
-1. Same caseworker (real Entra ID) in Browser A then Browser B → B shows the
-   info toast, A shows the alert toast with B's sign-in time. Both stay usable.
-2. Dismiss in A; third login (Browser C) re-raises the alert in A and B.
-3. JavaScript disabled → in-flow banner with a working "Hide" form post.
-4. RA-299 work-items filter behaviour and RA-306 sign-out unchanged.
-5. Screen-reader pass on both toast variants.
-
-## 6. Out of scope
-
-Real "sign out all other sessions" action (kept in reserve — needs a per-user
-`sessionsValidFrom` stamp); device/location list; notify-channel alerting;
-`epr-register-enrol-management-be` (stateless).
+`epr-register-enrol-mgmt-tests/test/specs/ra-462-concurrent-logins.e2e.js` —
+scoped to what a single spec can verify in the parallel journey grid (the
+just-signed-in session sees a notice; the older session is not signed out; the
+notice dismisses). The alert/info variant and dismissal persistence are
+covered by `concurrent-login.test.js`.
