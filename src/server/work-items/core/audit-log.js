@@ -1,4 +1,5 @@
 import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
+import { nationLabel } from '#/server/work-items/core/nations.js'
 
 /**
  * Audit log helpers (RA-97).
@@ -102,25 +103,6 @@ const ACTION_STATUS_PUSH_SKIPPED = 'status-push-skipped'
 const ACTION_STATUS_PUSH_FAILED = 'status-push-failed'
 const ACTION_ROUTED_TO_NATION = 'routed-to-nation'
 const ACTION_NATION_CORRECTED = 'nation-corrected'
-
-/**
- * Human-readable form of the `Nation` enum member names management-be sends
- * verbatim (`England`/`Scotland`/`Wales`/`NorthernIreland`) — matches the
- * label already used for the same values in the work-items list filter and
- * the re-accreditation create form (`NATION_FILTER_OPTIONS`/`NATION_OPTIONS`).
- * Falls back to the raw value for anything unrecognised so a future nation
- * value degrades to plain text rather than disappearing.
- */
-const NATION_DISPLAY_NAMES = {
-  England: 'England',
-  Scotland: 'Scotland',
-  Wales: 'Wales',
-  NorthernIreland: 'Northern Ireland'
-}
-
-function nationDisplayName(nation) {
-  return NATION_DISPLAY_NAMES[nation] ?? nation
-}
 
 /**
  * Human-readable form of `routed-to-nation`'s `derivedFrom` value.
@@ -519,7 +501,7 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       // `submitted`) are not fit for a caseworker-facing page on their own.
       const rows = []
       if (details.nation) {
-        rows.push({ key: 'Nation', value: nationDisplayName(details.nation) })
+        rows.push({ key: 'Nation', value: nationLabel(details.nation) })
       }
       if (details.derivedFrom) {
         rows.push({
@@ -540,13 +522,13 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       if (details.from) {
         rows.push({
           key: 'Previous nation',
-          value: nationDisplayName(details.from)
+          value: nationLabel(details.from)
         })
       }
       if (details.to) {
         rows.push({
           key: 'Corrected nation',
-          value: nationDisplayName(details.to)
+          value: nationLabel(details.to)
         })
       }
       if (details.reason) {
