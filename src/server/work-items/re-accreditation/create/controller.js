@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto'
 
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { NATION_OPTIONS } from '#/server/work-items/core/nations.js'
 
-import {
-  MATERIAL_OPTIONS,
-  TONNAGE_BAND_OPTIONS,
-  NATION_OPTIONS
-} from './schema.js'
+import { MATERIAL_OPTIONS, TONNAGE_BAND_OPTIONS } from './schema.js'
 import { createReAccreditationService } from './service.js'
 
 const VIEW_PATH = 're-accreditation/create/index'
