@@ -51,8 +51,11 @@
             class="app-session-notice__dismiss"
           >
             <input type="hidden" name="crumb" value="{{ crumb }}">
+            {#- No explicit type: a <button> inside a <form> defaults to
+                submit, and leaving the attribute off keeps this control out
+                of page-wide `button[type="submit"]` selectors that e2e specs
+                use to find a page's own primary submit button. -#}
             <button
-              type="submit"
               class="govuk-link app-session-notice__dismiss-button"
               data-testid="session-notice-dismiss"
             >Hide</button>
