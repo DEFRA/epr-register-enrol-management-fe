@@ -105,12 +105,22 @@ describe('markLoginAndNotifyPrevious', () => {
 })
 
 describe('clearLogin', () => {
-  test('drops the registry entry', async () => {
+  test('drops the entry when it points at the session logging out', async () => {
     const registry = fakeRegistry(
-      new Map([['user-1', { lastLoginAt: 1, lastLoginSessionId: 'x' }]])
+      new Map([['user-1', { lastLoginAt: 1, lastLoginSessionId: 'sess-new' }]])
     )
     await clearLogin(fakeRequest({ registry }), 'user-1')
     expect(registry.drop).toHaveBeenCalledWith('user-1')
+  })
+
+  test('leaves the entry when a different session is the latest login', async () => {
+    const registry = fakeRegistry(
+      new Map([
+        ['user-1', { lastLoginAt: 1, lastLoginSessionId: 'sess-other' }]
+      ])
+    )
+    await clearLogin(fakeRequest({ registry }), 'user-1')
+    expect(registry.drop).not.toHaveBeenCalled()
   })
 
   test('no-op without a registry', async () => {

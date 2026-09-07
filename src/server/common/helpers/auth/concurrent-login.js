@@ -69,14 +69,23 @@ export async function markLoginAndNotifyPrevious(request, userId) {
   }
 }
 
-/** Drop the registry entry for `userId` on logout. Best-effort. */
+/**
+ * On logout, drop the registry entry ONLY if it points at the session that is
+ * logging out. Other still-live sessions for the same identity (another
+ * device, or - in the journey-test grid - a parallel browser sharing the stub
+ * user) rely on that entry to keep showing their "new sign-in" alert.
+ * Best-effort.
+ */
 export async function clearLogin(request, userId) {
   const registry = getRegistry(request)
   if (!registry || !userId) {
     return
   }
   try {
-    await registry.drop(userId)
+    const latest = await registry.get(userId)
+    if (latest && latest.lastLoginSessionId === request.yar.id) {
+      await registry.drop(userId)
+    }
   } catch (err) {
     logWarn(request, 'concurrent-login: registry drop on logout failed', err)
   }
