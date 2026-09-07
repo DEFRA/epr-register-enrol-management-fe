@@ -3,6 +3,10 @@ import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
 import { stateTagClass as resolveStateTagClass } from '#/server/work-items/core/state-badge.js'
 import {
+  NATION_OPTIONS,
+  nationLabel
+} from '#/server/work-items/core/nations.js'
+import {
   MATERIAL_FILTER_OPTIONS,
   MATERIAL_TOKENS,
   materialLabel,
@@ -252,18 +256,8 @@ const SORT_OPTIONS = [
 const SORT_VALUES = new Set(SORT_OPTIONS.map((o) => o.value))
 const SORT_LABEL = new Map(SORT_OPTIONS.map((o) => [o.value, o.text]))
 
-// RA-324 phase-2. Nation filter uses plain nation names in the prototype
-// order (the role-based single-nation default still applies via
-// resolveNations).
-const NATION_FILTER_OPTIONS = [
-  { value: 'England', text: 'England' },
-  { value: 'NorthernIreland', text: 'Northern Ireland' },
-  { value: 'Scotland', text: 'Scotland' },
-  { value: 'Wales', text: 'Wales' }
-]
-const NATION_LABEL = new Map(
-  NATION_FILTER_OPTIONS.map((o) => [o.value, o.text])
-)
+// RA-324 phase-2. Nation filter uses the shared NATION_OPTIONS (RA-526) -
+// the role-based single-nation default still applies via resolveNations.
 
 /**
  * Renders the cross-type work item list, with filter, search and pagination.
@@ -830,7 +824,7 @@ function buildSortOptions(selectedSort) {
 
 function buildNationOptions(selectedNations) {
   const selected = new Set(selectedNations)
-  return NATION_FILTER_OPTIONS.map((o) => ({
+  return NATION_OPTIONS.map((o) => ({
     value: o.value,
     text: o.text,
     checked: selected.has(o.value)
@@ -1111,7 +1105,7 @@ function buildActiveFilters(filters, assignableUsers) {
     add('status', v, STATUS_OPTION_BY_VALUE.get(v).text)
   }
   for (const n of filters.nations) {
-    add('nation', n, NATION_LABEL.get(n))
+    add('nation', n, nationLabel(n))
   }
   // RA-299 AC05. `m` is the UI filter value (e.g. 'glass-remelt'), not the
   // raw backend payload token — use materialFilterLabel, not materialLabel.

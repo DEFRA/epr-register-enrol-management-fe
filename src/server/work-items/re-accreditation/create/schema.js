@@ -1,5 +1,7 @@
 import Joi from 'joi'
 
+import { NATION_VALUES } from '#/server/work-items/core/nations.js'
+
 /**
  * Material options offered by the create-work-item form (RA-127).
  *
@@ -28,27 +30,12 @@ export const TONNAGE_BAND_OPTIONS = [
   { value: '5000-plus', text: '5,000+ tonnes' }
 ]
 
-/**
- * Nation options offered by the create-work-item form (RA-526).
- *
- * management-be's ReAccreditationNationRoutingHook used to derive Nation
- * from the site address postcode - unreliable (postcode prefixes that
- * straddle a nation border) and, separately, dead code for real operator
- * submissions (which send siteAddress as a flat string, not the nested
- * document that derivation expected). The hook now trusts this
- * caller-supplied value directly, defaulting to England when it's absent.
- * Values must match management-be's Nation enum member names exactly.
- */
-export const NATION_OPTIONS = [
-  { value: 'England', text: 'England' },
-  { value: 'Scotland', text: 'Scotland' },
-  { value: 'Wales', text: 'Wales' },
-  { value: 'NorthernIreland', text: 'Northern Ireland' }
-]
+// Nation options offered by the create-work-item form (RA-526) are the
+// shared NATION_OPTIONS/NATION_VALUES imported above — see nations.js for
+// why this field exists and what management-be does with it.
 
 const MATERIAL_VALUES = MATERIAL_OPTIONS.map((o) => o.value)
 const TONNAGE_VALUES = TONNAGE_BAND_OPTIONS.map((o) => o.value)
-const NATION_VALUES = NATION_OPTIONS.map((o) => o.value)
 
 // Permissive UK postcode pattern. The full BS 7666 regex is huge and
 // rejects valid edge cases (e.g. `GIR 0AA`); for the demo we only need
