@@ -150,6 +150,25 @@ describe('concurrentLoginNoticeExt', () => {
     })
   })
 
+  test('alert wins when the session holds the info flag AND a newer login exists', async () => {
+    const registry = fakeRegistry(
+      new Map([
+        ['user-1', { lastLoginAt: 8000, lastLoginSessionId: 'sess-other' }]
+      ])
+    )
+    const yar = fakeYar('sess-mine')
+    yar._map.set(LOGIN_AT_KEY, 1000)
+    yar._map.set(INFO_KEY, { otherLoginAt: 500 })
+    const request = fakeRequest({ registry, yar })
+
+    await concurrentLoginNoticeExt(request, h)
+
+    expect(request.app.concurrentLoginNotice).toMatchObject({
+      variant: 'alert',
+      otherLoginAt: 8000
+    })
+  })
+
   test('sets an info notice from the one-shot flag on the new session', async () => {
     const registry = fakeRegistry()
     const yar = fakeYar('sess-mine')

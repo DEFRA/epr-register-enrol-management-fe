@@ -170,9 +170,12 @@ export async function concurrentLoginNoticeExt(request, h) {
 
   const dismissedFor = request.yar.get(NOTICE_DISMISSED_KEY) ?? 0
 
+  // Alert wins over info: "a newer sign-in happened after you" is the
+  // security-relevant one, and a session can legitimately hold both (it
+  // signed in while another session existed, then a third sign-in followed).
   const notice =
-    computeInfoNotice(request, dismissedFor) ??
-    (await computeAlertNotice(request, userId, dismissedFor))
+    (await computeAlertNotice(request, userId, dismissedFor)) ??
+    computeInfoNotice(request, dismissedFor)
 
   if (notice) {
     request.app.concurrentLoginNotice = notice
