@@ -4,9 +4,13 @@
   Renders only when `notice` is set (by the concurrent-login onPostAuth
   extension, surfaced on the nunjucks context as `concurrentLoginNotice`).
 
-  Server-rendered as an in-flow GOV.UK notification banner with a "Hide"
-  form-post that works without JavaScript. src/client/javascripts/session-notice.js
-  progressively enhances it into a dismissible floating toast.
+  Styled like a GOV.UK notification banner but with its OWN classes
+  (app-session-notice__*), NOT `govuk-notification-banner` — the notice can
+  be on screen at the same time as a real page-level notification banner, and
+  `$('.govuk-notification-banner')` selectors (e2e + app code) must still
+  resolve to that page banner, not this. src/client/javascripts/session-notice.js
+  progressively enhances it into a dismissible floating toast; without JS it
+  stays in flow and the "Hide" button posts a normal form.
 
   Params:
     notice { variant: 'alert' | 'info', at: string }  - required to render
@@ -23,23 +27,22 @@
       data-dismiss-url="/auth/session-notice/dismiss"
     >
       <div
-        class="govuk-notification-banner{{ ' govuk-notification-banner--success' if not isAlert }}"
+        class="app-session-notice__banner app-session-notice__banner--{{ notice.variant }}"
         role="{{ 'alert' if isAlert else 'region' }}"
         aria-labelledby="session-notice-title"
-        data-module="govuk-notification-banner"
       >
-        <div class="govuk-notification-banner__header">
-          <h2 class="govuk-notification-banner__title" id="session-notice-title">Important</h2>
+        <div class="app-session-notice__header">
+          <h2 class="app-session-notice__title" id="session-notice-title">Important</h2>
         </div>
-        <div class="govuk-notification-banner__content">
+        <div class="app-session-notice__content">
           {% if isAlert %}
-            <p class="govuk-notification-banner__heading" data-testid="session-notice-heading">A new sign-in to your account was detected</p>
+            <p class="app-session-notice__heading" data-testid="session-notice-heading">A new sign-in to your account was detected</p>
             <p class="govuk-body" data-testid="session-notice-body">Someone signed in to your account at {{ notice.at }}. If this was not you, sign out and contact your administrator.</p>
             <p class="govuk-body">
-              <a class="govuk-notification-banner__link" href="/auth/logout" data-testid="session-notice-signout">Sign out</a>
+              <a class="govuk-link app-session-notice__link" href="/auth/logout" data-testid="session-notice-signout">Sign out</a>
             </p>
           {% else %}
-            <p class="govuk-notification-banner__heading" data-testid="session-notice-heading">You are signed in on another device</p>
+            <p class="app-session-notice__heading" data-testid="session-notice-heading">You are signed in on another device</p>
             <p class="govuk-body" data-testid="session-notice-body">You were already signed in on another browser or device at {{ notice.at }}. Both sessions will stay signed in.</p>
           {% endif %}
           <form
