@@ -19,7 +19,12 @@ import { ROLE_STANDARD } from './auth-scopes.js'
  * with the same justification.
  */
 const EXEMPT_ROUTES = new Set([
-  'POST /auth/stub/login' // the login mechanism itself — auth: false
+  'POST /auth/stub/login', // the login mechanism itself — auth: false
+  // RA-462: dismisses the concurrent-login notice on the caller's OWN
+  // session (a per-viewer UI preference, not a caseworker action) — a
+  // read-only support user must be able to dismiss it too, so it is not
+  // gated on ROLE_STANDARD.
+  'POST /auth/session-notice/dismiss'
 ])
 
 describe('every mutating route requires the standard role', () => {

@@ -16,6 +16,10 @@ import {
   removeAssignableUser,
   upsertAssignableUser
 } from '#/server/common/helpers/auth/assignable-users-store.js'
+import {
+  markLoginAndNotifyPrevious,
+  clearLogin
+} from '#/server/common/helpers/auth/concurrent-login.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 
 const LOGIN_PATH = '/auth/regulator/login'
@@ -279,11 +283,24 @@ export function createAuthControllers({
     // `logout` falls back to a local-only sign-out for them.
     request.yar.set('idToken', idToken)
     request.yar.set('user', user)
+    // RA-462: stamp this session and, if the identity already had one, arm
+    // the "you were already signed in elsewhere" note on this new session.
+    await markLoginAndNotifyPrevious(request, user.id)
     return h.redirect(redirectTo)
   }
 
   function logout(request, h) {
     const idToken = request.yar.get('idToken')
+    const user = request.yar.get('user')
+
+    // RA-462: drop this identity's registry entry so a later request from a
+    // still-live parallel session doesn't raise a "new sign-in" alert about
+    // a login that has since been signed out. Fire-and-forget — best-effort
+    // cleanup that must not make `logout` async (it has synchronous callers
+    // in the RA-306 unit tests) or perturb its redirect behaviour.
+    if (user?.id) {
+      clearLogin(request, user.id).catch(() => {})
+    }
 
     // RA-306 (AC01/AC02): destroy the whole session rather than clearing
     // the `user` key alone. Anything else the session accumulated while

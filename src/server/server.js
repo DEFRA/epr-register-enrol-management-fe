@@ -16,6 +16,7 @@ import { requestTracing } from './plugins/request-tracing.js'
 import { requestLogger } from './plugins/request-logger.js'
 import { sessionCache } from './plugins/session-cache.js'
 import { getCacheEngine } from './common/helpers/session-cache/cache-engine.js'
+import { concurrentLoginPlugin } from './common/helpers/auth/concurrent-login.js'
 import { secureContext } from '@defra/hapi-secure-context'
 import { contentSecurityPolicy } from './plugins/content-security-policy.js'
 import { csrfProtection } from './plugins/csrf.js'
@@ -85,6 +86,10 @@ export async function createServer() {
     // registered first.
     authToRegister,
     sessionCache,
+    // RA-462: concurrent-login notification. Needs the named session cache
+    // (provisioned above) and the auth scheme registered; its onPostAuth runs
+    // after authentication regardless of registration order.
+    concurrentLoginPlugin,
     basicAuthPlugin,
     nunjucksConfig,
     Scooter,

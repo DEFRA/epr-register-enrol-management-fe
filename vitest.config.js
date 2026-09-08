@@ -18,7 +18,11 @@ export default defineConfig({
         'stylelint.config.js',
         'vitest.config.js',
         '.sonarlint',
-        'babel.config.cjs'
+        'babel.config.cjs',
+        // Client-side progressive-enhancement scripts: exercised by the WDIO
+        // journey suite (epr-register-enrol-mgmt-tests), not by unit tests —
+        // this repo has no jsdom test setup.
+        'src/client/**'
       ],
       // Baseline as measured on 2026-08-13 (RA-437), raised on 2026-08-18
       // (RA-437 follow-up) after adding coverage for auth-plugin.js,

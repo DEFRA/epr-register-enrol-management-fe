@@ -729,10 +729,11 @@ describe('logoutController', () => {
 
     logoutController(request, h)
 
-    // The idToken lookup is a read that must happen before reset() wipes
-    // it, but it's read-only and doesn't affect the RA-306 guarantee that
-    // reset() runs before anything is redirected.
-    expect(order).toEqual([['get', 'idToken'], ['reset']])
+    // The idToken and user lookups are reads that must happen before reset()
+    // wipes them (user.id feeds the RA-462 registry cleanup), but they are
+    // read-only and don't affect the RA-306 guarantee that reset() runs
+    // before anything is redirected.
+    expect(order).toEqual([['get', 'idToken'], ['get', 'user'], ['reset']])
   })
 
   test('is safe to call when there is no session to destroy', () => {
@@ -773,7 +774,9 @@ describe('logoutController', () => {
 
     logoutController(request, h)
 
-    expect(order).toEqual([['get', 'idToken'], ['reset']])
+    // RA-462: `user` is also read before reset() to feed the best-effort
+    // registry cleanup — read-only, and still ahead of reset().
+    expect(order).toEqual([['get', 'idToken'], ['get', 'user'], ['reset']])
   })
 
   // RA-437: post_logout_redirect_uri must be /auth/logout — that's the

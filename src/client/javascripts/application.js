@@ -9,6 +9,8 @@ import {
   SkipLink
 } from 'govuk-frontend'
 
+import './session-notice.js'
+
 createAll(Button)
 // RA-291: powers the live "You have N words remaining" count on the
 // query form's reason field. Progressive enhancement only — the word

@@ -41,6 +41,9 @@ export function context(request) {
     breadcrumbs: [],
     navigation: buildNavigation(request),
     user,
+    // RA-462: set by the concurrent-login onPostAuth extension when another
+    // sign-in for this identity has been detected.
+    concurrentLoginNotice: request?.app?.concurrentLoginNotice ?? null,
     getAssetPath(asset) {
       if (!config.get('isProduction')) {
         return `${assetPath}/${asset}`

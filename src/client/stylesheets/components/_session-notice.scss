@@ -1,0 +1,96 @@
+// RA-462 concurrent-login notice.
+//
+// Visually a GOV.UK notification banner, but with its own classes so it never
+// collides with a real `.govuk-notification-banner` on the same page. Raw
+// colour/size values, matching the convention in _language-switcher.scss.
+//
+// Server-rendered in flow (no-JS fallback). session-notice.js adds
+// `app-session-notice--toast` and moves it to <body>, turning it into a
+// floating dismissible toast.
+
+$app-session-notice-blue: #1d70b8;
+$app-session-notice-green: #00703c;
+$app-session-notice-white: #ffffff;
+$app-session-notice-black: #0b0c0c;
+
+.app-session-notice__banner {
+  margin-bottom: 30px;
+  border: 4px solid $app-session-notice-blue;
+  color: $app-session-notice-black;
+  font-size: 1.1875rem;
+  line-height: 1.3158;
+
+  &--info {
+    border-color: $app-session-notice-green;
+  }
+}
+
+.app-session-notice__header {
+  padding: 2px 15px 5px;
+  color: $app-session-notice-white;
+  background-color: $app-session-notice-blue;
+
+  .app-session-notice__banner--info & {
+    background-color: $app-session-notice-green;
+  }
+}
+
+.app-session-notice__title {
+  margin: 0;
+  padding: 0;
+  font-size: 1.1875rem;
+  font-weight: 700;
+}
+
+.app-session-notice__content {
+  padding: 15px;
+  color: $app-session-notice-black;
+  background-color: $app-session-notice-white;
+
+  > :last-child {
+    margin-bottom: 0;
+  }
+}
+
+.app-session-notice__heading {
+  margin: 0 0 15px;
+  padding: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.app-session-notice__dismiss {
+  margin-top: 10px;
+}
+
+.app-session-notice__dismiss-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.app-session-notice--toast {
+  position: fixed;
+  z-index: 100;
+  top: 15px;
+  right: 15px;
+  left: 15px;
+  max-width: 30rem;
+  margin-left: auto;
+
+  .app-session-notice__banner {
+    margin-bottom: 0;
+    box-shadow: 0 2px 8px rgb(11, 12, 12, 0.35);
+  }
+}
+
+@media (min-width: 641px) {
+  .app-session-notice--toast {
+    left: auto;
+    width: 30rem;
+  }
+}

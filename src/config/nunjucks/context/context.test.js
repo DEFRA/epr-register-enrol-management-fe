@@ -71,7 +71,8 @@ describe('context and cache', () => {
           ],
           serviceName: 'Packaging waste applications',
           serviceUrl: null,
-          user: null
+          user: null,
+          concurrentLoginNotice: null
         })
       })
 
@@ -182,7 +183,8 @@ describe('context and cache', () => {
           ],
           serviceName: 'Packaging waste applications',
           serviceUrl: null,
-          user: null
+          user: null,
+          concurrentLoginNotice: null
         })
       })
     })

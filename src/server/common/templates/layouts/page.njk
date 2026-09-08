@@ -8,6 +8,7 @@
 {% from "heading/macro.njk" import appHeading %}
 {% from "case-header/macro.njk" import appCaseHeader %}
 {% from "case-tabs/macro.njk" import appCaseTabs %}
+{% from "session-notice/macro.njk" import sessionNotice %}
 
 {% set mainClasses = "app-main-wrapper" %}
 
@@ -73,6 +74,7 @@
 {% endblock %}
 
 {% block beforeContent %}
+  {{ sessionNotice(concurrentLoginNotice, crumb) }}
   {% if breadcrumbs.length > 1 %}
     {{ govukBreadcrumbs({
       items: breadcrumbs
