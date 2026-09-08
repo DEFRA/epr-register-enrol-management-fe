@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
 import {
-  ENTER_REASON_MESSAGE,
   EXPORTER_ONLY_SECTION_VALUES,
   INVALID_SECTIONS_MESSAGE,
   QUERY_REASON_MAX_WORDS,
@@ -171,25 +170,26 @@ describe('validateQueryForm', () => {
     expect(result.fieldErrors.sections).toBe(SELECT_SECTIONS_MESSAGE)
   })
 
-  test('rejects a missing reason', () => {
+  // RA-534: the reason is optional.
+  test('accepts a missing reason and returns it as an empty string', () => {
     const result = validateQueryForm({ sections: ['business-plan'] })
-    expect(result.ok).toBe(false)
-    expect(result.fieldErrors.reason).toBe(ENTER_REASON_MESSAGE)
+    expect(result.ok).toBe(true)
+    expect(result.value).toEqual({ sections: ['business-plan'], reason: '' })
   })
 
-  test('rejects a whitespace-only reason', () => {
+  test('accepts a whitespace-only reason, trimmed to empty', () => {
     const result = validateQueryForm({
       sections: ['business-plan'],
       reason: '   \n\t '
     })
-    expect(result.ok).toBe(false)
-    expect(result.fieldErrors.reason).toBe(ENTER_REASON_MESSAGE)
+    expect(result.ok).toBe(true)
+    expect(result.value.reason).toBe('')
   })
 
-  test('rejects a non-string reason', () => {
+  test('coerces a non-string reason to an empty string', () => {
     const result = validateQueryForm({ sections: ['business-plan'], reason: 5 })
-    expect(result.ok).toBe(false)
-    expect(result.fieldErrors.reason).toBe(ENTER_REASON_MESSAGE)
+    expect(result.ok).toBe(true)
+    expect(result.value.reason).toBe('')
   })
 
   test(`accepts exactly ${QUERY_REASON_MAX_WORDS} words`, () => {
@@ -209,12 +209,13 @@ describe('validateQueryForm', () => {
     expect(result.fieldErrors.reason).toBe(REASON_TOO_LONG_MESSAGE)
   })
 
-  test('reports both field errors at once and echoes values back', () => {
+  // RA-534: an empty POST fails on sections alone now; the missing reason is
+  // valid, so it is not reported.
+  test('reports the sections error and echoes values back', () => {
     const result = validateQueryForm({})
     expect(result.ok).toBe(false)
     expect(result.fieldErrors).toEqual({
-      sections: SELECT_SECTIONS_MESSAGE,
-      reason: ENTER_REASON_MESSAGE
+      sections: SELECT_SECTIONS_MESSAGE
     })
     expect(result.values).toEqual({ sections: [], reason: '' })
   })
