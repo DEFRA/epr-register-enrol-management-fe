@@ -29,6 +29,7 @@ describe('#buildRedisClient', () => {
     test('Should instantiate a single Redis client', () => {
       expect(Redis).toHaveBeenCalledWith({
         db: 0,
+        enableReadyCheck: false,
         host: '127.0.0.1',
         keyPrefix: 'epr-register-case-management:',
         port: 6379
@@ -74,6 +75,7 @@ describe('#buildRedisClient', () => {
           keyPrefix: 'epr-register-case-management:',
           redisOptions: {
             db: 0,
+            enableReadyCheck: false,
             password: 'pass',
             tls: { rejectUnauthorized: true },
             username: 'user'
