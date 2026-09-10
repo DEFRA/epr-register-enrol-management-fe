@@ -9,7 +9,6 @@ import {
 } from '#/server/work-items/core/registry.js'
 import { clearDetailTemplateRegistry } from '#/server/work-items/core/templates.js'
 import {
-  ENTER_REASON_MESSAGE,
   QUERY_REASON_MAX_WORDS,
   QUERY_SECTION_OPTIONS,
   REASON_TOO_LONG_MESSAGE,
@@ -472,7 +471,10 @@ describe('GET /work-items/{id}/query', () => {
     expect(result).toEqual(
       expect.stringContaining('Which areas do you want to query?')
     )
-    expect(result).toEqual(expect.stringContaining('Reason for the query'))
+    // RA-534: the reason is optional and the label says so.
+    expect(result).toEqual(
+      expect.stringContaining('Reason for the query (optional)')
+    )
     expect(result).toEqual(
       expect.stringContaining(
         'The reason you provide is for internal use only.'
@@ -667,26 +669,28 @@ describe('POST /work-items/{id}/query', () => {
     expect(raiseWorkItemQuery).not.toHaveBeenCalled()
   })
 
-  test('rejects a submission with no reason', async () => {
-    const { statusCode, result } = await postQuery(
-      server,
-      'sections=business-plan'
-    )
+  // RA-534: the reason is optional — a submission with sections but no
+  // reason succeeds and sends an empty reason to the backend.
+  test('accepts a submission with no reason', async () => {
+    raiseWorkItemQuery.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining(ENTER_REASON_MESSAGE))
-    expect(result).toEqual(expect.stringContaining('href="#field-reason"'))
-    expect(raiseWorkItemQuery).not.toHaveBeenCalled()
+    const { statusCode } = await postQuery(server, 'sections=business-plan')
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(raiseWorkItemQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ sections: ['business-plan'], reason: '' })
+    )
   })
 
-  test('rejects a whitespace-only reason', async () => {
-    const { statusCode, result } = await postQuery(
-      server,
-      form({ reason: '    ' })
-    )
+  test('accepts a whitespace-only reason, sending it trimmed to empty', async () => {
+    raiseWorkItemQuery.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining(ENTER_REASON_MESSAGE))
+    const { statusCode } = await postQuery(server, form({ reason: '    ' }))
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(raiseWorkItemQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: '' })
+    )
   })
 
   test(`accepts a reason of exactly ${QUERY_REASON_MAX_WORDS} words`, async () => {
@@ -712,11 +716,17 @@ describe('POST /work-items/{id}/query', () => {
   })
 
   test('re-renders the form with the user input preserved', async () => {
-    const { result } = await postQuery(
+    // RA-534: an empty reason is valid now, so drive the re-render with an
+    // over-long reason and check the selected section survives it.
+    const { statusCode, result } = await postQuery(
       server,
-      form({ sections: ['prn-tonnage'], reason: '' })
+      form({
+        sections: ['prn-tonnage'],
+        reason: words(QUERY_REASON_MAX_WORDS + 1)
+      })
     )
 
+    expect(statusCode).toBe(statusCodes.badRequest)
     expect(result).toMatch(/value="prn-tonnage"[^>]*checked/)
   })
 

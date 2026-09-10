@@ -103,6 +103,46 @@ const ACTION_STATUS_PUSH_SKIPPED = 'status-push-skipped'
 const ACTION_STATUS_PUSH_FAILED = 'status-push-failed'
 const ACTION_ROUTED_TO_NATION = 'routed-to-nation'
 const ACTION_NATION_CORRECTED = 'nation-corrected'
+// RA-291: the query-detail entry ReAccreditationQueryService appends after a
+// `query-during-*` transition, carrying the selected sections and the
+// (RA-534: optional) free-text reason in its `details`.
+const ACTION_APPLICATION_QUERIED = 'application-queried'
+
+/**
+ * Human-readable labels for the query `details.sections` values — the same
+ * closed set the query form renders as checkboxes (RA-291). Kept local, like
+ * `DERIVED_FROM_DISPLAY_NAMES` above, so `core/` does not import from the
+ * `routes/` layer; an unknown value renders verbatim rather than being
+ * dropped.
+ */
+const QUERY_SECTION_DISPLAY_NAMES = {
+  'authority-to-issue': 'Authority to issue',
+  'business-plan': 'Business plan',
+  'prn-tonnage': 'PRN tonnage',
+  'sampling-and-inspection-plan': 'Sampling and inspection plan',
+  'broadly-equivalent-standards': 'Broadly equivalent standards (BES)',
+  'overseas-reprocessing-sites': 'Overseas reprocessing sites (ORS)'
+}
+
+/**
+ * Parse `details.sections` — stored by the backend as a comma-joined string
+ * (`"authority-to-issue,business-plan"`) — into a list of display names.
+ * Tolerates an already-split array and stray whitespace.
+ */
+function queriedSectionLabels(sections) {
+  let raw
+  if (Array.isArray(sections)) {
+    raw = sections
+  } else if (typeof sections === 'string') {
+    raw = sections.split(',')
+  } else {
+    raw = []
+  }
+  return raw
+    .map((value) => value.trim())
+    .filter((value) => value !== '')
+    .map((value) => QUERY_SECTION_DISPLAY_NAMES[value] ?? value)
+}
 
 /**
  * Human-readable form of `routed-to-nation`'s `derivedFrom` value.
@@ -268,7 +308,8 @@ const ACTION_DISPLAY_NAMES = {
   [ACTION_STATUS_PUSH_FAILED]:
     'Status failed to send to the Registration & Accreditation service',
   [ACTION_ROUTED_TO_NATION]: 'Routed to nation',
-  [ACTION_NATION_CORRECTED]: 'Nation corrected'
+  [ACTION_NATION_CORRECTED]: 'Nation corrected',
+  [ACTION_APPLICATION_QUERIED]: 'Application queried'
 }
 
 /**
@@ -374,6 +415,10 @@ export function summariseAuditEntry(entry) {
     }
     case ACTION_NOTE_ADDED:
       return ''
+    case ACTION_APPLICATION_QUERIED:
+      // The areas queried are the at-a-glance summary; the (optional) reason
+      // is shown in full in the disclosure rather than truncated here.
+      return queriedSectionLabels(details.sections).join(', ')
     case ACTION_NOTIFICATION_SENT:
       return details.recipient ?? ''
     case ACTION_NOTIFICATION_SKIPPED:
@@ -483,6 +528,25 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       const text = details.noteText
       if (typeof text === 'string' && text.length > 0) {
         rows.push({ key: 'Note', value: text, multiline: true })
+      }
+      return rows
+    }
+    case ACTION_APPLICATION_QUERIED: {
+      // RA-291/RA-534: ReAccreditationQueryService stamps `actionId`,
+      // `sections` (comma-joined) and `reason` onto this entry. The reason is
+      // optional (RA-534) — render its row only when the caseworker entered
+      // one, matching how every other action omits absent rows.
+      const rows = []
+      const areas = queriedSectionLabels(details.sections)
+      if (areas.length > 0) {
+        rows.push({ key: 'Areas queried', value: areas.join(', ') })
+      }
+      const actor = entry.createdByName ?? entry.createdBy
+      if (actor) {
+        rows.push({ key: 'Queried by', value: actor })
+      }
+      if (typeof details.reason === 'string' && details.reason.trim() !== '') {
+        rows.push({ key: 'Reason', value: details.reason, multiline: true })
       }
       return rows
     }

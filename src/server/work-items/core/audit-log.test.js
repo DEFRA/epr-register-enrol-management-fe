@@ -69,6 +69,22 @@ describe('summariseAuditEntry', () => {
     expect(summariseAuditEntry(null)).toBe('')
     expect(summariseAuditEntry({})).toBe('')
   })
+
+  // RA-291/RA-534: the query-detail entry summarises to the queried areas
+  // (display names, comma-separated); the optional reason is left to the
+  // disclosure.
+  test('summarises an application-queried entry as its queried areas', () => {
+    expect(
+      summariseAuditEntry({
+        action: 'application-queried',
+        details: {
+          actionId: 'query-during-assessment',
+          sections: 'authority-to-issue,prn-tonnage',
+          reason: 'Please confirm the figures.'
+        }
+      })
+    ).toBe('Authority to issue, PRN tonnage')
+  })
 })
 
 describe('decorateAuditLog', () => {
@@ -496,6 +512,66 @@ describe('detailRowsForAuditEntry', () => {
       { key: 'Previous nation', value: 'Northern Ireland' },
       { key: 'Corrected nation', value: 'England' }
     ])
+  })
+
+  // RA-291/RA-534 — the query-detail entry. AC2: a reason the caseworker
+  // entered must reach the application history; an omitted one must not
+  // leave an empty row.
+  test('projects areas, actor and reason for an application-queried entry', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'application-queried',
+        createdByName: 'Stub Caseworker One',
+        details: {
+          actionId: 'query-during-assessment',
+          sections: 'authority-to-issue,sampling-and-inspection-plan',
+          reason: 'Please re-upload the sampling and inspection plan.'
+        }
+      })
+    ).toEqual([
+      {
+        key: 'Areas queried',
+        value: 'Authority to issue, Sampling and inspection plan'
+      },
+      { key: 'Queried by', value: 'Stub Caseworker One' },
+      {
+        key: 'Reason',
+        value: 'Please re-upload the sampling and inspection plan.',
+        multiline: true
+      }
+    ])
+  })
+
+  test('omits the Reason row for an application-queried entry with no reason', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'application-queried',
+        createdByName: 'Stub Caseworker One',
+        details: {
+          actionId: 'query-during-assessment',
+          sections: 'business-plan',
+          reason: ''
+        }
+      })
+    ).toEqual([
+      { key: 'Areas queried', value: 'Business plan' },
+      { key: 'Queried by', value: 'Stub Caseworker One' }
+    ])
+  })
+
+  test('accepts an already-split sections array and renders unknown values verbatim', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'application-queried',
+        details: { sections: ['business-plan', 'mystery-area'] }
+      })
+    ).toEqual([{ key: 'Areas queried', value: 'Business plan, mystery-area' }])
+  })
+
+  test('returns an empty array for an application-queried entry with no sections, reason or actor', () => {
+    expect(
+      detailRowsForAuditEntry({ action: 'application-queried', details: {} })
+    ).toEqual([])
   })
 })
 
