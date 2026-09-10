@@ -69,7 +69,9 @@ export const SELECT_SECTIONS_MESSAGE = 'Select which areas you want to query'
  * sections errors, so the error summary shape is unchanged.
  */
 export const INVALID_SECTIONS_MESSAGE = 'Select which areas you want to query'
-export const ENTER_REASON_MESSAGE = 'Enter a reason for the query'
+// RA-534: the reason is no longer mandatory — an empty reason is a valid
+// submission and raises no error. The only remaining reason rule is the
+// word cap, which still applies to whatever text was entered.
 export const REASON_TOO_LONG_MESSAGE = `Query must be ${QUERY_REASON_MAX_WORDS} words or fewer`
 
 /**
@@ -104,12 +106,17 @@ export const queryFormSchema = Joi.object({
       'array.includes': SELECT_SECTIONS_MESSAGE,
       'any.only': SELECT_SECTIONS_MESSAGE
     }),
-  reason: Joi.string().trim().required().custom(withinWordLimit).messages({
-    'any.required': ENTER_REASON_MESSAGE,
-    'string.base': ENTER_REASON_MESSAGE,
-    'string.empty': ENTER_REASON_MESSAGE,
-    'string.maxWords': REASON_TOO_LONG_MESSAGE
-  })
+  // RA-534: optional. `validateQueryForm` coerces a missing/non-string
+  // reason to '' before it reaches here, so `.allow('')` is all that is
+  // needed for the empty case; the word cap still guards a filled-in one.
+  reason: Joi.string()
+    .trim()
+    .allow('')
+    .default('')
+    .custom(withinWordLimit)
+    .messages({
+      'string.maxWords': REASON_TOO_LONG_MESSAGE
+    })
 })
 
 /**
