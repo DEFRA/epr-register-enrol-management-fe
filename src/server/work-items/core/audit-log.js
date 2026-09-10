@@ -130,11 +130,12 @@ const QUERY_SECTION_DISPLAY_NAMES = {
  * Tolerates an already-split array and stray whitespace.
  */
 function queriedSectionLabels(sections) {
-  const raw = Array.isArray(sections)
-    ? sections
-    : typeof sections === 'string'
-      ? sections.split(',')
-      : []
+  let raw = []
+  if (Array.isArray(sections)) {
+    raw = sections
+  } else if (typeof sections === 'string') {
+    raw = sections.split(',')
+  }
   return raw
     .map((value) => value.trim())
     .filter((value) => value !== '')
