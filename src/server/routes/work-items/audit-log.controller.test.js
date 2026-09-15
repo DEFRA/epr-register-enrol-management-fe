@@ -76,23 +76,14 @@ describe('#workItemAuditLogController', () => {
     clearWorkItemRegistry()
   })
 
-  test('Renders the audit log page with entries in chronological (oldest-first) order, action, actor and timestamp', async () => {
+  test('Renders the audit log page with entries in reverse-chronological (newest-first) order, action, actor and timestamp', async () => {
     registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
+        // Backend projects newest-first (RA-568); the mock reflects that
+        // wire order since the controller does not re-sort.
         auditLog: [
-          {
-            id: 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-            action: 'note-added',
-            actionDisplayName: 'Note added',
-            details: {
-              noteText: 'Checked eligibility'
-            },
-            createdAt: '2026-04-27T09:00:00Z',
-            createdBy: 'alice-1',
-            createdByName: 'Alice Example'
-          },
           {
             id: 'bbbb2222-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
             action: 'action-applied',
@@ -106,6 +97,17 @@ describe('#workItemAuditLogController', () => {
             createdAt: '2026-04-27T10:00:00Z',
             createdBy: 'bob-2',
             createdByName: 'Bob Example'
+          },
+          {
+            id: 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            action: 'note-added',
+            actionDisplayName: 'Note added',
+            details: {
+              noteText: 'Checked eligibility'
+            },
+            createdAt: '2026-04-27T09:00:00Z',
+            createdBy: 'alice-1',
+            createdByName: 'Alice Example'
           }
         ]
       })
@@ -138,10 +140,10 @@ describe('#workItemAuditLogController', () => {
     // Timestamps render in UK local time (BST in April, so 09:00Z -> 10:00am)
     // via the formatDateTimeGds filter, not as the raw UTC ISO string.
     expect(result).toEqual(expect.stringContaining('27 April 2026 at 10:00am'))
-    // Chronological (oldest-first) ordering: the earlier entry appears
-    // before the later one in the rendered HTML.
-    expect(result.indexOf('Note added')).toBeLessThan(
-      result.indexOf('Action applied')
+    // Reverse-chronological (newest-first) ordering: the later entry
+    // appears before the earlier one in the rendered HTML.
+    expect(result.indexOf('Action applied')).toBeLessThan(
+      result.indexOf('Note added')
     )
     // Provides a way back to the detail page.
     expect(result).toEqual(expect.stringContaining(`/work-items/${ID}`))
