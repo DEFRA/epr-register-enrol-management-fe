@@ -7,16 +7,16 @@ import { nationLabel } from '#/server/work-items/core/nations.js'
  * The backend appends one `auditLog` entry to a work item for every
  * successful state-changing engine call (action
  * application, assignment / unassignment, note added). Entries arrive
- * already sorted chronologically (oldest-first). The detail template
- * renders them as a top-to-bottom timeline; this helper produces a short
- * human-readable `summary` per entry from the structured `details`
- * dictionary so the template can stay declarative.
+ * already sorted reverse-chronologically (newest-first, RA-568). The
+ * detail template renders them as a top-to-bottom timeline; this helper
+ * produces a short human-readable `summary` per entry from the structured
+ * `details` dictionary so the template can stay declarative.
  */
 
 /**
  * Decorate the raw audit log from a backend `WorkItemResponse` with a
  * `summary` string suitable for direct rendering. Returns the entries in
- * the same chronological order the backend projected them.
+ * the same order the backend projected them (newest-first, RA-568).
  *
  * The optional `payload` is the current work item payload; when supplied
  * it is surfaced as a `Payload` row on the `work-item-submitted` entry
@@ -333,8 +333,10 @@ function isFailureAuditEntry(entry) {
 /**
  * RA-211: whether a work item has an unresolved notification failure worth
  * surfacing as a banner. A `notification-failed` entry is "unresolved" when
- * no `notification-sent` entry for the SAME template appears later in the
- * (chronologically ordered) audit log — a later, unrelated notification
+ * no `notification-sent` entry for the SAME template has a later
+ * `createdAt` timestamp anywhere in the audit log (compared by timestamp,
+ * not array position — the array itself is newest-first, RA-568) — a
+ * later, unrelated notification
  * succeeding (e.g. DulyMade) must not hide an earlier, still-unresolved
  * failure of a different one (e.g. Queried). When either entry lacks a
  * `details.templateKey` (older data), falls back to treating any later

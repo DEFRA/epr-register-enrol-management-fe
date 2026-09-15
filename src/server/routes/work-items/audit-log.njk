@@ -5,8 +5,9 @@
 {#                                                                   #}
 {# Framework-provided audit timeline: every state-changing engine    #}
 {# call (task complete, action applied, assignment change, note      #}
-{# added) appends one entry on the backend. Projected chronologically #}
-{# (oldest-first) so we render top-to-bottom without re-sorting.     #}
+{# added) appends one entry on the backend. Projected reverse-        #}
+{# chronologically (newest-first, RA-568) so we render top-to-bottom #}
+{# without re-sorting.                                               #}
 {# ---------------------------------------------------------------- #}
 
 {% from "govuk/components/tag/macro.njk" import govukTag %}
