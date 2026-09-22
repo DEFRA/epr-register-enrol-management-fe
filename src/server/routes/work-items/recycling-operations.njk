@@ -23,11 +23,15 @@
   {# `request.yar.flash('flashBanner', ...)` with shape                   #}
   {# `{type: 'success' | 'error', title?, text}`. AC13's post-edit         #}
   {# confirmation banner renders here after the redirect back to this tab. #}
+  {# The error branch carries `app-notification-banner--error` for the     #}
+  {# same reason as detail.njk: an unmodified banner inherits the green    #}
+  {# service brand colour and an error reads as a success.                 #}
   {% if flashBanner %}
     {{ govukNotificationBanner({
       type: flashBanner.type,
       titleText: flashBanner.title or (flashBanner.type == 'success' and 'Success' or 'There is a problem'),
       text: flashBanner.text,
+      classes: flashBanner.type == 'error' and 'app-notification-banner--error' or '',
       attributes: { "data-testid": "recycling-operations-flash-banner" }
     }) }}
   {% endif %}

@@ -140,11 +140,17 @@
   {# RA-132. Generic flash-banner rendered above the existing per-feature  #}
   {# banners. Set by handlers via `request.yar.flash('flashBanner', ...)`  #}
   {# with shape `{type: 'success' | 'error', title?, text}`.                #}
+  {#                                                                       #}
+  {# govukNotificationBanner only honours `type: 'success'`, and           #}
+  {# core/_header.scss re-brands the service green, so an error flash      #}
+  {# banner would otherwise render green and read as good news — hence     #}
+  {# the `app-notification-banner--error` modifier on the error branch.    #}
   {% if flashBanner %}
     {{ govukNotificationBanner({
       type: flashBanner.type,
       titleText: flashBanner.title or (flashBanner.type == 'success' and 'Success' or 'There is a problem'),
       text: flashBanner.text,
+      classes: flashBanner.type == 'error' and 'app-notification-banner--error' or '',
       attributes: { "data-testid": "work-item-flash-banner" }
     }) }}
   {% endif %}

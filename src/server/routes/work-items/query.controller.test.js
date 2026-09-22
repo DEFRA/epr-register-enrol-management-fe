@@ -91,6 +91,31 @@ function postQuery(server, payload) {
   })
 }
 
+/**
+ * Extract the rendered RA-132 flash banner from the detail page, so an
+ * assertion about its classes is scoped to the banner itself and cannot pass
+ * against `app-notification-banner--error` appearing anywhere else on the
+ * page (the compiled stylesheet link, say).
+ *
+ * THROWS when the banner is absent, for the same reason `detailRow` does in
+ * detail.controller.test.js: a negative assertion scoped to a missing element
+ * passes vacuously, so a banner that stopped rendering would read as a pass.
+ */
+function flashBanner(html) {
+  const marker = 'data-testid="work-item-flash-banner"'
+  const at = html.indexOf(marker)
+  if (at === -1) {
+    throw new Error(
+      'No flash banner in the rendered detail page — a scoped assertion against it would pass vacuously.'
+    )
+  }
+  // The banner's own opening tag: back to the `<` that starts it, forward to
+  // the end of the element, so `classes` (rendered into that tag) is in range.
+  const start = html.lastIndexOf('<', at)
+  const end = html.indexOf('</div>', at)
+  return html.slice(start, end === -1 ? undefined : end)
+}
+
 const words = (n) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 
 describe('query action id helpers', () => {
@@ -644,6 +669,12 @@ describe('POST /work-items/{id}/query', () => {
     })
 
     expect(detail.result).toEqual(expect.stringContaining('Query sent'))
+    // The converse of the error assertion below: the modifier is conditional
+    // on `type == 'error'`, so a success banner must stay on the brand
+    // colour rather than being painted red.
+    expect(flashBanner(detail.result)).not.toContain(
+      'app-notification-banner--error'
+    )
   })
 
   test('normalises a single checkbox posted as a bare string', async () => {
@@ -870,6 +901,12 @@ describe('POST /work-items/{id}/query', () => {
 
       expect(detail.result).toEqual(
         expect.stringContaining('Could not send the query')
+      )
+      // The error flash banner must carry the error modifier. Without it the
+      // banner inherits the green service brand colour (core/_header.scss
+      // sets --govuk-brand-colour) and a failure reads as a success.
+      expect(flashBanner(detail.result)).toContain(
+        'app-notification-banner--error'
       )
     }
   )
