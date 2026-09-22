@@ -17,11 +17,10 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
   extendWorkItemSla: vi.fn(),
-  overrideWorkItemSla: vi.fn(),
   updateRecyclingOperations: vi.fn()
 }))
 
-const { extendWorkItemSla, overrideWorkItemSla, getWorkItem } =
+const { extendWorkItemSla, getWorkItem } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '22222222-2222-2222-2222-222222222222'
@@ -40,6 +39,16 @@ const aWorkItem = {
 const VALID_DEADLINE_PAYLOAD =
   'new-deadline-day=1&new-deadline-month=7&new-deadline-year=2026'
 
+/**
+ * The page's prose with every attribute value and href stripped out, so an
+ * "extend" assertion (RA-572 AC02) reads the words a regulator sees and not
+ * the `/sla/extend` route, the `sla-extend-*` testids or the `new-deadline`
+ * field names — all of which RA-572 deliberately leaves alone.
+ */
+function visibleText(html) {
+  return String(html).replace(/<[^>]*>/g, ' ')
+}
+
 describe('#makeShowExtendController', () => {
   let server
 
@@ -57,7 +66,7 @@ describe('#makeShowExtendController', () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
   })
 
-  test('GET renders the extend determination deadline form', async () => {
+  test('GET renders the change determination deadline form', async () => {
     const { statusCode, result } = await server.inject({
       method: 'GET',
       url: `/work-items/${ID}/sla/extend`
@@ -65,7 +74,7 @@ describe('#makeShowExtendController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).toEqual(
-      expect.stringContaining('Extend determination deadline')
+      expect.stringContaining('Change determination deadline')
     )
     expect(result).toEqual(expect.stringContaining('sla-extend-form'))
     expect(result).toEqual(expect.stringContaining('sla-extend-days'))
@@ -258,7 +267,12 @@ describe('#makeSubmitExtendController', () => {
   })
 })
 
-describe('#makeShowOverrideController', () => {
+// RA-572 AC01/AC02. The Override journey is deleted, not disabled: both of
+// its routes must be UNROUTABLE, and the Change page must speak only of a
+// change. Asserted here rather than only in the e2e suite because the
+// 404 is what stops a bookmarked or crafted Override request from
+// resurfacing a withdrawn journey.
+describe('RA-572 Override removal and Change copy', () => {
   let server
 
   beforeAll(async () => {
@@ -271,172 +285,115 @@ describe('#makeShowOverrideController', () => {
   })
 
   beforeEach(() => {
+    extendWorkItemSla.mockReset()
     getWorkItem.mockReset()
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
   })
 
-  test('GET renders the override determination deadline form', async () => {
-    const { statusCode, result } = await server.inject({
+  test.each(['GET', 'POST'])(
+    '%s /sla/override is no longer routable',
+    async (method) => {
+      const { statusCode } =
+        method === 'GET'
+          ? await server.inject({
+              method,
+              url: `/work-items/${ID}/sla/override`
+            })
+          : await injectWithCrumb(server, {
+              method,
+              url: `/work-items/${ID}/sla/override`,
+              payload: 'reason=Some+reason&newTargetDays=30',
+              headers: {
+                'content-type': 'application/x-www-form-urlencoded'
+              }
+            })
+
+      expect(statusCode).toBe(statusCodes.notFound)
+      expect(getWorkItem).not.toHaveBeenCalled()
+    }
+  )
+
+  // AC06. Removing Override must not take Change with it.
+  test('the Change journey still renders and still saves', async () => {
+    extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
+
+    const { statusCode: getStatus } = await server.inject({
       method: 'GET',
-      url: `/work-items/${ID}/sla/override`
+      url: `/work-items/${ID}/sla/extend`
+    })
+    expect(getStatus).toBe(statusCodes.ok)
+
+    const { statusCode, headers } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload: `reason=Needs+longer&${VALID_DEADLINE_PAYLOAD}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' }
     })
 
-    expect(statusCode).toBe(statusCodes.ok)
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    expect(extendWorkItemSla).toHaveBeenCalled()
+  })
+
+  // AC02. One assertion per string the regulator actually reads, plus a
+  // blanket check that no "extend"/"extending" wording survived anywhere on
+  // the page — that blanket check is what catches copy re-introduced by a
+  // later edit to the template.
+  test('the Change page uses change terminology throughout', async () => {
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/sla/extend`
+    })
+
     expect(result).toEqual(
-      expect.stringContaining('Override determination deadline')
+      expect.stringContaining('Change determination deadline')
     )
-    expect(result).toEqual(expect.stringContaining('sla-override-form'))
-    expect(result).toEqual(expect.stringContaining(REF))
+    expect(result).toEqual(expect.stringContaining('Reason for change'))
+    expect(result).toEqual(
+      expect.stringContaining(
+        'Explain why the determination deadline needs to be changed.'
+      )
+    )
+    expect(result).toEqual(
+      expect.stringContaining('New determination deadline')
+    )
+    // The form action, the testids and the field names all still say
+    // "extend" by design, so check the PROSE only.
+    expect(visibleText(result)).not.toMatch(/extend/i)
   })
 
-  // RA-358 AC2. As above — the second of this controller's two callers of
-  // the shared not-found view, previously uncovered.
-  test('GET renders the 404 page in application terms', async () => {
-    getWorkItem.mockResolvedValue({ ok: false, status: 404 })
-
-    const { statusCode, result } = await server.inject({
+  // The testids the e2e journeys key off are part of the contract: RA-572
+  // changes copy, never wiring.
+  test('keeps every sla-extend testid and the /sla/extend form action', async () => {
+    const { result } = await server.inject({
       method: 'GET',
-      url: `/work-items/${ID}/sla/override`
+      url: `/work-items/${ID}/sla/extend`
     })
 
-    expect(statusCode).toBe(statusCodes.notFound)
-    expect(result).toEqual(expect.stringContaining('Application not found'))
-    expect(result).toContain(
-      '<a class="govuk-breadcrumbs__link" href="/work-items">Applications</a>'
-    )
-    expect(result).not.toEqual(expect.stringContaining('No work item exists'))
-  })
-})
-
-describe('#makeSubmitOverrideController', () => {
-  let server
-
-  beforeAll(async () => {
-    server = await createServer()
-    await server.initialize()
-  })
-
-  afterAll(async () => {
-    await server.stop({ timeout: 0 })
-  })
-
-  beforeEach(() => {
-    overrideWorkItemSla.mockReset()
-    getWorkItem.mockReset()
-    getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
-  })
-
-  test('POST with valid data redirects to detail page on success', async () => {
-    overrideWorkItemSla.mockResolvedValue({
-      ok: true,
-      workItem: { id: ID }
-    })
-
-    const { statusCode, headers } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/override`,
-      payload: `reason=Reset+clock&newTargetDays=30&newStartedAt=2024-01-15T09%3A00%3A00Z`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}`)
-    expect(overrideWorkItemSla).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workItemId: ID,
-        reason: 'Reset clock',
-        newTargetDuration: 'P30D'
-      })
+    for (const testId of [
+      'sla-extend-form',
+      'sla-extend-reason',
+      'sla-extend-days',
+      'sla-extend-submit',
+      'sla-extend-cancel'
+    ]) {
+      expect(result).toEqual(expect.stringContaining(`data-testid="${testId}"`))
+    }
+    expect(result).toEqual(
+      expect.stringContaining(`action="/work-items/${ID}/sla/extend"`)
     )
   })
 
-  test('POST with empty reason re-renders form with 400', async () => {
+  test('the validation error summary uses change terminology', async () => {
     const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
-      url: `/work-items/${ID}/sla/override`,
-      payload: `reason=&newTargetDays=30&newStartedAt=2024-01-15T09%3A00%3A00Z`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded'
-      }
+      url: `/work-items/${ID}/sla/extend`,
+      payload: `reason=&${VALID_DEADLINE_PAYLOAD}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' }
     })
 
     expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining('There is a problem'))
-    expect(result).toEqual(expect.stringContaining('Reason is required'))
-    expect(overrideWorkItemSla).not.toHaveBeenCalled()
-  })
-
-  test('POST with invalid days re-renders form with 400', async () => {
-    const { statusCode, result } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/override`,
-      payload: `reason=Some+reason&newTargetDays=abc&newStartedAt=2024-01-15T09%3A00%3A00Z`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining('There is a problem'))
-    expect(overrideWorkItemSla).not.toHaveBeenCalled()
-  })
-
-  test('POST with invalid date re-renders form with 400', async () => {
-    const { statusCode, result } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/override`,
-      payload: `reason=Some+reason&newTargetDays=30&newStartedAt=not-a-date`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining('There is a problem'))
-    expect(overrideWorkItemSla).not.toHaveBeenCalled()
-  })
-
-  test('POST redirects with error flash on forbidden response', async () => {
-    overrideWorkItemSla.mockResolvedValue({
-      ok: false,
-      reason: 'forbidden',
-      status: 403,
-      message: 'Forbidden'
-    })
-
-    const { statusCode, headers } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/override`,
-      payload: `reason=Some+reason&newTargetDays=30&newStartedAt=2024-01-15T09%3A00%3A00Z`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}`)
-  })
-
-  test('POST redirects with error flash on conflict response', async () => {
-    overrideWorkItemSla.mockResolvedValue({
-      ok: false,
-      reason: 'conflict',
-      status: 409,
-      message: 'Conflict'
-    })
-
-    const { statusCode, headers } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/override`,
-      payload: `reason=Some+reason&newTargetDays=30&newStartedAt=2024-01-15T09%3A00%3A00Z`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded'
-      }
-    })
-
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}`)
+    expect(result).toEqual(expect.stringContaining('sla-extend-error-summary'))
+    expect(visibleText(result)).not.toMatch(/extend/i)
   })
 })

@@ -876,65 +876,6 @@ export async function extendWorkItemSla({
 }
 
 /**
- * Override the SLA clock on a work item (RA-131).
- *
- * Wraps `POST /work-items/{id}/sla/override`.
- * Body: { reason, newTargetDuration, newStartedAt } (ISO 8601 duration + datetime).
- */
-export async function overrideWorkItemSla({
-  workItemId,
-  reason,
-  newTargetDuration,
-  newStartedAt,
-  user = null,
-  baseUrl = config.get(CONFIG_BACKEND_API_URL),
-  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
-  fetchImpl = fetch
-}) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/sla/override`
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const response = await fetchImpl(url, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: buildHeaders(
-        { 'content-type': 'application/json', accept: 'application/json' },
-        user
-      ),
-      body: JSON.stringify({ reason, newTargetDuration, newStartedAt })
-    })
-
-    if (response.ok) {
-      const workItem = await response.json()
-      return { ok: true, workItem }
-    }
-
-    const problem = await safeReadJson(response)
-    const detail =
-      (problem && (problem.detail || problem.title)) ||
-      `Backend returned ${response.status}`
-    const slaReason = SLA_REASON_BY_STATUS[response.status] ?? 'server'
-    return {
-      ok: false,
-      reason: slaReason,
-      status: response.status,
-      message: detail
-    }
-  } catch (error) {
-    logger.warn({ err: error, url }, 'Backend API overrideWorkItemSla failed')
-    return {
-      ok: false,
-      reason: 'network',
-      message: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
-    }
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-/**
  * Raise a query against a re-accreditation application (RA-291).
  *
  * Wraps `POST /work-items/re-accreditation/{id}/query`.

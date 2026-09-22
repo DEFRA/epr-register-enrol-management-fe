@@ -1,7 +1,8 @@
 {% from "govuk/components/button/macro.njk" import govukButton %}
 
-{# RA-335. Case-panel affordances (reassign, unassign, change/override due
-   date, query, withdraw, approve, create work item) navigate to another
+{# RA-335. Case-panel affordances (reassign, unassign, change the
+   determination deadline, query, withdraw, approve, create work item)
+   navigate to another
    page rather than submitting a form — some rendered as plain text links,
    others (approve, create work item) as button-styled links via
    govukButton's `href` param. Neither has a native disabled state: an
