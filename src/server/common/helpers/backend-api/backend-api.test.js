@@ -13,7 +13,6 @@ import {
   getBackendHealth,
   getWorkItem,
   getWorkItems,
-  overrideWorkItemSla,
   raiseWorkItemQuery,
   recordReAccreditationDecision,
   unassignWorkItem,
@@ -1542,107 +1541,6 @@ describe('#extendWorkItemSla (RA-131)', () => {
       ok: false,
       reason: 'network',
       message: 'ECONNREFUSED'
-    })
-  })
-})
-
-describe('#overrideWorkItemSla (RA-131)', () => {
-  test('returns ok=true with workItem on 200', async () => {
-    const workItem = { id: 'wi-2' }
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve(workItem)
-    })
-
-    const result = await overrideWorkItemSla({
-      workItemId: 'wi-2',
-      reason: 'Reset clock',
-      newTargetDuration: 'P30D',
-      newStartedAt: '2024-01-15T09:00:00.000Z',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(fetchImpl).toHaveBeenCalledWith(
-      'http://backend:8085/work-items/wi-2/sla/override',
-      expect.objectContaining({
-        method: 'POST',
-        signal: expect.any(AbortSignal)
-      })
-    )
-    expect(result).toEqual({ ok: true, workItem })
-  })
-
-  test('sends correct JSON body', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({ id: 'wi-2' })
-    })
-
-    await overrideWorkItemSla({
-      workItemId: 'wi-2',
-      reason: 'Override reason',
-      newTargetDuration: 'P90D',
-      newStartedAt: '2024-03-01T00:00:00.000Z',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    const [, init] = fetchImpl.mock.calls[0]
-    const body = JSON.parse(init.body)
-    expect(body).toEqual({
-      reason: 'Override reason',
-      newTargetDuration: 'P90D',
-      newStartedAt: '2024-03-01T00:00:00.000Z'
-    })
-  })
-
-  test('returns invalid on 422', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 422,
-      json: () => Promise.resolve({ detail: 'Unprocessable entity' })
-    })
-
-    const result = await overrideWorkItemSla({
-      workItemId: 'wi-2',
-      reason: 'reason',
-      newTargetDuration: 'P30D',
-      newStartedAt: '2024-01-15T09:00:00.000Z',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'invalid',
-      status: 422,
-      message: 'Unprocessable entity'
-    })
-  })
-
-  test('returns network reason on transport error', async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(new Error('connection refused'))
-
-    const result = await overrideWorkItemSla({
-      workItemId: 'wi-2',
-      reason: 'reason',
-      newTargetDuration: 'P30D',
-      newStartedAt: '2024-01-15T09:00:00.000Z',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'network',
-      message: 'connection refused'
     })
   })
 })

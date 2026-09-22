@@ -16,9 +16,7 @@ import { workItemRecyclingOperationsController } from './recycling-operations.co
 import { workItemAdditionalInformationController } from './additional-information.controller.js'
 import {
   makeShowExtendController,
-  makeSubmitExtendController,
-  makeShowOverrideController,
-  makeSubmitOverrideController
+  makeSubmitExtendController
 } from './sla.controller.js'
 import {
   makeShowQueryController,
@@ -230,7 +228,14 @@ export const workItems = {
           ...makeSelfAssignController()
         },
         {
-          // RA-131. Extend SLA clock — available to any caseworker.
+          // RA-131. Change the determination deadline — available to any
+          // caseworker. RA-572 deleted the sibling `/sla/override` GET and
+          // POST routes outright rather than redirecting them: Override was
+          // withdrawn, not moved, so a crafted request must 404 instead of
+          // quietly landing somewhere that looks like it worked (same
+          // reasoning as the RA-410 task routes above). The route id and
+          // path stay `/sla/extend` — RA-572 is a content change, not a
+          // rename of the wiring.
           method: 'GET',
           path: '/work-items/{id}/sla/extend',
           options: requireStandard,
@@ -248,26 +253,6 @@ export const workItems = {
             }
           },
           ...makeSubmitExtendController()
-        },
-        {
-          // RA-131. Override SLA clock — available to any caseworker.
-          method: 'GET',
-          path: '/work-items/{id}/sla/override',
-          options: requireStandard,
-          ...makeShowOverrideController()
-        },
-        {
-          method: 'POST',
-          path: '/work-items/{id}/sla/override',
-          options: {
-            ...requireStandard,
-            payload: {
-              parse: true,
-              allow: FORM_URLENCODED,
-              maxBytes: 10 * 1024
-            }
-          },
-          ...makeSubmitOverrideController()
         }
       ])
     }

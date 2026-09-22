@@ -110,15 +110,20 @@ const TRANSITIONS = [
     actionId: 'sla-extend',
     // RA-447 CM5. `sla-extend` is filtered out of `availableActions` before
     // this reaches a template (see the RA-372 note in
-    // `work-items/detail.njk`), so this displayName is never rendered — kept
-    // in step with the page's own wording anyway, for anyone reading the
-    // action registry as documentation.
+    // `work-items/detail.njk`), so this displayName is never rendered.
+    // RA-572 reworded the PAGE from "Extend" to "Change" but deliberately
+    // left this string alone: it mirrors management-be's transition
+    // declaration, which RA-572 does not touch, and a declaration that
+    // silently disagrees with the backend is worse than one that disagrees
+    // with copy it never renders. The user-facing wording lives in
+    // `routes/work-items/detail.njk` and `routes/work-items/sla-extend.njk`.
     displayName: 'Extend determination deadline',
     fromStateId: STATE_ASSESSMENT_IN_PROGRESS,
     toStateId: STATE_ASSESSMENT_IN_PROGRESS
   },
-  // RA-351. A queried application can ALSO Extend SLA (and, on the same
-  // `canChangeDueDate` flag, Override the due date) — management-be projects
+  // RA-351. A queried application can ALSO change its determination
+  // deadline (RA-572 retired the Override affordance that used to ride on
+  // the same `canChangeDueDate` flag) — management-be projects
   // `sla-extend` into a queried item's `availableActions`, so a queried
   // item's projected actions are `['sla-extend', 'withdraw-during-query']`.
   //

@@ -5,10 +5,17 @@
 {% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
 {% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
 
-{# RA-131: Extend the determination deadline. Relabelled from "SLA" to      #}
-{# "Determination Deadline" and moved from a day-count input to a calendar  #}
-{# date picker with no upper bound by RA-447 (CM5 / CM6) — see              #}
-{# `sla.service.js#validateExtendDeadline`. `data-testid`s are unchanged.   #}
+{# RA-131: change the determination deadline. Relabelled from "SLA" to      #}
+{# "Determination Deadline" and moved from a day-count input to a date      #}
+{# input with no upper bound by RA-447 (CM5 / CM6) — see                    #}
+{# `sla.service.js#validateExtendDeadline`.                                 #}
+{#                                                                          #}
+{# RA-572 retired the Override journey and reworded this page from          #}
+{# "extend" to "change": Change is now the single regulator-facing route    #}
+{# for amending a determination deadline. Only the copy changed — the       #}
+{# `data-testid`s, field names and the `/sla/extend` form action are        #}
+{# deliberately unchanged. The three-field `govukDateInput` stays (RA-572   #}
+{# AC03, a date picker, is out of scope — confirmed with the reporter).     #}
 
 {% block content %}
   {{ appHeading({
@@ -38,11 +45,11 @@
           name: "reason",
           maxlength: reasonMaxLength,
           label: {
-            text: "Reason for extending the determination deadline",
+            text: "Reason for change",
             classes: "govuk-label--s"
           },
           hint: {
-            text: "Explain why the determination deadline needs to be extended."
+            text: "Explain why the determination deadline needs to be changed."
           },
           value: values.reason,
           errorMessage: { text: fieldErrors["reason"] } if fieldErrors["reason"] else null,
@@ -82,7 +89,7 @@
 
         <div class="govuk-button-group">
           {{ govukButton({
-            text: "Extend determination deadline",
+            text: "Change determination deadline",
             disabled: user.isReadOnly,
             attributes: { "data-testid": "sla-extend-submit" }
           }) }}

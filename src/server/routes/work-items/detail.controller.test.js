@@ -825,12 +825,12 @@ describe('#workItemDetailController', () => {
     )
   })
 
-  // The due-date links are NOT part of AC03's "available throughout" — that
-  // is about assignment. They follow the engine's `sla-extend` projection,
+  // The due-date link is NOT part of AC03's "available throughout" — that
+  // is about assignment. It follows the engine's `sla-extend` projection,
   // because SlaService.ExtendAsync has no terminal-state check of its own:
   // an ungated link would let a caseworker move the due date on a closed
   // case and the backend would accept it.
-  test('due-date links follow the engine projection, not the assignment panel', async () => {
+  test('the due-date link follows the engine projection, not the assignment panel', async () => {
     registerReaccreditation()
 
     getWorkItem.mockResolvedValue({
@@ -848,11 +848,8 @@ describe('#workItemDetailController', () => {
     expect(live.result).toEqual(
       expect.stringContaining('data-testid="action-sla-extend"')
     )
-    expect(live.result).toEqual(
-      expect.stringContaining('data-testid="action-sla-override"')
-    )
 
-    // Terminal / no SLA action projected: both links must disappear.
+    // Terminal / no SLA action projected: the link must disappear.
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({ stateId: 'approved', availableActions: [] })
@@ -865,13 +862,7 @@ describe('#workItemDetailController', () => {
       expect.stringContaining('data-testid="action-sla-extend"')
     )
     expect(closed.result).not.toEqual(
-      expect.stringContaining('data-testid="action-sla-override"')
-    )
-    expect(closed.result).not.toEqual(
       expect.stringContaining(`/work-items/${ID}/sla/extend`)
-    )
-    expect(closed.result).not.toEqual(
-      expect.stringContaining(`/work-items/${ID}/sla/override`)
     )
     // RA-358 REVERSED the original tail of this test, which asserted that
     // "assignment stays available, per AC03" on an approved item. A closed
@@ -893,13 +884,13 @@ describe('#workItemDetailController', () => {
     )
   })
 
-  // RA-351. The bug: a queried application offered no way to Extend or
-  // Override the SLA even though its clock keeps running while it waits for
-  // the operator. management-be now projects `sla-extend` into a queried
-  // item's `availableActions` (mirrored by the module.js self-loop), so
-  // `canChangeDueDate` turns true exactly as it does in assessment and BOTH
-  // due-date links render — no queried special-casing in the controller.
-  test('renders both SLA links for a queried item projecting sla-extend', async () => {
+  // RA-351. The bug: a queried application offered no way to change the
+  // determination deadline even though its clock keeps running while it
+  // waits for the operator. management-be now projects `sla-extend` into a
+  // queried item's `availableActions` (mirrored by the module.js self-loop),
+  // so `canChangeDueDate` turns true exactly as it does in assessment and
+  // the due-date link renders — no queried special-casing in the controller.
+  test('renders the due-date link for a queried item projecting sla-extend', async () => {
     registerReaccreditation()
 
     getWorkItem.mockResolvedValue({
@@ -922,21 +913,28 @@ describe('#workItemDetailController', () => {
       expect.stringContaining('data-testid="action-sla-extend"')
     )
     expect(result).toEqual(
-      expect.stringContaining('data-testid="action-sla-override"')
-    )
-    expect(result).toEqual(
       expect.stringContaining(`/work-items/${ID}/sla/extend`)
     )
-    expect(result).toEqual(
+    // RA-572 AC01/AC06: Override is gone, Change survives on the same item.
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="action-sla-override"')
+    )
+    expect(result).not.toEqual(
       expect.stringContaining(`/work-items/${ID}/sla/override`)
     )
+    // RA-572 AC02: the link is labelled with the same words as the page it
+    // opens, so "Change" is the only terminology a regulator ever sees.
+    expect(result).toEqual(
+      expect.stringContaining('Change determination deadline')
+    )
+    expect(result).not.toEqual(expect.stringContaining('Change the due date'))
   })
 
   // RA-351. The complement: a queried item the backend does NOT project
   // `sla-extend` for (e.g. a stale backend deployed behind this FE) keeps
-  // both links hidden. Proves the links follow the backend projection, not
-  // a FE-only "queried always shows SLA" override.
-  test('hides both SLA links for a queried item with no sla-extend projected', async () => {
+  // the link hidden. Proves it follows the backend projection, not a
+  // FE-only "queried always shows SLA" override.
+  test('hides the due-date link for a queried item with no sla-extend projected', async () => {
     registerReaccreditation()
 
     getWorkItem.mockResolvedValue({
@@ -951,9 +949,6 @@ describe('#workItemDetailController', () => {
 
     expect(result).not.toEqual(
       expect.stringContaining('data-testid="action-sla-extend"')
-    )
-    expect(result).not.toEqual(
-      expect.stringContaining('data-testid="action-sla-override"')
     )
   })
 
@@ -2293,11 +2288,11 @@ describe('#workItemDetailController', () => {
       expect(result).toContain(`/work-items/${ID}/self-assign`)
     })
 
-    // The gate hides the whole links list, which the SLA affordances share.
+    // The gate hides the whole links list, which the due-date link shares.
     // Called out explicitly because it is a deliberate side effect: the
     // existing canChangeDueDate comment already says moving a due date on a
     // closed case is wrong.
-    test('also suppresses the SLA links on a closed case', async () => {
+    test('also suppresses the due-date link on a closed case', async () => {
       registerWithTerminalStates()
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -2314,7 +2309,6 @@ describe('#workItemDetailController', () => {
 
       expect(result).toContain('data-testid="assignment-closed"')
       expect(result).not.toContain('data-testid="action-sla-extend"')
-      expect(result).not.toContain('data-testid="action-sla-override"')
     })
 
     // The assignee is information, not an affordance: a handed-over case
