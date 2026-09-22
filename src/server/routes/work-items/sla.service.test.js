@@ -83,6 +83,35 @@ describe('createSlaService', () => {
       expect(extend).not.toHaveBeenCalled()
     })
 
+    // 31/2 is well-formed but not a real day, so it is caught by the
+    // round-trip check. These are caught a step earlier, by the shape
+    // check: a non-numeric or wrongly-sized part never becomes a Date at
+    // all. Same message either way — the caseworker does not care which
+    // guard rejected it, and a partial year is the likeliest real typo.
+    it.each([
+      ['non-numeric day', { day: 'abc', month: '7', year: '2026' }],
+      ['two-digit year', { day: '1', month: '7', year: '26' }],
+      ['whitespace month', { day: '1', month: ' ', year: '2026' }]
+    ])(
+      'returns invalid for a malformed deadline (%s)',
+      async (_label, deadline) => {
+        const result = await service.extendSla({
+          workItemId: 'abc',
+          reason: 'valid reason',
+          deadline,
+          currentDueDate: CURRENT_DUE_DATE,
+          user: null
+        })
+        expect(result).toEqual({
+          ok: false,
+          outcome: 'invalid',
+          field: 'deadline',
+          message: 'Determination deadline must be a real date'
+        })
+        expect(extend).not.toHaveBeenCalled()
+      }
+    )
+
     it('returns invalid when the deadline is not a real date', async () => {
       const result = await service.extendSla({
         workItemId: 'abc',

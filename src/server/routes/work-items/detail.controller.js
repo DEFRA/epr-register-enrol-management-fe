@@ -961,15 +961,19 @@ function decorate(workItem) {
     // derived from. Generic either way: the marker, the state and the label
     // all come from the module declaration.
     selfAssignStart: buildSelfAssignStart(type, workItem),
-    // RA-295. Gates BOTH due-date links in the assignment panel. The backend
-    // is NOT a backstop here: SlaService.ExtendAsync validates the actor,
-    // reason, duration bounds and the existence of the item and its clock,
-    // but has no terminal-state check — so leaving these links ungated would
-    // let a caseworker change the due date on an approved, rejected or
-    // withdrawn case. AC03's "available throughout" is about ASSIGNMENT;
-    // nothing asked for SLA controls on a closed case. Override is BFF-only
-    // (never projected), so it rides on the same flag, exactly as it did
-    // when both lived inside the actions list.
+    // RA-295. Gates the "Change determination deadline" link in the
+    // assignment panel. The backend is NOT a backstop here:
+    // SlaService.ExtendAsync validates the actor, reason, duration bounds
+    // and the existence of the item and its clock, but has no terminal-state
+    // check — so leaving the link ungated would let a caseworker change the
+    // due date on an approved, rejected or withdrawn case. AC03's "available
+    // throughout" is about ASSIGNMENT; nothing asked for deadline controls
+    // on a closed case.
+    //
+    // RA-572 removed the second link this flag used to gate ("Override the
+    // due date", a BFF-only affordance the backend never projected). The
+    // flag itself is unchanged — Change was always the one that followed
+    // the `sla-extend` projection, and it still does.
     canChangeDueDate: projectedActions.some(
       (action) => action?.actionId === SLA_EXTEND_ACTION_ID
     ),

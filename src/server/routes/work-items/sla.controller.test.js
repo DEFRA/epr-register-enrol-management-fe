@@ -49,6 +49,38 @@ function visibleText(html) {
   return String(html).replace(/<[^>]*>/g, ' ')
 }
 
+/**
+ * POST a valid change to the determination deadline, then follow the
+ * redirect back to the detail page IN THE SAME SESSION and return what it
+ * rendered. The failure banners are flashed into the yar session rather
+ * than rendered inline, so asserting on the POST response alone proves only
+ * that a redirect happened — never which banner the caseworker will read.
+ */
+async function submitAndFollowRedirect(server) {
+  const posted = await injectWithCrumb(server, {
+    method: 'POST',
+    url: `/work-items/${ID}/sla/extend`,
+    payload: `reason=Some+reason&${VALID_DEADLINE_PAYLOAD}`,
+    headers: { 'content-type': 'application/x-www-form-urlencoded' }
+  })
+
+  expect(posted.statusCode).toBe(statusCodes.redirect)
+  expect(posted.headers.location).toBe(`/work-items/${ID}`)
+
+  const cookies = []
+    .concat(posted.headers['set-cookie'] ?? [])
+    .map((header) => header.split(';')[0])
+    .join('; ')
+
+  const followed = await server.inject({
+    method: 'GET',
+    url: `/work-items/${ID}`,
+    headers: { cookie: cookies }
+  })
+
+  return followed.result
+}
+
 describe('#makeShowExtendController', () => {
   let server
 
@@ -79,6 +111,29 @@ describe('#makeShowExtendController', () => {
     expect(result).toEqual(expect.stringContaining('sla-extend-form'))
     expect(result).toEqual(expect.stringContaining('sla-extend-days'))
     expect(result).toEqual(expect.stringContaining(REF))
+  })
+
+  // The other half of the shared loader's failure handling: anything that
+  // is not a 404 is a backend problem, not a missing application, so it
+  // renders the "unavailable" page at 502 with the backend's own reason —
+  // never the not-found copy, which would tell a caseworker the
+  // application does not exist when the backend is merely down.
+  test('GET renders the 502 unavailable page when the backend fails', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: false,
+      status: 503,
+      error: 'upstream unavailable'
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/sla/extend`
+    })
+
+    expect(statusCode).toBe(statusCodes.badGateway)
+    expect(result).toEqual(expect.stringContaining('Work item unavailable'))
+    expect(result).toEqual(expect.stringContaining('upstream unavailable'))
+    expect(result).not.toEqual(expect.stringContaining('Application not found'))
   })
 
   // RA-358 AC2. This route is one of the nine callers of the shared
@@ -204,46 +259,77 @@ describe('#makeSubmitExtendController', () => {
     expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 
-  test('POST redirects with error flash on forbidden response', async () => {
+  // These two used to mock `outcome:` on the backend client's result. The
+  // client returns `reason:` — `extendSla` maps `reason` onto `outcome` —
+  // so the mocks fell through to the unmapped-failure default and the
+  // forbidden / conflict banners they are named after were never reached.
+  // Mocking `reason` is what the real client does, and the banner text is
+  // asserted on the page the caseworker actually lands on, so the mapping
+  // cannot silently regress again.
+  test.each([
+    [
+      'forbidden',
+      403,
+      'Forbidden',
+      'You do not have permission to perform this action.'
+    ],
+    [
+      'conflict',
+      409,
+      'Conflict',
+      'The work item state changed. Refresh and try again.'
+    ],
+    ['not-found', 404, 'Missing', 'The work item could not be found.']
+  ])(
+    'POST flashes the %s banner and redirects to the detail page',
+    async (reason, status, message, expectedText) => {
+      extendWorkItemSla.mockResolvedValue({
+        ok: false,
+        reason,
+        status,
+        message
+      })
+
+      const banner = await submitAndFollowRedirect(server)
+
+      expect(banner).toEqual(
+        expect.stringContaining('Could not change the determination deadline')
+      )
+      expect(banner).toEqual(expect.stringContaining(expectedText))
+    }
+  )
+
+  // The unmapped default: anything the SLA_REASON_BY_STATUS map does not
+  // recognise surfaces the backend's own message rather than inventing one,
+  // under a generic title. RA-572 reworded the last-resort text off "SLA".
+  test('POST surfaces the backend message for an unmapped failure', async () => {
     extendWorkItemSla.mockResolvedValue({
       ok: false,
-      outcome: 'forbidden',
-      status: 403,
-      message: 'Forbidden'
+      reason: 'server',
+      status: 500,
+      message: 'Backend exploded'
     })
 
-    const { statusCode, headers } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/extend`,
-      payload: `reason=Some+reason&${VALID_DEADLINE_PAYLOAD}`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded'
-      }
-    })
+    const banner = await submitAndFollowRedirect(server)
 
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}`)
+    expect(banner).toEqual(expect.stringContaining('Action failed'))
+    expect(banner).toEqual(expect.stringContaining('Backend exploded'))
+    expect(banner).not.toEqual(expect.stringContaining('SLA'))
   })
 
-  test('POST redirects with error flash on conflict response', async () => {
-    extendWorkItemSla.mockResolvedValue({
-      ok: false,
-      outcome: 'conflict',
-      status: 409,
-      message: 'Conflict'
-    })
+  // Same path with no message at all — the fallback sentence, which must
+  // speak of the determination deadline and never of "the SLA" (RA-447
+  // retired that as user-facing wording, RA-572 finished the job here).
+  test('POST falls back to determination-deadline wording with no message', async () => {
+    extendWorkItemSla.mockResolvedValue({ ok: false, reason: 'server' })
 
-    const { statusCode, headers } = await injectWithCrumb(server, {
-      method: 'POST',
-      url: `/work-items/${ID}/sla/extend`,
-      payload: `reason=Some+reason&${VALID_DEADLINE_PAYLOAD}`,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded'
-      }
-    })
+    const banner = await submitAndFollowRedirect(server)
 
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(`/work-items/${ID}`)
+    expect(banner).toEqual(
+      expect.stringContaining(
+        'The determination deadline could not be updated.'
+      )
+    )
   })
 
   // RA-358 AC2 equivalent for the submit path: the work item is now fetched
