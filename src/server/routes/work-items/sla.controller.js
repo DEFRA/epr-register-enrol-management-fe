@@ -1,9 +1,16 @@
 /**
- * SLA extend and override controllers (RA-131), both relabelled from "SLA"
- * to "Determination Deadline" by RA-447. Extend also got behavioural
- * changes: CM6 replaced the day-count input with a calendar date picker and
- * removed the extension cap. Override (CM9) is a pure wording change — its
- * validation, wire contract and `OverrideAsync` audit string are untouched.
+ * Determination-deadline CHANGE controllers (RA-131 as "SLA extend",
+ * relabelled to "Determination Deadline" by RA-447 CM5/CM6, which also
+ * replaced the day-count input with a calendar date input and removed the
+ * extension cap).
+ *
+ * RA-572 deleted the sibling Override controllers: UAT found "Change" and
+ * "Override" indistinguishable, so Change is now the single regulator-facing
+ * route for amending a determination deadline and all user-facing copy
+ * describes a CHANGE rather than an extension. The internal ids, the
+ * `/sla/extend` route and the `sla-extend-*` testids are deliberately
+ * unchanged — this is a content + removal change, not a rename of the
+ * wiring. management-be's `SlaService.OverrideAsync` is untouched.
  */
 
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
@@ -12,7 +19,6 @@ import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { REASON_MAX_LENGTH, createSlaService } from './sla.service.js'
 
 const EXTEND_VIEW = 'work-items/sla-extend'
-const OVERRIDE_VIEW = 'work-items/sla-override'
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
 const WORK_ITEMS_HREF = '/work-items'
@@ -26,10 +32,9 @@ const UNAVAILABLE_TITLE = 'Work item unavailable'
 const EXTEND_DEADLINE_ID = 'new-deadline'
 const EXTEND_DEADLINE_ANCHOR = `#${EXTEND_DEADLINE_ID}-day`
 
-const EXTEND_HEADING = 'Extend determination deadline'
-// RA-447 CM9. This single constant drives pageTitle/heading/breadcrumb on
-// both the GET and the validation-error re-render.
-const OVERRIDE_HEADING = 'Override determination deadline'
+// RA-572. This single constant drives pageTitle/heading/breadcrumb on both
+// the GET and the validation-error re-render.
+const EXTEND_HEADING = 'Change determination deadline'
 
 const logger = createLogger()
 
@@ -187,8 +192,8 @@ export function makeSubmitExtendController({
       if (result.ok) {
         flashBanner(request, {
           type: 'success',
-          title: 'Determination deadline extended',
-          text: 'The determination deadline has been extended.'
+          title: 'Determination deadline changed',
+          text: 'The determination deadline has been changed.'
         })
         return h.redirect(detailHref(id))
       }
@@ -206,136 +211,14 @@ export function makeSubmitExtendController({
 
       logger.warn(
         { workItemId: id, outcome: result.outcome, message: result.message },
-        'SLA extend failed'
+        'Determination deadline change failed'
       )
       flashBanner(
         request,
         bannerForSlaFailure(
           result,
-          'Could not extend the determination deadline'
+          'Could not change the determination deadline'
         )
-      )
-      return h.redirect(detailHref(id))
-    }
-  }
-}
-
-export function makeShowOverrideController() {
-  return {
-    async handler(request, h) {
-      const id = request.params.id
-      const user = getUser(request)
-      const result = await getWorkItem({ workItemId: id, user })
-
-      if (result.ok === false && result.status === 404) {
-        return h
-          .view(NOT_FOUND_VIEW, {
-            pageTitle: NOT_FOUND_TITLE,
-            heading: NOT_FOUND_TITLE,
-            workItemId: id,
-            breadcrumbs: [
-              { text: 'Applications', href: WORK_ITEMS_HREF },
-              { text: 'Not found' }
-            ]
-          })
-          .code(404)
-      }
-
-      if (!result.ok) {
-        return h
-          .view(UNAVAILABLE_VIEW, {
-            pageTitle: UNAVAILABLE_TITLE,
-            heading: UNAVAILABLE_TITLE,
-            workItemId: id,
-            error: result.error ?? `Backend returned ${result.status}`,
-            breadcrumbs: [
-              { text: WORK_ITEMS_BREADCRUMB, href: WORK_ITEMS_HREF },
-              { text: 'Work item' }
-            ]
-          })
-          .code(502)
-      }
-
-      const workItem = result.workItem
-      const applicationRef = workItem.payload.applicationReference
-      return h.view(OVERRIDE_VIEW, {
-        pageTitle: OVERRIDE_HEADING,
-        heading: OVERRIDE_HEADING,
-        breadcrumbs: breadcrumbs(id, OVERRIDE_HEADING, applicationRef),
-        workItem: { ...workItem, applicationRef },
-        formAction: `/work-items/${encodeURIComponent(id)}/sla/override`,
-        cancelHref: detailHref(id),
-        reasonMaxLength: REASON_MAX_LENGTH,
-        values: { reason: '', newTargetDays: '', newStartedAt: '' },
-        errorSummary: null,
-        fieldErrors: {}
-      })
-    }
-  }
-}
-
-export function makeSubmitOverrideController({
-  service = createSlaService()
-} = {}) {
-  return {
-    async handler(request, h) {
-      const id = request.params.id
-      const user = getUser(request)
-      const payload = request.payload ?? {}
-      const reason = typeof payload.reason === 'string' ? payload.reason : ''
-      const newTargetDays =
-        typeof payload.newTargetDays === 'string' ? payload.newTargetDays : ''
-      const newStartedAt =
-        typeof payload.newStartedAt === 'string' ? payload.newStartedAt : ''
-
-      const result = await service.overrideSla({
-        workItemId: id,
-        reason,
-        newTargetDays,
-        newStartedAt,
-        user
-      })
-
-      if (result.ok) {
-        flashBanner(request, {
-          type: 'success',
-          title: 'SLA overridden',
-          text: 'The SLA clock has been overridden.'
-        })
-        return h.redirect(detailHref(id))
-      }
-
-      if (result.outcome === 'invalid') {
-        const itemResult = await getWorkItem({ workItemId: id, user })
-        const applicationRef = itemResult.ok
-          ? itemResult.workItem.payload.applicationReference
-          : null
-        return h
-          .view(OVERRIDE_VIEW, {
-            pageTitle: `Error: ${OVERRIDE_HEADING}`,
-            heading: OVERRIDE_HEADING,
-            breadcrumbs: breadcrumbs(id, OVERRIDE_HEADING, applicationRef),
-            workItem: { id, applicationRef },
-            formAction: `/work-items/${encodeURIComponent(id)}/sla/override`,
-            cancelHref: detailHref(id),
-            reasonMaxLength: REASON_MAX_LENGTH,
-            values: { reason, newTargetDays, newStartedAt },
-            errorSummary: {
-              titleText: 'There is a problem',
-              items: [{ text: result.message, href: '#field-reason' }]
-            },
-            fieldErrors: { reason: result.message }
-          })
-          .code(400)
-      }
-
-      logger.warn(
-        { workItemId: id, outcome: result.outcome, message: result.message },
-        'SLA override failed'
-      )
-      flashBanner(
-        request,
-        bannerForSlaFailure(result, 'Could not override SLA')
       )
       return h.redirect(detailHref(id))
     }
@@ -368,6 +251,6 @@ function bannerForSlaFailure(result, title) {
   return {
     type: 'error',
     title: 'Action failed',
-    text: result.message ?? 'The SLA could not be updated.'
+    text: result.message ?? 'The determination deadline could not be updated.'
   }
 }

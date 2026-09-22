@@ -1,13 +1,13 @@
 /**
- * SLA extend/override service (RA-131, extend reworked by RA-447 CM6).
+ * Determination-deadline change service (RA-131, reworked by RA-447 CM6).
  *
- * Two operations:
- *  - extendSla: validates reason + a new deadline date → calls BE extend
- *    endpoint. There is no upper bound on the extension (RA-447 CM6) — the
- *    only constraint is that the new deadline is strictly after the current
- *    one.
- *  - overrideSla: validates reason + days + date → calls BE override
- *    endpoint. Unchanged by RA-447.
+ * One operation, `extendSla`: validates reason + a new deadline date → calls
+ * the BE extend endpoint. There is no upper bound (RA-447 CM6) — the only
+ * constraint is that the new deadline is strictly after the current one.
+ *
+ * RA-572 removed the sibling `overrideSla` operation and its validation
+ * along with the Override journey. The method name and the BE endpoint it
+ * wraps are unchanged: only the user-facing copy became "change" wording.
  *
  * Result shape: { ok: true, workItem } OR { ok: false, outcome, message }
  * Outcomes: 'invalid', 'forbidden', 'not-found', 'conflict', 'server', 'network'
@@ -20,12 +20,7 @@ async function defaultExtend(args) {
   return mod.extendWorkItemSla(args)
 }
 
-async function defaultOverride(args) {
-  const mod = await import('#/server/common/helpers/backend-api/backend-api.js')
-  return mod.overrideWorkItemSla(args)
-}
-
-/** Shared reason validation for both extend and override. */
+/** Reason validation for the determination-deadline change form. */
 function validateReason(reason) {
   const trimmedReason = typeof reason === 'string' ? reason.trim() : ''
   if (!trimmedReason) {
@@ -123,7 +118,7 @@ export function validateExtendDeadline(deadline, currentDueDate) {
 
   const currentDue = currentDueDate ? new Date(currentDueDate) : null
   if (!currentDue || Number.isNaN(currentDue.getTime())) {
-    return invalid('This application has no determination deadline to extend')
+    return invalid('This application has no determination deadline to change')
   }
   const currentDueUtcDay = startOfUtcDay(currentDue)
 
@@ -146,10 +141,7 @@ export function validateExtendDeadline(deadline, currentDueDate) {
   }
 }
 
-export function createSlaService({
-  extend = defaultExtend,
-  override = defaultOverride
-} = {}) {
+export function createSlaService({ extend = defaultExtend } = {}) {
   return {
     async extendSla({ workItemId, reason, deadline, currentDueDate, user }) {
       const reasonValidation = validateReason(reason)
@@ -168,62 +160,6 @@ export function createSlaService({
         workItemId,
         reason: reasonValidation.reason,
         additionalDuration: deadlineValidation.additionalDuration,
-        user
-      })
-      if (result.ok) {
-        return { ok: true, workItem: result.workItem }
-      }
-      return {
-        ok: false,
-        outcome: result.reason ?? 'server',
-        message: result.message
-      }
-    },
-
-    async overrideSla({
-      workItemId,
-      reason,
-      newTargetDays,
-      newStartedAt,
-      user
-    }) {
-      const reasonValidation = validateReason(reason)
-      if (!reasonValidation.ok) {
-        return reasonValidation
-      }
-
-      const days = Number(newTargetDays)
-      if (!Number.isInteger(days) || days < 1) {
-        return {
-          ok: false,
-          outcome: 'invalid',
-          message: 'Target duration must be a whole number of at least 1'
-        }
-      }
-      // newStartedAt is optional: when omitted the BE defaults to today
-      // (BA confirmed RA-131).
-      const trimmedStartedAt =
-        typeof newStartedAt === 'string' ? newStartedAt.trim() : ''
-      let resolvedStartedAt
-      if (trimmedStartedAt) {
-        const startedAtDate = new Date(trimmedStartedAt)
-        if (Number.isNaN(startedAtDate.getTime())) {
-          return {
-            ok: false,
-            outcome: 'invalid',
-            message: 'Start date is not a valid date'
-          }
-        }
-        resolvedStartedAt = startedAtDate.toISOString()
-      }
-      const newTargetDuration = `P${days}D`
-      const result = await override({
-        workItemId,
-        reason: reasonValidation.reason,
-        newTargetDuration,
-        ...(resolvedStartedAt !== undefined
-          ? { newStartedAt: resolvedStartedAt }
-          : {}),
         user
       })
       if (result.ok) {

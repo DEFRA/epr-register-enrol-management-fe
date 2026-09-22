@@ -576,29 +576,24 @@
               testId: "unassign-link"
             }) }}
           </li>
-          {# RA-131's Extend / Override SLA affordances, relabelled to the   #}
-          {# prototype's wording. Testids unchanged so existing journeys     #}
-          {# keep working. Gated on the engine still projecting `sla-extend` #}
+          {# RA-131's determination-deadline affordance. RA-572 retired the  #}
+          {# Override link entirely: UAT found "Change" and "Override"       #}
+          {# indistinguishable, so Change is the single regulator-facing     #}
+          {# route for amending the deadline. Wording aligned with the       #}
+          {# Change page's heading and button; the testid and the            #}
+          {# `/sla/extend` route are unchanged so existing journeys keep     #}
+          {# working. Gated on the engine still projecting `sla-extend`      #}
           {# — see `canChangeDueDate` in the controller: the backend has no  #}
           {# terminal-state check of its own, so an ungated link would let a #}
           {# caseworker move the due date on a closed case.                   #}
           {% if workItem.canChangeDueDate %}
             <li>
               {{ appActionLink({
-                text: "Change the due date",
+                text: "Change determination deadline",
                 href: "/work-items/" + workItem.id + "/sla/extend",
                 classes: "govuk-link",
                 disabled: user.isReadOnly,
                 testId: "action-sla-extend"
-              }) }}
-            </li>
-            <li>
-              {{ appActionLink({
-                text: "Override the due date",
-                href: "/work-items/" + workItem.id + "/sla/override",
-                classes: "govuk-link",
-                disabled: user.isReadOnly,
-                testId: "action-sla-override"
               }) }}
             </li>
           {% endif %}
@@ -621,9 +616,9 @@
         {% if workItem.availableActions and workItem.availableActions.length > 0 %}
           <div data-testid="work-item-actions">
             {# `sla-extend` is filtered out of `availableActions` by the     #}
-            {# controller (it renders as "Change the due date" in the        #}
-            {# assignment panel), so it never reaches this loop and the      #}
-            {# length check above stays honest.                              #}
+            {# controller (it renders as "Change determination deadline"     #}
+            {# in the assignment panel), so it never reaches this loop and   #}
+            {# the length check above stays honest.                          #}
 
             {# Primary actions — full-width buttons, stacked. Query is           #}
             {# special-cased into the secondary link row below. RA-317: withdraw #}
