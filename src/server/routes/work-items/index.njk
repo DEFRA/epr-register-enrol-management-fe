@@ -227,7 +227,8 @@
         {# backend strings into `html:` (epr-6fi).                         #}
         {{ govukNotificationBanner({
           titleText: "Could not reach the backend",
-          text: error or "Unknown error"
+          text: error or "Unknown error",
+          classes: "app-notification-banner--error"
         }) }}
       {% else %}
         {% if totalCount === 0 and not hasFilters %}

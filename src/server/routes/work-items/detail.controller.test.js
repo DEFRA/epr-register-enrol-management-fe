@@ -498,6 +498,12 @@ describe('#workItemDetailController', () => {
     expect(statusCode).toBe(statusCodes.badGateway)
     expect(result).toEqual(expect.stringContaining('Work item unavailable'))
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
+    // The banner must carry the error modifier. Without it the notification
+    // banner inherits the green service brand colour and an error reads as a
+    // success message.
+    expect(result).toEqual(
+      expect.stringContaining('app-notification-banner--error')
+    )
   })
 
   // XSS regression — epr-6fi. The detail-error banner used to splice the

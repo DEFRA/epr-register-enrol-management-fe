@@ -15,7 +15,8 @@
   {% set detailErrorHtml %}<p class="govuk-notification-banner__heading" data-testid="work-item-detail-error">{{ error or "Unknown error" }}</p>{% endset %}
   {{ govukNotificationBanner({
     titleText: "Could not reach the backend",
-    html: detailErrorHtml
+    html: detailErrorHtml,
+    classes: "app-notification-banner--error"
   }) }}
 
   <p class="govuk-body">

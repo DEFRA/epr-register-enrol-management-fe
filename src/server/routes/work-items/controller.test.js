@@ -1228,6 +1228,12 @@ describe('#workItemListController', () => {
       expect.stringContaining('Could not reach the backend')
     )
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
+    // The banner must carry the error modifier. Without it the notification
+    // banner inherits the green service brand colour and an error reads as a
+    // success message.
+    expect(result).toEqual(
+      expect.stringContaining('app-notification-banner--error')
+    )
   })
 
   // RA-324 phase-2. The new filter params (type, status group, material, sort,
