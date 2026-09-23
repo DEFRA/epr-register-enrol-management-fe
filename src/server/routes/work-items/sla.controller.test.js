@@ -237,9 +237,37 @@ describe('#makeSubmitExtendController', () => {
     expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 
-  // RA-447 CM6: the extension cap is gone, but a reduction is still
-  // rejected — a new deadline on/before the current one is not an extension.
-  test('POST with a new deadline that is not after the current one re-renders form with 400', async () => {
+  // RA-601: the deadline may now be advanced as well as pushed back. An
+  // earlier date goes through the same route to the same backend call, with a
+  // negative duration — no extra confirmation step, no floor.
+  test('POST with an earlier new deadline applies the change and redirects to detail', async () => {
+    extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
+
+    const { statusCode, headers } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload:
+        'reason=Brought+forward&new-deadline-day=27&new-deadline-month=5&new-deadline-year=2026',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    // 2026-06-01 → 2026-05-27 is 5 days earlier.
+    expect(extendWorkItemSla).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workItemId: ID,
+        reason: 'Brought forward',
+        additionalDuration: '-P5D'
+      })
+    )
+  })
+
+  // RA-601: the one surviving date rejection. Resubmitting the current
+  // deadline changes nothing, so it is rejected as a no-op.
+  test('POST with an unchanged deadline re-renders form with 400', async () => {
     const { statusCode, result } = await injectWithCrumb(server, {
       method: 'POST',
       url: `/work-items/${ID}/sla/extend`,
@@ -253,7 +281,7 @@ describe('#makeSubmitExtendController', () => {
     expect(statusCode).toBe(statusCodes.badRequest)
     expect(result).toEqual(
       expect.stringContaining(
-        'The new determination deadline must be after the current deadline'
+        'The new determination deadline must be different from the current deadline'
       )
     )
     expect(extendWorkItemSla).not.toHaveBeenCalled()

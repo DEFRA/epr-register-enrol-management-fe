@@ -1,9 +1,11 @@
 /**
- * Determination-deadline change service (RA-131, reworked by RA-447 CM6).
+ * Determination-deadline change service (RA-131, reworked by RA-447 CM6 and
+ * RA-601).
  *
  * One operation, `extendSla`: validates reason + a new deadline date → calls
- * the BE extend endpoint. There is no upper bound (RA-447 CM6) — the only
- * constraint is that the new deadline is strictly after the current one.
+ * the BE extend endpoint. There is no upper bound (RA-447 CM6) and, since
+ * RA-601, no lower bound either — the only constraint on the date is that it
+ * differs from the current deadline.
  *
  * RA-572 removed the sibling `overrideSla` operation and its validation
  * along with the Override journey. The method name and the BE endpoint it
@@ -51,6 +53,18 @@ function startOfUtcDay(date) {
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /**
+ * Format a whole-day gap as the ISO-8601 duration the backend's
+ * `additionalDuration` field expects.
+ *
+ * RA-601 allows the deadline to move backwards, which makes `days` negative.
+ * ISO-8601 puts the sign AHEAD of the `P` designator — `-P5D`, never `P-5D`,
+ * which is malformed and would be rejected or mis-parsed by the backend.
+ */
+function isoDayDuration(days) {
+  return days < 0 ? `-P${Math.abs(days)}D` : `P${days}D`
+}
+
+/**
  * Parse a day/month/year triple into a real calendar date, or null when the
  * parts aren't well-formed or don't round-trip to a real date (e.g.
  * 2026-02-30, which `Date.UTC` would otherwise roll forward into March).
@@ -81,14 +95,20 @@ function parseCalendarDate(day, month, year) {
  *
  * RA-447 CM6 replaced the "number of additional days" input (capped by
  * `workItems.sla.maxExtensionDays`) with a `govukDateInput` for the new
- * determination deadline, and dropped the cap entirely — the only rule left
- * is that the new deadline must be an EXTENSION, never a reduction, so it
- * must fall strictly after the work item's current `slaDueDate`.
+ * determination deadline, and dropped the cap entirely.
+ *
+ * RA-601 removed the remaining direction rule. The new deadline may now fall
+ * BEFORE the current one: a regulator can advance a determination deadline as
+ * well as push it back. There is deliberately no floor — a date earlier than
+ * today, or earlier than the SLA clock's `startedAt`, is accepted. The only
+ * surviving date rule is that the new deadline must differ from the current
+ * one, because resubmitting the same date is a no-op rather than a change.
  *
  * The day-count the backend's wire contract still expects
  * (`additionalDuration`, an ISO-8601 duration) is derived here from the gap
  * between the two dates, so the API contract is unchanged even though the
- * user no longer types a day count directly.
+ * user no longer types a day count directly. A backwards move produces a
+ * NEGATIVE duration, spelled with the sign ahead of the designator (`-P5D`).
  *
  * @param {{ day?: string, month?: string, year?: string }} deadline
  * @param {string|null|undefined} currentDueDate the work item's current
@@ -122,22 +142,26 @@ export function validateExtendDeadline(deadline, currentDueDate) {
   }
   const currentDueUtcDay = startOfUtcDay(currentDue)
 
-  // EXTENSION ONLY (RA-447 CM6). Strictly after, not on-or-after, so
-  // resubmitting the current deadline is rejected as a no-op rather than
-  // silently accepted as a zero-day "extension".
-  if (parsed.date.getTime() <= currentDueUtcDay) {
+  // RA-601: either direction is allowed, so the only date rule left is that
+  // something actually changes. Equality is the no-op — it would otherwise be
+  // submitted to the backend as a zero-day change and recorded in the audit
+  // log as a deadline change that moved nothing.
+  if (parsed.date.getTime() === currentDueUtcDay) {
     return invalid(
-      'The new determination deadline must be after the current deadline'
+      'The new determination deadline must be different from the current deadline'
     )
   }
 
+  // Both operands are UTC midnights, so the gap is an exact whole number of
+  // days in either direction — UTC has no DST, so a BST↔GMT boundary between
+  // the two dates cannot shift it by an hour.
   const days = Math.round(
     (parsed.date.getTime() - currentDueUtcDay) / MS_PER_DAY
   )
   return {
     ok: true,
     value: `${pad(parsed.year, 4)}-${pad(parsed.month, 2)}-${pad(parsed.day, 2)}`,
-    additionalDuration: `P${days}D`
+    additionalDuration: isoDayDuration(days)
   }
 }
 
