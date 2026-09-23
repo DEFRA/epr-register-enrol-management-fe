@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { injectWithCrumb } from '#/test-helpers/csrf.js'
+import { bannerClasses } from '#/test-helpers/banner.js'
 import {
   clearWorkItemRegistry,
   registerWorkItemType
@@ -84,6 +85,9 @@ function postCodes(server, codes, url = EDIT_HREF) {
     payload
   })
 }
+
+/** The flash banner on the recycling-operations list page. */
+const FLASH_BANNER = '[data-testid="recycling-operations-flash-banner"]'
 
 describe('GET /work-items/{id}/recycling-operations/{siteId}', () => {
   let server
@@ -330,6 +334,11 @@ describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {
     })
 
     expect(list.result).toContain('Recycling operations updated')
+    // The modifier is conditional on `type == 'error'`, so the success
+    // banner must stay on the brand colour rather than being painted red.
+    expect(bannerClasses(list.result, FLASH_BANNER)).not.toContain(
+      'app-notification-banner--error'
+    )
   })
 
   test('AC10: R12 alone re-renders the form with the exact operator-journey error message', async () => {
@@ -461,6 +470,12 @@ describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {
 
     expect(list.result).toContain(
       'There was a problem updating the recycling operations'
+    )
+    // Without the modifier the banner inherits the green service brand
+    // colour (core/_header.scss sets --govuk-brand-colour) and a failure
+    // reads as a success.
+    expect(bannerClasses(list.result, FLASH_BANNER)).toContain(
+      'app-notification-banner--error'
     )
   })
 

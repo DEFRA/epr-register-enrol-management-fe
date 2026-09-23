@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { injectWithCrumb } from '#/test-helpers/csrf.js'
+import { bannerClasses } from '#/test-helpers/banner.js'
 import {
   clearWorkItemRegistry,
   registerWorkItemType
@@ -90,6 +91,9 @@ function postQuery(server, payload) {
     payload
   })
 }
+
+/** The RA-132 flash banner on the detail page. */
+const FLASH_BANNER = '[data-testid="work-item-flash-banner"]'
 
 const words = (n) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 
@@ -644,6 +648,12 @@ describe('POST /work-items/{id}/query', () => {
     })
 
     expect(detail.result).toEqual(expect.stringContaining('Query sent'))
+    // The converse of the error assertion below: the modifier is conditional
+    // on `type == 'error'`, so a success banner must stay on the brand
+    // colour rather than being painted red.
+    expect(bannerClasses(detail.result, FLASH_BANNER)).not.toContain(
+      'app-notification-banner--error'
+    )
   })
 
   test('normalises a single checkbox posted as a bare string', async () => {
@@ -870,6 +880,12 @@ describe('POST /work-items/{id}/query', () => {
 
       expect(detail.result).toEqual(
         expect.stringContaining('Could not send the query')
+      )
+      // The error flash banner must carry the error modifier. Without it the
+      // banner inherits the green service brand colour (core/_header.scss
+      // sets --govuk-brand-colour) and a failure reads as a success.
+      expect(bannerClasses(detail.result, FLASH_BANNER)).toContain(
+        'app-notification-banner--error'
       )
     }
   )

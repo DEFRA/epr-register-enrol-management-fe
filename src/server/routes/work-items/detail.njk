@@ -140,11 +140,27 @@
   {# RA-132. Generic flash-banner rendered above the existing per-feature  #}
   {# banners. Set by handlers via `request.yar.flash('flashBanner', ...)`  #}
   {# with shape `{type: 'success' | 'error', title?, text}`.                #}
+  {#                                                                       #}
+  {# govukNotificationBanner only honours `type: 'success'`, and           #}
+  {# core/_header.scss re-brands the service green, so an unmodified flash #}
+  {# banner renders green and reads as good news — hence the              #}
+  {# `app-notification-banner--error` modifier.                            #}
+  {#                                                                       #}
+  {# Both the title and the modifier branch on a CONFIRMED success, so a   #}
+  {# banner flashed with a missing or unexpected `type` falls to the error #}
+  {# treatment on both lines rather than pairing "There is a problem" with #}
+  {# a green border. Testing `type == 'error'` instead would let the two   #}
+  {# lines disagree and reintroduce the green-error bug through the gap.   #}
+  {#                                                                       #}
+  {# Written as an inline `if/else`, not `x and '' or y`: `and ''` yields a #}
+  {# FALSY value, so the `or` branch would fire on a success too and every  #}
+  {# success banner would come out red.                                    #}
   {% if flashBanner %}
     {{ govukNotificationBanner({
       type: flashBanner.type,
       titleText: flashBanner.title or (flashBanner.type == 'success' and 'Success' or 'There is a problem'),
       text: flashBanner.text,
+      classes: '' if flashBanner.type == 'success' else 'app-notification-banner--error',
       attributes: { "data-testid": "work-item-flash-banner" }
     }) }}
   {% endif %}

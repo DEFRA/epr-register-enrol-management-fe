@@ -1,0 +1,27 @@
+@use "govuk-frontend" as *;
+
+// Error variant of the GOV.UK notification banner.
+//
+// The banner draws its border and header from the brand colour, and
+// core/_header.scss re-brands the service green via `--govuk-brand-colour` —
+// so a banner carrying an error rendered green, reading as success. This
+// modifier recolours it GOV.UK red.
+//
+// `--_govuk-notification-banner-colour` is the same hook the component's own
+// `--success` variant uses. It is private to govuk-frontend, so the border and
+// header background are also set directly: if a future release renames or
+// drops the custom property, the banner stays red rather than reverting to
+// green.
+
+.app-notification-banner--error {
+  // govuk-frontend names this custom property with a leading underscore;
+  // we do not choose the name.
+  // stylelint-disable-next-line custom-property-pattern
+  --_govuk-notification-banner-colour: #{govuk-functional-colour(error)};
+
+  border-color: govuk-functional-colour(error);
+
+  .govuk-notification-banner__header {
+    background-color: govuk-functional-colour(error);
+  }
+}
