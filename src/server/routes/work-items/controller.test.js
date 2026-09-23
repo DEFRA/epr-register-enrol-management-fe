@@ -2,6 +2,7 @@ import { vi, beforeEach, afterEach } from 'vitest'
 
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
+import { bannerClasses } from '#/test-helpers/banner.js'
 import { config } from '#/config/config.js'
 import {
   clearWorkItemRegistry,
@@ -1230,10 +1231,9 @@ describe('#workItemListController', () => {
     expect(result).toEqual(expect.stringContaining('ECONNREFUSED'))
     // The banner must carry the error modifier. Without it the notification
     // banner inherits the green service brand colour and an error reads as a
-    // success message.
-    expect(result).toEqual(
-      expect.stringContaining('app-notification-banner--error')
-    )
+    // success message. Scoped to the banner element, so the assertion cannot
+    // start passing on the modifier appearing elsewhere in the page.
+    expect(bannerClasses(result)).toContain('app-notification-banner--error')
   })
 
   // RA-324 phase-2. The new filter params (type, status group, material, sort,

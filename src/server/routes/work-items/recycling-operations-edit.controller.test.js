@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { injectWithCrumb } from '#/test-helpers/csrf.js'
+import { bannerClasses } from '#/test-helpers/banner.js'
 import {
   clearWorkItemRegistry,
   registerWorkItemType
@@ -85,26 +86,8 @@ function postCodes(server, codes, url = EDIT_HREF) {
   })
 }
 
-/**
- * Extract the rendered flash banner from the recycling-operations list page,
- * so a class assertion is scoped to the banner and cannot pass against
- * `app-notification-banner--error` appearing elsewhere in the page.
- *
- * THROWS when the banner is absent: a negative assertion scoped to a missing
- * element passes vacuously, which would hide a banner that stopped rendering.
- */
-function flashBanner(html) {
-  const marker = 'data-testid="recycling-operations-flash-banner"'
-  const at = html.indexOf(marker)
-  if (at === -1) {
-    throw new Error(
-      'No flash banner in the rendered recycling-operations page — a scoped assertion against it would pass vacuously.'
-    )
-  }
-  const start = html.lastIndexOf('<', at)
-  const end = html.indexOf('</div>', at)
-  return html.slice(start, end === -1 ? undefined : end)
-}
+/** The flash banner on the recycling-operations list page. */
+const FLASH_BANNER = '[data-testid="recycling-operations-flash-banner"]'
 
 describe('GET /work-items/{id}/recycling-operations/{siteId}', () => {
   let server
@@ -353,7 +336,7 @@ describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {
     expect(list.result).toContain('Recycling operations updated')
     // The modifier is conditional on `type == 'error'`, so the success
     // banner must stay on the brand colour rather than being painted red.
-    expect(flashBanner(list.result)).not.toContain(
+    expect(bannerClasses(list.result, FLASH_BANNER)).not.toContain(
       'app-notification-banner--error'
     )
   })
@@ -491,7 +474,9 @@ describe('POST /work-items/{id}/recycling-operations/{siteId}', () => {
     // Without the modifier the banner inherits the green service brand
     // colour (core/_header.scss sets --govuk-brand-colour) and a failure
     // reads as a success.
-    expect(flashBanner(list.result)).toContain('app-notification-banner--error')
+    expect(bannerClasses(list.result, FLASH_BANNER)).toContain(
+      'app-notification-banner--error'
+    )
   })
 
   test('returns 404 when the site does not exist', async () => {
