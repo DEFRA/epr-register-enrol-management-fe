@@ -2,7 +2,8 @@
  * Determination-deadline CHANGE controllers (RA-131 as "SLA extend",
  * relabelled to "Determination Deadline" by RA-447 CM5/CM6, which also
  * replaced the day-count input with a calendar date input and removed the
- * extension cap).
+ * extension cap; RA-601 then removed the extension-only direction rule, so
+ * the deadline can be advanced as well as pushed back).
  *
  * RA-572 deleted the sibling Override controllers: UAT found "Change" and
  * "Override" indistinguishable, so Change is now the single regulator-facing
@@ -58,8 +59,8 @@ function breadcrumbs(id, action, ref) {
  * Fetch the work item for the extend flow, or the not-found / unavailable
  * view when that fails. Shared between the GET and POST handlers because
  * RA-447 CM6 needs the work item's CURRENT `slaDueDate` on submit too — the
- * new deadline can only be validated as a genuine extension once that is
- * known.
+ * new deadline is validated against it, and (since RA-601) the signed
+ * day-gap sent to the backend is derived from it.
  */
 async function loadWorkItemForExtend(request, h, id) {
   const user = getUser(request)
