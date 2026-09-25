@@ -1,3 +1,4 @@
+import { config } from '#/config/config.js'
 import {
   getReAccreditationPriorYear,
   getWorkItem
@@ -482,6 +483,9 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   const priorYear = await loadPriorYear({ workItem: enriched, id, user })
 
   const { rows: applicationDetails } = buildApplicationSummary({
+    multipleInterimSitesEnabled: config.get(
+      'featureFlags.multipleInterimSitesEnabled'
+    ),
     workItem: enriched
   })
 

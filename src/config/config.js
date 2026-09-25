@@ -317,6 +317,12 @@ export const config = convict({
     env: 'ENVIRONMENT'
   },
   featureFlags: {
+    multipleInterimSitesEnabled: {
+      doc: 'RA-603. Show every interim site an overseas reprocessing site carries, rather than only the first. Off by default until the operator journey that creates them ships; the same flag name and default exist in epr-register-enrol-frontend and the two are meant to be flipped together.',
+      format: Boolean,
+      default: false,
+      env: 'MULTIPLE_INTERIM_SITES_ENABLED'
+    },
     workItemCreationEnabled: {
       doc: 'RA-127. Enable the demo "create a work item" form. Enabled by default; opt-out via WORK_ITEM_CREATION_ENABLED=false.',
       format: Boolean,
