@@ -7,6 +7,7 @@ import {
   buildAuthorityToIssueContacts,
   buildBusinessPlanPairs,
   buildInterimSite,
+  buildInterimSites,
   buildOverseasSite,
   buildSiteAddressLines,
   deriveSiteAddress,
@@ -886,6 +887,8 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
     expect(buildOverseasSite({})).toEqual({
       siteName: EM_DASH,
       isNew: false,
+      // RA-603: an ORS now also reports its interim sites as a list, empty here.
+      interimSites: [],
       addressLines: [],
       details: [],
       interimSite: null
@@ -1449,5 +1452,178 @@ describe('#buildApplicationSummary removed overseas sites (RA-483)', () => {
 
     expect(row(rows, 'bes').sites).toEqual([])
     expect(JSON.stringify(rows)).not.toContain('bes.pdf')
+  })
+})
+
+// RA-603 AC10b. An overseas reprocessing site can hold many interim sites now, and the
+// regulator's view folds each one down separately. The builder therefore returns a list rather
+// than a single nested object.
+describe('#buildInterimSites (RA-603 AC10b)', () => {
+  const interim = (overrides = {}) => ({
+    siteId: 21,
+    siteNumber: 'SN-0021',
+    siteName: 'Bilbao Interim Holding',
+    country: 'Spain',
+    addressLine1: '9 Muelle de Zorroza',
+    townOrCity: 'Bilbao',
+    contactName: 'Site Contact',
+    contactEmail: 'site.contact@example.com',
+    contactPhone: '+34 96 765 4321',
+    operationCodes: ['R12'],
+    isNewSite: false,
+    ...overrides
+  })
+
+  test('returns one entry per interim site, in order', () => {
+    const result = buildInterimSites({
+      interimSites: [
+        interim({ siteId: 21, siteName: 'First' }),
+        interim({ siteId: 22, siteName: 'Second' })
+      ]
+    })
+
+    expect(result.map((i) => i.siteName)).toEqual(['First', 'Second'])
+  })
+
+  // AC05 keeps withdrawn interim sites in the record for reporting. The regulator's view is not
+  // where that reporting happens, so they are filtered out here rather than rendered greyed out.
+  test('leaves out interim sites the operator has withdrawn', () => {
+    const result = buildInterimSites({
+      interimSites: [
+        interim({ siteId: 21, siteName: 'Still here' }),
+        interim({
+          siteId: 22,
+          siteName: 'Withdrawn',
+          removedAt: '2026-08-14T09:30:00.000Z'
+        })
+      ]
+    })
+
+    expect(result.map((i) => i.siteName)).toEqual(['Still here'])
+  })
+
+  // A work item written before RA-603, or one the backfill has not reached, carries only the
+  // singular field.
+  test('falls back to the legacy singular field when the list is absent', () => {
+    const result = buildInterimSites({
+      interimSite: interim({ siteName: 'Legacy' })
+    })
+
+    expect(result.map((i) => i.siteName)).toEqual(['Legacy'])
+  })
+
+  test('prefers the list over the singular field when both are present', () => {
+    const result = buildInterimSites({
+      interimSite: interim({ siteName: 'Stale mirror' }),
+      interimSites: [interim({ siteName: 'Authoritative' })]
+    })
+
+    expect(result.map((i) => i.siteName)).toEqual(['Authoritative'])
+  })
+
+  test('returns an empty list when the site has no interim sites at all', () => {
+    expect(buildInterimSites({})).toEqual([])
+    expect(buildInterimSites(null)).toEqual([])
+  })
+
+  test('builds each entry with the same shape as a single interim site', () => {
+    const [built] = buildInterimSites({
+      interimSites: [interim({ isNewSite: true })]
+    })
+
+    expect(built.siteName).toBe('Bilbao Interim Holding')
+    expect(built.isNew).toBe(true)
+    expect(built.addressLines.length).toBeGreaterThan(0)
+    expect(built.details.length).toBeGreaterThan(0)
+  })
+
+  test('keeps each interim site R codes separate', () => {
+    const result = buildInterimSites({
+      interimSites: [
+        interim({ siteId: 21, operationCodes: ['R12'] }),
+        interim({ siteId: 22, operationCodes: ['R12', 'R13'] })
+      ]
+    })
+
+    const codesOf = (built) =>
+      built.details.find((d) => d.key === 'operation-code')?.values
+
+    expect(codesOf(result[0])).toEqual(['R12'])
+    expect(codesOf(result[1])).toEqual(['R12', 'R13'])
+  })
+})
+
+describe('#buildOverseasSite interim sites (RA-603)', () => {
+  const site = (interimSites) => ({
+    siteId: 1,
+    siteName: 'Valencia Fibre Reprocessing',
+    interimSites
+  })
+
+  test('exposes every active interim site as a list', () => {
+    const built = buildOverseasSite(
+      site([
+        { siteId: 21, siteName: 'First' },
+        { siteId: 22, siteName: 'Second' }
+      ])
+    )
+
+    expect(built.interimSites.map((i) => i.siteName)).toEqual([
+      'First',
+      'Second'
+    ])
+  })
+
+  // The singular property stays so nothing reading it has to change at once; it points at the
+  // first interim site still standing, never at a withdrawn one.
+  test('keeps the singular property pointing at the first active interim site', () => {
+    const built = buildOverseasSite(
+      site([
+        {
+          siteId: 21,
+          siteName: 'Withdrawn',
+          removedAt: '2026-08-14T09:30:00.000Z'
+        },
+        { siteId: 22, siteName: 'Still here' }
+      ])
+    )
+
+    expect(built.interimSite.siteName).toBe('Still here')
+  })
+
+  test('leaves the singular property null when every interim site is withdrawn', () => {
+    const built = buildOverseasSite(
+      site([
+        { siteId: 21, siteName: 'Gone', removedAt: '2026-08-14T09:30:00.000Z' }
+      ])
+    )
+
+    expect(built.interimSite).toBeNull()
+    expect(built.interimSites).toEqual([])
+  })
+
+  // B3: with the flag off the regulator sees what they see today - at most one.
+  test('shows only the first interim site when multiple are not enabled', () => {
+    const built = buildOverseasSite(
+      site([
+        { siteId: 21, siteName: 'First' },
+        { siteId: 22, siteName: 'Second' }
+      ]),
+      { multipleInterimSitesEnabled: false }
+    )
+
+    expect(built.interimSites.map((i) => i.siteName)).toEqual(['First'])
+  })
+
+  test('shows all of them when multiple are enabled', () => {
+    const built = buildOverseasSite(
+      site([
+        { siteId: 21, siteName: 'First' },
+        { siteId: 22, siteName: 'Second' }
+      ]),
+      { multipleInterimSitesEnabled: true }
+    )
+
+    expect(built.interimSites).toHaveLength(2)
   })
 })

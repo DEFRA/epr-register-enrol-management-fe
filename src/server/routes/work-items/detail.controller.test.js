@@ -4383,13 +4383,17 @@ describe('RA-295 individual work item page', () => {
   // an ORS that is not new, because its child supplied the string. Neither
   // failure is visible in the assertion itself. (Raised by the mgmt-tests
   // teammate, which scopes to the same elements.)
+  // RA-603: matches whatever element carries the testid rather than assuming a
+  // <p>. AC10b moved the interim site name into a <summary> so each interim
+  // site folds down on its own, and this helper asserts the TEXT of a named
+  // element, not its tag.
   function lineTexts(html, testId) {
     const pattern = new RegExp(
-      `<p[^>]*data-testid="${testId}"[^>]*>([\\s\\S]*?)</p>`,
+      `<(\\w+)[^>]*data-testid="${testId}"[^>]*>([\\s\\S]*?)</\\1>`,
       'g'
     )
     return [...html.matchAll(pattern)].map((match) =>
-      match[1]
+      match[2]
         .replace(/<[^>]+>/g, '')
         .replace(/\s+/g, ' ')
         .trim()
@@ -4602,9 +4606,13 @@ describe('RA-295 individual work item page', () => {
 
   test('RA-292 AC02: renders the "Interim sites" sub-label', async () => {
     const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
-    const interimIdx = ors.indexOf('data-testid="interim-site"')
+    // RA-603: the label now sits on the wrapper that holds all of an ORS's
+    // interim sites, above the individual fold-downs, and carries a count so a
+    // regulator knows how many are folded away before opening any of them. The
+    // plural itself was always deliberate; it is simply accurate now.
+    const interimIdx = ors.indexOf('data-testid="interim-sites"')
     expect(ors.slice(interimIdx, interimIdx + 600)).toContain(
-      '<strong>Interim sites</strong>'
+      '<strong>Interim sites (1)</strong>'
     )
   })
 

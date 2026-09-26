@@ -581,9 +581,59 @@ export function buildInterimSite(site) {
   }
 }
 
-/** RA-292 AC01 + AC04. One overseas site with its detail and interim child. */
-export function buildOverseasSite(site) {
+/**
+ * RA-603 AC10b. Every interim site on an ORS that the operator has not withdrawn.
+ *
+ * An ORS used to hold at most one, in a singular `interimSite`; it can hold many now, in
+ * `interimSites`. The list wins whenever it has anything in it, and the singular field is only a
+ * fallback for a work item written before RA-603 or one the backfill has not reached yet. Reading
+ * it that way round matters: the singular field is a mirror maintained by the producer, so it can
+ * lag the list, and rebuilding from it would be a downgrade rather than a fallback.
+ *
+ * Withdrawn sites (AC05 keeps them in the record for reporting) are filtered out here. The
+ * regulator's detail page is not where that reporting happens, and a caseworker reviewing an
+ * application wants what is on it now.
+ *
+ * @returns {object[]} possibly empty, never null.
+ */
+export function buildInterimSites(site) {
   const source = site ?? {}
+  const fromList = Array.isArray(source.interimSites) ? source.interimSites : []
+  // The list wins when it has anything. Falling back to the singular field is
+  // for a work item written before RA-603, which has no list at all.
+  const legacy = source.interimSite != null ? [source.interimSite] : []
+  const candidates = fromList.length > 0 ? fromList : legacy
+
+  return candidates
+    .filter(
+      (interimSite) => interimSite != null && interimSite.removedAt == null
+    )
+    .map((interimSite) => buildInterimSite(interimSite))
+    .filter((built) => built != null)
+}
+
+/**
+ * RA-292 AC01 + AC04, extended by RA-603 AC10b.
+ *
+ * `interimSites` is the list the view renders, one fold-down per entry. `interimSite` is retained
+ * as the first ACTIVE entry so anything still reading a single value keeps working and can never
+ * be handed a site the operator has withdrawn.
+ *
+ * @param {object} site
+ * @param {object} [options]
+ * @param {boolean} [options.multipleInterimSitesEnabled] - when false, only the first interim
+ *   site is shown, which is what a regulator sees today.
+ */
+export function buildOverseasSite(
+  site,
+  { multipleInterimSitesEnabled = true } = {}
+) {
+  const source = site ?? {}
+  const interimSites = buildInterimSites(source)
+  const visibleInterimSites = multipleInterimSitesEnabled
+    ? interimSites
+    : interimSites.slice(0, 1)
+
   return {
     siteName: firstLineOr(source.siteName, EM_DASH),
     isNew: isFlaggedNew(source.isNewSite),
@@ -592,7 +642,8 @@ export function buildOverseasSite(site) {
     // detail list.
     addressLines: overseasSiteAddressLines(source),
     details: buildDetails(ORS_DETAIL_FIELDS, source),
-    interimSite: buildInterimSite(source.interimSite)
+    interimSites: visibleInterimSites,
+    interimSite: visibleInterimSites[0] ?? null
   }
 }
 
@@ -629,33 +680,28 @@ export function buildAuthorityToIssueContacts(prns) {
 }
 
 /**
- * Build the AC02-ordered application information rows.
+ * The summary rows every application has, in display order.
  *
- * @param {object} args
- * @param {object} args.workItem decorated work item
- * @returns {{ rows: object[], isExporter: boolean }}
+ * Split out of {@link buildApplicationSummary}, which had grown past the 75-line
+ * limit. Takes one context object rather than seven arguments: the row set needs
+ * most of the caller's locals, and passing them positionally would trade a
+ * long-function finding for a long-parameter-list one.
+ *
+ * The exporter-only rows stay with the caller, which appends them after these.
+ *
+ * @param {object} context
+ * @returns {object[]}
  */
-export function buildApplicationSummary({ workItem }) {
-  const payload = workItem?.payload ?? {}
-  const workItemId = workItem?.id ?? ''
-  const prns = payload.prns ?? {}
-  const isExporter = isExporterApplication(workItem)
-
-  const authorisers = Array.isArray(prns.authorisers) ? prns.authorisers : []
-  const samplingFiles = Array.isArray(payload.samplingPlan?.files)
-    ? payload.samplingPlan.files
-    : []
-  // RA-483: operator-removed (deselected) sites are excluded here, so BOTH
-  // the BES row and the ORS row below skip them — see `overseas-sites.js`.
-  const overseasSites = overseasSitesOf(workItem)
-  // CM2. Mirrors the "Additional information" tab's registered-address
-  // computation, so both tabs' site-address rows resolve to exactly the
-  // same fallback for an exporter.
-  const registeredAddress = formatSiteAddress({
-    siteAddress: payload.companyRegisteredAddress
-  })
-
-  const rows = [
+function buildCoreSummaryRows({
+  workItem,
+  payload,
+  workItemId,
+  prns,
+  authorisers,
+  samplingFiles,
+  registeredAddress
+}) {
+  return [
     {
       key: 'site-address',
       label: 'Site address',
@@ -727,6 +773,47 @@ export function buildApplicationSummary({ workItem }) {
       pairs: buildBusinessPlanPairs(payload.businessPlan)
     }
   ]
+}
+
+/**
+ * Build the AC02-ordered application information rows.
+ *
+ * @param {object} args
+ * @param {object} args.workItem decorated work item
+ * @returns {{ rows: object[], isExporter: boolean }}
+ */
+export function buildApplicationSummary({
+  workItem,
+  multipleInterimSitesEnabled = true
+}) {
+  const payload = workItem?.payload ?? {}
+  const workItemId = workItem?.id ?? ''
+  const prns = payload.prns ?? {}
+  const isExporter = isExporterApplication(workItem)
+
+  const authorisers = Array.isArray(prns.authorisers) ? prns.authorisers : []
+  const samplingFiles = Array.isArray(payload.samplingPlan?.files)
+    ? payload.samplingPlan.files
+    : []
+  // RA-483: operator-removed (deselected) sites are excluded here, so BOTH
+  // the BES row and the ORS row below skip them — see `overseas-sites.js`.
+  const overseasSites = overseasSitesOf(workItem)
+  // CM2. Mirrors the "Additional information" tab's registered-address
+  // computation, so both tabs' site-address rows resolve to exactly the
+  // same fallback for an exporter.
+  const registeredAddress = formatSiteAddress({
+    siteAddress: payload.companyRegisteredAddress
+  })
+
+  const rows = buildCoreSummaryRows({
+    workItem,
+    payload,
+    workItemId,
+    prns,
+    authorisers,
+    samplingFiles,
+    registeredAddress
+  })
 
   if (isExporter) {
     rows.push(
@@ -754,7 +841,9 @@ export function buildApplicationSummary({ workItem }) {
         // RA-292 AC01/AC02/AC04. Carries the new-site flag, the full site
         // detail and the nested interim site.
         kind: 'overseas-sites',
-        sites: overseasSites.map((site) => buildOverseasSite(site))
+        sites: overseasSites.map((site) =>
+          buildOverseasSite(site, { multipleInterimSitesEnabled })
+        )
       }
     )
   }

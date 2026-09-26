@@ -370,29 +370,49 @@
                            data-testid="overseas-site-address">{{ site.addressLines | join(', ') }}</p>
                       {% endif %}
                       {{ siteDetails(site.details, 'overseas-site') }}
-                      {% if site.interimSite %}
+                      {% if site.interimSites.length %}
+                        {# RA-603 AC10b: an ORS can carry several interim     #}
+                        {# sites, each folding down on its own so a regulator #}
+                        {# can open one without wading through the rest.      #}
+                        {# Nested <details> inside the ORS's own <details> -   #}
+                        {# valid, and it works without JavaScript, which a    #}
+                        {# nested govuk-accordion would not.                  #}
                         <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-0"
-                             data-testid="interim-site">
-                          {# Sub-label per the design, on its own line above  #}
-                          {# the site name. The PLURAL is deliberate and        #}
-                          {# matches the mockup, confirmed with Tom, even       #}
-                          {# though the data model allows at most one interim   #}
-                          {# site per ORS and it reads slightly oddly with a    #}
-                          {# single child. Do not "correct" it to singular.     #}
-                          {# It carries no testid: the e2e suite reads          #}
-                          {# `interim-site-name` for the name line, and putting #}
-                          {# the label inside that element would push `NEW: `   #}
-                          {# off position 0 and break its prefix check.         #}
-                          <p class="govuk-body govuk-!-margin-bottom-1"><strong>Interim sites</strong></p>
+                             data-testid="interim-sites">
+                          {# Sub-label per the design. The PLURAL was          #}
+                          {# deliberate even when only one interim site was    #}
+                          {# possible, confirmed with Tom - it is now simply   #}
+                          {# accurate. The count tells a regulator how many    #}
+                          {# are folded away before they open any of them,     #}
+                          {# matching the operator page.                       #}
                           <p class="govuk-body govuk-!-margin-bottom-1"
-                             data-testid="interim-site-name">
-                            <strong>{% if site.interimSite.isNew %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ site.interimSite.siteName }}</strong>
-                          </p>
-                          {% if site.interimSite.addressLines.length %}
-                            <p class="govuk-body govuk-!-margin-bottom-1"
-                               data-testid="interim-site-address">{{ site.interimSite.addressLines | join(', ') }}</p>
-                          {% endif %}
-                          {{ siteDetails(site.interimSite.details, 'interim-site') }}
+                             data-testid="interim-sites-label"><strong>Interim sites ({{ site.interimSites.length }})</strong></p>
+                          {% for interimSite in site.interimSites %}
+                            {# The testids stay unsuffixed. mgmt-tests reads   #}
+                            {# these as collections already (flaggedBlockNames,#}
+                            {# newTagCount), so repeating them per interim     #}
+                            {# site is what those helpers expect; suffixing    #}
+                            {# would break every one of them for no gain.      #}
+                            <details class="govuk-details govuk-!-margin-bottom-1"
+                                     data-testid="interim-site">
+                              <summary class="govuk-details__summary">
+                                {# The testid sits on the <strong>, not the   #}
+                                {# wrapping <span>: the NEW marker is itself   #}
+                                {# a <span>, so a same-tag nesting would make  #}
+                                {# any "text of this element" reader stop at   #}
+                                {# the marker's closing tag and see "NEW:"     #}
+                                {# alone instead of the site name.             #}
+                                <span class="govuk-details__summary-text"><strong data-testid="interim-site-name">{% if interimSite.isNew %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ interimSite.siteName }}</strong></span>
+                              </summary>
+                              <div class="govuk-details__text">
+                                {% if interimSite.addressLines.length %}
+                                  <p class="govuk-body govuk-!-margin-bottom-1"
+                                     data-testid="interim-site-address">{{ interimSite.addressLines | join(', ') }}</p>
+                                {% endif %}
+                                {{ siteDetails(interimSite.details, 'interim-site') }}
+                              </div>
+                            </details>
+                          {% endfor %}
                         </div>
                       {% endif %}
                     </div>
