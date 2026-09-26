@@ -599,12 +599,10 @@ export function buildInterimSite(site) {
 export function buildInterimSites(site) {
   const source = site ?? {}
   const fromList = Array.isArray(source.interimSites) ? source.interimSites : []
-  const candidates =
-    fromList.length > 0
-      ? fromList
-      : source.interimSite != null
-        ? [source.interimSite]
-        : []
+  // The list wins when it has anything. Falling back to the singular field is
+  // for a work item written before RA-603, which has no list at all.
+  const legacy = source.interimSite != null ? [source.interimSite] : []
+  const candidates = fromList.length > 0 ? fromList : legacy
 
   return candidates
     .filter(
@@ -682,36 +680,28 @@ export function buildAuthorityToIssueContacts(prns) {
 }
 
 /**
- * Build the AC02-ordered application information rows.
+ * The summary rows every application has, in display order.
  *
- * @param {object} args
- * @param {object} args.workItem decorated work item
- * @returns {{ rows: object[], isExporter: boolean }}
+ * Split out of {@link buildApplicationSummary}, which had grown past the 75-line
+ * limit. Takes one context object rather than seven arguments: the row set needs
+ * most of the caller's locals, and passing them positionally would trade a
+ * long-function finding for a long-parameter-list one.
+ *
+ * The exporter-only rows stay with the caller, which appends them after these.
+ *
+ * @param {object} context
+ * @returns {object[]}
  */
-export function buildApplicationSummary({
+function buildCoreSummaryRows({
   workItem,
-  multipleInterimSitesEnabled = true
+  payload,
+  workItemId,
+  prns,
+  authorisers,
+  samplingFiles,
+  registeredAddress
 }) {
-  const payload = workItem?.payload ?? {}
-  const workItemId = workItem?.id ?? ''
-  const prns = payload.prns ?? {}
-  const isExporter = isExporterApplication(workItem)
-
-  const authorisers = Array.isArray(prns.authorisers) ? prns.authorisers : []
-  const samplingFiles = Array.isArray(payload.samplingPlan?.files)
-    ? payload.samplingPlan.files
-    : []
-  // RA-483: operator-removed (deselected) sites are excluded here, so BOTH
-  // the BES row and the ORS row below skip them — see `overseas-sites.js`.
-  const overseasSites = overseasSitesOf(workItem)
-  // CM2. Mirrors the "Additional information" tab's registered-address
-  // computation, so both tabs' site-address rows resolve to exactly the
-  // same fallback for an exporter.
-  const registeredAddress = formatSiteAddress({
-    siteAddress: payload.companyRegisteredAddress
-  })
-
-  const rows = [
+  return [
     {
       key: 'site-address',
       label: 'Site address',
@@ -783,6 +773,47 @@ export function buildApplicationSummary({
       pairs: buildBusinessPlanPairs(payload.businessPlan)
     }
   ]
+}
+
+/**
+ * Build the AC02-ordered application information rows.
+ *
+ * @param {object} args
+ * @param {object} args.workItem decorated work item
+ * @returns {{ rows: object[], isExporter: boolean }}
+ */
+export function buildApplicationSummary({
+  workItem,
+  multipleInterimSitesEnabled = true
+}) {
+  const payload = workItem?.payload ?? {}
+  const workItemId = workItem?.id ?? ''
+  const prns = payload.prns ?? {}
+  const isExporter = isExporterApplication(workItem)
+
+  const authorisers = Array.isArray(prns.authorisers) ? prns.authorisers : []
+  const samplingFiles = Array.isArray(payload.samplingPlan?.files)
+    ? payload.samplingPlan.files
+    : []
+  // RA-483: operator-removed (deselected) sites are excluded here, so BOTH
+  // the BES row and the ORS row below skip them — see `overseas-sites.js`.
+  const overseasSites = overseasSitesOf(workItem)
+  // CM2. Mirrors the "Additional information" tab's registered-address
+  // computation, so both tabs' site-address rows resolve to exactly the
+  // same fallback for an exporter.
+  const registeredAddress = formatSiteAddress({
+    siteAddress: payload.companyRegisteredAddress
+  })
+
+  const rows = buildCoreSummaryRows({
+    workItem,
+    payload,
+    workItemId,
+    prns,
+    authorisers,
+    samplingFiles,
+    registeredAddress
+  })
 
   if (isExporter) {
     rows.push(
