@@ -3,7 +3,10 @@
  * relabelled to "Determination Deadline" by RA-447 CM5/CM6, which also
  * replaced the day-count input with a calendar date input and removed the
  * extension cap; RA-601 then removed the extension-only direction rule, so
- * the deadline can be advanced as well as pushed back).
+ * the deadline can be advanced as well as pushed back; RA-611 put a floor
+ * back under it — a deadline earlier than today (UK local) is rejected and
+ * re-rendered in place, with the error anchored at the date input rather
+ * than at the reason field).
  *
  * RA-572 deleted the sibling Override controllers: UAT found "Change" and
  * "Override" indistinguishable, so Change is now the single regulator-facing

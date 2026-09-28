@@ -39,6 +39,16 @@ const aWorkItem = {
 const VALID_DEADLINE_PAYLOAD =
   'new-deadline-day=1&new-deadline-month=7&new-deadline-year=2026'
 
+// RA-611: the validator now refuses a deadline earlier than TODAY, so the
+// fixtures above only mean what they say against a pinned clock. 2026-05-01
+// sits before every deadline the accepting cases submit. Only `Date` is
+// faked — faking timers wholesale would stall `server.inject`.
+const FIXED_NOW = new Date('2026-05-01T12:00:00Z')
+
+function pinTheClock() {
+  vi.useFakeTimers({ toFake: ['Date'], now: FIXED_NOW })
+}
+
 /**
  * The page's prose with every attribute value and href stripped out, so an
  * "extend" assertion (RA-572 AC02) reads the words a regulator sees and not
@@ -94,8 +104,13 @@ describe('#makeShowExtendController', () => {
   })
 
   beforeEach(() => {
+    pinTheClock()
     getWorkItem.mockReset()
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   test('GET renders the change determination deadline form', async () => {
@@ -173,9 +188,14 @@ describe('#makeSubmitExtendController', () => {
   })
 
   beforeEach(() => {
+    pinTheClock()
     extendWorkItemSla.mockReset()
     getWorkItem.mockReset()
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   test('POST with a valid new deadline applies the extension and redirects to detail', async () => {
@@ -237,10 +257,11 @@ describe('#makeSubmitExtendController', () => {
     expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 
-  // RA-601: the deadline may now be advanced as well as pushed back. An
+  // RA-601's surviving half: the deadline may be brought forward as well as
+  // pushed back, provided (since RA-611) it lands on today or later. An
   // earlier date goes through the same route to the same backend call, with a
-  // negative duration — no extra confirmation step, no floor.
-  test('POST with an earlier new deadline applies the change and redirects to detail', async () => {
+  // negative duration and no extra confirmation step.
+  test('POST with an earlier but still future new deadline applies the change and redirects to detail', async () => {
     extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
 
     const { statusCode, headers } = await injectWithCrumb(server, {
@@ -262,6 +283,75 @@ describe('#makeSubmitExtendController', () => {
         reason: 'Brought forward',
         additionalDuration: '-P5D'
       })
+    )
+  })
+
+  // RA-611, the reported bug end to end: a deadline earlier than today must
+  // never reach the backend, and the caseworker must see why — in the error
+  // summary AND on the date input — with what they typed still in the boxes.
+  test('POST with a deadline earlier than today re-renders form with 400 and the RA-611 error', async () => {
+    const { statusCode, result } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload:
+        'reason=Brought+forward+too+far&new-deadline-day=30&new-deadline-month=4&new-deadline-year=2026',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(extendWorkItemSla).not.toHaveBeenCalled()
+
+    // The GOV.UK error summary, anchored at the DAY box rather than at the
+    // reason field — a date problem must focus the date input.
+    expect(result).toEqual(expect.stringContaining('There is a problem'))
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="sla-extend-error-summary"')
+    )
+    expect(result).toEqual(expect.stringContaining('href="#new-deadline-day"'))
+    expect(result).not.toEqual(expect.stringContaining('href="#field-reason"'))
+
+    // The field-level error on the date input.
+    expect(result).toEqual(expect.stringContaining('id="new-deadline-error"'))
+    expect(result).toEqual(expect.stringContaining('govuk-input--error'))
+
+    // Exactly twice: once in the summary, once under the date input.
+    const occurrences =
+      String(result).split(
+        'The new determination deadline cannot be earlier than today'
+      ).length - 1
+    expect(occurrences).toBe(2)
+
+    // What the caseworker typed survives the re-render.
+    expect(result).toEqual(expect.stringContaining('value="30"'))
+    expect(result).toEqual(expect.stringContaining('value="4"'))
+    expect(result).toEqual(expect.stringContaining('value="2026"'))
+    expect(visibleText(result)).toEqual(
+      expect.stringContaining('Brought forward too far')
+    )
+  })
+
+  // The boundary: today itself is allowed, so the same form that rejects
+  // yesterday accepts today and reaches the backend.
+  test('POST with today as the new deadline applies the change', async () => {
+    extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
+
+    const { statusCode, headers } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload:
+        'reason=Determine+today&new-deadline-day=1&new-deadline-month=5&new-deadline-year=2026',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    // 2026-06-01 → 2026-05-01 is 31 days earlier.
+    expect(extendWorkItemSla).toHaveBeenCalledWith(
+      expect.objectContaining({ additionalDuration: '-P31D' })
     )
   })
 
@@ -399,9 +489,14 @@ describe('RA-572 Override removal and Change copy', () => {
   })
 
   beforeEach(() => {
+    pinTheClock()
     extendWorkItemSla.mockReset()
     getWorkItem.mockReset()
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   test.each(['GET', 'POST'])(
