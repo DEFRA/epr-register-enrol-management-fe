@@ -10,13 +10,39 @@ import {
 const CURRENT_DUE_DATE = '2026-06-01T00:00:00Z'
 const A_LATER_DEADLINE = { day: '1', month: '7', year: '2026' }
 
-// RA-611 put a floor under the new deadline: it may not be earlier than
-// TODAY. Every fixture below is therefore measured against a pinned clock
-// rather than the real date, so the boundary cases are deterministic and the
-// suite does not start failing as wall-clock time walks past 2026-06-01.
-// 2026-05-01 sits before every date the accepting cases submit.
-const FIXED_NOW = new Date('2026-05-01T12:00:00Z')
-const AT = { now: FIXED_NOW }
+// RA-611 puts a floor under the new deadline. The 29 Sep 2026 spec REPLACED
+// the today-floor these fixtures were originally built for: the floor is now
+// the LATER of the duly-made date (the SLA clock's start) and 1 January of the
+// accreditation year, so it is derived from the work item's own dates and not
+// from the clock. Nothing here pins a clock any more because nothing reads one
+// — which also means the suite cannot rot as wall-clock time moves on.
+//
+// The default bounds below make the DULY-MADE date the binding floor
+// (3 March 2026 is later than 1 January 2026), and it sits before every date
+// the accepting cases submit.
+const SLA_STARTED_AT = '2026-03-03T00:00:00Z'
+const ACCREDITATION_YEAR = 2026
+const BOUNDS = {
+  slaStartedAt: SLA_STARTED_AT,
+  accreditationYear: ACCREDITATION_YEAR
+}
+
+// The two floor messages, byte-for-byte as the caseworker sees them. The
+// duly-made date renders in the GDS `d MMMM yyyy` style via the shared
+// `formatDateGds` filter.
+const DULY_MADE_MESSAGE =
+  'The new determination deadline cannot be earlier than 3 March 2026, when the application was duly made'
+const JANUARY_MESSAGE =
+  'The new determination deadline cannot be earlier than 1 January 2026'
+const NO_CLOCK_MESSAGE =
+  'This application has no determination deadline to change'
+
+// A second set of bounds in which the 1-JANUARY backstop is the later bound:
+// the application was duly made in the previous accreditation year.
+const JANUARY_BOUND = {
+  slaStartedAt: '2025-11-20T00:00:00Z',
+  accreditationYear: 2026
+}
 
 describe('createSlaService', () => {
   describe('#extendSla', () => {
@@ -25,7 +51,7 @@ describe('createSlaService', () => {
 
     beforeEach(() => {
       extend = vi.fn()
-      service = createSlaService({ extend, now: () => FIXED_NOW })
+      service = createSlaService({ extend })
     })
 
     it('returns invalid when reason is empty', async () => {
@@ -34,6 +60,7 @@ describe('createSlaService', () => {
         reason: '',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
@@ -51,6 +78,7 @@ describe('createSlaService', () => {
         reason: '   ',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result.ok).toBe(false)
@@ -63,6 +91,7 @@ describe('createSlaService', () => {
         reason: 'x'.repeat(REASON_MAX_LENGTH + 1),
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
@@ -80,6 +109,7 @@ describe('createSlaService', () => {
         reason: 'valid reason',
         deadline: { day: '', month: '', year: '' },
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
@@ -108,6 +138,7 @@ describe('createSlaService', () => {
           reason: 'valid reason',
           deadline,
           currentDueDate: CURRENT_DUE_DATE,
+          ...BOUNDS,
           user: null
         })
         expect(result).toEqual({
@@ -126,6 +157,7 @@ describe('createSlaService', () => {
         reason: 'valid reason',
         deadline: { day: '31', month: '2', year: '2026' },
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
@@ -146,6 +178,7 @@ describe('createSlaService', () => {
         reason: 'valid reason',
         deadline: { day: '1', month: '6', year: '2026' },
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
@@ -159,10 +192,10 @@ describe('createSlaService', () => {
     })
 
     // RA-601's still-valid half, kept alive by RA-611: moving the deadline
-    // BACKWARDS is legitimate as long as it lands on today or later. 2026-05-27
-    // is earlier than the current 2026-06-01 but later than the pinned today,
-    // so it is accepted and the derived duration is negative.
-    it('accepts an earlier deadline that is still in the future and sends a negative duration', async () => {
+    // BACKWARDS is legitimate as long as it lands on or above the floor.
+    // 2026-05-27 is earlier than the current 2026-06-01 and well after the
+    // duly-made date, so it is accepted and the derived duration is negative.
+    it('accepts an earlier deadline above the floor and sends a negative duration', async () => {
       const workItem = { id: 'abc' }
       extend.mockResolvedValue({ ok: true, workItem })
 
@@ -171,6 +204,7 @@ describe('createSlaService', () => {
         reason: 'Determination brought forward',
         deadline: { day: '27', month: '5', year: '2026' },
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: { id: 'u1' }
       })
 
@@ -180,41 +214,68 @@ describe('createSlaService', () => {
       )
     })
 
-    // RA-611, the bug as raised: a deadline earlier than today is rejected
-    // before it can reach the backend.
-    it('returns invalid when the deadline is earlier than today', async () => {
+    // RA-611 as respecified: a deadline below the floor is rejected before it
+    // can reach the backend. 2 March 2026 is the day before the duly-made date.
+    it('returns invalid when the deadline is earlier than the duly-made date', async () => {
       const result = await service.extendSla({
         workItemId: 'abc',
         reason: 'valid reason',
-        deadline: { day: '30', month: '4', year: '2026' },
+        deadline: { day: '2', month: '3', year: '2026' },
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
         ok: false,
         outcome: 'invalid',
         field: 'deadline',
-        message: 'The new determination deadline cannot be earlier than today'
+        message: DULY_MADE_MESSAGE
       })
       expect(extend).not.toHaveBeenCalled()
     })
 
-    // The clock the RA-611 floor is measured against is injected, so a service
-    // built without one must fall back to the real current time rather than
-    // silently accepting everything.
-    it('defaults to the real clock when no now is injected', async () => {
-      const realClockService = createSlaService({ extend })
-      const result = await realClockService.extendSla({
+    // The case the today-floor got wrong, end to end through the service: a
+    // date in the PAST is legitimate as long as it is on or above the floor.
+    // 15 April 2026 is after the 3 March duly-made date and before the current
+    // 1 June deadline, so it is accepted with a negative duration.
+    it('accepts a past deadline that is still above the floor', async () => {
+      const workItem = { id: 'abc' }
+      extend.mockResolvedValue({ ok: true, workItem })
+
+      const result = await service.extendSla({
+        workItemId: 'abc',
+        reason: 'Backdated to the duly made date',
+        deadline: { day: '15', month: '4', year: '2026' },
+        currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
+        user: { id: 'u1' }
+      })
+
+      expect(result).toEqual({ ok: true, workItem })
+      expect(extend).toHaveBeenCalledWith(
+        expect.objectContaining({ additionalDuration: '-P47D' })
+      )
+    })
+
+    // management-be projects `slaDueDate` and `slaStartedAt` off the same clock,
+    // so a work item without one has neither. The service reports that rather
+    // than dropping the floor and calling the backend unbounded.
+    it('returns invalid when the work item has no SLA clock', async () => {
+      const result = await service.extendSla({
         workItemId: 'abc',
         reason: 'valid reason',
-        deadline: { day: '1', month: '1', year: '2020' },
-        currentDueDate: CURRENT_DUE_DATE,
+        deadline: A_LATER_DEADLINE,
+        currentDueDate: null,
+        slaStartedAt: null,
+        accreditationYear: ACCREDITATION_YEAR,
         user: null
       })
-      expect(result.ok).toBe(false)
-      expect(result.message).toBe(
-        'The new determination deadline cannot be earlier than today'
-      )
+      expect(result).toEqual({
+        ok: false,
+        outcome: 'invalid',
+        field: 'deadline',
+        message: NO_CLOCK_MESSAGE
+      })
       expect(extend).not.toHaveBeenCalled()
     })
 
@@ -229,6 +290,7 @@ describe('createSlaService', () => {
         reason: 'valid reason',
         deadline: { day: '1', month: '1', year: '2027' },
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
 
@@ -247,6 +309,7 @@ describe('createSlaService', () => {
         reason: 'Need more time',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: { id: 'u1' }
       })
 
@@ -270,6 +333,7 @@ describe('createSlaService', () => {
         reason: 'reason',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
@@ -290,6 +354,7 @@ describe('createSlaService', () => {
         reason: 'reason',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
@@ -310,6 +375,7 @@ describe('createSlaService', () => {
         reason: 'reason',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
@@ -330,6 +396,7 @@ describe('createSlaService', () => {
         reason: 'reason',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({
@@ -346,6 +413,7 @@ describe('createSlaService', () => {
         reason: 'reason',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(result).toEqual({ ok: false, outcome: 'server', message: 'Boom' })
@@ -359,6 +427,7 @@ describe('createSlaService', () => {
         reason: '  trimmed  ',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
+        ...BOUNDS,
         user: null
       })
       expect(extend).toHaveBeenCalledWith(
@@ -368,16 +437,38 @@ describe('createSlaService', () => {
   })
 
   describe('#validateExtendDeadline (RA-447 CM6, RA-601, RA-611)', () => {
-    const pastMessage =
-      'The new determination deadline cannot be earlier than today'
-
     it('rejects a work item with no current due date at all', () => {
-      expect(validateExtendDeadline(A_LATER_DEADLINE, null, AT)).toEqual({
+      expect(validateExtendDeadline(A_LATER_DEADLINE, null, BOUNDS)).toEqual({
         ok: false,
         outcome: 'invalid',
         field: 'deadline',
-        message: 'This application has no determination deadline to change'
+        message: NO_CLOCK_MESSAGE
       })
+    })
+
+    // The floor's anchor comes off the same SLA clock as the due date, so a
+    // missing anchor is the same condition and gets the same message. It is
+    // reported rather than silently dropping the floor, which would let an
+    // unbounded backdate through to a backend that would reject it.
+    it('rejects a work item with no SLA start date', () => {
+      expect(
+        validateExtendDeadline(A_LATER_DEADLINE, CURRENT_DUE_DATE, {
+          accreditationYear: ACCREDITATION_YEAR
+        })
+      ).toEqual({
+        ok: false,
+        outcome: 'invalid',
+        field: 'deadline',
+        message: NO_CLOCK_MESSAGE
+      })
+    })
+
+    // Called with two arguments there are no bounds at all, so the same
+    // explicit branch fires rather than an accidentally unbounded accept.
+    it('rejects when no bounds are passed at all', () => {
+      const result = validateExtendDeadline(A_LATER_DEADLINE, CURRENT_DUE_DATE)
+      expect(result.ok).toBe(false)
+      expect(result.message).toBe(NO_CLOCK_MESSAGE)
     })
 
     it('rejects an empty date', () => {
@@ -385,7 +476,7 @@ describe('createSlaService', () => {
         validateExtendDeadline(
           { day: '', month: '', year: '' },
           CURRENT_DUE_DATE,
-          AT
+          BOUNDS
         )
       ).toEqual({
         ok: false,
@@ -400,7 +491,7 @@ describe('createSlaService', () => {
         validateExtendDeadline(
           { day: '31', month: '2', year: '2026' },
           CURRENT_DUE_DATE,
-          AT
+          BOUNDS
         )
       ).toEqual({
         ok: false,
@@ -414,7 +505,7 @@ describe('createSlaService', () => {
       const result = validateExtendDeadline(
         { day: '2', month: '6', year: '2026' },
         CURRENT_DUE_DATE,
-        AT
+        BOUNDS
       )
       expect(result).toEqual({
         ok: true,
@@ -427,7 +518,7 @@ describe('createSlaService', () => {
       const result = validateExtendDeadline(
         { day: '31', month: '5', year: '2026' },
         CURRENT_DUE_DATE,
-        AT
+        BOUNDS
       )
       expect(result).toEqual({
         ok: true,
@@ -438,109 +529,206 @@ describe('createSlaService', () => {
 
     // The sign leads the designator. `P-1D` is malformed ISO-8601 and the
     // backend would reject or mis-parse it, so pin the spelling explicitly.
+    // (RA-601 coverage, kept verbatim through both RA-611 floors.)
     it('signs a negative duration ahead of the P designator', () => {
       const result = validateExtendDeadline(
         { day: '31', month: '5', year: '2026' },
         CURRENT_DUE_DATE,
-        AT
+        BOUNDS
       )
       expect(result.additionalDuration).toBe('-P1D')
       expect(result.additionalDuration).not.toContain('P-')
     })
 
-    // RA-611's floor, at the boundary. Yesterday is out, today is in.
-    it('rejects yesterday with the RA-611 message', () => {
-      expect(
-        validateExtendDeadline(
-          { day: '30', month: '4', year: '2026' },
+    // RA-611's floor, at the duly-made boundary. Was "yesterday is out, today
+    // is in" against the pinned clock; the 29 Sep 2026 spec makes it "the day
+    // before the duly-made date is out, the duly-made date itself is in".
+    describe('floors at the duly-made date when that is the later bound', () => {
+      it('rejects the day before the duly-made date, naming it', () => {
+        expect(
+          validateExtendDeadline(
+            { day: '2', month: '3', year: '2026' },
+            CURRENT_DUE_DATE,
+            BOUNDS
+          )
+        ).toEqual({
+          ok: false,
+          outcome: 'invalid',
+          field: 'deadline',
+          message: DULY_MADE_MESSAGE
+        })
+      })
+
+      it('accepts the duly-made date itself', () => {
+        const result = validateExtendDeadline(
+          { day: '3', month: '3', year: '2026' },
           CURRENT_DUE_DATE,
-          AT
+          BOUNDS
         )
-      ).toEqual({
-        ok: false,
-        outcome: 'invalid',
-        field: 'deadline',
-        message: pastMessage
+        expect(result).toEqual({
+          ok: true,
+          value: '2026-03-03',
+          additionalDuration: '-P90D'
+        })
       })
-    })
 
-    it('accepts today itself', () => {
-      const result = validateExtendDeadline(
-        { day: '1', month: '5', year: '2026' },
-        CURRENT_DUE_DATE,
-        AT
-      )
-      expect(result).toEqual({
-        ok: true,
-        value: '2026-05-01',
-        additionalDuration: '-P31D'
-      })
-    })
-
-    it('accepts tomorrow', () => {
-      const result = validateExtendDeadline(
-        { day: '2', month: '5', year: '2026' },
-        CURRENT_DUE_DATE,
-        AT
-      )
-      expect(result.ok).toBe(true)
-      expect(result.additionalDuration).toBe('-P30D')
-    })
-
-    // RA-601 remains correct in this one respect: a BACKWARDS move is still
-    // legitimate, provided it lands today or later. The negative duration is
-    // spelled with the sign ahead of the designator.
-    it('accepts a backwards move onto a still-future date', () => {
-      const result = validateExtendDeadline(
-        { day: '27', month: '5', year: '2026' },
-        CURRENT_DUE_DATE,
-        AT
-      )
-      expect(result).toEqual({
-        ok: true,
-        value: '2026-05-27',
-        additionalDuration: '-P5D'
-      })
-    })
-
-    // Was an RA-601 case asserting acceptance ("no floor at the SLA clock's
-    // startedAt"). RA-611 reverses it: a date years in the past is exactly
-    // what the floor exists to catch. The coverage is kept, the expectation
-    // flipped.
-    it('rejects a deadline far earlier than any plausible clock start', () => {
-      expect(
-        validateExtendDeadline(
-          { day: '1', month: '1', year: '2020' },
+      // THE case the first cut of RA-611 got wrong. 15 April 2026 is in the
+      // past relative to any plausible run of this suite, is after the
+      // duly-made date and is before the current deadline: backdating there is
+      // exactly what the spec permits, so it must be ACCEPTED.
+      it('accepts a date in the past that is still above the floor', () => {
+        const result = validateExtendDeadline(
+          { day: '15', month: '4', year: '2026' },
           CURRENT_DUE_DATE,
-          AT
+          BOUNDS
         )
-      ).toEqual({
-        ok: false,
-        outcome: 'invalid',
-        field: 'deadline',
-        message: pastMessage
+        expect(result).toEqual({
+          ok: true,
+          value: '2026-04-15',
+          additionalDuration: '-P47D'
+        })
+      })
+
+      // Was an RA-601 case asserting acceptance ("no floor at the SLA clock's
+      // startedAt"), then an RA-611 case asserting rejection for being in the
+      // past. It is still a rejection, but now because it is below the
+      // duly-made anchor rather than because it is historic.
+      it('rejects a deadline years before the duly-made date', () => {
+        expect(
+          validateExtendDeadline(
+            { day: '1', month: '1', year: '2020' },
+            CURRENT_DUE_DATE,
+            BOUNDS
+          )
+        ).toEqual({
+          ok: false,
+          outcome: 'invalid',
+          field: 'deadline',
+          message: DULY_MADE_MESSAGE
+        })
       })
     })
 
-    // The past check runs BEFORE the no-op check, so a date that is both in
-    // the past AND equal to the current deadline reports the more specific,
-    // more actionable problem.
-    it('reports the past-date problem ahead of the no-op problem', () => {
+    // The other bound. JANUARY_BOUND was duly made on 20 November 2025, in the
+    // previous accreditation year, so 1 January 2026 is the later bound and the
+    // spec's absolute backstop applies.
+    describe('floors at 1 January when that is the later bound', () => {
+      it('rejects 31 December of the previous year, naming 1 January', () => {
+        expect(
+          validateExtendDeadline(
+            { day: '31', month: '12', year: '2025' },
+            CURRENT_DUE_DATE,
+            JANUARY_BOUND
+          )
+        ).toEqual({
+          ok: false,
+          outcome: 'invalid',
+          field: 'deadline',
+          message: JANUARY_MESSAGE
+        })
+      })
+
+      // The LATER bound wins: a date that clears the duly-made anchor but
+      // falls in the previous accreditation year is still refused.
+      it('rejects a date after the duly-made date but before 1 January', () => {
+        const result = validateExtendDeadline(
+          { day: '15', month: '12', year: '2025' },
+          CURRENT_DUE_DATE,
+          JANUARY_BOUND
+        )
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe(JANUARY_MESSAGE)
+      })
+
+      it('accepts 1 January itself', () => {
+        const result = validateExtendDeadline(
+          { day: '1', month: '1', year: '2026' },
+          CURRENT_DUE_DATE,
+          JANUARY_BOUND
+        )
+        expect(result).toEqual({
+          ok: true,
+          value: '2026-01-01',
+          additionalDuration: '-P151D'
+        })
+      })
+
+      // A tie (duly made ON 1 January) takes the 1-January wording, matching
+      // management-be's tie-break. Both bounds name the same day, so the date
+      // the caseworker reads is right either way.
+      it('prefers the 1 January wording when both bounds are the same day', () => {
+        const result = validateExtendDeadline(
+          { day: '31', month: '12', year: '2025' },
+          CURRENT_DUE_DATE,
+          { slaStartedAt: '2026-01-01T00:00:00Z', accreditationYear: 2026 }
+        )
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe(JANUARY_MESSAGE)
+      })
+    })
+
+    // AC: `accreditationYear` missing or not a number falls back to the
+    // duly-made floor ALONE. The current year is NOT substituted — doing so
+    // would impose a bound the payload never stated and could refuse a
+    // legitimate backdate. management-be behaves identically, including for a
+    // year outside the representable range.
+    describe('falls back to the duly-made floor alone without a usable accreditation year', () => {
+      const NOVEMBER_MESSAGE =
+        'The new determination deadline cannot be earlier than 20 November 2025, when the application was duly made'
+
+      const unusableYears = [
+        ['absent', undefined],
+        ['null', null],
+        ['a numeric string', '2026'],
+        ['NaN', Number.NaN]
+      ]
+
+      it.each(unusableYears)(
+        'accepts a date the 1-January bound would have refused when the year is %s',
+        (_label, accreditationYear) => {
+          const result = validateExtendDeadline(
+            { day: '1', month: '12', year: '2025' },
+            CURRENT_DUE_DATE,
+            { slaStartedAt: '2025-11-20T00:00:00Z', accreditationYear }
+          )
+          expect(result.ok).toBe(true)
+          expect(result.value).toBe('2025-12-01')
+        }
+      )
+
+      it.each(unusableYears)(
+        'still floors at the duly-made date when the year is %s',
+        (_label, accreditationYear) => {
+          const result = validateExtendDeadline(
+            { day: '19', month: '11', year: '2025' },
+            CURRENT_DUE_DATE,
+            { slaStartedAt: '2025-11-20T00:00:00Z', accreditationYear }
+          )
+          expect(result.ok).toBe(false)
+          expect(result.message).toBe(NOVEMBER_MESSAGE)
+        }
+      )
+    })
+
+    // The floor check runs BEFORE the no-op check, so a date that is both
+    // below the floor AND equal to the current deadline reports the more
+    // specific, more actionable problem.
+    it('reports the floor problem ahead of the no-op problem', () => {
+      const result = validateExtendDeadline(
+        { day: '1', month: '2', year: '2026' },
+        '2026-02-01T00:00:00Z',
+        BOUNDS
+      )
+      expect(result.message).toBe(DULY_MADE_MESSAGE)
+    })
+
+    // ...and a date that is merely unchanged, with the current deadline above
+    // the floor, keeps the RA-601 no-op message.
+    it('keeps the no-op message when the unchanged deadline is above the floor', () => {
       const result = validateExtendDeadline(
         { day: '1', month: '6', year: '2026' },
         CURRENT_DUE_DATE,
-        { now: new Date('2026-07-01T09:00:00Z') }
-      )
-      expect(result.message).toBe(pastMessage)
-    })
-
-    // ...and a date that is merely unchanged, with the current deadline still
-    // in the future, keeps the RA-601 no-op message.
-    it('keeps the no-op message when the unchanged deadline is not in the past', () => {
-      const result = validateExtendDeadline(
-        { day: '1', month: '6', year: '2026' },
-        CURRENT_DUE_DATE,
-        AT
+        BOUNDS
       )
       expect(result).toEqual({
         ok: false,
@@ -551,73 +739,81 @@ describe('createSlaService', () => {
       })
     })
 
-    // The shape checks run before the floor, so an unparseable date reports
-    // as an unreal date even when the year it names is long past.
-    it('reports an unreal date ahead of the past-date floor', () => {
+    // The shape checks run before the floor, so an unparseable date reports as
+    // an unreal date even when the year it names is far below the floor.
+    it('reports an unreal date ahead of the floor', () => {
       const result = validateExtendDeadline(
         { day: '30', month: '2', year: '2020' },
         CURRENT_DUE_DATE,
-        AT
+        BOUNDS
       )
       expect(result.message).toBe('Determination deadline must be a real date')
     })
 
-    // RA-611: "today" is the UK-local calendar date, not the UTC one. During
-    // BST the UK is a day ahead of UTC for the hour after UK midnight, and a
-    // UTC floor would accept a date the regulator reads as yesterday. At
-    // 23:30Z on 15 June it is 00:30 on 16 June in London.
-    describe('resolves today in Europe/London, not UTC', () => {
-      const justAfterUkMidnightBst = {
-        now: new Date('2026-06-15T23:30:00Z')
+    // The duly-made anchor is an INSTANT, so it has to be read as a UK-local
+    // calendar date rather than a UTC one. `dulyMake` stamps midnight UTC,
+    // where the two agree, but management-be's backfill migration and seeder
+    // stamp a real timestamp — and at 23:30Z during BST the London date is
+    // already the next day. management-be floors on the London date, so
+    // reading UTC here would name a floor date the backend then rejects.
+    describe('resolves the duly-made anchor in Europe/London, not UTC', () => {
+      // 23:30Z on 15 June is 00:30 on 16 June in London (BST).
+      const bstAnchor = {
+        slaStartedAt: '2026-06-15T23:30:00Z',
+        accreditationYear: 2026
       }
 
-      it('rejects the UTC date, which is already yesterday in the UK', () => {
+      it('rejects the UTC date, which is the day before the UK anchor date', () => {
         const result = validateExtendDeadline(
           { day: '15', month: '6', year: '2026' },
           '2026-08-01T00:00:00Z',
-          justAfterUkMidnightBst
+          bstAnchor
         )
         expect(result.ok).toBe(false)
-        expect(result.message).toBe(pastMessage)
+        expect(result.message).toBe(
+          'The new determination deadline cannot be earlier than 16 June 2026, when the application was duly made'
+        )
       })
 
-      it('accepts the UK date, which is today in London', () => {
+      it('accepts the UK anchor date itself', () => {
         const result = validateExtendDeadline(
           { day: '16', month: '6', year: '2026' },
           '2026-08-01T00:00:00Z',
-          justAfterUkMidnightBst
+          bstAnchor
         )
         expect(result.ok).toBe(true)
         expect(result.additionalDuration).toBe('-P46D')
       })
 
-      // In GMT the UK date and the UTC date agree, so the same instant-shape
-      // must not be over-corrected into rejecting a legitimate today.
-      it('accepts today in GMT, when UK local time equals UTC', () => {
+      // In GMT the UK date and the UTC date agree, so the correction must not
+      // be over-applied and push the floor a day forward.
+      it('accepts the anchor date in GMT, when UK local time equals UTC', () => {
         const result = validateExtendDeadline(
           { day: '15', month: '12', year: '2026' },
           '2027-01-01T00:00:00Z',
-          { now: new Date('2026-12-15T23:30:00Z') }
+          { slaStartedAt: '2026-12-15T23:30:00Z', accreditationYear: 2026 }
         )
         expect(result.ok).toBe(true)
       })
+
+      it('names the GMT anchor date in the message', () => {
+        const result = validateExtendDeadline(
+          { day: '14', month: '12', year: '2026' },
+          '2027-01-01T00:00:00Z',
+          { slaStartedAt: '2026-12-15T23:30:00Z', accreditationYear: 2026 }
+        )
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe(
+          'The new determination deadline cannot be earlier than 15 December 2026, when the application was duly made'
+        )
+      })
     })
 
-    // Defaulting the clock keeps the validator callable with two arguments.
-    it('falls back to the real clock when no options are passed', () => {
-      const result = validateExtendDeadline(
-        { day: '1', month: '1', year: '2020' },
-        CURRENT_DUE_DATE
-      )
-      expect(result.ok).toBe(false)
-      expect(result.message).toBe(pastMessage)
-    })
-
-    // Both operands are UTC midnights, so a UK clock change between them must
-    // not shift the gap by an hour and round to the wrong day count. 2026's
-    // transitions are 29 March (GMT→BST) and 25 October (BST→GMT); each pair
-    // below straddles one of them. The clock is pinned before all of them so
-    // the RA-611 floor never interferes.
+    // Both operands of the day-gap are UTC midnights, so a UK clock change
+    // between them must not shift the gap by an hour and round to the wrong
+    // day count. 2026's transitions are 29 March (GMT→BST) and 25 October
+    // (BST→GMT); each pair below straddles one of them. The anchor is early in
+    // the year so the RA-611 floor never interferes.
     it.each([
       ['forwards over GMT→BST', '2026-03-01T00:00:00Z', 1, 4, 2026, 'P31D'],
       ['backwards over GMT→BST', '2026-04-01T00:00:00Z', 1, 3, 2026, '-P31D'],
@@ -629,7 +825,7 @@ describe('createSlaService', () => {
         const result = validateExtendDeadline(
           { day: String(day), month: String(month), year: String(year) },
           currentDue,
-          { now: new Date('2026-01-01T00:00:00Z') }
+          { slaStartedAt: '2026-01-05T00:00:00Z', accreditationYear: 2026 }
         )
         expect(result.ok).toBe(true)
         expect(result.additionalDuration).toBe(expected)
