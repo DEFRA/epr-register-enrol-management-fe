@@ -214,6 +214,61 @@ function parseCalendarDate(day, month, year) {
 }
 
 /**
+ * Parse an ISO instant the backend put on the work item, or null when it is
+ * absent or unparseable. Both of the dates this module reads off the work item
+ * — the current due date and the SLA clock's start — go through here, so
+ * "the backend gave us nothing usable" is one shape rather than two.
+ */
+function parseInstant(value) {
+  if (!value) {
+    return null
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/**
+ * The SHAPE checks, in the order the ACs fix: empty, then not-a-real-date, then
+ * the work item's own dates. Separated from the RULE checks in
+ * `validateExtendDeadline` so each half stays readable as the floor rules grow.
+ *
+ * The SLA clock is the source of BOTH date rules' inputs: management-be
+ * projects `slaDueDate` and `slaStartedAt` off the same clock object, so one is
+ * null exactly when the other is (confirmed with management-be on this
+ * branch). A work item with no clock has no deadline to change and no
+ * duly-made anchor to floor a new one at, which is one condition and gets one
+ * message — rather than silently dropping the floor and letting an unbounded
+ * backdate through to a backend that would reject it.
+ *
+ * @returns {{ message: string } |
+ *   { parsed: object, currentDue: Date, startedAt: Date }}
+ */
+function resolveDeadlineInputs(deadline, currentDueDate, slaStartedAt) {
+  const day = textOf(deadline?.day)
+  const month = textOf(deadline?.month)
+  const year = textOf(deadline?.year)
+
+  if (day === '' && month === '' && year === '') {
+    return { message: 'Enter the new determination deadline' }
+  }
+
+  const parsed = parseCalendarDate(day, month, year)
+  if (!parsed) {
+    return { message: 'Determination deadline must be a real date' }
+  }
+
+  const currentDue = parseInstant(currentDueDate)
+  const startedAt = parseInstant(slaStartedAt)
+  if (!currentDue || !startedAt) {
+    return {
+      message: 'This application has no determination deadline to change'
+    }
+  }
+
+  return { parsed, currentDue, startedAt }
+}
+
+/**
  * Pure validator for the extend-SLA form's new-deadline date input.
  *
  * RA-447 CM6 replaced the "number of additional days" input (capped by
@@ -257,9 +312,6 @@ export function validateExtendDeadline(
   currentDueDate,
   { slaStartedAt, accreditationYear } = {}
 ) {
-  const day = textOf(deadline?.day)
-  const month = textOf(deadline?.month)
-  const year = textOf(deadline?.year)
   const invalid = (message) => ({
     ok: false,
     outcome: 'invalid',
@@ -267,32 +319,11 @@ export function validateExtendDeadline(
     message
   })
 
-  if (day === '' && month === '' && year === '') {
-    return invalid('Enter the new determination deadline')
+  const resolved = resolveDeadlineInputs(deadline, currentDueDate, slaStartedAt)
+  if (resolved.message) {
+    return invalid(resolved.message)
   }
-
-  const parsed = parseCalendarDate(day, month, year)
-  if (!parsed) {
-    return invalid('Determination deadline must be a real date')
-  }
-
-  // The SLA clock is the source of BOTH date rules' inputs: management-be
-  // projects `slaDueDate` and `slaStartedAt` off the same clock object, so one
-  // is null exactly when the other is (confirmed with management-be on this
-  // branch). A work item with no clock has no deadline to change and no
-  // duly-made anchor to floor a new one at, which is one condition and gets
-  // one message — rather than silently dropping the floor and letting an
-  // unbounded backdate through to a backend that would reject it.
-  const currentDue = currentDueDate ? new Date(currentDueDate) : null
-  const startedAt = slaStartedAt ? new Date(slaStartedAt) : null
-  if (
-    !currentDue ||
-    Number.isNaN(currentDue.getTime()) ||
-    !startedAt ||
-    Number.isNaN(startedAt.getTime())
-  ) {
-    return invalid('This application has no determination deadline to change')
-  }
+  const { parsed, currentDue, startedAt } = resolved
   const currentDueUtcDay = startOfUtcDay(currentDue)
 
   // RA-611: the floor, checked before the no-op rule — a date below the floor
