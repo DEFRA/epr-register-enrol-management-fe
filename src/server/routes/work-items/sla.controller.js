@@ -3,7 +3,15 @@
  * relabelled to "Determination Deadline" by RA-447 CM5/CM6, which also
  * replaced the day-count input with a calendar date input and removed the
  * extension cap; RA-601 then removed the extension-only direction rule, so
- * the deadline can be advanced as well as pushed back).
+ * the deadline can be advanced as well as pushed back; RA-611 put a floor
+ * back under it — rejected and re-rendered in place, with the error anchored
+ * at the date input rather than at the reason field).
+ *
+ * RA-611's floor changed mid-branch: the first cut floored the new deadline at
+ * today, and the 29 Sep 2026 spec replaced that with the later of the
+ * duly-made date (`slaStartedAt`) and 1 January of the accreditation year, so
+ * backdating into the past is legitimate again. Both of those inputs come off
+ * the work item this controller already loads — see `sla.service.js`.
  *
  * RA-572 deleted the sibling Override controllers: UAT found "Change" and
  * "Override" indistinguishable, so Change is now the single regulator-facing
@@ -187,6 +195,11 @@ export function makeSubmitExtendController({
         reason,
         deadline,
         currentDueDate: workItem.slaDueDate,
+        // RA-611's floor inputs, read off the same already-loaded work item as
+        // the current due date: the SLA clock's start (the duly-made anchor)
+        // and the accreditation year the 1-January backstop is derived from.
+        slaStartedAt: workItem.slaStartedAt,
+        accreditationYear: workItem.payload?.accreditationYear,
         user: getUser(request)
       })
 

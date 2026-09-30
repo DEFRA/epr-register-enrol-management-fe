@@ -30,11 +30,21 @@ const REF = 'RA-123456789'
 // deadline of 2026-07-01 is unambiguously an extension.
 const CURRENT_DUE_DATE = '2026-06-01T00:00:00Z'
 
+// RA-611's floor inputs travel on the work item itself: management-be projects
+// `slaStartedAt` (the duly-made anchor) off the same SLA clock as `slaDueDate`,
+// and `accreditationYear` is already on the re-accreditation payload. Duly made
+// on 3 March 2026, which is later than 1 January 2026, so the DULY-MADE bound
+// binds for every case below.
+const SLA_STARTED_AT = '2026-03-03T00:00:00Z'
 const aWorkItem = {
   id: ID,
-  payload: { applicationReference: REF },
-  slaDueDate: CURRENT_DUE_DATE
+  payload: { applicationReference: REF, accreditationYear: 2026 },
+  slaDueDate: CURRENT_DUE_DATE,
+  slaStartedAt: SLA_STARTED_AT
 }
+
+const DULY_MADE_MESSAGE =
+  'The new determination deadline cannot be earlier than 3 March 2026, when the application was duly made'
 
 const VALID_DEADLINE_PAYLOAD =
   'new-deadline-day=1&new-deadline-month=7&new-deadline-year=2026'
@@ -237,10 +247,11 @@ describe('#makeSubmitExtendController', () => {
     expect(extendWorkItemSla).not.toHaveBeenCalled()
   })
 
-  // RA-601: the deadline may now be advanced as well as pushed back. An
+  // RA-601's surviving half: the deadline may be brought forward as well as
+  // pushed back, provided (since RA-611) it lands on or above the floor. An
   // earlier date goes through the same route to the same backend call, with a
-  // negative duration — no extra confirmation step, no floor.
-  test('POST with an earlier new deadline applies the change and redirects to detail', async () => {
+  // negative duration and no extra confirmation step.
+  test('POST with an earlier but still future new deadline applies the change and redirects to detail', async () => {
     extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
 
     const { statusCode, headers } = await injectWithCrumb(server, {
@@ -262,6 +273,75 @@ describe('#makeSubmitExtendController', () => {
         reason: 'Brought forward',
         additionalDuration: '-P5D'
       })
+    )
+  })
+
+  // RA-611 end to end: a deadline below the floor must never reach the backend,
+  // and the caseworker must see why — in the error summary AND on the date
+  // input — with what they typed still in the boxes. 2 March 2026 is the day
+  // before the duly-made date, so the message names that date.
+  test('POST with a deadline below the duly-made floor re-renders form with 400 and the RA-611 error', async () => {
+    const { statusCode, result } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload:
+        'reason=Brought+forward+too+far&new-deadline-day=2&new-deadline-month=3&new-deadline-year=2026',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(extendWorkItemSla).not.toHaveBeenCalled()
+
+    // The GOV.UK error summary, anchored at the DAY box rather than at the
+    // reason field — a date problem must focus the date input.
+    expect(result).toEqual(expect.stringContaining('There is a problem'))
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="sla-extend-error-summary"')
+    )
+    expect(result).toEqual(expect.stringContaining('href="#new-deadline-day"'))
+    expect(result).not.toEqual(expect.stringContaining('href="#field-reason"'))
+
+    // The field-level error on the date input.
+    expect(result).toEqual(expect.stringContaining('id="new-deadline-error"'))
+    expect(result).toEqual(expect.stringContaining('govuk-input--error'))
+
+    // Exactly twice: once in the summary, once under the date input.
+    const occurrences = String(result).split(DULY_MADE_MESSAGE).length - 1
+    expect(occurrences).toBe(2)
+
+    // What the caseworker typed survives the re-render.
+    expect(result).toEqual(expect.stringContaining('value="2"'))
+    expect(result).toEqual(expect.stringContaining('value="3"'))
+    expect(result).toEqual(expect.stringContaining('value="2026"'))
+    expect(visibleText(result)).toEqual(
+      expect.stringContaining('Brought forward too far')
+    )
+  })
+
+  // The boundary: the floor date itself is allowed, so the same form that
+  // rejects 2 March accepts 3 March and reaches the backend. This date is also
+  // in the PAST, which the 29 Sep 2026 spec makes legitimate — the first cut of
+  // RA-611 would have rejected it.
+  test('POST with the duly-made date as the new deadline applies the change', async () => {
+    extendWorkItemSla.mockResolvedValue({ ok: true, workItem: { id: ID } })
+
+    const { statusCode, headers } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload:
+        'reason=Backdate+to+duly+made&new-deadline-day=3&new-deadline-month=3&new-deadline-year=2026',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(`/work-items/${ID}`)
+    // 2026-06-01 → 2026-03-03 is 90 days earlier.
+    expect(extendWorkItemSla).toHaveBeenCalledWith(
+      expect.objectContaining({ additionalDuration: '-P90D' })
     )
   })
 
