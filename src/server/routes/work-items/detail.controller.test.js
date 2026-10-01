@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 
 import { createServer } from '#/server/server.js'
+import { config } from '#/config/config.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { bannerClasses } from '#/test-helpers/banner.js'
 import { injectWithCrumb } from '#/test-helpers/csrf.js'
@@ -4606,14 +4607,55 @@ describe('RA-295 individual work item page', () => {
 
   test('RA-292 AC02: renders the "Interim sites" sub-label', async () => {
     const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
-    // RA-603: the label now sits on the wrapper that holds all of an ORS's
-    // interim sites, above the individual fold-downs, and carries a count so a
-    // regulator knows how many are folded away before opening any of them. The
-    // plural itself was always deliberate; it is simply accurate now.
-    const interimIdx = ors.indexOf('data-testid="interim-sites"')
+    const interimIdx = ors.indexOf('data-testid="interim-site"')
     expect(ors.slice(interimIdx, interimIdx + 600)).toContain(
-      '<strong>Interim sites (1)</strong>'
+      '<strong>Interim sites</strong>'
     )
+  })
+
+  describe('RA-603 AC10b: the nested interim-site layout follows the flag', () => {
+    const SEVERAL = {
+      ...ROTTERDAM,
+      interimSites: [
+        { ...ROTTERDAM.interimSite, siteId: 21 },
+        {
+          ...ROTTERDAM.interimSite,
+          siteId: 22,
+          siteNumber: '002',
+          siteName: 'Ghent Interim Depot'
+        }
+      ]
+    }
+
+    afterEach(() => {
+      config.set('featureFlags.multipleInterimSitesEnabled', false)
+    })
+
+    test('with the flag off, a regulator sees the page they see today', async () => {
+      const ors = detailValue(await renderWithSites([SEVERAL]), 'ors')
+
+      expect(ors).toContain('<strong>Interim sites</strong>')
+      expect(ors).not.toContain('data-testid="interim-sites"')
+      expect(ors).not.toMatch(/<details[^>]*data-testid="interim-site"/)
+      expect(ors).toContain('Antwerp Interim Holding Site')
+      expect(ors).not.toContain('Ghent Interim Depot')
+    })
+
+    test('with the flag on, each interim site folds down under a counted label', async () => {
+      config.set('featureFlags.multipleInterimSitesEnabled', true)
+
+      const ors = detailValue(await renderWithSites([SEVERAL]), 'ors')
+
+      // The label sits on the wrapper above the individual fold-downs, and the
+      // count tells a regulator how many are folded away before opening any.
+      expect(ors).toContain('<strong>Interim sites (2)</strong>')
+      expect(
+        ors.match(
+          /<details class="govuk-details[^"]*"\s+data-testid="interim-site"/g
+        )
+      ).toHaveLength(2)
+      expect(ors).toContain('Ghent Interim Depot')
+    })
   })
 
   test('RA-292 AC02: an ORS with no interim site renders no interim block', async () => {

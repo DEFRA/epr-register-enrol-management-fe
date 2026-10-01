@@ -1565,7 +1565,8 @@ describe('#buildOverseasSite interim sites (RA-603)', () => {
       site([
         { siteId: 21, siteName: 'First' },
         { siteId: 22, siteName: 'Second' }
-      ])
+      ]),
+      { multipleInterimSitesEnabled: true }
     )
 
     expect(built.interimSites.map((i) => i.siteName)).toEqual([

@@ -621,12 +621,12 @@ export function buildInterimSites(site) {
  *
  * @param {object} site
  * @param {object} [options]
- * @param {boolean} [options.multipleInterimSitesEnabled] - when false, only the first interim
- *   site is shown, which is what a regulator sees today.
+ * @param {boolean} [options.multipleInterimSitesEnabled] - when false (the default, matching
+ *   the config flag), only the first interim site is shown, which is what a regulator sees today.
  */
 export function buildOverseasSite(
   site,
-  { multipleInterimSitesEnabled = true } = {}
+  { multipleInterimSitesEnabled = false } = {}
 ) {
   const source = site ?? {}
   const interimSites = buildInterimSites(source)
@@ -784,7 +784,7 @@ function buildCoreSummaryRows({
  */
 export function buildApplicationSummary({
   workItem,
-  multipleInterimSitesEnabled = true
+  multipleInterimSitesEnabled = false
 }) {
   const payload = workItem?.payload ?? {}
   const workItemId = workItem?.id ?? ''

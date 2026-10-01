@@ -482,10 +482,11 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   // failed lookup simply omits the section rather than failing the page.
   const priorYear = await loadPriorYear({ workItem: enriched, id, user })
 
+  const multipleInterimSitesEnabled = config.get(
+    'featureFlags.multipleInterimSitesEnabled'
+  )
   const { rows: applicationDetails } = buildApplicationSummary({
-    multipleInterimSitesEnabled: config.get(
-      'featureFlags.multipleInterimSitesEnabled'
-    ),
+    multipleInterimSitesEnabled,
     workItem: enriched
   })
 
@@ -499,6 +500,9 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       caseHeader: buildCaseHeader({ workItem: enriched, assignment }),
       caseTabs: buildCaseTabs({ workItemId: enriched.id, active: 'summary' }),
       applicationDetails,
+      // RA-603: the nested interim-site layout is behind the same flag as the
+      // data, so with it off a regulator sees exactly the page they see today.
+      multipleInterimSitesEnabled,
       priorYear,
       workItem: enriched,
       assignment,
