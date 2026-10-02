@@ -401,11 +401,10 @@ function addressSegments(lines) {
  * a substring test by another name and would resurrect the `"York"` /
  * `"New York Road"` loss.
  */
-function overseasSiteAddressLines(site) {
+function overseasSiteAddressLines(site, summary) {
   const structured = [
     site.addressLine1,
-    site.addressLine2,
-    site.townOrCity
+    ...(summary ? [] : [site.addressLine2, site.townOrCity])
   ].flatMap(toDisplayLines)
 
   // The country is the LAST part of the address, per the design — it used to
@@ -587,10 +586,11 @@ export function buildOverseasSite(site) {
   return {
     siteName: firstLineOr(source.siteName, EM_DASH),
     isNew: isFlaggedNew(source.isNewSite),
+    summaryAddress: overseasSiteAddressLines(source, true).join(', '),
     // Separate from `details` because the design gives the address its own
     // unlabelled line under the site name rather than a labelled row in the
     // detail list.
-    addressLines: overseasSiteAddressLines(source),
+    addressLines: overseasSiteAddressLines(source, false),
     details: buildDetails(ORS_DETAIL_FIELDS, source),
     interimSite: buildInterimSite(source.interimSite)
   }
@@ -729,6 +729,18 @@ export function buildApplicationSummary({ workItem }) {
   ]
 
   if (isExporter) {
+    const orsSites = overseasSites.map((site) => buildOverseasSite(site))
+    const siteNameCounts = new Map()
+    for (const { siteName } of orsSites) {
+      siteNameCounts.set(siteName, (siteNameCounts.get(siteName) ?? 0) + 1)
+    }
+    // Only repeated names need an address in the collapsed list.
+    for (const site of orsSites) {
+      if (siteNameCounts.get(site.siteName) === 1) {
+        site.summaryAddress = ''
+      }
+    }
+
     rows.push(
       {
         key: 'bes',
@@ -754,7 +766,7 @@ export function buildApplicationSummary({ workItem }) {
         // RA-292 AC01/AC02/AC04. Carries the new-site flag, the full site
         // detail and the nested interim site.
         kind: 'overseas-sites',
-        sites: overseasSites.map((site) => buildOverseasSite(site))
+        sites: orsSites
       }
     )
   }
