@@ -776,6 +776,33 @@ function buildCoreSummaryRows({
 }
 
 /**
+ * Build overseas-site view models and show condensed addresses only when site
+ * names repeat in the visible list.
+ *
+ * @param {object[]} overseasSites
+ * @param {boolean} multipleInterimSitesEnabled
+ * @returns {object[]}
+ */
+function buildOverseasSites(overseasSites, multipleInterimSitesEnabled) {
+  const sites = overseasSites.map((site) =>
+    buildOverseasSite(site, { multipleInterimSitesEnabled })
+  )
+  const siteNameCounts = new Map()
+
+  for (const { siteName } of sites) {
+    siteNameCounts.set(siteName, (siteNameCounts.get(siteName) ?? 0) + 1)
+  }
+
+  for (const site of sites) {
+    if (siteNameCounts.get(site.siteName) === 1) {
+      site.summaryAddress = ''
+    }
+  }
+
+  return sites
+}
+
+/**
  * Build the AC02-ordered application information rows.
  *
  * @param {object} args
@@ -816,20 +843,6 @@ export function buildApplicationSummary({
   })
 
   if (isExporter) {
-    const orsSites = overseasSites.map((site) =>
-      buildOverseasSite(site, { multipleInterimSitesEnabled })
-    )
-    const siteNameCounts = new Map()
-    for (const { siteName } of orsSites) {
-      siteNameCounts.set(siteName, (siteNameCounts.get(siteName) ?? 0) + 1)
-    }
-    // Only repeated names need an address in the collapsed list.
-    for (const site of orsSites) {
-      if (siteNameCounts.get(site.siteName) === 1) {
-        site.summaryAddress = ''
-      }
-    }
-
     rows.push(
       {
         key: 'bes',
@@ -855,7 +868,7 @@ export function buildApplicationSummary({
         // RA-292 AC01/AC02/AC04. Carries the new-site flag, the full site
         // detail and the nested interim site.
         kind: 'overseas-sites',
-        sites: orsSites
+        sites: buildOverseasSites(overseasSites, multipleInterimSitesEnabled)
       }
     )
   }
