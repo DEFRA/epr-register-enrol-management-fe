@@ -21,26 +21,8 @@ export function buildConsentRecord(analytics, now = new Date()) {
   }
 }
 
-// Raw JSON so the cookie is readable in browser dev tools. Quotes and commas
-// fall outside RFC 6265's cookie-value characters, which is why the cookie is
-// declared with `strictHeader: false`.
-export function serialiseConsentRecord(record) {
-  return JSON.stringify(record)
-}
-
-export function parseConsentCookie(value) {
-  if (typeof value !== 'string') {
-    return null
-  }
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
-}
-
 function readConsent(request) {
-  const record = parseConsentCookie(request?.state?.[ANALYTICS_CONSENT_COOKIE])
+  const record = request?.state?.[ANALYTICS_CONSENT_COOKIE]
 
   if (record?.version !== ANALYTICS_CONSENT_VERSION) {
     return null

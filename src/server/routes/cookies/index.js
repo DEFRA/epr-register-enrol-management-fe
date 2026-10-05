@@ -20,11 +20,11 @@ export const cookies = {
         isSecure: config.get('session.cookie.secure'),
         isHttpOnly: true,
         isSameSite: 'Lax',
-        encoding: 'none',
-        // The value is raw JSON (see serialiseConsentRecord), which a strict
-        // header would reject. Set here rather than relying on the server-wide
-        // default.
-        strictHeader: false
+        encoding: 'base64json',
+        // A value that won't decode is dropped rather than failing the
+        // request, so the visitor is simply asked again.
+        clearInvalid: true,
+        ignoreErrors: true
       })
 
       server.ext('onPreResponse', takeConsentConfirmationForView, {

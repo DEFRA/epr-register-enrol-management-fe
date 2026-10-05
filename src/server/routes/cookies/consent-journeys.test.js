@@ -6,9 +6,9 @@ import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 import {
   ANALYTICS_CONSENT_COOKIE,
-  ANALYTICS_CONSENT_VERSION,
-  parseConsentCookie
+  ANALYTICS_CONSENT_VERSION
 } from '#/server/common/analytics/consent.js'
+import { decodeConsentValue } from '#/test-helpers/analytics-consent.js'
 
 // Drives the forms exactly as rendered, the way a browser without JavaScript
 // would: read the form's action and hidden fields, add the chosen button or
@@ -107,7 +107,8 @@ function createBrowser(server) {
       return current.url
     },
     consentRecord() {
-      return parseConsentCookie(jar.get(ANALYTICS_CONSENT_COOKIE))
+      const value = jar.get(ANALYTICS_CONSENT_COOKIE)
+      return value === undefined ? null : decodeConsentValue(value)
     }
   }
 }

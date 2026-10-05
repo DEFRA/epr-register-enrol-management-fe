@@ -4,6 +4,7 @@ import { config } from '#/config/config.js'
 import { createServer } from '#/server/server.js'
 import { getCrumbToken } from '#/test-helpers/csrf.js'
 import { consentCookie } from '#/test-helpers/analytics-consent.js'
+import { buildConsentRecord } from '#/server/common/analytics/consent.js'
 
 // Any page rendered from the shared layout carries the banner. The signed-out
 // page is used because it needs no backend and proves the banner shows
@@ -124,7 +125,12 @@ describe('cookie banner', () => {
 
     test.each([
       ['an earlier policy version', consentCookie('accepted', { version: 0 })],
-      ['a bare string', 'analyticsConsent=accepted']
+      ['a bare string', 'analyticsConsent=accepted'],
+      [
+        'raw JSON',
+        `analyticsConsent=${JSON.stringify(buildConsentRecord('accepted'))}`
+      ],
+      ['malformed base64', 'analyticsConsent=e30$$$']
     ])('asks again for an answer to %s', async (_label, cookie) => {
       const { $ } = await render({ cookie })
 

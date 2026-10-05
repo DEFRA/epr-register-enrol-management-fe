@@ -4,8 +4,7 @@ import { config } from '#/config/config.js'
 import {
   ANALYTICS_CONSENT,
   ANALYTICS_CONSENT_COOKIE,
-  buildConsentRecord,
-  serialiseConsentRecord
+  buildConsentRecord
 } from '#/server/common/analytics/consent.js'
 import { setConsentConfirmation } from '#/server/common/analytics/confirmation.js'
 
@@ -40,10 +39,7 @@ export const consentController = {
 
     const response = h
       .redirect(safeReturnUrl(returnUrl))
-      .state(
-        ANALYTICS_CONSENT_COOKIE,
-        serialiseConsentRecord(buildConsentRecord(analytics))
-      )
+      .state(ANALYTICS_CONSENT_COOKIE, buildConsentRecord(analytics))
 
     // Only clears GA cookies set for this exact host: a cookie only expires
     // when its domain matches, and GA defaults to the parent domain.

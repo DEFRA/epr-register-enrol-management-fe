@@ -4,20 +4,13 @@ import {
   ANALYTICS_CONSENT,
   ANALYTICS_CONSENT_VERSION,
   analyticsConsent,
-  buildConsentRecord,
-  parseConsentCookie,
-  serialiseConsentRecord
+  buildConsentRecord
 } from './consent.js'
 
-// A record is serialised as the service would write it; anything else is
-// passed through as the raw value a browser might send.
+// `cookie` is the value as hapi hands it over, already decoded.
 function requestWith({ cookie, pathname = '/work-items', search = '' } = {}) {
-  const value =
-    cookie !== null && typeof cookie === 'object'
-      ? serialiseConsentRecord(cookie)
-      : cookie
   return {
-    state: cookie === undefined ? {} : { [ANALYTICS_CONSENT_COOKIE]: value },
+    state: cookie === undefined ? {} : { [ANALYTICS_CONSENT_COOKIE]: cookie },
     url: { pathname, search }
   }
 }
@@ -58,27 +51,6 @@ describe('analyticsConsent', () => {
 
       expect(Date.parse(decidedAt)).toBeGreaterThanOrEqual(before)
       expect(Date.parse(decidedAt)).toBeLessThanOrEqual(Date.now())
-    })
-  })
-
-  describe('serialiseConsentRecord / parseConsentCookie', () => {
-    test('round-trips a record as raw JSON', () => {
-      const record = buildConsentRecord(
-        'accepted',
-        new Date('2026-10-05T09:00:00.000Z')
-      )
-      const value = serialiseConsentRecord(record)
-
-      expect(value).toBe(
-        `{"analytics":"accepted","version":${ANALYTICS_CONSENT_VERSION},"decidedAt":"2026-10-05T09:00:00.000Z"}`
-      )
-      // Either would end the cookie value early, even with a lenient parser.
-      expect(value).not.toMatch(/[;\s]/)
-      expect(parseConsentCookie(value)).toEqual(record)
-    })
-
-    test.each([undefined, null, 42])('parses %j as nothing', (value) => {
-      expect(parseConsentCookie(value)).toBeNull()
     })
   })
 
@@ -156,19 +128,7 @@ describe('analyticsConsent', () => {
         'an unrecognised answer',
         { analytics: 'yes', version: ANALYTICS_CONSENT_VERSION }
       ],
-      ['a bare string', 'accepted'],
-      [
-        'base64-encoded JSON',
-        Buffer.from(JSON.stringify(buildConsentRecord('accepted'))).toString(
-          'base64'
-        )
-      ],
-      [
-        'URL-encoded JSON',
-        encodeURIComponent(JSON.stringify(buildConsentRecord('accepted')))
-      ],
-      ['malformed JSON', '{"analytics"'],
-      ['an empty value', ''],
+      ['a string', 'accepted'],
       ['null', null]
     ])('treats %s as no answer', (_label, cookie) => {
       expect(analyticsConsent(requestWith({ cookie }))).toEqual(
