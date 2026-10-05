@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import { load } from 'cheerio'
 
 import { createServer } from '#/server/server.js'
+import { config } from '#/config/config.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { bannerClasses } from '#/test-helpers/banner.js'
 import { injectWithCrumb } from '#/test-helpers/csrf.js'
@@ -4384,6 +4385,10 @@ describe('RA-295 individual work item page', () => {
   // an ORS that is not new, because its child supplied the string. Neither
   // failure is visible in the assertion itself. (Raised by the mgmt-tests
   // teammate, which scopes to the same elements.)
+  // RA-603: matches whatever element carries the testid rather than assuming a
+  // <p>. AC10b moved the interim site name into a <summary> so each interim
+  // site folds down on its own, and this helper asserts the TEXT of a named
+  // element, not its tag.
   function lineTexts(html, testId) {
     const $ = load(html)
     return $(`[data-testid="${testId}"]`)
@@ -4628,6 +4633,51 @@ describe('RA-295 individual work item page', () => {
     expect(ors.slice(interimIdx, interimIdx + 600)).toContain(
       '<strong>Interim sites</strong>'
     )
+  })
+
+  describe('RA-603 AC10b: the nested interim-site layout follows the flag', () => {
+    const SEVERAL = {
+      ...ROTTERDAM,
+      interimSites: [
+        { ...ROTTERDAM.interimSite, siteId: 21 },
+        {
+          ...ROTTERDAM.interimSite,
+          siteId: 22,
+          siteNumber: '002',
+          siteName: 'Ghent Interim Depot'
+        }
+      ]
+    }
+
+    afterEach(() => {
+      config.set('featureFlags.multipleInterimSitesEnabled', false)
+    })
+
+    test('with the flag off, a regulator sees the page they see today', async () => {
+      const ors = detailValue(await renderWithSites([SEVERAL]), 'ors')
+
+      expect(ors).toContain('<strong>Interim sites</strong>')
+      expect(ors).not.toContain('data-testid="interim-sites"')
+      expect(ors).not.toMatch(/<details[^>]*data-testid="interim-site"/)
+      expect(ors).toContain('Antwerp Interim Holding Site')
+      expect(ors).not.toContain('Ghent Interim Depot')
+    })
+
+    test('with the flag on, each interim site folds down under a counted label', async () => {
+      config.set('featureFlags.multipleInterimSitesEnabled', true)
+
+      const ors = detailValue(await renderWithSites([SEVERAL]), 'ors')
+
+      // The label sits on the wrapper above the individual fold-downs, and the
+      // count tells a regulator how many are folded away before opening any.
+      expect(ors).toContain('<strong>Interim sites (2)</strong>')
+      expect(
+        ors.match(
+          /<details class="govuk-details[^"]*"\s+data-testid="interim-site"/g
+        )
+      ).toHaveLength(2)
+      expect(ors).toContain('Ghent Interim Depot')
+    })
   })
 
   test('RA-292 AC02: an ORS with no interim site renders no interim block', async () => {
