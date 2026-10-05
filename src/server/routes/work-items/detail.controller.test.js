@@ -3787,9 +3787,22 @@ describe('RA-295 individual work item page', () => {
     expect(header).toContain('data-testid="case-header-assigned-to"')
     expect(header).toContain('Unassigned')
     expect(header).toContain('data-testid="case-header-due-on"')
-    expect(header).toContain('24 August 2026')
+    expect(header).toContain('24 Aug 2026')
     expect(header).toContain('data-testid="case-header-registration-number"')
     expect(header).toContain('EPR-100999')
+    // RA-493: Figma grid order and labels (bold label above the value).
+    const labels = [...header.matchAll(/meta-label">([^<]+)<\/dt>/g)].map(
+      (match) => match[1]
+    )
+    expect(labels).toEqual([
+      'Material:',
+      'Status:',
+      'Assigned to:',
+      'Due date:',
+      'Registration number:',
+      'Payment date:',
+      'Payment amount:'
+    ])
   })
 
   test('AC01: the case header due date is an em dash when no SLA clock has started', async () => {
@@ -3842,7 +3855,7 @@ describe('RA-295 individual work item page', () => {
     })
 
     expect(result).toMatch(
-      /data-testid="case-header-payment-date">1 November 2026</
+      /data-testid="case-header-payment-date">01 Nov 2026</
     )
     expect(result).toMatch(
       /data-testid="case-header-payment-amount">£3,276.50</
@@ -4343,12 +4356,12 @@ describe('RA-295 individual work item page', () => {
   })
 
   // RA-359 part 2. A withdrawn/terminal item reports the new `Cancelled` SLA
-  // state (management-be) while KEEPING its `slaDueDate`. The header's "Due on"
+  // state (management-be) while KEEPING its `slaDueDate`. The header's "Due date"
   // must not present that frozen date as a live deadline: the cell still
   // renders (so the layout is stable) but its value degrades to the em dash,
   // exactly as for a work item whose clock never started. This does NOT
   // reintroduce the RA-295-removed SLA badge — asserted above.
-  test('suppresses the header Due on date for a Cancelled SLA (withdrawn item)', async () => {
+  test('suppresses the header Due date for a Cancelled SLA (withdrawn item)', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: fullPayloadWorkItem({
@@ -4365,7 +4378,7 @@ describe('RA-295 individual work item page', () => {
 
     // The cell is still present (stable layout) but shows no live date.
     expect(result).toContain('data-testid="case-header-due-on"')
-    expect(result).not.toContain('24 August 2026')
+    expect(result).not.toContain('24 Aug 2026')
   })
 
   // AC05 -------------------------------------------------------------

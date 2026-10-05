@@ -1,4 +1,4 @@
-import { formatDateGds } from '#/config/nunjucks/filters/format-date.js'
+import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
 import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
@@ -52,7 +52,7 @@ export const NOT_RECEIVED = 'Not received'
  */
 export function formatPayment(payload) {
   const iso = unwrapMongoDate(payload?.paymentDate)
-  const date = iso ? formatDateGds(iso) : ''
+  const date = iso ? formatDateShortGds(iso) : ''
   if (date === '') {
     return { date: NOT_RECEIVED, amount: NOT_RECEIVED }
   }
@@ -75,7 +75,7 @@ export function formatDueOn(value) {
   if (!iso) {
     return EM_DASH
   }
-  const formatted = formatDateGds(iso)
+  const formatted = formatDateShortGds(iso)
   return formatted === '' ? EM_DASH : formatted
 }
 
@@ -158,7 +158,7 @@ export function buildCaseHeader({ workItem, assignment = null }) {
       },
       {
         key: 'due-on',
-        label: 'Due on',
+        label: 'Due date',
         // RA-359 part 2. A `Cancelled` SLA (terminal/withdrawn item) is a
         // stopped clock: management-be keeps `slaDueDate`, but showing it here
         // would imply a live deadline the caseworker must still meet. Suppress

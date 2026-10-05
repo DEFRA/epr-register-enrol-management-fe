@@ -18,13 +18,11 @@ describe('#formatDueOn (RA-295 AC01)', () => {
   test('formats an ISO-8601 UTC instant as a GDS date in UK local time', () => {
     // June is BST (UTC+1), so 23:30Z is already the 27th locally — proving
     // the conversion happens rather than the UTC date being printed raw.
-    expect(formatDueOn('2026-06-26T23:30:00Z')).toBe('27 June 2026')
+    expect(formatDueOn('2026-06-26T23:30:00Z')).toBe('27 Jun 2026')
   })
 
   test('unwraps the Mongo extended-JSON shape', () => {
-    expect(formatDueOn({ $date: '2026-08-24T09:00:00Z' })).toBe(
-      '24 August 2026'
-    )
+    expect(formatDueOn({ $date: '2026-08-24T09:00:00Z' })).toBe('24 Aug 2026')
   })
 
   test('renders an em dash when no SLA clock has started (null)', () => {
@@ -61,7 +59,7 @@ describe('#formatPayment (RA-493)', () => {
   test('formats the recorded date and amount once duly made (AC01, AC02, AC03)', () => {
     expect(
       formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 327650 })
-    ).toEqual({ date: '1 November 2026', amount: '£3,276.50' })
+    ).toEqual({ date: '01 Nov 2026', amount: '£3,276.50' })
   })
 
   test('renders whole-pound charges without pence, matching the duly-making page', () => {
@@ -80,7 +78,7 @@ describe('#formatPayment (RA-493)', () => {
   test('renders an em dash for the amount when duly made but no charge is recorded', () => {
     expect(
       formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: null })
-    ).toEqual({ date: '1 November 2026', amount: EM_DASH })
+    ).toEqual({ date: '01 Nov 2026', amount: EM_DASH })
     expect(formatPayment({ paymentDate: '2026-11-01' }).amount).toBe(EM_DASH)
   })
 
@@ -96,7 +94,7 @@ describe('#formatPayment (RA-493)', () => {
         paymentDate: { $date: '2026-11-01T00:00:00Z' },
         chargeAmountPence: 54600
       })
-    ).toEqual({ date: '1 November 2026', amount: '£546' })
+    ).toEqual({ date: '01 Nov 2026', amount: '£546' })
   })
 })
 
@@ -134,7 +132,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(header, 'material')).toBe('Plastic')
     expect(metaValue(header, 'status')).toBe('Duly made')
     expect(metaValue(header, 'assigned-to')).toBe('Alice Example')
-    expect(metaValue(header, 'due-on')).toBe('24 August 2026')
+    expect(metaValue(header, 'due-on')).toBe('24 Aug 2026')
     expect(metaValue(header, 'registration-number')).toBe('EPR-100999')
     expect(metaValue(header, 'payment-date')).toBe('Not received')
     expect(metaValue(header, 'payment-amount')).toBe('Not received')
@@ -152,6 +150,9 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
       }
     })
 
+    expect(header.meta.find((entry) => entry.key === 'due-on').label).toBe(
+      'Due date'
+    )
     expect(header.meta.map((entry) => entry.key)).toEqual([
       'material',
       'status',
@@ -164,7 +165,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(
       header.meta.slice(-2).map(({ label, value }) => ({ label, value }))
     ).toEqual([
-      { label: 'Payment date', value: '1 November 2026' },
+      { label: 'Payment date', value: '01 Nov 2026' },
       { label: 'Payment amount', value: '£2,184' }
     ])
   })
@@ -185,20 +186,20 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
 
   // RA-359 part 2. management-be keeps `slaDueDate` on a terminal/withdrawn
   // item but reports the new `slaState: 'Cancelled'`. A stopped clock must not
-  // read as a live deadline, so "Due on" degrades to the em dash — exactly as
+  // read as a live deadline, so "Due date" degrades to the em dash — exactly as
   // it does for a work item whose clock never started.
-  test('suppresses the Due on date for a Cancelled SLA (RA-359 part 2)', () => {
+  test('suppresses the Due date for a Cancelled SLA (RA-359 part 2)', () => {
     const header = buildCaseHeader({
       workItem: { ...workItem, slaState: 'Cancelled' }
     })
     expect(metaValue(header, 'due-on')).toBe(EM_DASH)
   })
 
-  test('keeps the Due on date for a running SLA (OnTrack) unchanged', () => {
+  test('keeps the Due date for a running SLA (OnTrack) unchanged', () => {
     const header = buildCaseHeader({
       workItem: { ...workItem, slaState: 'OnTrack' }
     })
-    expect(metaValue(header, 'due-on')).toBe('24 August 2026')
+    expect(metaValue(header, 'due-on')).toBe('24 Aug 2026')
   })
 
   test('keeps the shared state-badge colour on the status entry', () => {
