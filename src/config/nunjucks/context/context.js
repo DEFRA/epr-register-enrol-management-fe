@@ -5,6 +5,8 @@ import { config } from '#/config/config.js'
 import { buildNavigation } from './build-navigation.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { ROLE_SUPPORT_READONLY } from '#/server/common/helpers/auth/auth-scopes.js'
+import { analyticsConsent } from '#/server/common/analytics/consent.js'
+import { consentConfirmationFor } from '#/server/common/analytics/confirmation.js'
 
 const logger = createLogger()
 const assetPath = config.get('assetPath')
@@ -44,6 +46,10 @@ export function context(request) {
     // RA-462: set by the concurrent-login onPostAuth extension when another
     // sign-in for this identity has been detected.
     concurrentLoginNotice: request?.app?.concurrentLoginNotice ?? null,
+    analytics: {
+      ...analyticsConsent(request),
+      confirmation: consentConfirmationFor(request)
+    },
     getAssetPath(asset) {
       if (!config.get('isProduction')) {
         return `${assetPath}/${asset}`

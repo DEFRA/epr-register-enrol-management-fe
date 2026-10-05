@@ -324,6 +324,20 @@ export const config = convict({
       env: 'WORK_ITEM_CREATION_ENABLED'
     }
   },
+  analytics: {
+    isEnabled: {
+      doc: 'Show the analytics cookie banner and allow analytics. Only takes effect alongside a measurement id.',
+      format: Boolean,
+      default: false,
+      env: 'ANALYTICS_ENABLED'
+    },
+    measurementId: {
+      doc: 'GA4 measurement id of the analytics property to report to.',
+      format: String,
+      default: '',
+      env: 'ANALYTICS_MEASUREMENT_ID'
+    }
+  },
   fileStorage: {
     fallbackBucket: {
       doc: 'Fallback S3 bucket for file downloads when a file record has no s3Bucket of its own (older records; every file type — sampling-plan and BES-evidence alike — currently lands in this one shared bucket on the operator upload side, see epr-register-enrol-frontend fileUpload.s3Bucket). Must match that value.',

@@ -72,7 +72,15 @@ describe('context and cache', () => {
           serviceName: 'Packaging waste applications',
           serviceUrl: null,
           user: null,
-          concurrentLoginNotice: null
+          concurrentLoginNotice: null,
+          analytics: {
+            confirmation: null,
+            hasConsented: false,
+            hasRejected: false,
+            isEnabled: false,
+            returnUrl: '/',
+            shouldAskConsent: false
+          }
         })
       })
 
@@ -184,7 +192,15 @@ describe('context and cache', () => {
           serviceName: 'Packaging waste applications',
           serviceUrl: null,
           user: null,
-          concurrentLoginNotice: null
+          concurrentLoginNotice: null,
+          analytics: {
+            confirmation: null,
+            hasConsented: false,
+            hasRejected: false,
+            isEnabled: false,
+            returnUrl: '/',
+            shouldAskConsent: false
+          }
         })
       })
     })

@@ -24,7 +24,10 @@ const EXEMPT_ROUTES = new Set([
   // session (a per-viewer UI preference, not a caseworker action) — a
   // read-only support user must be able to dismiss it too, so it is not
   // gated on ROLE_STANDARD.
-  'POST /auth/session-notice/dismiss'
+  'POST /auth/session-notice/dismiss',
+  // A per-browser cookie preference, not a caseworker action: it has to work
+  // signed out and for a read-only support user.
+  'POST /cookies/consent'
 ])
 
 describe('every mutating route requires the standard role', () => {
