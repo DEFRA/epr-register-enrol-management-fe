@@ -4,7 +4,7 @@ import { takeConsentConfirmationForView } from '#/server/common/analytics/confir
 import { cookiesController } from './controller.js'
 import { consentController } from './consent-controller.js'
 
-const CONSENT_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000
+const CONSENT_MAX_AGE_MS = 31_536_000_000 // 365 days
 
 // Reachable signed out, but `try` still loads a signed-in session so the
 // navigation and Sign out link render as normal.
