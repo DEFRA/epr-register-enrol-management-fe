@@ -195,11 +195,13 @@ export function makeSubmitExtendController({
         reason,
         deadline,
         currentDueDate: workItem.slaDueDate,
-        // RA-611's floor inputs, read off the same already-loaded work item as
-        // the current due date: the SLA clock's start (the duly-made anchor)
-        // and the accreditation year the 1-January backstop is derived from.
+        // RA-611's duly-made anchor, read off the same already-loaded work item
+        // as the current due date. The floor's other half — 1 January of the
+        // CURRENT calendar year — comes from the service's own clock, not from
+        // the work item: `payload.accreditationYear` was passed here until QA
+        // showed it is the year the accreditation is valid for (ahead of
+        // determination), which floored 2026 cases at 1 Jan 2027.
         slaStartedAt: workItem.slaStartedAt,
-        accreditationYear: workItem.payload?.accreditationYear,
         user: getUser(request)
       })
 

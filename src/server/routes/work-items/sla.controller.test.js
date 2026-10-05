@@ -30,11 +30,16 @@ const REF = 'RA-123456789'
 // deadline of 2026-07-01 is unambiguously an extension.
 const CURRENT_DUE_DATE = '2026-06-01T00:00:00Z'
 
-// RA-611's floor inputs travel on the work item itself: management-be projects
-// `slaStartedAt` (the duly-made anchor) off the same SLA clock as `slaDueDate`,
-// and `accreditationYear` is already on the re-accreditation payload. Duly made
-// on 3 March 2026, which is later than 1 January 2026, so the DULY-MADE bound
-// binds for every case below.
+// RA-611's duly-made anchor travels on the work item itself: management-be
+// projects `slaStartedAt` off the same SLA clock as `slaDueDate`. The floor's
+// other half is 1 January of the CURRENT CALENDAR YEAR, read from the clock —
+// NOT from `payload.accreditationYear`, which is the year the accreditation is
+// valid for and floored live 2026 cases at 1 Jan 2027 until QA caught it.
+//
+// Duly made on 3 March 2026, later than 1 January 2026, so the DULY-MADE bound
+// binds for every case below. That only holds while the clock reads 2026, so
+// the suite pins it — otherwise these expectations would change on 1 January.
+const NOW = new Date('2026-10-05T09:00:00Z')
 const SLA_STARTED_AT = '2026-03-03T00:00:00Z'
 const aWorkItem = {
   id: ID,
@@ -45,9 +50,22 @@ const aWorkItem = {
 
 const DULY_MADE_MESSAGE =
   'The new determination deadline cannot be earlier than 3 March 2026, when the application was duly made'
+const JANUARY_MESSAGE =
+  'The new determination deadline cannot be earlier than 1 January 2026'
 
 const VALID_DEADLINE_PAYLOAD =
   'new-deadline-day=1&new-deadline-month=7&new-deadline-year=2026'
+
+// Only `Date` is faked: the Hapi server's own timers (request timeouts, the
+// session cache) must keep running normally while the determination-deadline
+// floor sees a fixed calendar year.
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+})
+
+afterAll(() => {
+  vi.useRealTimers()
+})
 
 /**
  * The page's prose with every attribute value and href stripped out, so an
@@ -318,6 +336,49 @@ describe('#makeSubmitExtendController', () => {
     expect(visibleText(result)).toEqual(
       expect.stringContaining('Brought forward too far')
     )
+  })
+
+  // The OTHER bound, end to end, and the exact shape of the QA case-blocker:
+  // an application duly made in the previous calendar year, so 1 January of the
+  // current year binds. The message must name 1 January 2026 — the year the
+  // clock reads — and never the accreditation year the payload carries.
+  test('POST with a deadline below 1 January re-renders form with 400 naming the current year', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: {
+        ...aWorkItem,
+        payload: { ...aWorkItem.payload, accreditationYear: 2027 },
+        slaStartedAt: '2025-11-20T00:00:00Z'
+      }
+    })
+
+    const { statusCode, result } = await injectWithCrumb(server, {
+      method: 'POST',
+      url: `/work-items/${ID}/sla/extend`,
+      payload:
+        'reason=Backdated+into+last+year&new-deadline-day=15&new-deadline-month=12&new-deadline-year=2025',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(extendWorkItemSla).not.toHaveBeenCalled()
+
+    expect(result).toEqual(expect.stringContaining('There is a problem'))
+    expect(result).toEqual(expect.stringContaining('href="#new-deadline-day"'))
+    expect(result).toEqual(expect.stringContaining('id="new-deadline-error"'))
+
+    // Once in the summary, once under the date input — and naming 2026, the
+    // current calendar year, not the payload's 2027 accreditation year.
+    const occurrences = String(result).split(JANUARY_MESSAGE).length - 1
+    expect(occurrences).toBe(2)
+    expect(result).not.toEqual(expect.stringContaining('1 January 2027'))
+
+    // What the caseworker typed survives the re-render.
+    expect(result).toEqual(expect.stringContaining('value="15"'))
+    expect(result).toEqual(expect.stringContaining('value="12"'))
+    expect(result).toEqual(expect.stringContaining('value="2025"'))
   })
 
   // The boundary: the floor date itself is allowed, so the same form that
