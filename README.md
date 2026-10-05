@@ -192,6 +192,19 @@ whole preview environment rather than replacing user sign-in.
 > demo flow is on in prod unless something outside this repo's visibility
 > (AWS Secrets Manager) overrides it.
 
+### Analytics and cookie consent
+
+| Variable                   | Default   | Description                                                                             |
+| -------------------------- | --------- | --------------------------------------------------------------------------------------- |
+| `ANALYTICS_ENABLED`        | `false`   | Shows the cookie banner, the analytics section of `/cookies`, and allows GA4 in the CSP |
+| `ANALYTICS_MEASUREMENT_ID` | _(blank)_ | GA4 measurement id for the environment                                                  |
+
+Both must be set for any of this to switch on; with neither set, the service
+asks for no consent and allows no analytics. If `ANALYTICS_ENABLED` is `true`
+but the id is blank, the service logs an error at startup and stays off.
+Per-environment values are listed in
+[`docs/cdp-deployment.md`](docs/cdp-deployment.md).
+
 ### Example local/testing values
 
 ```bash
@@ -201,10 +214,15 @@ ENTRA_CLIENT_SECRET=local-dev-fake-entra-secret
 ENTRA_TENANT_ID=00000000-0000-0000-0000-000000000000
 SESSION_COOKIE_PASSWORD=the-password-must-be-at-least-32-characters-long
 FILE_UPLOAD_S3_BUCKET=epr-register-enrol-file-uploads
+ANALYTICS_ENABLED=true
+ANALYTICS_MEASUREMENT_ID=G-LOCAL0000
 ```
 
 `AUTH_STUB_ENABLED=true` (the local default) makes the Entra ID values
 above irrelevant for a plain local run.
+
+`G-LOCAL0000` is a placeholder that switches the cookie banner on locally;
+nothing reports to it.
 
 See [`src/config/config.js`](src/config/config.js) for the full schema.
 

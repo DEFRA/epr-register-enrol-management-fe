@@ -71,6 +71,9 @@ services:
       USE_SINGLE_INSTANCE_CACHE: true
       REDIS_TLS: false
       BACKEND_API_URL: http://case-management-backend:8085
+      # Placeholder id: shows the cookie banner, reports nowhere.
+      ANALYTICS_ENABLED: true
+      ANALYTICS_MEASUREMENT_ID: G-LOCAL0000
     networks:
       - cdp-tenant
 
