@@ -22,12 +22,12 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
 
 import { evaluateDulyMakeEligibility } from './eligibility.js'
 import {
   PAYMENT_DATE_ID,
   buildPaymentDateErrorSummary,
-  formatChargeAmount,
   isPaymentDateErrorCode,
   messageForErrorCode,
   resolvePaymentReference,

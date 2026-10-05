@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'vitest'
 
-import { buildCaseHeader, buildCaseTabs, formatDueOn } from './case-header.js'
+import {
+  NOT_RECEIVED,
+  buildCaseHeader,
+  buildCaseTabs,
+  formatDueOn,
+  formatPayment
+} from './case-header.js'
 
 const EM_DASH = '—'
 
@@ -28,6 +34,69 @@ describe('#formatDueOn (RA-295 AC01)', () => {
 
   test('renders an em dash rather than throwing on an unparseable value', () => {
     expect(formatDueOn('not-a-date')).toBe(EM_DASH)
+  })
+})
+
+describe('#formatPayment (RA-493)', () => {
+  test('shows "Not received" for both items before the item is duly made (AC04)', () => {
+    // The charge is already known from submission, but without a recorded
+    // payment date the payment has not been received.
+    expect(formatPayment({ chargeAmountPence: 327600 })).toEqual({
+      date: NOT_RECEIVED,
+      amount: NOT_RECEIVED
+    })
+    expect(
+      formatPayment({ paymentDate: null, chargeAmountPence: 327600 })
+    ).toEqual({ date: NOT_RECEIVED, amount: NOT_RECEIVED })
+    expect(NOT_RECEIVED).toBe('Not received')
+  })
+
+  test('tolerates a missing payload', () => {
+    expect(formatPayment(undefined)).toEqual({
+      date: NOT_RECEIVED,
+      amount: NOT_RECEIVED
+    })
+  })
+
+  test('formats the recorded date and amount once duly made (AC01, AC02, AC03)', () => {
+    expect(
+      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 327650 })
+    ).toEqual({ date: '1 November 2026', amount: '£3,276.50' })
+  })
+
+  test('renders whole-pound charges without pence, matching the duly-making page', () => {
+    expect(
+      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 327600 })
+        .amount
+    ).toBe('£3,276')
+  })
+
+  test('treats a £0 charge as a real amount, not a missing one', () => {
+    expect(
+      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 0 }).amount
+    ).toBe('£0')
+  })
+
+  test('renders an em dash for the amount when duly made but no charge is recorded', () => {
+    expect(
+      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: null })
+    ).toEqual({ date: '1 November 2026', amount: EM_DASH })
+    expect(formatPayment({ paymentDate: '2026-11-01' }).amount).toBe(EM_DASH)
+  })
+
+  test('shows "Not received" rather than throwing on an unparseable payment date', () => {
+    expect(
+      formatPayment({ paymentDate: 'not-a-date', chargeAmountPence: 327600 })
+    ).toEqual({ date: NOT_RECEIVED, amount: NOT_RECEIVED })
+  })
+
+  test('unwraps the Mongo extended-JSON date shape', () => {
+    expect(
+      formatPayment({
+        paymentDate: { $date: '2026-11-01T00:00:00Z' },
+        chargeAmountPence: 54600
+      })
+    ).toEqual({ date: '1 November 2026', amount: '£546' })
   })
 })
 
@@ -67,6 +136,37 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(header, 'assigned-to')).toBe('Alice Example')
     expect(metaValue(header, 'due-on')).toBe('24 August 2026')
     expect(metaValue(header, 'registration-number')).toBe('EPR-100999')
+    expect(metaValue(header, 'payment-date')).toBe('Not received')
+    expect(metaValue(header, 'payment-amount')).toBe('Not received')
+  })
+
+  test('places payment date then payment amount after the registration number (RA-493)', () => {
+    const header = buildCaseHeader({
+      workItem: {
+        ...workItem,
+        payload: {
+          ...workItem.payload,
+          paymentDate: '2026-11-01',
+          chargeAmountPence: 218400
+        }
+      }
+    })
+
+    expect(header.meta.map((entry) => entry.key)).toEqual([
+      'material',
+      'status',
+      'assigned-to',
+      'due-on',
+      'registration-number',
+      'payment-date',
+      'payment-amount'
+    ])
+    expect(
+      header.meta.slice(-2).map(({ label, value }) => ({ label, value }))
+    ).toEqual([
+      { label: 'Payment date', value: '1 November 2026' },
+      { label: 'Payment amount', value: '£2,184' }
+    ])
   })
 
   test('appends the glass recycling type suffix to the material meta entry', () => {

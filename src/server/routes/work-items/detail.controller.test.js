@@ -3806,6 +3806,49 @@ describe('RA-295 individual work item page', () => {
     expect(result).toMatch(/data-testid="case-header-due-on">\s*—\s*</)
   })
 
+  // RA-493 -----------------------------------------------------------
+  test('RA-493 AC04: payment date and amount read "Not received" before duly making', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        payload: { paymentDate: null, chargeAmountPence: 327600 }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toMatch(
+      /Payment date:<\/dt>\s*<dd[^>]*data-testid="case-header-payment-date">Not received</
+    )
+    expect(result).toMatch(
+      /Payment amount:<\/dt>\s*<dd[^>]*data-testid="case-header-payment-amount">Not received</
+    )
+  })
+
+  test('RA-493 AC01-AC03: the header shows the recorded payment date and amount', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: fullPayloadWorkItem({
+        payload: { paymentDate: '2026-11-01', chargeAmountPence: 327650 }
+      })
+    })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).toMatch(
+      /data-testid="case-header-payment-date">1 November 2026</
+    )
+    expect(result).toMatch(
+      /data-testid="case-header-payment-amount">£3,276.50</
+    )
+  })
+
   test('AC01: the RA-98 reference-implementation notification banner is gone', async () => {
     registerDetailTemplate(
       're-accreditation',
