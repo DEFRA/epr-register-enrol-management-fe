@@ -1,6 +1,7 @@
 import { createServer } from '#/server/server.js'
 import { config } from '#/config/config.js'
 import { cspOptions } from './content-security-policy.js'
+import { analyticsOrigins } from '../common/analytics/origins.js'
 
 function directive(header, name) {
   return header
@@ -65,7 +66,41 @@ describe('#contentSecurityPolicy', () => {
   })
 })
 
+// A source that names a host: anything other than a quoted keyword
+// ('self', 'none', a hash) or a bare scheme (data:, wss:).
+const isHostSource = (source) =>
+  !/^'.*'$/.test(source) &&
+  !/^[a-z]+:$/.test(source) &&
+  !/^(self|none)$/.test(source)
+
+const hostSources = (options) =>
+  Object.entries(options)
+    .filter(([, sources]) => Array.isArray(sources))
+    .flatMap(([name, sources]) =>
+      sources.filter(isHostSource).map((source) => `${name} ${source}`)
+    )
+
 describe('#cspOptions', () => {
+  // Every third-party origin a page talks to receives the user's IP address,
+  // which is a personal-data transfer under UK GDPR. The CSP is what stops the
+  // browser making those requests, so it must not allow any host except the
+  // Google Analytics ones, which only load after cookie consent. Self-host the
+  // asset instead of adding its origin here.
+  test('with analytics off, allows no third-party origin at all', () => {
+    expect(hostSources(cspOptions({ allowAnalytics: false }))).toEqual([])
+  })
+
+  test('with analytics on, the only third-party origins are the analytics ones', () => {
+    const allowed = [
+      ...analyticsOrigins.connect.map((o) => `connectSrc ${o}`),
+      ...analyticsOrigins.script.map((o) => `scriptSrc ${o}`),
+      ...analyticsOrigins.img.map((o) => `imgSrc ${o}`)
+    ]
+    expect(hostSources(cspOptions({ allowAnalytics: true })).sort()).toEqual(
+      allowed.sort()
+    )
+  })
+
   test('with analytics off, is exactly the policy the service has always served', () => {
     expect(cspOptions({ allowAnalytics: false })).toEqual({
       defaultSrc: ['self'],
