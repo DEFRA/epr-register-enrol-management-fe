@@ -69,10 +69,10 @@ describe('#cspOptions', () => {
   test('with analytics off, is exactly the policy the service has always served', () => {
     expect(cspOptions({ allowAnalytics: false })).toEqual({
       defaultSrc: ['self'],
-      fontSrc: ['self', 'data:', 'https://fonts.gstatic.com'],
+      fontSrc: ['self', 'data:'],
       connectSrc: ['self', 'wss:', 'data:'],
       mediaSrc: ['self'],
-      styleSrc: ['self', 'https://fonts.googleapis.com'],
+      styleSrc: ['self'],
       scriptSrc: [
         'self',
         "'sha256-GUQ5ad8JK5KmEWmROf3LZd9ge94daqNvd8xy9YS1iDw='"
