@@ -1,6 +1,11 @@
 import { vi } from 'vitest'
 
-import { formatDate, formatDateTimeGds, formatDateGds } from './format-date.js'
+import {
+  formatDate,
+  formatDateTimeGds,
+  formatDateGds,
+  formatDateShortGds
+} from './format-date.js'
 
 describe('#formatDate', () => {
   beforeAll(() => {
@@ -191,5 +196,32 @@ describe('#formatDateGds', () => {
     expect(formatDateGds('not-a-date')).toBe('')
     expect(formatDateGds('01/15/2026')).toBe('')
     expect(formatDateGds('January 15, 2026')).toBe('')
+  })
+})
+
+// ---------------------------------------------------------------- //
+// formatDateShortGds — case header format ("01 Nov 2026"), RA-493. //
+// ---------------------------------------------------------------- //
+describe('#formatDateShortGds', () => {
+  test('Pads the day to two digits and abbreviates the month', () => {
+    expect(formatDateShortGds('2026-11-01')).toBe('01 Nov 2026')
+    expect(formatDateShortGds('2026-09-15T10:00:00Z')).toBe('15 Sep 2026')
+  })
+
+  test('Converts an instant to UK local time before formatting', () => {
+    // June is BST (UTC+1), so 23:30Z is already the 27th in London.
+    expect(formatDateShortGds('2026-06-26T23:30:00Z')).toBe('27 Jun 2026')
+  })
+
+  test('Accepts a Date object', () => {
+    expect(formatDateShortGds(new Date('2026-12-10T08:00:00Z'))).toBe(
+      '10 Dec 2026'
+    )
+  })
+
+  test('Returns an empty string for an absent or unparseable value', () => {
+    expect(formatDateShortGds(null)).toBe('')
+    expect(formatDateShortGds(undefined)).toBe('')
+    expect(formatDateShortGds('not-a-date')).toBe('')
   })
 })

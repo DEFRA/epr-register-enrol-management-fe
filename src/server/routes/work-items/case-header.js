@@ -1,4 +1,5 @@
-import { formatDateGds } from '#/config/nunjucks/filters/format-date.js'
+import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
+import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
 // Single definition of the "no value" glyph, shared with the application
@@ -17,7 +18,9 @@ import { EM_DASH } from './application-summary.js'
  *   3. the organisation name, and
  *   4. the organisation ID,
  *   5. material,          6. status,
- *   7. assigned to,       8. due on, and 9. registration number.
+ *   7. assigned to,       8. due on, and 9. registration number,
+ *
+ * plus (RA-493) 10. payment date and 11. payment amount.
  *
  * (1)-(4) are the breadcrumb + title lines; the rest are the meta line.
  *
@@ -28,6 +31,36 @@ import { EM_DASH } from './application-summary.js'
 const BACK_HREF = '/work-items'
 const BACK_TEXT = 'Applications'
 const UNASSIGNED = 'Unassigned'
+export const NOT_RECEIVED = 'Not received'
+
+/**
+ * Duly Made payment information for the header (RA-493).
+ *
+ * management-be stamps `payload.paymentDate` (a `yyyy-MM-dd` DateOnly)
+ * when the work item is marked Duly made, and it is null before then. A
+ * recorded payment date is therefore the signal that payment has been
+ * received: until it is present (or if it cannot be parsed) BOTH the date
+ * and the amount read "Not received" (AC04), even when the charge itself
+ * is already known from submission.
+ *
+ * Once duly made, the amount is the charge currently recorded against the
+ * application (AC03). `0` is a legitimate charge and formats as "£0"; an
+ * absent or malformed charge degrades to the em dash rather than claiming
+ * payment was not received.
+ *
+ * @returns {{ date: string, amount: string }}
+ */
+export function formatPayment(payload) {
+  const iso = unwrapMongoDate(payload?.paymentDate)
+  const date = iso ? formatDateShortGds(iso) : ''
+  if (date === '') {
+    return { date: NOT_RECEIVED, amount: NOT_RECEIVED }
+  }
+  return {
+    date,
+    amount: formatChargeAmount(payload.chargeAmountPence) ?? EM_DASH
+  }
+}
 
 /**
  * Format the absolute SLA due date for the header.
@@ -42,7 +75,7 @@ export function formatDueOn(value) {
   if (!iso) {
     return EM_DASH
   }
-  const formatted = formatDateGds(iso)
+  const formatted = formatDateShortGds(iso)
   return formatted === '' ? EM_DASH : formatted
 }
 
@@ -85,6 +118,7 @@ export function resolveOrganisationId(payload) {
  */
 export function buildCaseHeader({ workItem, assignment = null }) {
   const payload = workItem?.payload ?? {}
+  const payment = formatPayment(payload)
 
   return {
     backHref: BACK_HREF,
@@ -124,7 +158,7 @@ export function buildCaseHeader({ workItem, assignment = null }) {
       },
       {
         key: 'due-on',
-        label: 'Due on',
+        label: 'Due date',
         // RA-359 part 2. A `Cancelled` SLA (terminal/withdrawn item) is a
         // stopped clock: management-be keeps `slaDueDate`, but showing it here
         // would imply a live deadline the caseworker must still meet. Suppress
@@ -139,6 +173,20 @@ export function buildCaseHeader({ workItem, assignment = null }) {
         key: 'registration-number',
         label: 'Registration number',
         value: payload.registrationNumber || EM_DASH
+      },
+      // RA-493. Figma places "Payment date" after "Registration number"
+      // (second row under "Status"); the meta line is an inline flex-wrap,
+      // so sequence alone controls placement. Figma omits the amount, but
+      // AC02/AC04 require it, so it sits immediately after the date.
+      {
+        key: 'payment-date',
+        label: 'Payment date',
+        value: payment.date
+      },
+      {
+        key: 'payment-amount',
+        label: 'Payment amount',
+        value: payment.amount
       }
     ]
   }

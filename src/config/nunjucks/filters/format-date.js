@@ -54,6 +54,23 @@ export function formatDateTimeGds(value) {
  * surrounding guard.
  */
 export function formatDateGds(value) {
+  return formatDateSafely(value, 'd MMMM yyyy')
+}
+
+/**
+ * Format an ISO-8601 date(-time) string in the short case-header format:
+ * "DD MMM YYYY" (e.g. "01 Nov 2026") — two-digit day, abbreviated month.
+ *
+ * Used only by the work item case header (RA-493), whose Figma design uses
+ * this compact form so the grid columns stay narrow. Same guard and UK
+ * time zone as `formatDateGds`; empty string for an absent or unparseable
+ * value.
+ */
+export function formatDateShortGds(value) {
+  return formatDateSafely(value, 'dd MMM yyyy')
+}
+
+function formatDateSafely(value, pattern) {
   if (!value) {
     return ''
   }
@@ -61,5 +78,5 @@ export function formatDateGds(value) {
   if (Number.isNaN(date.getTime())) {
     return ''
   }
-  return format(date, 'd MMMM yyyy', { in: tz(UK_TIMEZONE) })
+  return format(date, pattern, { in: tz(UK_TIMEZONE) })
 }
