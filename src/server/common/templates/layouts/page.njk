@@ -2,6 +2,7 @@
 
 {# Import GOVUK components globally #}
 {% from "govuk/components/breadcrumbs/macro.njk" import govukBreadcrumbs %}
+{% from "govuk/components/cookie-banner/macro.njk" import govukCookieBanner %}
 {% from "govuk/components/service-navigation/macro.njk" import govukServiceNavigation %}
 
 {# Import custom components globally #}
@@ -25,6 +26,62 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
   <link href="{{ getAssetPath('src/client/stylesheets/application.scss') }}" rel="stylesheet">
+{% endblock %}
+
+{# GOV.UK requires the cookie banner before the skip link. #}
+{% block bodyStart %}
+  {% if not hideCookieBanner %}
+    {% if analytics.shouldAskConsent %}
+      <form method="post" action="/cookies/consent" data-testid="cookie-banner-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}">
+        <input type="hidden" name="returnUrl" value="{{ analytics.returnUrl }}">
+        {{ govukCookieBanner({
+          ariaLabel: "Cookies on " + serviceName,
+          attributes: { 'data-testid': 'cookie-banner' },
+          messages: [{
+            headingText: "Cookies on " + serviceName,
+            html: '<p class="govuk-body">We use some essential cookies to make this service work.</p><p class="govuk-body">We&#39;d also like to use analytics cookies so we can understand how you use the service and make improvements.</p>',
+            actions: [
+              {
+                text: "Accept analytics cookies",
+                type: "submit",
+                name: "analytics",
+                value: "accepted",
+                attributes: { 'data-testid': 'cookie-banner-accept' }
+              },
+              {
+                text: "Reject analytics cookies",
+                type: "submit",
+                name: "analytics",
+                value: "rejected",
+                attributes: { 'data-testid': 'cookie-banner-reject' }
+              },
+              {
+                text: "View cookies",
+                href: "/cookies"
+              }
+            ]
+          }]
+        }) }}
+      </form>
+    {% elif analytics.confirmation %}
+      {{ govukCookieBanner({
+        ariaLabel: "Cookies on " + serviceName,
+        attributes: { 'data-testid': 'cookie-banner-confirmation' },
+        messages: [{
+          html: '<p class="govuk-body">You&#39;ve ' + analytics.confirmation + ' analytics cookies. You can <a class="govuk-link" href="/cookies">change your cookie settings</a> at any time.</p>',
+          role: "alert",
+          actions: [
+            {
+              text: "Hide cookie message",
+              href: analytics.returnUrl,
+              attributes: { 'data-testid': 'cookie-banner-hide' }
+            }
+          ]
+        }]
+      }) }}
+    {% endif %}
+  {% endif %}
 {% endblock %}
 
 {% block header %}
@@ -90,6 +147,12 @@
       <div class="govuk-width-container">
         <div class="govuk-footer__meta">
           <div class="govuk-footer__meta-item govuk-footer__meta-item--grow">
+            <h2 class="govuk-visually-hidden">Support links</h2>
+            <ul class="govuk-footer__inline-list">
+              <li class="govuk-footer__inline-list-item">
+                <a class="govuk-footer__link" href="/cookies" data-testid="footer-cookies">Cookies</a>
+              </li>
+            </ul>
             <p class="govuk-footer__body">A Department for Environment, Food &amp; Rural Affairs Digital, Data and Technology service</p>
           </div>
         </div>

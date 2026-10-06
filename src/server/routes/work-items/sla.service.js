@@ -8,20 +8,32 @@
  * brought forward as well as pushed back; RA-611 then put a FLOOR back under
  * it.
  *
- * RA-611's floor changed MID-BRANCH. The first cut (commit ee15047) floored
- * the new deadline at TODAY, on the reasoning that a deadline already in the
- * past the moment it is saved is never what the regulator meant. The spec
- * that arrived on 29 Sep 2026 says otherwise: a determination may legitimately
- * be BACKDATED, as far back as the date the application became "duly made"
- * (the first date on which the regulator held all the required data and the
- * application charge was paid), but never before 1 January of the
- * accreditation year. The today-floor is therefore REPLACED, not
+ * RA-611's floor changed TWICE on this branch.
+ *
+ * The first cut floored the new deadline at TODAY, on the reasoning that a
+ * deadline already in the past the moment it is saved is never what the
+ * regulator meant. The spec that arrived on 29 Sep 2026 says otherwise: a
+ * determination may legitimately be BACKDATED, as far back as the date the
+ * application became "duly made" (the first date on which the regulator held
+ * all the required data and the application charge was paid), but never
+ * before 1 January. The today-floor was therefore REPLACED, not
  * supplemented — keeping it would make the real rule unreachable, because
  * every date it permits is already at or after today.
  *
- * The floor is now the LATER of:
+ * The second cut read "1 January" off the payload's `accreditationYear`, and
+ * that was a QA case-blocker. `accreditationYear` is the year the
+ * accreditation is VALID FOR, not the current calendar year: management-be
+ * stamps it at approval from `Accreditation:CurrentYear` and derives the
+ * accreditation's START date from it. Determination happens BEFORE that year
+ * begins, so in October 2026 a live case carrying 2027 floored at 1 Jan 2027
+ * and refused every date in 2026 — including the case's own existing deadline
+ * of 4 Dec 2026. The bound is the CURRENT CALENDAR YEAR, per Anthony Moody's
+ * ACs ("not further back than 1st Jan of current year"), confirmed by Giri
+ * Nattu in QA on 5 Oct 2026.
+ *
+ * The floor is therefore the LATER of:
  *   (a) the SLA clock's start date (`slaStartedAt`) — the duly-made anchor;
- *   (b) 1 January of the payload's `accreditationYear`.
+ *   (b) 1 January of the CURRENT calendar year, read in Europe/London.
  *
  * So the two surviving date rules are: not earlier than that floor, and
  * different from the current deadline.
@@ -109,25 +121,28 @@ const ukDateFormatter = new Intl.DateTimeFormat('en-GB', {
  * that date so it is directly comparable with the values `parseCalendarDate`
  * produces.
  *
- * RA-611's first cut used this to resolve "today". The 29 Sep 2026 spec
- * removed "today" from the rule, but the zone handling is still needed — now
- * for the duly-made ANCHOR, which is an instant and not a date. Items made
- * duly by `dulyMake` carry a midnight-UTC anchor, where the UTC and London
- * calendar dates always agree; but the backfill migration and the seeder in
- * management-be stamp `StartedAt` from a real timestamp, and for those the two
- * readings can differ by a day: 23:30Z on 15 June is 00:30 on 16 June in
- * London during BST. Where they differ, London is the right answer — the
- * regulator types a UK calendar date into the day/month/year boxes, and
- * management-be floors on the London date too, so reading the anchor in UTC
- * here would let the FE name a floor date the backend then rejects with a 422
- * the caseworker could not satisfy.
+ * Both halves of the floor need this. The duly-made ANCHOR is an instant and
+ * not a date: items made duly by `dulyMake` carry a midnight-UTC anchor, where
+ * the UTC and London calendar dates always agree; but the backfill migration
+ * and the seeder in management-be stamp `StartedAt` from a real timestamp, and
+ * for those the two readings can differ by a day: 23:30Z on 15 June is 00:30
+ * on 16 June in London during BST. Where they differ, London is the right
+ * answer — the regulator types a UK calendar date into the day/month/year
+ * boxes, and management-be floors on the London date too, so reading the
+ * anchor in UTC here would let the FE name a floor date the backend then
+ * rejects with a 422 the caseworker could not satisfy. The CURRENT YEAR half
+ * reads the same formatter for the same reason (see `ukCalendarYearOf`).
  */
-function ukCalendarDayOf(instant) {
-  const parts = Object.fromEntries(
+function ukCalendarPartsOf(instant) {
+  return Object.fromEntries(
     ukDateFormatter
       .formatToParts(instant)
       .map((part) => [part.type, part.value])
   )
+}
+
+function ukCalendarDayOf(instant) {
+  const parts = ukCalendarPartsOf(instant)
   return Date.UTC(
     Number(parts.year),
     Number(parts.month) - 1,
@@ -136,8 +151,21 @@ function ukCalendarDayOf(instant) {
 }
 
 /**
- * RA-611 (29 Sep 2026 spec). The lower bound the new deadline may not fall
- * below, and the message naming whichever bound produced it.
+ * The calendar year an instant falls in, as the regulator reckons it.
+ *
+ * Deliberately NOT `instant.getFullYear()`: that is the SERVER's zone, and the
+ * container's TZ is not the regulator's. The two disagree for an hour either
+ * side of New Year — 23:30 on 31 December in London is already 1 January in
+ * CET — and that hour decides which year the floor names.
+ */
+function ukCalendarYearOf(instant) {
+  return Number(ukCalendarPartsOf(instant).year)
+}
+
+/**
+ * RA-611 (29 Sep 2026 spec, corrected after QA on 5 Oct 2026). The lower bound
+ * the new deadline may not fall below, and the message naming whichever bound
+ * produced it.
  *
  * Two candidates, of which the LATER wins:
  *
@@ -145,39 +173,40 @@ function ukCalendarDayOf(instant) {
  *      management-be stamps `slaStartedAt` when the application became duly
  *      made, so it IS the "first date on which the regulator had all the data
  *      and the charge was paid" the spec names.
- *  (b) 1 January of the accreditation year, which the spec makes an absolute
- *      backstop: a determination is never backdated into the previous
- *      accreditation year, even if the application was duly made before the
- *      year began. This one needs no timezone handling — it is already a
- *      calendar date rather than an instant.
+ *  (b) 1 January of the CURRENT calendar year, which the ACs make an absolute
+ *      backstop: a determination is never backdated into the previous calendar
+ *      year, even if the application was duly made before this year began.
  *
- * `accreditationYear` missing or not a number — or a year outside the range a
- * date can represent — falls back to (a) ALONE. The current year is
- * deliberately NOT substituted: inventing a bound the payload did not state
- * could refuse a backdate the spec permits on a work item whose year we merely
- * failed to read. management-be does exactly the same (confirmed on this
- * branch). The `typeof … === 'number'` test is the idiom already used for
- * this field in `re-accreditation-decision-metadata.js`.
+ * (b) was WRONG in the previous revision, which read it off the payload's
+ * `accreditationYear`. That field is the year the accreditation is valid for,
+ * stamped at approval and always AHEAD of determination, so it floored live
+ * 2026 cases at 1 Jan 2027 and refused their own existing deadlines. Do not
+ * reinstate it. For the same reason, do not reach for any config value named
+ * "current year" either: management-be's `Accreditation:CurrentYear` is 2027 —
+ * it means "the accreditation year currently open", not today's year — and
+ * there is deliberately no FE equivalent to misuse. The current year comes
+ * from the injected clock, nothing else.
+ *
+ * Both bounds are resolved in Europe/London: the clock is an instant, so which
+ * calendar year it falls in is a zone question like the anchor's date.
  *
  * Ties go to the 1-January wording: when the application was duly made on
  * 1 January itself both bounds name the same day, and the year bound is the
  * clearer thing to tell the caseworker. management-be tie-breaks the same way.
  *
  * @param {Date} startedAt the SLA clock's start instant
- * @param {number|null|undefined} accreditationYear
+ * @param {Date} now the current instant, from the injectable clock
  * @returns {{ floor: number, message: string }}
  */
-function deadlineFloor(startedAt, accreditationYear) {
+function deadlineFloor(startedAt, now) {
   const dulyMadeFloor = ukCalendarDayOf(startedAt)
-  const yearFloor =
-    typeof accreditationYear === 'number' && Number.isFinite(accreditationYear)
-      ? Date.UTC(accreditationYear, 0, 1)
-      : null
+  const currentYear = ukCalendarYearOf(now)
+  const yearFloor = Date.UTC(currentYear, 0, 1)
 
-  if (yearFloor !== null && yearFloor >= dulyMadeFloor) {
+  if (yearFloor >= dulyMadeFloor) {
     return {
       floor: yearFloor,
-      message: `The new determination deadline cannot be earlier than 1 January ${accreditationYear}`
+      message: `The new determination deadline cannot be earlier than 1 January ${currentYear}`
     }
   }
 
@@ -281,7 +310,7 @@ function resolveDeadlineInputs(deadline, currentDueDate, slaStartedAt) {
  * away. Per the 29 Sep 2026 spec, backdating is legitimate — including into
  * the past, which the first cut of RA-611 wrongly forbade — down to but not
  * below `deadlineFloor()`: the later of the duly-made date and 1 January of
- * the accreditation year. Landing exactly ON the floor is accepted.
+ * the current calendar year. Landing exactly ON the floor is accepted.
  *
  * Two date rules therefore survive, checked in this order after the shape
  * checks (empty, then not-a-real-date):
@@ -300,17 +329,19 @@ function resolveDeadlineInputs(deadline, currentDueDate, slaStartedAt) {
  * @param {{ day?: string, month?: string, year?: string }} deadline
  * @param {string|null|undefined} currentDueDate the work item's current
  *   `slaDueDate`, as an ISO string
- * @param {{ slaStartedAt?: string|null, accreditationYear?: number|null }}
- *   [bounds] the two inputs the RA-611 floor is built from: the SLA clock's
- *   start date (the duly-made anchor) and the payload's accreditation year.
- *   Both come straight off the work item the controller already loaded.
+ * @param {{ slaStartedAt?: string|null, now?: Date }} [bounds] the two inputs
+ *   the RA-611 floor is built from: the SLA clock's start date (the duly-made
+ *   anchor), which comes straight off the work item the controller already
+ *   loaded, and `now` — the injectable clock the 1-January bound reads the
+ *   current calendar year from. Pin `now` in tests that exercise that bound:
+ *   left to the real clock, their expectations would change on 1 January.
  * @returns {{ ok: true, value: string, additionalDuration: string } |
  *   { ok: false, outcome: 'invalid', field: 'deadline', message: string }}
  */
 export function validateExtendDeadline(
   deadline,
   currentDueDate,
-  { slaStartedAt, accreditationYear } = {}
+  { slaStartedAt, now = new Date() } = {}
 ) {
   const invalid = (message) => ({
     ok: false,
@@ -330,7 +361,7 @@ export function validateExtendDeadline(
   // is the more specific and more actionable problem to report, even when it
   // happens to equal the current deadline. Landing exactly ON the floor is
   // accepted, so the comparison is strictly-below.
-  const bound = deadlineFloor(startedAt, accreditationYear)
+  const bound = deadlineFloor(startedAt, now)
   if (parsed.date.getTime() < bound.floor) {
     return invalid(bound.message)
   }
@@ -359,12 +390,14 @@ export function validateExtendDeadline(
 }
 
 /**
- * @param {{ extend?: Function }} [deps] The injectable clock the first cut of
- *   RA-611 needed is gone: the 29 Sep 2026 floor is built from the work item's
- *   own dates, so nothing here reads the current time and there is no clock
- *   left to pin.
+ * @param {{ extend?: Function, now?: () => Date }} [deps] `now` is the
+ *   injectable clock, read once per submission. RA-611's corrected floor
+ *   consults the current calendar year again, so the clock is back — and it
+ *   matters more than it did in the first cut: without pinning it, every test
+ *   of the 1-January bound would change behaviour on 1 January.
  */
-export function createSlaService({ extend = defaultExtend } = {}) {
+export function createSlaService({ extend = defaultExtend, now } = {}) {
+  const clock = now ?? (() => new Date())
   return {
     async extendSla({
       workItemId,
@@ -372,7 +405,6 @@ export function createSlaService({ extend = defaultExtend } = {}) {
       deadline,
       currentDueDate,
       slaStartedAt,
-      accreditationYear,
       user
     }) {
       const reasonValidation = validateReason(reason)
@@ -382,7 +414,7 @@ export function createSlaService({ extend = defaultExtend } = {}) {
       const deadlineValidation = validateExtendDeadline(
         deadline,
         currentDueDate,
-        { slaStartedAt, accreditationYear }
+        { slaStartedAt, now: clock() }
       )
       if (!deadlineValidation.ok) {
         return deadlineValidation
