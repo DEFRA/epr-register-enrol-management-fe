@@ -16,7 +16,7 @@ const govukInlineScriptHash =
  */
 export const cspOptions = ({ allowAnalytics }) => ({
   defaultSrc: ['self'],
-  fontSrc: ['self', 'data:', 'https://fonts.gstatic.com'],
+  fontSrc: ['self', 'data:'],
   connectSrc: [
     'self',
     'wss:',
@@ -24,7 +24,7 @@ export const cspOptions = ({ allowAnalytics }) => ({
     ...(allowAnalytics ? analyticsOrigins.connect : [])
   ],
   mediaSrc: ['self'],
-  styleSrc: ['self', 'https://fonts.googleapis.com'],
+  styleSrc: ['self'],
   scriptSrc: [
     'self',
     govukInlineScriptHash,

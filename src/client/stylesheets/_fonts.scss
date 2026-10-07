@@ -1,0 +1,5 @@
+// Roboto served from our own origin (via @fontsource) rather than Google Fonts,
+// so users' IP addresses are not sent to a third party.
+@use "@fontsource/roboto/400" as roboto-regular;
+@use "@fontsource/roboto/400-italic" as roboto-italic;
+@use "@fontsource/roboto/700" as roboto-bold;
