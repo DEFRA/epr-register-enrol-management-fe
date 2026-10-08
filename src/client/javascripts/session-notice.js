@@ -62,5 +62,3 @@ export function initSessionNotice(doc = document) {
   notice.setAttribute('tabindex', '-1')
   notice.focus()
 }
-
-initSessionNotice()

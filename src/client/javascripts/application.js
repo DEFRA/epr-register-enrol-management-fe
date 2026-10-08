@@ -9,7 +9,9 @@ import {
   SkipLink
 } from 'govuk-frontend'
 
-import './session-notice.js'
+import { initSessionNotice } from './session-notice.js'
+
+initSessionNotice()
 
 createAll(Button)
 // RA-291: powers the live "You have N words remaining" count on the
