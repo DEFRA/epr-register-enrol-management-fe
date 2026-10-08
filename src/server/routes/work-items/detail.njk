@@ -342,7 +342,7 @@
                 {# serves when an application declares several.               #}
                 {# Wrapped in a native <details> per site (collapsed by       #}
                 {# default) so a regulator scanning an application with many  #}
-                {# sites sees just the name list first, expanding one at a    #}
+                {# sites sees names and condensed addresses, expanding one   #}
                 {# time rather than scrolling past every field of every site. #}
                 {% for site in row.sites %}
                   <details class="govuk-details govuk-!-margin-bottom-2" data-testid="overseas-site">
@@ -353,10 +353,15 @@
                       {# "NEW: <name>" string and a prefix assertion scoped   #}
                       {# to it cannot be satisfied by a nested interim site's #}
                       {# prefix.                                              #}
-                      <p class="govuk-details__summary-text govuk-!-margin-bottom-0"
-                         data-testid="overseas-site-name">
-                        <strong>{% if site.isNew %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>
-                      </p>
+                      <span class="govuk-details__summary-text">
+                        <span data-testid="overseas-site-name">
+                          <strong>{% if site.isNew %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>
+                        </span>
+                        {% if site.summaryAddress %}
+                          <br>
+                          <span data-testid="overseas-site-summary-address">{{ site.summaryAddress }}</span>
+                        {% endif %}
+                      </span>
                     </summary>
                     <div class="govuk-details__text">
                       {# One flowing comma-separated line, per the design — and #}

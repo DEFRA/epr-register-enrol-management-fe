@@ -822,7 +822,8 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
   )
 
   test('AC04: surfaces every site field, in reading order, with its label', () => {
-    const { details, addressLines } = buildOverseasSite(FULL_SITE)
+    const { details, addressLines, summaryAddress } =
+      buildOverseasSite(FULL_SITE)
 
     // The design puts the address on its own unlabelled line beneath the site
     // name, so it is NOT a labelled detail row.
@@ -832,6 +833,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
       'Rotterdam',
       'Netherlands'
     ])
+    expect(summaryAddress).toBe('1 Havenstraat, Netherlands')
     expect(details.map((detail) => [detail.key, detail.values])).toEqual([
       ['ors-id', ['ORS-2026-0292']],
       ['coordinates', ['51.9244, 4.4777']],
@@ -879,6 +881,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
     })
     expect(site.details.map((detail) => detail.key)).toEqual(['ors-id'])
     expect(site.addressLines).toEqual(['Calle Uno, Bilbao', 'Spain'])
+    expect(site.summaryAddress).toBe('Calle Uno, Bilbao, Spain')
     expect(site.isNew).toBe(false)
     expect(site.interimSite).toBeNull()
   })
@@ -887,6 +890,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
     expect(buildOverseasSite({})).toEqual({
       siteName: EM_DASH,
       isNew: false,
+      summaryAddress: '',
       // RA-603: an ORS now also reports its interim sites as a list, empty here.
       interimSites: [],
       addressLines: [],
