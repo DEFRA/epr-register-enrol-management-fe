@@ -45,16 +45,16 @@ export function initSessionNotice(doc = document) {
     }
   }
 
-  function onKeydown(event) {
+  async function onKeydown(event) {
     if (event.key === 'Escape') {
-      dismiss()
+      await dismiss()
     }
   }
 
   if (form) {
-    form.addEventListener('submit', (event) => {
+    form.addEventListener('submit', async (event) => {
       event.preventDefault()
-      dismiss()
+      await dismiss()
     })
   }
   doc.addEventListener('keydown', onKeydown)
@@ -62,5 +62,3 @@ export function initSessionNotice(doc = document) {
   notice.setAttribute('tabindex', '-1')
   notice.focus()
 }
-
-initSessionNotice()
