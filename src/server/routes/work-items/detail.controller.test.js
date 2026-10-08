@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { load } from 'cheerio'
 
 import { createServer } from '#/server/server.js'
 import { config } from '#/config/config.js'
@@ -4097,7 +4098,7 @@ describe('RA-295 individual work item page', () => {
     expect(result).toContain('Overseas Reprocessing Site (ORS)')
     expect(result).toContain('bes-evidence.pdf')
     expect(result).toContain(`/work-items/${ID}/files/b-1/download`)
-    expect(detailRow(result, 'ors')).toContain(
+    expect(detailValue(result, 'ors')).toContain(
       'data-testid="overseas-site-address"'
     )
     expect(result).toContain('1 Overseas Lane, Rotterdam')
@@ -4445,16 +4446,10 @@ describe('RA-295 individual work item page', () => {
   // site folds down on its own, and this helper asserts the TEXT of a named
   // element, not its tag.
   function lineTexts(html, testId) {
-    const pattern = new RegExp(
-      `<(\\w+)[^>]*data-testid="${testId}"[^>]*>([\\s\\S]*?)</\\1>`,
-      'g'
-    )
-    return [...html.matchAll(pattern)].map((match) =>
-      match[2]
-        .replace(/<[^>]+>/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-    )
+    const $ = load(html)
+    return $(`[data-testid="${testId}"]`)
+      .map((_index, element) => $(element).text().replace(/\s+/g, ' ').trim())
+      .get()
   }
 
   const ROTTERDAM = {
@@ -4556,6 +4551,33 @@ describe('RA-295 individual work item page', () => {
       'NEW: Rotterdam New Reprocessing Site',
       'Hamburg Established Reprocessing Site',
       'Bilbao Legacy Reprocessing Site'
+    ])
+    expect(lineTexts(ors, 'overseas-site-summary-address')).toEqual([])
+  })
+
+  test('shows condensed addresses only for duplicate names in the visible ORS list', async () => {
+    const ors = detailValue(
+      await renderWithSites([
+        { ...ROTTERDAM, siteName: 'Shared Reprocessing Site' },
+        { ...HAMBURG, siteName: 'Shared Reprocessing Site' },
+        BILBAO,
+        { ...BILBAO, selected: false }
+      ]),
+      'ors'
+    )
+    const $ = load(ors)
+    const summaries = $('[data-testid="overseas-site"] > summary')
+    expect(summaries).toHaveLength(3)
+    expect(
+      lineTexts(summaries.toString(), 'overseas-site-summary-address')
+    ).toEqual(['1 Havenstraat, Netherlands', '9 Hafenstrasse, Germany'])
+    expect(
+      summaries.eq(2).find('[data-testid="overseas-site-summary-address"]')
+    ).toHaveLength(0)
+    expect(lineTexts(ors, 'overseas-site-address')).toEqual([
+      '1 Havenstraat, Europoort Industrial Park, Rotterdam, Netherlands',
+      '9 Hafenstrasse, Hamburg, Germany',
+      'Calle Uno, Bilbao, Spain'
     ])
   })
 
