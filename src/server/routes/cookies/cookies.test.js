@@ -21,17 +21,17 @@ const SUPPORT_USER_HEADERS = { 'x-test-user-role': 'support-readonly' }
 
 const original = {
   isEnabled: config.get('analytics.isEnabled'),
-  measurementId: config.get('analytics.measurementId')
+  gtmContainerId: config.get('analytics.gtmContainerId')
 }
 
 function enableAnalytics() {
   config.set('analytics.isEnabled', true)
-  config.set('analytics.measurementId', 'G-TEST')
+  config.set('analytics.gtmContainerId', 'GTM-TEST')
 }
 
 function restoreAnalytics() {
   config.set('analytics.isEnabled', original.isEnabled)
-  config.set('analytics.measurementId', original.measurementId)
+  config.set('analytics.gtmContainerId', original.gtmContainerId)
 }
 
 function setCookies(res) {

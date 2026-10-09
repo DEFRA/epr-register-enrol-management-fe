@@ -122,7 +122,7 @@ describe('#cspOptions', () => {
     })
   })
 
-  test('with analytics on, adds the GA4 origins and widens nothing else', () => {
+  test('with analytics on, adds the Tag Manager and GA4 origins and widens nothing else', () => {
     const off = cspOptions({ allowAnalytics: false })
     const on = cspOptions({ allowAnalytics: true })
 
@@ -143,19 +143,19 @@ describe('#cspOptions', () => {
 describe('#contentSecurityPolicy with analytics', () => {
   const original = {
     isEnabled: config.get('analytics.isEnabled'),
-    measurementId: config.get('analytics.measurementId')
+    gtmContainerId: config.get('analytics.gtmContainerId')
   }
 
   afterEach(() => {
     config.set('analytics.isEnabled', original.isEnabled)
-    config.set('analytics.measurementId', original.measurementId)
+    config.set('analytics.gtmContainerId', original.gtmContainerId)
   })
 
-  async function scriptSrcFor({ isEnabled, measurementId }) {
+  async function scriptSrcFor({ isEnabled, gtmContainerId }) {
     // The policy is fixed when the server registers the plugin, so config
     // has to be in place before the server is created.
     config.set('analytics.isEnabled', isEnabled)
-    config.set('analytics.measurementId', measurementId)
+    config.set('analytics.gtmContainerId', gtmContainerId)
     const server = await createServer()
     await server.initialize()
     try {
@@ -168,15 +168,15 @@ describe('#contentSecurityPolicy with analytics', () => {
 
   test('allows Google Tag Manager when analytics is on', async () => {
     expect(
-      await scriptSrcFor({ isEnabled: true, measurementId: 'G-TEST' })
+      await scriptSrcFor({ isEnabled: true, gtmContainerId: 'GTM-TEST' })
     ).toContain('https://www.googletagmanager.com')
   })
 
   test.each([
-    { isEnabled: false, measurementId: 'G-TEST' },
-    { isEnabled: true, measurementId: '' }
+    { isEnabled: false, gtmContainerId: 'GTM-TEST' },
+    { isEnabled: true, gtmContainerId: '' }
   ])(
-    'does not allow it for isEnabled=$isEnabled, measurementId="$measurementId"',
+    'does not allow it for isEnabled=$isEnabled, gtmContainerId="$gtmContainerId"',
     async (settings) => {
       expect(await scriptSrcFor(settings)).not.toContain('googletagmanager')
     }

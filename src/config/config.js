@@ -332,16 +332,16 @@ export const config = convict({
   },
   analytics: {
     isEnabled: {
-      doc: 'Show the analytics cookie banner and allow analytics. Only takes effect alongside a measurement id.',
+      doc: 'Show the analytics cookie banner and allow analytics. Only takes effect alongside a Google Tag Manager container id.',
       format: Boolean,
       default: false,
       env: 'ANALYTICS_ENABLED'
     },
-    measurementId: {
-      doc: 'GA4 measurement id of the analytics property to report to.',
+    gtmContainerId: {
+      doc: 'Google Tag Manager container id (GTM-XXXXXXX) loaded once a visitor accepts analytics cookies.',
       format: String,
       default: '',
-      env: 'ANALYTICS_MEASUREMENT_ID'
+      env: 'ANALYTICS_GTM_CONTAINER_ID'
     }
   },
   fileStorage: {

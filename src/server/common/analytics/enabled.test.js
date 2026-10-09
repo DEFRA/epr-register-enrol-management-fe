@@ -6,12 +6,12 @@ import { isAnalyticsEnabled, logAnalyticsMisconfiguration } from './enabled.js'
 describe('analytics enablement', () => {
   const original = {
     isEnabled: config.get('analytics.isEnabled'),
-    measurementId: config.get('analytics.measurementId')
+    gtmContainerId: config.get('analytics.gtmContainerId')
   }
 
-  function configure({ isEnabled, measurementId }) {
+  function configure({ isEnabled, gtmContainerId }) {
     config.set('analytics.isEnabled', isEnabled)
-    config.set('analytics.measurementId', measurementId)
+    config.set('analytics.gtmContainerId', gtmContainerId)
   }
 
   afterEach(() => {
@@ -23,39 +23,46 @@ describe('analytics enablement', () => {
   })
 
   test.each([
-    { isEnabled: false, measurementId: '', expected: false },
-    { isEnabled: false, measurementId: 'G-TEST', expected: false },
-    { isEnabled: true, measurementId: '', expected: false },
-    { isEnabled: true, measurementId: 'G-TEST', expected: true }
+    { isEnabled: false, gtmContainerId: '', expected: false },
+    { isEnabled: false, gtmContainerId: 'GTM-TEST', expected: false },
+    { isEnabled: true, gtmContainerId: '', expected: false },
+    { isEnabled: true, gtmContainerId: 'GTM-TEST', expected: true },
+    { isEnabled: true, gtmContainerId: 'GTM-M23T3F5D', expected: true },
+    { isEnabled: true, gtmContainerId: 'G-PLACEHOLDER', expected: false },
+    { isEnabled: true, gtmContainerId: 'gtm-m23t3f5d', expected: false },
+    { isEnabled: true, gtmContainerId: 'GTM-X"><script>', expected: false }
   ])(
-    'isEnabled=$isEnabled with measurementId="$measurementId" → $expected',
-    ({ isEnabled, measurementId, expected }) => {
-      configure({ isEnabled, measurementId })
+    'isEnabled=$isEnabled with gtmContainerId="$gtmContainerId" → $expected',
+    ({ isEnabled, gtmContainerId, expected }) => {
+      configure({ isEnabled, gtmContainerId })
       expect(isAnalyticsEnabled()).toBe(expected)
     }
   )
 
   describe('logAnalyticsMisconfiguration', () => {
-    test('logs an error when switched on without a measurement id', () => {
-      configure({ isEnabled: true, measurementId: '' })
-      const logger = { error: vi.fn() }
+    test.each(['', 'G-PLACEHOLDER'])(
+      'logs an error when switched on without a valid container id ("%s")',
+      (gtmContainerId) => {
+        configure({ isEnabled: true, gtmContainerId })
+        const logger = { error: vi.fn() }
 
-      logAnalyticsMisconfiguration(logger)
+        logAnalyticsMisconfiguration(logger)
 
-      expect(logger.error).toHaveBeenCalledTimes(1)
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.stringContaining('ANALYTICS_MEASUREMENT_ID is not set')
-      )
-    })
+        expect(logger.error).toHaveBeenCalledTimes(1)
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.stringContaining('ANALYTICS_GTM_CONTAINER_ID is not set')
+        )
+      }
+    )
 
     test.each([
-      { isEnabled: false, measurementId: '' },
-      { isEnabled: false, measurementId: 'G-TEST' },
-      { isEnabled: true, measurementId: 'G-TEST' }
+      { isEnabled: false, gtmContainerId: '' },
+      { isEnabled: false, gtmContainerId: 'GTM-TEST' },
+      { isEnabled: true, gtmContainerId: 'GTM-TEST' }
     ])(
-      'logs nothing for isEnabled=$isEnabled, measurementId="$measurementId"',
-      ({ isEnabled, measurementId }) => {
-        configure({ isEnabled, measurementId })
+      'logs nothing for isEnabled=$isEnabled, gtmContainerId="$gtmContainerId"',
+      ({ isEnabled, gtmContainerId }) => {
+        configure({ isEnabled, gtmContainerId })
         const logger = { error: vi.fn() }
 
         logAnalyticsMisconfiguration(logger)
