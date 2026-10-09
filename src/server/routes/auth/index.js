@@ -1,4 +1,5 @@
 import { config } from '#/config/config.js'
+import { isEntraIdConfigured } from '#/server/common/helpers/auth/providers/azure-entra-id.js'
 import {
   regulatorLoginController,
   regulatorCallbackController,
@@ -49,10 +50,10 @@ export const authRoutes = {
           }
         })
 
-        if (
-          config.get('auth.azureEntraId.clientId') &&
-          config.get('auth.azureEntraId.tenantId')
-        ) {
+        // Hybrid mode (RA-537): alongside the stub login, offer Entra ID
+        // sign-in — the real service on dev, the Entra ID stub on
+        // test/perf-test — whenever it is configured.
+        if (isEntraIdConfigured(config)) {
           server.route([
             {
               method: 'GET',

@@ -1,8 +1,9 @@
 import { createHash, randomBytes as nodeRandomBytes } from 'node:crypto'
+import Boom from '@hapi/boom'
 import { fetch as undiciFetch } from 'undici'
 
 import { config } from '#/config/config.js'
-import { getAzureEntraIdConfig } from '#/server/common/helpers/auth/providers/azure-entra-id.js'
+import { resolveAzureEntraIdProvider } from '#/server/common/helpers/auth/providers/azure-entra-id.js'
 import { verifyAzureIdToken } from '#/server/common/helpers/auth/providers/azure-id-token.js'
 import {
   ROLE_STANDARD,
@@ -73,14 +74,26 @@ export function createAuthControllers({
   fetchImpl = undiciFetch,
   verifyIdToken = verifyAzureIdToken,
   randomToken = defaultRandomToken,
-  getProviderConfig = () => getAzureEntraIdConfig(config),
+  // RA-537: resolves the client config plus the endpoints read from the
+  // Entra ID discovery document (real Microsoft, or the Entra ID stub).
+  // Async, and rejects when discovery fails.
+  getProviderConfig = () => resolveAzureEntraIdProvider(config, { fetchImpl }),
   syncAssignableUser = upsertAssignableUser,
   desyncAssignableUser = removeAssignableUser
 } = {}) {
-  function regulatorLogin(request, h) {
+  async function regulatorLogin(request, h) {
     confirmPostLoginRedirect(request)
 
-    const provider = getProviderConfig()
+    let provider
+    try {
+      provider = await getProviderConfig()
+    } catch (err) {
+      // Not a redirect back to LOGIN_PATH: with stub auth off that path
+      // is this controller, so a redirect would loop while discovery is
+      // down. A 502 renders the generic error page via errors.js catchAll,
+      // which also logs the underlying error.
+      throw Boom.boomify(err, { statusCode: statusCodes.badGateway })
+    }
     const state = randomToken()
     const nonce = randomToken()
     const codeVerifier = randomToken(64)
@@ -139,7 +152,13 @@ export function createAuthControllers({
       return h.redirect(LOGIN_PATH)
     }
 
-    const provider = getProviderConfig()
+    let provider
+    try {
+      provider = await getProviderConfig()
+    } catch (err) {
+      logWarn(request, 'oauth callback: Entra ID discovery failed', { err })
+      return h.redirect(LOGIN_PATH)
+    }
 
     let tokenJson
     try {
@@ -187,6 +206,10 @@ export function createAuthControllers({
 
     let claims
     try {
+      // RA-537: `issuer` is the discovery document's own `issuer` value —
+      // never the URL the document was fetched from (the Entra ID stub is
+      // fetched over an internal URL but issues tokens under its external
+      // one).
       claims = await verifyIdToken(idToken, {
         jwksUri: provider.jwksUri,
         issuer: provider.issuer,
@@ -289,15 +312,14 @@ export function createAuthControllers({
     return h.redirect(redirectTo)
   }
 
-  function logout(request, h) {
+  async function logout(request, h) {
     const idToken = request.yar.get('idToken')
     const user = request.yar.get('user')
 
     // RA-462: drop this identity's registry entry so a later request from a
     // still-live parallel session doesn't raise a "new sign-in" alert about
     // a login that has since been signed out. Fire-and-forget — best-effort
-    // cleanup that must not make `logout` async (it has synchronous callers
-    // in the RA-306 unit tests) or perturb its redirect behaviour.
+    // cleanup that must not delay or perturb the redirect.
     if (user?.id) {
       clearLogin(request, user.id).catch(() => {})
     }
@@ -335,7 +357,17 @@ export function createAuthControllers({
     // already gone, so this second pass falls straight into the !idToken
     // branch above and lands on the interstitial rather than looping back
     // to Entra again.
-    const provider = getProviderConfig()
+    //
+    // RA-537: the end-session endpoint comes from the discovery document.
+    // If discovery is unavailable the local session is already gone, so
+    // fall back to the local-only sign-out rather than erroring.
+    let provider
+    try {
+      provider = await getProviderConfig()
+    } catch (err) {
+      logWarn(request, 'logout: Entra ID discovery failed', { err })
+      return h.redirect(LOGGED_OUT_PATH)
+    }
     const params = new URLSearchParams({
       post_logout_redirect_uri: `${config.get('auth.callbackBaseUrl')}${LOGOUT_PATH}`
     })
