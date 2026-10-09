@@ -149,12 +149,20 @@ fails loudly if it is still in use when `NODE_ENV=production` or
 | ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ENTRA_CLIENT_ID`        | _(blank)_               | **Secret.** Azure Entra ID app registration client ID                                                                                          |
 | `ENTRA_CLIENT_SECRET`    | _(blank)_               | **Secret.** Paired client secret                                                                                                               |
-| `ENTRA_TENANT_ID`        | _(blank)_               | Azure AD tenant ID                                                                                                                             |
+| `ENTRA_TENANT_ID`        | _(blank)_               | Azure AD tenant ID. Used to derive the Microsoft discovery document URL when `ENTRA_DISCOVERY_URL` is blank                                    |
+| `ENTRA_DISCOVERY_URL`    | _(blank)_               | OpenID Connect discovery document the Entra ID endpoints are read from: the Entra ID stub's on `test`/`perf-test`                              |
 | `AUTH_CALLBACK_BASE_URL` | `http://localhost:3000` | Base URL used to build the Entra ID OAuth `redirect_uri`. Boot fails loudly outside `environment=local` if this is still the localhost default |
 | `AUTH_STUB_ENABLED`      | `true` (non-prod)       | Bypasses real OAuth, auto-authenticates as a fixed stub case-worker                                                                            |
 
-All three Entra values are required at boot in production whenever
-`AUTH_STUB_ENABLED=false`; leave blank for a local run under stub auth.
+`ENTRA_CLIENT_ID` and `ENTRA_CLIENT_SECRET` are required at boot in
+production whenever `AUTH_STUB_ENABLED=false`, and `GET /health/ready`
+reports `ENTRA_DISCOVERY_URL or ENTRA_TENANT_ID` as missing when stub auth
+is off and neither is set. Leave all of them blank for a local run under
+stub auth. With stub auth on, setting `ENTRA_CLIENT_ID` plus
+`ENTRA_DISCOVERY_URL` or `ENTRA_TENANT_ID` adds a "Sign in with Entra ID"
+button to the stub login page (hybrid mode, used on `dev` and on
+`test`/`perf-test` against the Entra ID stub) — see
+[`docs/authentication.md`](docs/authentication.md).
 Likewise, `AUTH_STUB_ENABLED` must be `false` when `ENVIRONMENT=prod` — the
 stub auth provider auto-authenticates every request and bypasses real
 OAuth, so boot fails loudly if stub auth is enabled in that environment. It
@@ -209,17 +217,14 @@ Per-environment values are listed in
 
 ```bash
 BACKEND_API_SHARED_SECRET=local-dev-backend-shared-secret-not-real
-ENTRA_CLIENT_ID=local-dev-entra-client-id
-ENTRA_CLIENT_SECRET=local-dev-fake-entra-secret
-ENTRA_TENANT_ID=00000000-0000-0000-0000-000000000000
 SESSION_COOKIE_PASSWORD=the-password-must-be-at-least-32-characters-long
 FILE_UPLOAD_S3_BUCKET=epr-register-enrol-file-uploads
 ANALYTICS_ENABLED=true
 ANALYTICS_MEASUREMENT_ID=G-LOCAL0000
 ```
 
-`AUTH_STUB_ENABLED=true` (the local default) makes the Entra ID values
-above irrelevant for a plain local run.
+No Entra ID values are needed for a local run: `AUTH_STUB_ENABLED=true` is
+the local default and the stub login is the only sign-in offered.
 
 `G-LOCAL0000` is a placeholder that switches the cookie banner on locally;
 nothing reports to it.

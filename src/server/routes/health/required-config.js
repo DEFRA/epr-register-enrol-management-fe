@@ -1,4 +1,5 @@
 import { config } from '#/config/config.js'
+import { getEntraDiscoveryUrl } from '#/server/common/helpers/auth/providers/azure-entra-id.js'
 
 /**
  * Config values that are only validated (or not validated at all) at
@@ -25,15 +26,13 @@ export function findMissingRequiredConfig() {
     missing.push('BACKEND_API_URL')
   }
 
-  // ENTRA_TENANT_ID: hand-built into the Entra OAuth/token/JWKS URLs
-  // (src/server/common/helpers/auth/providers/azure-entra-id.js). Not
-  // guarded at boot the way clientId/clientSecret are. Only relevant
-  // when stub auth is disabled.
-  if (
-    !config.get('auth.stubEnabled') &&
-    !config.get('auth.azureEntraId.tenantId')
-  ) {
-    missing.push('ENTRA_TENANT_ID')
+  // ENTRA_DISCOVERY_URL / ENTRA_TENANT_ID: where the Entra ID endpoints
+  // are discovered from (src/server/common/helpers/auth/providers/
+  // azure-entra-id.js) — either one suffices, the tenant yielding the
+  // Microsoft discovery document. Not guarded at boot the way
+  // clientId/clientSecret are. Only relevant when stub auth is disabled.
+  if (!config.get('auth.stubEnabled') && !getEntraDiscoveryUrl(config)) {
+    missing.push('ENTRA_DISCOVERY_URL or ENTRA_TENANT_ID')
   }
 
   // BASIC_USER / BASIC_PASSWD: doc comment on auth.basicEnabled claims the

@@ -4,11 +4,34 @@ This service authenticates regulator users via Defra Azure Entra ID (OIDC) and e
 
 ## Modes
 
-| Mode            | When                                                          | Behaviour                                                                      |
-| --------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **Real OAuth**  | `AUTH_STUB_ENABLED=false` (forced when `ENVIRONMENT=prod`)    | Redirects to Azure Entra ID; stores user profile in the yar session            |
-| **Stub (dev)**  | `AUTH_STUB_ENABLED=true` (default when `ENVIRONMENT != prod`) | Local chooser at `/auth/stub/login` lets you select a fake regulator user      |
-| **Test bypass** | `NODE_ENV=test`                                               | Every request auto-authenticates; override role with `x-test-user-role` header |
+| Mode            | When                                                                            | Behaviour                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Real OAuth**  | `AUTH_STUB_ENABLED=false` (forced when `ENVIRONMENT=prod`)                      | Redirects to Azure Entra ID; stores user profile in the yar session                                                     |
+| **Stub (dev)**  | `AUTH_STUB_ENABLED=true` (default when `ENVIRONMENT != prod`)                   | Local chooser at `/auth/stub/login` lets you select a fake regulator user                                               |
+| **Hybrid**      | Stub mode plus `ENTRA_CLIENT_ID` and `ENTRA_DISCOVERY_URL` or `ENTRA_TENANT_ID` | The stub chooser also shows a "Sign in with Entra ID" button (`/auth/regulator/entra-id`) that runs the real OAuth flow |
+| **Test bypass** | `NODE_ENV=test`                                                                 | Every request auto-authenticates; override role with `x-test-user-role` header                                          |
+
+Hybrid mode (RA-537) is how `dev` (real Entra ID) and `test` / `perf-test`
+(the Entra ID stub, `epr-register-enrol-entra-stub`, used by the automated
+journey tests) run. Local runs leave the Entra variables blank, so only the
+stub chooser is offered and no Entra ID service is needed.
+
+### Entra ID endpoints (RA-537)
+
+The authorize, token, JWKS, issuer and end-session endpoints are read from
+the OpenID Connect discovery document at `ENTRA_DISCOVERY_URL`
+(`src/server/common/helpers/auth/providers/azure-entra-id.js`), fetched
+through the CDP outbound proxy and cached per process. When
+`ENTRA_DISCOVERY_URL` is blank the Microsoft document for the tenant is used:
+`https://login.microsoftonline.com/<ENTRA_TENANT_ID>/v2.0/.well-known/openid-configuration`.
+
+The id_token `iss` claim is checked against the document's `issuer` value,
+never against the URL the document was fetched from. The Entra ID stub is
+fetched over its internal URL but issues tokens under its external one.
+
+If discovery fails, sign-in shows the generic error page (502), the
+callback returns to the login page, and sign-out still ends the local
+session and lands on `/auth/logged-out`.
 
 All routes are protected by `server.auth.default('session')`. Public routes (health, static assets, login pages) opt out with `auth: false`.
 
@@ -56,8 +79,9 @@ session.
 The "assign to" / "reassign" work item picker and the work items list's
 "specific officer" filter are backed by
 `src/server/work-items/core/assignees.js`. In stub-auth environments this
-reuses the stub login user list; in real (Entra ID) environments it reads
-`src/server/common/helpers/auth/assignable-users-store.js`, a Redis-backed
+lists the stub login users. Wherever Entra ID sign-in is available it also
+lists `src/server/common/helpers/auth/assignable-users-store.js` (RA-537: in
+hybrid mode, after the stub users), which is a Redis-backed
 directory populated incrementally as regulator-role users sign in (there's
 no Graph API access to enumerate app-role group membership directly, so the
 role check the OAuth callback already performs is reused instead of a
@@ -79,7 +103,7 @@ second source of truth):
   above.
 
 A directory read or write failure is logged but degrades gracefully
-(empty directory / lookup miss) rather than failing sign-in or the
+(empty directory, or the stub users alone in hybrid mode / lookup miss) rather than failing sign-in or the
 work-items list. A user who holds the role but has never logged in since
 this shipped won't appear as assignable until their first login.
 
@@ -109,7 +133,8 @@ server.route({
 | `AUTH_CALLBACK_BASE_URL`          | Base URL used to build OAuth callback redirect URI. Must be set to this environment's public URL outside local dev — boot fails otherwise (see `config.js`).   | `http://localhost:3000`      |
 | `ENTRA_CLIENT_ID`                 | Azure Entra ID client ID                                                                                                                                       | _(empty)_                    |
 | `ENTRA_CLIENT_SECRET`             | Azure Entra ID client secret                                                                                                                                   | _(empty)_                    |
-| `ENTRA_TENANT_ID`                 | Azure Entra ID tenant ID                                                                                                                                       | _(empty)_                    |
+| `ENTRA_TENANT_ID`                 | Azure Entra ID tenant ID. Used to derive the Microsoft discovery document URL when `ENTRA_DISCOVERY_URL` is blank                                              | _(empty)_                    |
+| `ENTRA_DISCOVERY_URL`             | RA-537. OpenID Connect discovery document for Entra ID: the Entra ID stub's on test/perf-test. Blank means the Microsoft document for `ENTRA_TENANT_ID`        | _(empty)_                    |
 | `ENTRA_REGULATOR_ROLE_VALUE`      | RA-323. App role a signed-in user must hold to be treated as a caseworker. Unconfirmed pending sign-off.                                                       | `Waste.Regulator.Standard`   |
 | `ENTRA_SUPPORT_USER_ROLE_VALUE`   | RA-335. App role a signed-in user must hold to be treated as a read-only support user.                                                                         | `Waste.SupportUser.ReadOnly` |
 | `ASSIGNABLE_USER_INACTIVITY_DAYS` | RA-446. Days since last login before an entry in the real-Entra-ID assignable-users directory is pruned on read. TBC pending an access-review policy decision. | `90`                         |
@@ -119,6 +144,7 @@ server.route({
 | Method | Path                       | Notes                                                                |
 | ------ | -------------------------- | -------------------------------------------------------------------- |
 | GET    | `/auth/regulator/login`    | Initiates OAuth (or redirects to stub chooser)                       |
+| GET    | `/auth/regulator/entra-id` | Hybrid mode only: initiates OAuth from the stub chooser's button     |
 | GET    | `/auth/regulator/callback` | OAuth callback — exchanges code for session                          |
 | GET    | `/auth/logout`             | Clears the session                                                   |
 | GET    | `/auth/stub/login`         | Stub chooser (stub mode only) — caseworker or support user (RA-335)  |

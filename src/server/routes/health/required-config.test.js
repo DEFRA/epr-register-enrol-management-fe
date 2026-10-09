@@ -26,6 +26,7 @@ describe('#findMissingRequiredConfig', () => {
     process.env.ENVIRONMENT = 'local'
     delete process.env.BACKEND_API_URL
     delete process.env.ENTRA_TENANT_ID
+    delete process.env.ENTRA_DISCOVERY_URL
     delete process.env.AUTH_BASIC_ENABLED
 
     const findMissingRequiredConfig = await importFindMissing()
@@ -71,37 +72,55 @@ describe('#findMissingRequiredConfig', () => {
     expect(findMissingRequiredConfig()).not.toContain('BACKEND_API_URL')
   })
 
-  test('flags ENTRA_TENANT_ID when stub auth is disabled and tenant id is blank', async () => {
+  const ENTRA_DISCOVERY_SOURCE = 'ENTRA_DISCOVERY_URL or ENTRA_TENANT_ID'
+
+  test('flags the Entra discovery source when stub auth is disabled and neither discovery URL nor tenant is set', async () => {
     process.env.NODE_ENV = 'development'
     process.env.ENVIRONMENT = 'local'
     process.env.AUTH_STUB_ENABLED = 'false'
     delete process.env.ENTRA_TENANT_ID
+    delete process.env.ENTRA_DISCOVERY_URL
 
     const findMissingRequiredConfig = await importFindMissing()
 
-    expect(findMissingRequiredConfig()).toContain('ENTRA_TENANT_ID')
+    expect(findMissingRequiredConfig()).toContain(ENTRA_DISCOVERY_SOURCE)
   })
 
-  test('does not flag ENTRA_TENANT_ID when stub auth is enabled', async () => {
+  test('does not flag the Entra discovery source when stub auth is enabled', async () => {
     process.env.NODE_ENV = 'development'
     process.env.ENVIRONMENT = 'local'
     process.env.AUTH_STUB_ENABLED = 'true'
     delete process.env.ENTRA_TENANT_ID
+    delete process.env.ENTRA_DISCOVERY_URL
 
     const findMissingRequiredConfig = await importFindMissing()
 
-    expect(findMissingRequiredConfig()).not.toContain('ENTRA_TENANT_ID')
+    expect(findMissingRequiredConfig()).not.toContain(ENTRA_DISCOVERY_SOURCE)
   })
 
-  test('does not flag ENTRA_TENANT_ID when stub auth is disabled but a tenant id is set', async () => {
+  test('does not flag the Entra discovery source when stub auth is disabled but a tenant id is set', async () => {
     process.env.NODE_ENV = 'development'
     process.env.ENVIRONMENT = 'local'
     process.env.AUTH_STUB_ENABLED = 'false'
     process.env.ENTRA_TENANT_ID = 'a-tenant-id'
+    delete process.env.ENTRA_DISCOVERY_URL
 
     const findMissingRequiredConfig = await importFindMissing()
 
-    expect(findMissingRequiredConfig()).not.toContain('ENTRA_TENANT_ID')
+    expect(findMissingRequiredConfig()).not.toContain(ENTRA_DISCOVERY_SOURCE)
+  })
+
+  test('does not flag the Entra discovery source when stub auth is disabled but a discovery URL is set', async () => {
+    process.env.NODE_ENV = 'development'
+    process.env.ENVIRONMENT = 'local'
+    process.env.AUTH_STUB_ENABLED = 'false'
+    delete process.env.ENTRA_TENANT_ID
+    process.env.ENTRA_DISCOVERY_URL =
+      'http://entra-stub:3200/.well-known/openid-configuration'
+
+    const findMissingRequiredConfig = await importFindMissing()
+
+    expect(findMissingRequiredConfig()).not.toContain(ENTRA_DISCOVERY_SOURCE)
   })
 
   test('flags BASIC_USER and BASIC_PASSWD when basic auth is enabled and both are blank', async () => {
