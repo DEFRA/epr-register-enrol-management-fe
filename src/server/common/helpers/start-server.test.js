@@ -49,22 +49,22 @@ describe('#startServer', () => {
     })
   })
 
-  describe('When analytics is switched on without a measurement id', () => {
+  describe('When analytics is switched on without a container id', () => {
     let server
     let original
 
     beforeAll(() => {
       original = {
         isEnabled: config.get('analytics.isEnabled'),
-        measurementId: config.get('analytics.measurementId')
+        gtmContainerId: config.get('analytics.gtmContainerId')
       }
       config.set('analytics.isEnabled', true)
-      config.set('analytics.measurementId', '')
+      config.set('analytics.gtmContainerId', '')
     })
 
     afterAll(async () => {
       config.set('analytics.isEnabled', original.isEnabled)
-      config.set('analytics.measurementId', original.measurementId)
+      config.set('analytics.gtmContainerId', original.gtmContainerId)
       await server?.stop({ timeout: 0 })
     })
 

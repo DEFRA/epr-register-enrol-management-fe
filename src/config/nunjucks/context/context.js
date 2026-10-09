@@ -36,6 +36,8 @@ export function context(request) {
       }
     : null
 
+  const consent = analyticsConsent(request)
+
   return {
     assetPath: `${assetPath}/assets`,
     serviceName: config.get('serviceName'),
@@ -47,8 +49,13 @@ export function context(request) {
     // sign-in for this identity has been detected.
     concurrentLoginNotice: request?.app?.concurrentLoginNotice ?? null,
     analytics: {
-      ...analyticsConsent(request),
-      confirmation: consentConfirmationFor(request)
+      ...consent,
+      confirmation: consentConfirmationFor(request),
+      // Only a page for a visitor who has accepted carries the id, so the
+      // tag can't load before consent or after it's withdrawn.
+      gtmContainerId: consent.hasConsented
+        ? config.get('analytics.gtmContainerId')
+        : null
     },
     getAssetPath(asset) {
       if (!config.get('isProduction')) {

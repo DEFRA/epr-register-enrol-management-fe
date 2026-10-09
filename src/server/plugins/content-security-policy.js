@@ -9,9 +9,10 @@ const govukInlineScriptHash =
   "'sha256-GUQ5ad8JK5KmEWmROf3LZd9ge94daqNvd8xy9YS1iDw='"
 
 /**
- * Analytics widens connect, script and img sources only. frameSrc and nonces
- * stay closed: they're needed for Google Tag Manager (its noscript iframe and
- * the tags it injects), which this policy does not allow.
+ * Analytics widens connect, script and img sources only - enough for the Tag
+ * Manager container and the GA4 tag in it. frameSrc and nonces stay closed, so
+ * GTM's noscript iframe and any Custom HTML tag added to the container are
+ * blocked: a tag of that kind needs a change here, not just in GTM.
  * @param {{ allowAnalytics: boolean }} options
  */
 export const cspOptions = ({ allowAnalytics }) => ({

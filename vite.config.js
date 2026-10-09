@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         htmlAssets: 'src/client/assets.html',
         application: 'src/client/javascripts/application.js',
+        analytics: 'src/client/javascripts/analytics.js',
         applicationCss: 'src/client/stylesheets/application.scss'
       }
     },

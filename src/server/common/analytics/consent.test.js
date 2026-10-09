@@ -18,12 +18,12 @@ function requestWith({ cookie, pathname = '/work-items', search = '' } = {}) {
 describe('analyticsConsent', () => {
   const original = {
     isEnabled: config.get('analytics.isEnabled'),
-    measurementId: config.get('analytics.measurementId')
+    gtmContainerId: config.get('analytics.gtmContainerId')
   }
 
   afterEach(() => {
     config.set('analytics.isEnabled', original.isEnabled)
-    config.set('analytics.measurementId', original.measurementId)
+    config.set('analytics.gtmContainerId', original.gtmContainerId)
   })
 
   test('uses the same cookie name and answer values as ReEx', () => {
@@ -73,7 +73,7 @@ describe('analyticsConsent', () => {
   describe('when analytics is on', () => {
     beforeEach(() => {
       config.set('analytics.isEnabled', true)
-      config.set('analytics.measurementId', 'G-TEST')
+      config.set('analytics.gtmContainerId', 'GTM-TEST')
     })
 
     test('asks a visitor who has not answered', () => {
