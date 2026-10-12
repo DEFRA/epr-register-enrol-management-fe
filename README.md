@@ -194,14 +194,24 @@ whole preview environment rather than replacing user sign-in.
 
 ### Analytics and cookie consent
 
-| Variable                   | Default   | Description                                                                             |
-| -------------------------- | --------- | --------------------------------------------------------------------------------------- |
-| `ANALYTICS_ENABLED`        | `false`   | Shows the cookie banner, the analytics section of `/cookies`, and allows GA4 in the CSP |
-| `ANALYTICS_MEASUREMENT_ID` | _(blank)_ | GA4 measurement id for the environment                                                  |
+| Variable                     | Default   | Description                                                                                     |
+| ---------------------------- | --------- | ----------------------------------------------------------------------------------------------- |
+| `ANALYTICS_ENABLED`          | `false`   | Shows the cookie banner, the analytics section of `/cookies`, and allows Tag Manager in the CSP |
+| `ANALYTICS_GTM_CONTAINER_ID` | _(blank)_ | Google Tag Manager container id (`GTM-XXXXXXX`), loaded only for visitors who accept analytics  |
 
 Both must be set for any of this to switch on; with neither set, the service
 asks for no consent and allows no analytics. If `ANALYTICS_ENABLED` is `true`
-but the id is blank, the service logs an error at startup and stays off.
+but the id is blank or isn't a `GTM-` id, the service logs an error at startup
+and stays off.
+
+The container is loaded by `src/client/javascripts/analytics.js` rather than
+Google's inline snippet, which the CSP refuses. The page only carries the
+container id once the visitor has accepted, so rejecting or withdrawing
+consent stops it loading on the next page. What the container then sends
+(the GA4 tag and its settings) is configured in Tag Manager, not here. The
+CSP allows the Tag Manager and GA4 origins only: Custom HTML tags and GTM's
+noscript iframe are blocked.
+
 Per-environment values are listed in
 [`docs/cdp-deployment.md`](docs/cdp-deployment.md).
 
@@ -215,14 +225,14 @@ ENTRA_TENANT_ID=00000000-0000-0000-0000-000000000000
 SESSION_COOKIE_PASSWORD=the-password-must-be-at-least-32-characters-long
 FILE_UPLOAD_S3_BUCKET=epr-register-enrol-file-uploads
 ANALYTICS_ENABLED=true
-ANALYTICS_MEASUREMENT_ID=G-LOCAL0000
+ANALYTICS_GTM_CONTAINER_ID=GTM-LOCAL0000
 ```
 
 `AUTH_STUB_ENABLED=true` (the local default) makes the Entra ID values
 above irrelevant for a plain local run.
 
-`G-LOCAL0000` is a placeholder that switches the cookie banner on locally;
-nothing reports to it.
+`GTM-LOCAL0000` is a placeholder that switches the cookie banner on locally;
+there is no such container, so nothing reports to it.
 
 See [`src/config/config.js`](src/config/config.js) for the full schema.
 

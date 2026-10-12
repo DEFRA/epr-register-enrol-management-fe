@@ -116,6 +116,10 @@ function createBrowser(server) {
 const bannerShown = ($) => $('[data-testid="cookie-banner"]').length === 1
 const bannerConfirmation = ($) =>
   $('[data-testid="cookie-banner-confirmation"]').text()
+const tagContainerId = ($) =>
+  $('meta[name="analytics-gtm-container-id"]').attr('content')
+const tagScriptLoaded = ($) =>
+  $('script[src$="src/client/javascripts/analytics.js"]').length === 1
 const selectedChoice = ($) =>
   $('[data-testid="cookies-form"] input[name="analytics"]:checked').val()
 
@@ -123,19 +127,19 @@ describe('consent journeys', () => {
   let server
   const original = {
     isEnabled: config.get('analytics.isEnabled'),
-    measurementId: config.get('analytics.measurementId')
+    gtmContainerId: config.get('analytics.gtmContainerId')
   }
 
   beforeAll(async () => {
     config.set('analytics.isEnabled', true)
-    config.set('analytics.measurementId', 'G-TEST')
+    config.set('analytics.gtmContainerId', 'GTM-TEST')
     server = await createServer()
     await server.initialize()
   })
 
   afterAll(async () => {
     config.set('analytics.isEnabled', original.isEnabled)
-    config.set('analytics.measurementId', original.measurementId)
+    config.set('analytics.gtmContainerId', original.gtmContainerId)
     await server.stop({ timeout: 0 })
   })
 
@@ -224,6 +228,48 @@ describe('consent journeys', () => {
       const elsewhere = await browser.visit(PAGE)
       expect(bannerShown(elsewhere)).toBe(false)
       expect(bannerConfirmation(elsewhere)).toBe('')
+    })
+  })
+
+  describe('the Tag Manager container follows consent', () => {
+    test('is not loaded before the visitor answers', async () => {
+      const $ = await createBrowser(server).visit(PAGE)
+
+      expect(tagContainerId($)).toBeUndefined()
+      expect(tagScriptLoaded($)).toBe(false)
+    })
+
+    test('loads from the page that confirms acceptance onwards', async () => {
+      const browser = createBrowser(server)
+      await browser.visit(PAGE)
+
+      const confirmed = await browser.clickBannerButton('accepted')
+      expect(tagContainerId(confirmed)).toBe('GTM-TEST')
+      expect(tagScriptLoaded(confirmed)).toBe(true)
+
+      expect(tagContainerId(await browser.visit('/cookies'))).toBe('GTM-TEST')
+    })
+
+    test('is never loaded for a visitor who rejects', async () => {
+      const browser = createBrowser(server)
+      await browser.visit(PAGE)
+
+      const confirmed = await browser.clickBannerButton('rejected')
+      expect(tagScriptLoaded(confirmed)).toBe(false)
+      expect(tagScriptLoaded(await browser.visit(PAGE))).toBe(false)
+    })
+
+    test('stops loading as soon as consent is withdrawn', async () => {
+      const browser = createBrowser(server)
+      await browser.visit(PAGE)
+      await browser.clickBannerButton('accepted')
+
+      await browser.visit('/cookies')
+      const saved = await browser.saveOnCookiesPage('rejected')
+
+      expect(tagContainerId(saved)).toBeUndefined()
+      expect(tagScriptLoaded(saved)).toBe(false)
+      expect(tagScriptLoaded(await browser.visit(PAGE))).toBe(false)
     })
   })
 })

@@ -23,6 +23,11 @@
 
 {% block head %}
   <link href="{{ getAssetPath('src/client/stylesheets/application.scss') }}" rel="stylesheet">
+  {# The CSP refuses GTM's inline snippet, so a bundled script does its job. #}
+  {% if analytics.gtmContainerId %}
+    <meta name="analytics-gtm-container-id" content="{{ analytics.gtmContainerId }}">
+    <script type="module" src="{{ getAssetPath('src/client/javascripts/analytics.js') }}"></script>
+  {% endif %}
 {% endblock %}
 
 {# GOV.UK requires the cookie banner before the skip link. #}
