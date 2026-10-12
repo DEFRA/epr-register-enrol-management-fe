@@ -411,9 +411,16 @@ export const config = convict({
         sensitive: true
       },
       tenantId: {
+        doc: 'Azure Entra ID tenant. When ENTRA_DISCOVERY_URL is blank, the Microsoft v2.0 discovery document for this tenant is used.',
         format: String,
         default: '',
         env: 'ENTRA_TENANT_ID'
+      },
+      discoveryUrl: {
+        doc: "RA-537. OpenID Connect discovery document the Entra ID endpoints (authorize, token, JWKS, issuer, end-session) are read from — the Entra ID stub's on test/perf-test. Blank means https://login.microsoftonline.com/<ENTRA_TENANT_ID>/v2.0/.well-known/openid-configuration.",
+        format: String,
+        default: '',
+        env: 'ENTRA_DISCOVERY_URL'
       },
       regulatorRoleValue: {
         doc: 'RA-323. Entra ID app role a signed-in user must hold to be treated as a caseworker. Unconfirmed pending sign-off — override via env once confirmed.',

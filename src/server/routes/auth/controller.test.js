@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { SignJWT, exportJWK, generateKeyPair } from 'jose'
 
 import { createAuthControllers, loggedOutController } from './controller.js'
 import { config } from '#/config/config.js'
+import { _clearEntraEndpointCache } from '#/server/common/helpers/auth/providers/azure-entra-id.js'
+import { _clearJwksCache } from '#/server/common/helpers/auth/providers/azure-id-token.js'
 
 const REQUIRED_ROLE = config.get('auth.azureEntraId.regulatorRoleValue')
 const SUPPORT_ROLE = config.get('auth.azureEntraId.supportUserRoleValue')
@@ -86,11 +89,11 @@ function buildOk({
 }
 
 describe('regulatorLoginController', () => {
-  test('stores state, nonce, pkce verifier and builds authorize URL with PKCE S256', () => {
+  test('stores state, nonce, pkce verifier and builds authorize URL with PKCE S256', async () => {
     const { request, yar } = makeRequest()
     const { regulatorLoginController } = buildOk()
 
-    const result = regulatorLoginController(request, h)
+    const result = await regulatorLoginController(request, h)
 
     expect(yar.set).toHaveBeenCalledWith('oauthState', 'token-1')
     expect(yar.set).toHaveBeenCalledWith('oauthNonce', 'token-2')
@@ -695,7 +698,7 @@ describe('regulatorCallbackController', () => {
 
 // RA-306.
 describe('logoutController', () => {
-  test('destroys the whole session, not just the user key (AC01/AC02)', () => {
+  test('destroys the whole session, not just the user key (AC01/AC02)', async () => {
     const { request, yar } = makeRequest({
       session: {
         user: { id: 'oid', roles: ['standard'] },
@@ -704,7 +707,7 @@ describe('logoutController', () => {
     })
     const { logoutController } = buildOk()
 
-    logoutController(request, h)
+    await logoutController(request, h)
 
     expect(yar.reset).toHaveBeenCalledTimes(1)
     // clear('user') would have left the rest of the session (and the
@@ -714,20 +717,20 @@ describe('logoutController', () => {
   })
 
   // RA-449.
-  test('redirects to the logged-out page rather than straight to Entra ID', () => {
+  test('redirects to the logged-out page rather than straight to Entra ID', async () => {
     const { request } = makeRequest({ session: { user: { id: 'oid' } } })
     const { logoutController } = buildOk()
 
-    logoutController(request, h)
+    await logoutController(request, h)
 
     expect(h.redirect).toHaveBeenCalledWith('/auth/logged-out')
   })
 
-  test('resets the session before redirecting', () => {
+  test('resets the session before redirecting', async () => {
     const { request, order } = makeRequest({ session: { user: { id: 'a' } } })
     const { logoutController } = buildOk()
 
-    logoutController(request, h)
+    await logoutController(request, h)
 
     // The idToken and user lookups are reads that must happen before reset()
     // wipes them (user.id feeds the RA-462 registry cleanup), but they are
@@ -736,23 +739,23 @@ describe('logoutController', () => {
     expect(order).toEqual([['get', 'idToken'], ['get', 'user'], ['reset']])
   })
 
-  test('is safe to call when there is no session to destroy', () => {
+  test('is safe to call when there is no session to destroy', async () => {
     const { request, yar } = makeRequest()
     const { logoutController } = buildOk()
 
-    expect(() => logoutController(request, h)).not.toThrow()
+    await expect(logoutController(request, h)).resolves.toBeDefined()
     expect(yar.reset).toHaveBeenCalledTimes(1)
     expect(h.redirect).toHaveBeenCalledWith('/auth/logged-out')
   })
 
   // RA-437.
-  test('ends the Entra ID session too when signed in via real Entra ID', () => {
+  test('ends the Entra ID session too when signed in via real Entra ID', async () => {
     const { request, yar } = makeRequest({
       session: { user: { id: 'oid' }, idToken: 'the-entra-id-token' }
     })
     const { logoutController } = buildOk()
 
-    logoutController(request, h)
+    await logoutController(request, h)
 
     expect(yar.reset).toHaveBeenCalledTimes(1)
     expect(h.redirect).toHaveBeenCalledTimes(1)
@@ -766,13 +769,13 @@ describe('logoutController', () => {
     )
   })
 
-  test('reads the id_token before resetting the session, then resets before redirecting', () => {
+  test('reads the id_token before resetting the session, then resets before redirecting', async () => {
     const { request, order } = makeRequest({
       session: { user: { id: 'oid' }, idToken: 'the-entra-id-token' }
     })
     const { logoutController } = buildOk()
 
-    logoutController(request, h)
+    await logoutController(request, h)
 
     // RA-462: `user` is also read before reset() to feed the best-effort
     // registry cleanup — read-only, and still ahead of reset().
@@ -785,20 +788,20 @@ describe('logoutController', () => {
   // reopen RA-449: by the time Entra redirects back to /auth/logout, the
   // session (and its id_token) is already gone, so the second pass falls
   // through to a plain local sign-out instead of looping back to Entra.
-  test('a second hit to /auth/logout, as Entra redirects back to, lands on the interstitial rather than looping back to Entra', () => {
+  test('a second hit to /auth/logout, as Entra redirects back to, lands on the interstitial rather than looping back to Entra', async () => {
     const { request: firstRequest } = makeRequest({
       session: { user: { id: 'oid' }, idToken: 'the-entra-id-token' }
     })
     const { logoutController } = buildOk()
 
-    logoutController(firstRequest, h)
+    await logoutController(firstRequest, h)
     h.redirect.mockClear()
 
     // Entra redirects the browser back to /auth/logout — a fresh request,
     // with no session left (the reset() above already cleared it).
     const { request: secondRequest } = makeRequest()
 
-    logoutController(secondRequest, h)
+    await logoutController(secondRequest, h)
 
     expect(h.redirect).toHaveBeenCalledWith('/auth/logged-out')
   })
@@ -816,5 +819,221 @@ describe('loggedOutController', () => {
       loginPath: '/auth/regulator/login'
     })
     expect(result.viewPath).toBe('auth/logged-out')
+  })
+})
+
+// RA-537: endpoints come from the Entra ID discovery document.
+describe('Entra ID discovery failures', () => {
+  const discoveryDown = () =>
+    createAuthControllers({
+      randomToken,
+      getProviderConfig: vi.fn(async () => {
+        throw new Error('Entra ID OIDC discovery failed: 503')
+      })
+    })
+
+  test('login responds 502 (generic error page) rather than redirecting back to itself', async () => {
+    const { request } = makeRequest()
+    const { regulatorLoginController } = discoveryDown()
+
+    await expect(regulatorLoginController(request, h)).rejects.toMatchObject({
+      isBoom: true,
+      output: { statusCode: 502 }
+    })
+    expect(h.redirect).not.toHaveBeenCalled()
+  })
+
+  test('callback redirects to login without calling the token endpoint', async () => {
+    const { request, logger } = makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+    const fetchImpl = vi.fn()
+    const { regulatorCallbackController } = createAuthControllers({
+      fetchImpl,
+      getProviderConfig: vi.fn(async () => {
+        throw new Error('Entra ID OIDC discovery failed: 503')
+      })
+    })
+
+    const result = await regulatorCallbackController(request, h)
+
+    expect(result.redirected).toBe('/auth/regulator/login')
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('Entra ID discovery failed')
+    )
+  })
+
+  test('logout still ends the local session and lands on the logged-out page', async () => {
+    const { request, yar, logger } = makeRequest({
+      session: { user: { id: 'oid' }, idToken: 'the-entra-id-token' }
+    })
+    const { logoutController } = discoveryDown()
+
+    await logoutController(request, h)
+
+    expect(yar.reset).toHaveBeenCalledTimes(1)
+    expect(h.redirect).toHaveBeenCalledWith('/auth/logged-out')
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('Entra ID discovery failed')
+    )
+  })
+})
+
+// RA-537: the default wiring against an Entra ID stub-shaped discovery
+// document, with the real id_token verifier. The stub is fetched over an
+// internal URL but issues tokens under its external URL, so the issuer
+// must come from the document, never from the URL it was fetched from.
+describe('Entra ID sign-in via a discovery document (default wiring)', () => {
+  const INTERNAL = 'http://entra-stub:3200'
+  const EXTERNAL = 'http://localhost:3200'
+  const DISCOVERY_URL = `${INTERNAL}/.well-known/openid-configuration`
+  const discoveryDoc = {
+    issuer: EXTERNAL,
+    authorization_endpoint: `${EXTERNAL}/authorize`,
+    token_endpoint: `${INTERNAL}/token`,
+    jwks_uri: `${INTERNAL}/.well-known/jwks.json`,
+    end_session_endpoint: `${EXTERNAL}/logout`
+  }
+  const keys = {
+    clientId: config.get('auth.azureEntraId.clientId'),
+    clientSecret: config.get('auth.azureEntraId.clientSecret'),
+    discoveryUrl: config.get('auth.azureEntraId.discoveryUrl')
+  }
+
+  let privateKey
+
+  beforeEach(async () => {
+    config.set('auth.azureEntraId.clientId', 'epr-register-enrol-management-fe')
+    config.set('auth.azureEntraId.clientSecret', 'stub-client-secret')
+    config.set('auth.azureEntraId.discoveryUrl', DISCOVERY_URL)
+
+    const pair = await generateKeyPair('RS256')
+    privateKey = pair.privateKey
+    const jwk = await exportJWK(pair.publicKey)
+    Object.assign(jwk, { kid: 'k1', alg: 'RS256', use: 'sig' })
+    // jose fetches the JWKS with the global fetch.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ keys: [jwk] })
+      }))
+    )
+  })
+
+  afterEach(() => {
+    config.set('auth.azureEntraId.clientId', keys.clientId)
+    config.set('auth.azureEntraId.clientSecret', keys.clientSecret)
+    config.set('auth.azureEntraId.discoveryUrl', keys.discoveryUrl)
+    vi.unstubAllGlobals()
+    _clearEntraEndpointCache()
+    _clearJwksCache()
+  })
+
+  function idTokenWithIssuer(iss) {
+    return new SignJWT({
+      nonce: 'n',
+      oid: 'oid-1',
+      name: 'Reg',
+      preferred_username: 'r@d',
+      roles: [REQUIRED_ROLE]
+    })
+      .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
+      .setIssuer(iss)
+      .setAudience('epr-register-enrol-management-fe')
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(privateKey)
+  }
+
+  function stubFetch(idToken) {
+    return vi.fn(async (url) => ({
+      ok: true,
+      status: 200,
+      json: async () =>
+        url === DISCOVERY_URL ? discoveryDoc : { id_token: idToken },
+      text: async () => ''
+    }))
+  }
+
+  function callbackRequest() {
+    return makeRequest({
+      query: { code: 'c', state: 's' },
+      session: { oauthState: 's', oauthNonce: 'n', pkceVerifier: 'v' }
+    })
+  }
+
+  test('login redirects to the discovered authorization_endpoint', async () => {
+    const fetchImpl = stubFetch()
+    const { regulatorLoginController } = createAuthControllers({
+      fetchImpl,
+      randomToken
+    })
+
+    const result = await regulatorLoginController(makeRequest().request, h)
+
+    expect(fetchImpl).toHaveBeenCalledWith(DISCOVERY_URL, expect.anything())
+    expect(result.redirected.startsWith(`${EXTERNAL}/authorize?`)).toBe(true)
+  })
+
+  test('callback exchanges the code at the discovered token_endpoint and accepts the document issuer', async () => {
+    const fetchImpl = stubFetch(await idTokenWithIssuer(EXTERNAL))
+    const { regulatorCallbackController } = createAuthControllers({
+      fetchImpl,
+      syncAssignableUser: vi.fn(async () => {}),
+      desyncAssignableUser: vi.fn(async () => {})
+    })
+    const { request, yar } = callbackRequest()
+
+    const result = await regulatorCallbackController(request, h)
+
+    const [tokenUrl, tokenInit] = fetchImpl.mock.calls[1]
+    expect(tokenUrl).toBe(`${INTERNAL}/token`)
+    expect(tokenInit.body.get('client_secret')).toBe('stub-client-secret')
+    expect(result.redirected).toBe('/work-items')
+    expect(yar.set).toHaveBeenCalledWith(
+      'user',
+      expect.objectContaining({ id: 'oid-1', roles: ['standard'] })
+    )
+  })
+
+  test('callback rejects an id_token issued under the URL the document was fetched from', async () => {
+    const fetchImpl = stubFetch(await idTokenWithIssuer(INTERNAL))
+    const { regulatorCallbackController } = createAuthControllers({
+      fetchImpl,
+      syncAssignableUser: vi.fn(async () => {}),
+      desyncAssignableUser: vi.fn(async () => {})
+    })
+    const { request, yar, logger } = callbackRequest()
+
+    const result = await regulatorCallbackController(request, h)
+
+    expect(result.redirected).toBe('/auth/regulator/login')
+    expect(yar.set).not.toHaveBeenCalledWith('user', expect.anything())
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('id_token verification failed')
+    )
+  })
+
+  test('logout redirects to the discovered end_session_endpoint', async () => {
+    const { logoutController } = createAuthControllers({
+      fetchImpl: stubFetch()
+    })
+    const { request } = makeRequest({
+      session: { user: { id: 'oid-1' }, idToken: 'the-id-token' }
+    })
+
+    const result = await logoutController(request, h)
+
+    const url = new URL(result.redirected)
+    expect(url.origin + url.pathname).toBe(`${EXTERNAL}/logout`)
+    expect(url.searchParams.get('id_token_hint')).toBe('the-id-token')
   })
 })

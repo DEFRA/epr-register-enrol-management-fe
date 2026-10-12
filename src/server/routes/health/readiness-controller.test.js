@@ -36,7 +36,7 @@ describe('#readinessController', () => {
   test('returns 503 Unhealthy naming the missing keys when something is missing', async () => {
     findMissingRequiredConfig.mockReturnValue([
       'BACKEND_API_URL',
-      'ENTRA_TENANT_ID'
+      'ENTRA_DISCOVERY_URL or ENTRA_TENANT_ID'
     ])
 
     const { result, statusCode } = await server.inject({
@@ -47,6 +47,8 @@ describe('#readinessController', () => {
     expect(statusCode).toBe(statusCodes.serviceUnavailable)
     expect(result.status).toBe('Unhealthy')
     expect(result.checks[0].description).toContain('BACKEND_API_URL')
-    expect(result.checks[0].description).toContain('ENTRA_TENANT_ID')
+    expect(result.checks[0].description).toContain(
+      'ENTRA_DISCOVERY_URL or ENTRA_TENANT_ID'
+    )
   })
 })

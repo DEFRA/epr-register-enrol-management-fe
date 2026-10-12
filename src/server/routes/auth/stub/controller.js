@@ -12,6 +12,7 @@ import {
   popPostLoginRedirect
 } from '#/server/common/helpers/auth/auth-redirect.js'
 import { markLoginAndNotifyPrevious } from '#/server/common/helpers/auth/concurrent-login.js'
+import { isEntraIdConfigured } from '#/server/common/helpers/auth/providers/azure-entra-id.js'
 
 /**
  * Static directory of stub assignable users. Exported for the assignee-
@@ -62,10 +63,7 @@ function viewData(overrides = {}) {
 export function stubLoginGetController(request, h) {
   confirmPostLoginRedirect(request)
 
-  const entraIdConfigured = !!(
-    config.get('auth.azureEntraId.clientId') &&
-    config.get('auth.azureEntraId.tenantId')
-  )
+  const entraIdConfigured = isEntraIdConfigured(config)
   return h.view(
     'auth/stub/login',
     viewData({ entraIdConfigured, rt: request.query.rt ?? '' })

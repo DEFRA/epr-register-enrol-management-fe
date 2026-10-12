@@ -1,5 +1,6 @@
 import { config } from '#/config/config.js'
 import { STUB_USERS } from '#/server/routes/auth/stub/controller.js'
+import { isEntraIdConfigured } from '#/server/common/helpers/auth/providers/azure-entra-id.js'
 import {
   findAssignableUserInStore,
   listAssignableUsers
@@ -21,24 +22,46 @@ const FROZEN_STUB_USERS = Object.freeze(
 )
 
 /**
- * Returns true when the stub auth provider is the configured directory
- * source. Real deployments source assignable users from the RA-446
- * assignable-users-store instead (populated incrementally at login — see
- * auth/controller.js), keeping the PoC stub directory from ever leaking
- * into an environment that uses real OAuth.
+ * Returns true when the stub auth provider is enabled, so its fixed users
+ * belong in the directory. Real deployments source assignable users from
+ * the RA-446 assignable-users-store instead (populated incrementally at
+ * login — see auth/controller.js), keeping the PoC stub directory from
+ * ever leaking into an environment that uses real OAuth only.
  */
 function stubDirectoryEnabled() {
   return config.get('auth.stubEnabled') === true
 }
 
 /**
+ * RA-537: true when Entra ID sign-in is available, so the RA-446 store —
+ * kept in sync by the Entra ID callback — belongs in the directory. With
+ * stub auth on as well (hybrid mode: dev, and test/perf-test against the
+ * Entra ID stub) both sources are listed; with stub auth on and no Entra
+ * configuration (local) the store is never read.
+ */
+function storeDirectoryEnabled() {
+  return !stubDirectoryEnabled() || isEntraIdConfigured(config)
+}
+
+async function readStore(read, fallback, message) {
+  try {
+    return await read()
+  } catch (err) {
+    logger.warn({ err }, message)
+    return fallback
+  }
+}
+
+/**
  * Directory of users a work item can be assigned to.
  *
- * In stub-auth environments this reuses the stub login user list so the
+ * In stub-auth environments this includes the stub login user list so the
  * assign UI has something concrete to show and the IDs align with the user
- * that signs in via the stub login. In real (Entra ID) environments it
- * reads the RA-446 store instead, which is populated/pruned as regulator
- * -role users log in (see auth/controller.js and assignable-users-store.js).
+ * that signs in via the stub login. Wherever Entra ID sign-in is available
+ * it also includes the RA-446 store, which is populated/pruned as
+ * regulator-role users log in (see auth/controller.js and
+ * assignable-users-store.js). Stub users come first; a store entry with a
+ * stub user's id is dropped rather than listed twice.
  *
  * Returns objects shaped `{ id, name, email, roles }` — the same envelope
  * the auth plugin puts on `request.auth.credentials`, so the caller can
@@ -47,21 +70,25 @@ function stubDirectoryEnabled() {
  * Each call returns a fresh array so callers can sort or filter the result
  * without affecting other callers.
  *
- * A Redis outage degrades to an empty directory (logged) rather than
- * failing the caller — this is read on every work-items list render, and
- * before RA-446 it was a pure in-memory function that could never fail;
- * a directory read must not be able to 500 the whole list page.
+ * A Redis outage degrades to the stub users alone, or an empty directory
+ * when stub auth is off (logged), rather than failing the caller — this is
+ * read on every work-items list render, and a directory read must not be
+ * able to 500 the whole list page.
  */
 export async function getAssignableUsers() {
-  if (stubDirectoryEnabled()) {
-    return FROZEN_STUB_USERS.slice()
+  const readDirectory = () =>
+    readStore(listAssignableUsers, [], 'assignable-users directory read failed')
+
+  if (!stubDirectoryEnabled()) {
+    return readDirectory()
   }
-  try {
-    return await listAssignableUsers()
-  } catch (err) {
-    logger.warn({ err }, 'assignable-users directory read failed')
-    return []
+  const stubUsers = FROZEN_STUB_USERS.slice()
+  if (!storeDirectoryEnabled()) {
+    return stubUsers
   }
+  const stubIds = new Set(stubUsers.map((u) => u.id))
+  const storeUsers = await readDirectory()
+  return [...stubUsers, ...storeUsers.filter((u) => !stubIds.has(u.id))]
 }
 
 /**
@@ -75,12 +102,17 @@ export async function findAssignableUser(id) {
     return null
   }
   if (stubDirectoryEnabled()) {
-    return FROZEN_STUB_USERS.find((u) => u.id === id) ?? null
+    const stubUser = FROZEN_STUB_USERS.find((u) => u.id === id)
+    if (stubUser) {
+      return stubUser
+    }
   }
-  try {
-    return await findAssignableUserInStore(id)
-  } catch (err) {
-    logger.warn({ err }, 'assignable-user directory lookup failed')
+  if (!storeDirectoryEnabled()) {
     return null
   }
+  return readStore(
+    () => findAssignableUserInStore(id),
+    null,
+    'assignable-user directory lookup failed'
+  )
 }

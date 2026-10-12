@@ -298,46 +298,126 @@ describe('no-store on authenticated responses', () => {
   })
 })
 
-describe('Entra ID button visibility', () => {
-  let entraServer
+// RA-537: hybrid mode — the stub login page plus Entra ID sign-in (the real
+// service on dev, the Entra ID stub on test/perf-test). Discovery is mocked
+// so no test reaches the network.
+const STUB_PROVIDER = {
+  discoveryUrl: 'http://entra-stub:3200/.well-known/openid-configuration',
+  scopes: ['openid', 'profile', 'email'],
+  clientId: 'test-client-id',
+  clientSecret: 'test-client-secret',
+  callbackUrl: 'http://localhost:3000/auth/regulator/callback',
+  authUrl: 'http://localhost:3200/authorize',
+  tokenUrl: 'http://entra-stub:3200/token',
+  jwksUri: 'http://entra-stub:3200/.well-known/jwks.json',
+  issuer: 'http://localhost:3200',
+  logoutUrl: 'http://localhost:3200/logout'
+}
+
+vi.mock(
+  '#/server/common/helpers/auth/providers/azure-entra-id.js',
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    resolveAzureEntraIdProvider: vi.fn(async () => STUB_PROVIDER)
+  })
+)
+
+describe.each([
+  [
+    'ENTRA_TENANT_ID',
+    { 'auth.azureEntraId.tenantId': 'Defradev.onmicrosoft.com' }
+  ],
+  [
+    'ENTRA_DISCOVERY_URL',
+    { 'auth.azureEntraId.discoveryUrl': STUB_PROVIDER.discoveryUrl }
+  ]
+])(
+  'Entra ID sign-in alongside stub login (client id + %s)',
+  (_label, entraConfig) => {
+    let entraServer
+
+    beforeAll(async () => {
+      const overrides = {
+        'auth.azureEntraId.clientId': 'test-client-id',
+        ...entraConfig
+      }
+      vi.spyOn(config, 'get').mockImplementation((key) =>
+        key in overrides ? overrides[key] : realConfigGet(key)
+      )
+      entraServer = await createServer()
+      await entraServer.initialize()
+    })
+
+    afterAll(async () => {
+      await entraServer?.stop({ timeout: 0 })
+      vi.restoreAllMocks()
+    })
+
+    test('shows the Entra ID button on the stub login page', async () => {
+      const { result, statusCode } = await entraServer.inject({
+        method: 'GET',
+        url: '/auth/stub/login'
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toContain('data-testid="entra-id-login"')
+      expect(result).toContain('href="/auth/regulator/entra-id"')
+    })
+
+    test('the Entra ID login route redirects to the discovered authorize endpoint', async () => {
+      const { statusCode, headers } = await entraServer.inject({
+        method: 'GET',
+        url: '/auth/regulator/entra-id'
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location.startsWith(`${STUB_PROVIDER.authUrl}?`)).toBe(
+        true
+      )
+    })
+
+    test('the stub login stays the default login route', async () => {
+      const { statusCode, headers } = await entraServer.inject({
+        method: 'GET',
+        url: '/auth/regulator/login'
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe('/auth/stub/login')
+    })
+  }
+)
+
+describe('Entra ID sign-in not offered with a client id but no discovery URL or tenant', () => {
+  let partialServer
 
   beforeAll(async () => {
-    vi.spyOn(config, 'get').mockImplementation((key) => {
-      if (key === 'auth.azureEntraId.clientId') {
-        return 'test-client-id'
-      }
-      if (key === 'auth.azureEntraId.tenantId') {
-        return 'Defradev.onmicrosoft.com'
-      }
-      return realConfigGet(key)
-    })
-    entraServer = await createServer()
-    await entraServer.initialize()
+    vi.spyOn(config, 'get').mockImplementation((key) =>
+      key === 'auth.azureEntraId.clientId'
+        ? 'test-client-id'
+        : realConfigGet(key)
+    )
+    partialServer = await createServer()
+    await partialServer.initialize()
   })
 
   afterAll(async () => {
-    await entraServer?.stop({ timeout: 0 })
+    await partialServer?.stop({ timeout: 0 })
     vi.restoreAllMocks()
   })
 
-  test('shows Entra ID button when credentials are configured', async () => {
-    const { result, statusCode } = await entraServer.inject({
+  test('hides the button and does not register the Entra ID routes', async () => {
+    const page = await partialServer.inject({
       method: 'GET',
       url: '/auth/stub/login'
     })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(result).toContain('data-testid="entra-id-login"')
-  })
-
-  test('Entra ID routes are registered when credentials are configured', async () => {
-    const { statusCode } = await entraServer.inject({
+    const entraRoute = await partialServer.inject({
       method: 'GET',
       url: '/auth/regulator/entra-id'
     })
 
-    // regulatorLoginController redirects to Azure — any non-404 means the route exists
-    expect(statusCode).not.toBe(statusCodes.notFound)
+    expect(page.result).not.toContain('data-testid="entra-id-login"')
+    expect(entraRoute.statusCode).toBe(statusCodes.notFound)
   })
 })
 
