@@ -7,6 +7,10 @@ import { globSync, readFileSync } from 'node:fs'
 // bundle it instead, the way @fontsource/roboto is.
 //
 // Plain <a href> links are fine: nothing loads until the user clicks.
+//
+// The one deliberate exception is Google Tag Manager, which
+// src/client/javascripts/analytics.js loads only for a visitor who has
+// accepted analytics cookies.
 
 const RULES = [
   {

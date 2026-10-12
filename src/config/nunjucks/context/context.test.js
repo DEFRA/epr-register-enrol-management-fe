@@ -79,7 +79,8 @@ describe('context and cache', () => {
             hasRejected: false,
             isEnabled: false,
             returnUrl: '/',
-            shouldAskConsent: false
+            shouldAskConsent: false,
+            gtmContainerId: null
           }
         })
       })
@@ -199,7 +200,8 @@ describe('context and cache', () => {
             hasRejected: false,
             isEnabled: false,
             returnUrl: '/',
-            shouldAskConsent: false
+            shouldAskConsent: false,
+            gtmContainerId: null
           }
         })
       })
