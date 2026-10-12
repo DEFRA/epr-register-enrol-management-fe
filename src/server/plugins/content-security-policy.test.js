@@ -135,7 +135,11 @@ describe('#cspOptions', () => {
         'https://www.googletagmanager.com'
       ],
       scriptSrc: [...off.scriptSrc, 'https://www.googletagmanager.com'],
-      imgSrc: [...off.imgSrc, 'https://*.google-analytics.com']
+      imgSrc: [
+        ...off.imgSrc,
+        'https://*.google-analytics.com',
+        'https://www.googletagmanager.com'
+      ]
     })
   })
 })
