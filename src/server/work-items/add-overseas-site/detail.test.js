@@ -91,6 +91,26 @@ describe('Add ORS public pages', () => {
     expect(response.result).toContain('data-testid="application-type">Add ORS')
   })
 
+  test('withdrawn case retains correlation and offers no caseworker decision or outcome retry', async () => {
+    vi.mocked(getWorkItem).mockResolvedValue({
+      ok: true,
+      workItem: { ...item, stateId: 'withdrawn' }
+    })
+    const response = await server.inject(`/work-items/${item.id}`)
+    expect(response.statusCode).toBe(200)
+    expect(response.result).toContain('Withdrawn')
+    expect(response.result).toContain('data-request-id="request-1"')
+    for (const action of [
+      'start-assessment',
+      'approve',
+      'refuse',
+      'retry-outcome',
+      'delivery-unconfirmed'
+    ]) {
+      expect(response.result).not.toContain(`data-testid="add-ors-${action}"`)
+    }
+  })
+
   test.each([
     ['submitted', {}, 'add-ors-start-assessment'],
     ['assessment-in-progress', {}, 'add-ors-refuse'],
