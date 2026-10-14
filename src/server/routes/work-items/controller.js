@@ -163,6 +163,7 @@ const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
 // typeIds)` until those work item types exist.
 const APPLICATION_TYPE_FILTER_OPTIONS = [
   { value: RE_ACCREDITATION_TYPE_ID, text: 'Re-accreditation' },
+  { value: 'add-overseas-site', text: 'Add ORS' },
   { value: 'accreditation', text: 'Accreditation' },
   { value: 'registration-application', text: 'Registration application' },
   {
@@ -717,6 +718,7 @@ function decorate(item) {
 
   return {
     ...item,
+    typeDisplayName: type?.displayName ?? item.typeId,
     stateDisplayName,
     stateTagClass: resolveStateTagClass(stateId),
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,

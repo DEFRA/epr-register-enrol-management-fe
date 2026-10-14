@@ -11,5 +11,6 @@
  */
 
 import { reAccreditationModule } from './re-accreditation/module.js'
+import { addOverseasSiteModule } from './add-overseas-site/module.js'
 
-export const workItemModules = [reAccreditationModule]
+export const workItemModules = [reAccreditationModule, addOverseasSiteModule]

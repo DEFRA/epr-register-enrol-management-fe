@@ -1,0 +1,30 @@
+{% extends 'layouts/page.njk' %}
+{% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+
+{% block content %}
+  <a class="govuk-back-link" href="/work-items" data-testid="add-ors-back">Applications</a>
+  <div data-testid="add-ors-detail" data-state-id="{{ workItem.stateId }}" data-template-version="{{ workItem.templateVersion }}" data-request-id="{{ workItem.payload.operatorRequestId }}" data-case-id="{{ workItem.id }}" data-site-id="{{ workItem.payload.proposedSiteId }}">
+    <h1 class="govuk-heading-l">Add ORS</h1>
+    {{ govukTag({ text: workItem.stateDisplayName, classes: workItem.stateTagClass, attributes: { 'data-testid': 'add-ors-state' } }) }}
+    <h2 class="govuk-heading-m govuk-!-margin-top-4">Change request</h2>
+    {{ govukSummaryList({ rows: [
+      { key: { text: 'Organisation' }, value: { text: workItem.payload.organisationName } },
+      { key: { text: 'Organisation ID' }, value: { text: workItem.payload.target.organisationId } },
+      { key: { text: 'Registration ID' }, value: { text: workItem.payload.target.registrationId } },
+      { key: { text: 'Accreditation ID' }, value: { text: workItem.payload.target.accreditationId } },
+      { key: { text: 'Material' }, value: { text: workItem.payload.target.materialType } },
+      { key: { text: 'Accreditation year' }, value: { text: workItem.payload.target.year } },
+      { key: { text: 'Request ID' }, value: { text: workItem.payload.operatorRequestId } },
+      { key: { text: 'Case ID' }, value: { text: workItem.id } },
+      { key: { text: 'Case reference' }, value: { text: workItem.payload.applicationReference } }
+    ] }) }}
+    <h2 class="govuk-heading-m">Proposed overseas site</h2>
+    {{ govukSummaryList({ rows: [
+      { key: { text: 'Proposed site ID' }, value: { text: workItem.payload.proposedSiteId } },
+      { key: { text: 'Site name' }, value: { text: workItem.payload.proposal.siteName } },
+      { key: { text: 'Address' }, value: { text: workItem.payload.proposal.siteAddress } },
+      { key: { text: 'Country' }, value: { text: workItem.payload.proposal.country } }
+    ] }) }}
+  </div>
+{% endblock %}
