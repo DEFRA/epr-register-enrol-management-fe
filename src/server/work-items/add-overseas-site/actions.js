@@ -8,7 +8,12 @@ const logger = createLogger()
 export function buildAddOverseasSiteRoutes({
   service = createAddOverseasSiteActionsService()
 } = {}) {
-  return ['start-assessment', 'refuse'].map((operation) => ({
+  const operations = {
+    'start-assessment': service.startAssessment,
+    refuse: service.refuseRequest,
+    approve: service.approveRequest
+  }
+  return Object.entries(operations).map(([operation, act]) => ({
     method: 'POST',
     path: `/work-items/add-overseas-site/{id}/${operation}`,
     options: {
@@ -20,8 +25,6 @@ export function buildAddOverseasSiteRoutes({
       }
     },
     async handler(request, h) {
-      const act =
-        operation === 'refuse' ? service.refuseRequest : service.startAssessment
       const result = await act({
         workItemId: request.params.id,
         user: getUser(request)
@@ -37,7 +40,7 @@ export function buildAddOverseasSiteRoutes({
             result.outcome === 'delivery-unconfirmed'
               ? 'Operator delivery unconfirmed'
               : 'Operation unconfirmed',
-          text: 'Refresh the case to check its current state. If refusal delivery is unconfirmed, retry the recorded refusal.'
+          text: 'Refresh the case to check its current state. If outcome delivery is unconfirmed, retry the recorded decision.'
         })
       }
       return h.redirect(`/work-items/${encodeURIComponent(request.params.id)}`)

@@ -20,6 +20,7 @@ export function createAddOverseasSiteActionsService({
 
   return {
     startAssessment: (args) => perform('start-assessment', args),
-    refuseRequest: (args) => perform('refuse', args)
+    refuseRequest: (args) => perform('refuse', args),
+    approveRequest: (args) => perform('approve', args)
   }
 }

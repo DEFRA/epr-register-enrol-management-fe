@@ -5,7 +5,7 @@ import { config } from '#/config/config.js'
 describe('Add ORS authenticated module transport', () => {
   afterEach(() => config.reset('backendApi.sharedSecret'))
 
-  test.each(['start-assessment', 'refuse'])(
+  test.each(['start-assessment', 'refuse', 'approve'])(
     'sends %s to the module boundary with a signed caseworker role',
     async (operation) => {
       config.set('backendApi.sharedSecret', 'test-add-ors-secret')

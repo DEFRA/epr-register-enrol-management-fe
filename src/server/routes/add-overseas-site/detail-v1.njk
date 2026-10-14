@@ -31,11 +31,11 @@
       { key: { text: 'Address' }, value: { text: workItem.payload.proposal.siteAddress } },
       { key: { text: 'Country' }, value: { text: workItem.payload.proposal.country } }
     ] }) }}
-    {% if workItem.stateId === 'rejected' %}
+    {% if workItem.stateId === 'rejected' or workItem.stateId === 'approved' %}
       {% if workItem.payload.outcomeDeliveryConfirmed %}
         <p class="govuk-body" data-testid="add-ors-delivery-confirmed">Operator outcome confirmed.</p>
       {% else %}
-        <p class="govuk-body" data-testid="add-ors-delivery-unconfirmed">Refusal recorded. Operator outcome delivery is unconfirmed. Retry this refusal to send the same outcome.</p>
+        <p class="govuk-body" data-testid="add-ors-delivery-unconfirmed">Decision recorded. Operator outcome delivery is unconfirmed. Retry this decision to send the same outcome.</p>
       {% endif %}
     {% endif %}
     {% if not user.isReadOnly %}
@@ -45,12 +45,16 @@
           {{ govukButton({ text: 'Start assessment', attributes: { 'data-testid': 'add-ors-start-assessment' } }) }}
         </form>
       {% elif workItem.stateId === 'assessment-in-progress' %}
+        <form method="post" action="/work-items/add-overseas-site/{{ workItem.id }}/approve">
+          <input type="hidden" name="crumb" value="{{ crumb }}">
+          {{ govukButton({ text: 'Approve request', attributes: { 'data-testid': 'add-ors-approve' } }) }}
+        </form>
         <form method="post" action="/work-items/add-overseas-site/{{ workItem.id }}/refuse">
           <input type="hidden" name="crumb" value="{{ crumb }}">
           {{ govukButton({ text: 'Refuse request', attributes: { 'data-testid': 'add-ors-refuse' } }) }}
         </form>
-      {% elif workItem.stateId === 'rejected' and not workItem.payload.outcomeDeliveryConfirmed %}
-        <form method="post" action="/work-items/add-overseas-site/{{ workItem.id }}/refuse">
+      {% elif (workItem.stateId === 'rejected' or workItem.stateId === 'approved') and not workItem.payload.outcomeDeliveryConfirmed %}
+        <form method="post" action="/work-items/add-overseas-site/{{ workItem.id }}/{% if workItem.stateId === 'approved' %}approve{% else %}refuse{% endif %}">
           <input type="hidden" name="crumb" value="{{ crumb }}">
           {{ govukButton({ text: 'Retry outcome delivery', attributes: { 'data-testid': 'add-ors-retry-outcome' } }) }}
         </form>
