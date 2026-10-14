@@ -2,8 +2,10 @@ import { vi } from 'vitest'
 import { createServer } from '#/server/server.js'
 import {
   getWorkItem,
-  getWorkItems
+  getWorkItems,
+  performAddOverseasSiteOperation
 } from '#/server/common/helpers/backend-api/backend-api.js'
+import { injectWithCrumb } from '#/test-helpers/csrf.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js')
 
@@ -87,5 +89,131 @@ describe('Add ORS public pages', () => {
     )
     expect(response.result).toContain('value="add-overseas-site"')
     expect(response.result).toContain('data-testid="application-type">Add ORS')
+  })
+
+  test.each([
+    ['submitted', {}, 'add-ors-start-assessment'],
+    ['assessment-in-progress', {}, 'add-ors-refuse'],
+    ['rejected', {}, 'add-ors-retry-outcome']
+  ])(
+    'state %s offers its supported module operation',
+    async (stateId, payload, testId) => {
+      vi.mocked(getWorkItem).mockResolvedValue({
+        ok: true,
+        workItem: { ...item, stateId, payload: { ...item.payload, ...payload } }
+      })
+      const response = await server.inject(`/work-items/${item.id}`)
+      expect(response.statusCode).toBe(200)
+      expect(response.result).toContain(`data-testid="${testId}"`)
+      expect(response.result).not.toContain('data-testid="add-ors-approve"')
+    }
+  )
+
+  test('confirmed delivery offers no further mutation', async () => {
+    vi.mocked(getWorkItem).mockResolvedValue({
+      ok: true,
+      workItem: {
+        ...item,
+        stateId: 'rejected',
+        payload: { ...item.payload, outcomeDeliveryConfirmed: true }
+      }
+    })
+    const response = await server.inject(`/work-items/${item.id}`)
+    expect(response.result).toContain('Operator outcome confirmed')
+    expect(response.result).not.toContain('data-testid="add-ors-retry-outcome"')
+  })
+
+  test.each(['start-assessment', 'refuse'])(
+    'protected %s posts through the module and redirects to current case details',
+    async (operation) => {
+      vi.mocked(performAddOverseasSiteOperation).mockResolvedValue({
+        ok: true,
+        workItem: item
+      })
+      const response = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/add-overseas-site/${item.id}/${operation}`,
+        payload: '',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }
+      })
+      expect(response.statusCode).toBe(302)
+      expect(response.headers.location).toBe(`/work-items/${item.id}`)
+      expect(performAddOverseasSiteOperation).toHaveBeenCalledWith({
+        workItemId: item.id,
+        operation,
+        user: expect.objectContaining({ id: expect.any(String) })
+      })
+    }
+  )
+
+  test.each([409, 503])(
+    'failed refusal (%s) remains visible on the returned case with a retry',
+    async (status) => {
+      vi.mocked(performAddOverseasSiteOperation).mockResolvedValue({
+        ok: false,
+        status
+      })
+      const response = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/add-overseas-site/${item.id}/refuse`,
+        payload: '',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }
+      })
+      expect(response.statusCode).toBe(302)
+      expect(response.headers.location).toBe(`/work-items/${item.id}`)
+      vi.mocked(getWorkItem).mockResolvedValue({
+        ok: true,
+        workItem: { ...item, stateId: 'rejected' }
+      })
+      const cookie = []
+        .concat(response.headers['set-cookie'] || [])
+        .map((entry) => entry.split(';')[0])
+        .join('; ')
+      const returned = await server.inject({
+        url: response.headers.location,
+        headers: { cookie }
+      })
+      expect(returned.result).toContain(
+        status === 503
+          ? 'Operator delivery unconfirmed'
+          : 'Operation unconfirmed'
+      )
+      expect(returned.result).toContain('data-testid="add-ors-retry-outcome"')
+      expect(returned.result).not.toContain(
+        'data-testid="add-ors-delivery-confirmed"'
+      )
+    }
+  )
+
+  test('support can read but cannot assess, refuse or retry; missing CSRF is rejected', async () => {
+    vi.mocked(getWorkItem).mockResolvedValue({
+      ok: true,
+      workItem: { ...item, stateId: 'assessment-in-progress' }
+    })
+    const read = await server.inject({
+      url: `/work-items/${item.id}`,
+      headers: { 'x-test-user-role': 'support-readonly' }
+    })
+    expect(read.statusCode).toBe(200)
+    expect(read.result).not.toContain('data-testid="add-ors-refuse"')
+    for (const operation of ['start-assessment', 'refuse']) {
+      const forbidden = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/add-overseas-site/${item.id}/${operation}`,
+        payload: '',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'x-test-user-role': 'support-readonly'
+        }
+      })
+      expect(forbidden.statusCode).toBe(403)
+      const missingCrumb = await server.inject({
+        method: 'POST',
+        url: `/work-items/add-overseas-site/${item.id}/${operation}`,
+        payload: '',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }
+      })
+      expect(missingCrumb.statusCode).toBe(403)
+    }
   })
 })

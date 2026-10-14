@@ -1,8 +1,13 @@
 {% extends 'layouts/page.njk' %}
 {% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
 {% from "govuk/components/tag/macro.njk" import govukTag %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
 
 {% block content %}
+  {% if flashBanner %}
+    {{ govukNotificationBanner({ titleText: flashBanner.title, text: flashBanner.text }) }}
+  {% endif %}
   <a class="govuk-back-link" href="/work-items" data-testid="add-ors-back">Applications</a>
   <div data-testid="add-ors-detail" data-state-id="{{ workItem.stateId }}" data-template-version="{{ workItem.templateVersion }}" data-request-id="{{ workItem.payload.operatorRequestId }}" data-case-id="{{ workItem.id }}" data-site-id="{{ workItem.payload.proposedSiteId }}">
     <h1 class="govuk-heading-l">Add ORS</h1>
@@ -26,5 +31,30 @@
       { key: { text: 'Address' }, value: { text: workItem.payload.proposal.siteAddress } },
       { key: { text: 'Country' }, value: { text: workItem.payload.proposal.country } }
     ] }) }}
+    {% if workItem.stateId === 'rejected' %}
+      {% if workItem.payload.outcomeDeliveryConfirmed %}
+        <p class="govuk-body" data-testid="add-ors-delivery-confirmed">Operator outcome confirmed.</p>
+      {% else %}
+        <p class="govuk-body" data-testid="add-ors-delivery-unconfirmed">Refusal recorded. Operator outcome delivery is unconfirmed. Retry this refusal to send the same outcome.</p>
+      {% endif %}
+    {% endif %}
+    {% if not user.isReadOnly %}
+      {% if workItem.stateId === 'submitted' %}
+        <form method="post" action="/work-items/add-overseas-site/{{ workItem.id }}/start-assessment">
+          <input type="hidden" name="crumb" value="{{ crumb }}">
+          {{ govukButton({ text: 'Start assessment', attributes: { 'data-testid': 'add-ors-start-assessment' } }) }}
+        </form>
+      {% elif workItem.stateId === 'assessment-in-progress' %}
+        <form method="post" action="/work-items/add-overseas-site/{{ workItem.id }}/refuse">
+          <input type="hidden" name="crumb" value="{{ crumb }}">
+          {{ govukButton({ text: 'Refuse request', attributes: { 'data-testid': 'add-ors-refuse' } }) }}
+        </form>
+      {% elif workItem.stateId === 'rejected' and not workItem.payload.outcomeDeliveryConfirmed %}
+        <form method="post" action="/work-items/add-overseas-site/{{ workItem.id }}/refuse">
+          <input type="hidden" name="crumb" value="{{ crumb }}">
+          {{ govukButton({ text: 'Retry outcome delivery', attributes: { 'data-testid': 'add-ors-retry-outcome' } }) }}
+        </form>
+      {% endif %}
+    {% endif %}
   </div>
 {% endblock %}

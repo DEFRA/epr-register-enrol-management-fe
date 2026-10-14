@@ -1,4 +1,5 @@
 import { registerModuleDetailTemplates } from '../core/templates.js'
+import { buildAddOverseasSiteRoutes } from './actions.js'
 
 export const addOverseasSiteModule = {
   type: {
@@ -44,9 +45,10 @@ export const addOverseasSiteModule = {
       }
     ]
   },
-  async register() {
+  async register(server) {
     registerModuleDetailTemplates('add-overseas-site', {
       v1: 'add-overseas-site/detail-v1'
     })
+    server.route(buildAddOverseasSiteRoutes())
   }
 }

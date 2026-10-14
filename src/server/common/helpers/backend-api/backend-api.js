@@ -444,6 +444,25 @@ export async function applyWorkItemAction({
   })
 }
 
+export async function performAddOverseasSiteOperation({
+  workItemId,
+  operation,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/add-overseas-site/${encodeURIComponent(workItemId)}/${encodeURIComponent(operation)}`
+  return postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    extraHeaders: recyclingOperationsAuthHeaders(user),
+    label: 'performAddOverseasSiteOperation'
+  })
+}
+
 /**
  * Assign (or re-assign) a work item to a user. Authorization (who is
  * allowed to assign what) is this BFF's responsibility, not the backend's
@@ -1216,6 +1235,7 @@ async function postJson({
   fetchImpl,
   user,
   label,
+  extraHeaders = {},
   body = null,
   method = 'POST'
 }) {
@@ -1226,7 +1246,10 @@ async function postJson({
     const requestInit = {
       method,
       signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' }, user)
+      headers: buildHeaders(
+        { accept: 'application/json', ...extraHeaders },
+        user
+      )
     }
     if (body != null) {
       requestInit.headers['content-type'] = 'application/json'
