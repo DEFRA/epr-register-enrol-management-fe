@@ -1861,6 +1861,52 @@ describe('#approveReAccreditation approve-specific timeout (RA-448 phase 2)', ()
   })
 })
 
+describe('#raiseWorkItemQuery query-specific timeout', () => {
+  // The query call must not inherit the short shared backendApi.timeoutMs:
+  // management-be sends an email and pushes to the operator backend before it
+  // responds, and an abort before that finished is what left the caseworker
+  // seeing a failure for a query that had in fact been raised.
+  test('defaults its abort to backendApi.queryTimeoutMs, not the shared backendApi.timeoutMs', async () => {
+    vi.useFakeTimers()
+    try {
+      let capturedSignal
+      const fetchImpl = vi.fn((_url, init) => {
+        capturedSignal = init.signal
+        return new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => {
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+          })
+        })
+      })
+
+      const promise = raiseWorkItemQuery({
+        workItemId: 'wi-1',
+        sections: ['business-plan'],
+        reason: 'Please clarify',
+        baseUrl: 'http://backend:8085',
+        fetchImpl
+      })
+
+      const sharedTimeout = config.get('backendApi.timeoutMs')
+      const queryTimeout = config.get('backendApi.queryTimeoutMs')
+
+      await vi.advanceTimersByTimeAsync(sharedTimeout + 1000)
+      expect(capturedSignal.aborted).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(queryTimeout - sharedTimeout)
+      expect(capturedSignal.aborted).toBe(true)
+
+      expect(await promise).toEqual({
+        ok: false,
+        reason: 'network',
+        message: 'Request timed out'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('#updateRecyclingOperations (RA-469)', () => {
   test('returns ok=true with workItem on 200', async () => {
     const workItem = { id: 'wi-1', stateId: 'submitted' }
