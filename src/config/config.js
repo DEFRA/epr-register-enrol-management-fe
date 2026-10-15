@@ -287,6 +287,12 @@ export const config = convict({
       default: 25000,
       env: 'BACKEND_API_APPROVE_TIMEOUT_MS'
     },
+    queryTimeoutMs: {
+      doc: 'Per-call timeout in milliseconds for raising a query (POST /work-items/re-accreditation/{id}/query). Unlike a plain read or write, this call does more than one thing before it responds: management-be self-assigns the item, applies the query transition, then runs its post-action work, which includes a GOV.UK Notify email (each attempt can take several seconds, and is retried) and the push that tells the operator backend the application is now queried. Aborting here while that is still running used to cancel the push and leave the operator showing the old status; management-be now finishes it regardless, but a timeout this short still reports the query to the caseworker as failed when it succeeded. Default 30000ms; separate from backendApi.timeoutMs so raising it does not slow down every other backend call.',
+      format: Number,
+      default: 30000,
+      env: 'BACKEND_API_QUERY_TIMEOUT_MS'
+    },
     clientId: {
       doc: 'CDP client id sent on outbound calls to the backend (x-cdp-client-id header). Empty string disables the header.',
       format: String,

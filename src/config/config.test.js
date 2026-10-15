@@ -459,3 +459,41 @@ describe('config backend API approve timeout (RA-448 phase 2)', () => {
     expect(mod.config.get('backendApi.approveTimeoutMs')).toBe(40000)
   })
 })
+
+// Raising a query makes management-be assign the item, apply the transition,
+// send a GOV.UK Notify email and push the change to the operator backend before
+// it responds. The shared 5s timeout aborted that mid-way (the 24 Sep ext-test
+// incident), so the call has its own, longer budget.
+describe('backendApi.queryTimeoutMs', () => {
+  const originalEnv = process.env
+
+  beforeEach(() => {
+    vi.resetModules()
+    process.env = { ...originalEnv }
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
+  test('defaults to 30000', async () => {
+    delete process.env.BACKEND_API_QUERY_TIMEOUT_MS
+    const mod = await import('./config.js')
+    expect(mod.config.get('backendApi.queryTimeoutMs')).toBe(30000)
+  })
+
+  test('is longer than the shared backend timeout', async () => {
+    delete process.env.BACKEND_API_QUERY_TIMEOUT_MS
+    delete process.env.BACKEND_API_TIMEOUT_MS
+    const mod = await import('./config.js')
+    expect(mod.config.get('backendApi.queryTimeoutMs')).toBeGreaterThan(
+      mod.config.get('backendApi.timeoutMs')
+    )
+  })
+
+  test('BACKEND_API_QUERY_TIMEOUT_MS overrides the default', async () => {
+    process.env.BACKEND_API_QUERY_TIMEOUT_MS = '45000'
+    const mod = await import('./config.js')
+    expect(mod.config.get('backendApi.queryTimeoutMs')).toBe(45000)
+  })
+})

@@ -892,6 +892,11 @@ export async function extendWorkItemSla({
  *  - 409 → { ok: false, reason: 'not-allowed' } (wrong state to query)
  *  - other → { ok: false, reason: 'server' }
  *  - network/timeout → { ok: false, reason: 'network' }
+ *
+ * Uses `backendApi.queryTimeoutMs`, NOT the shared `backendApi.timeoutMs`:
+ * management-be sends GOV.UK Notify email and pushes to the operator backend
+ * before it responds, which the shared 5s budget does not cover. See the
+ * config doc.
  */
 export async function raiseWorkItemQuery({
   workItemId,
@@ -899,7 +904,7 @@ export async function raiseWorkItemQuery({
   reason,
   user = null,
   baseUrl = config.get(CONFIG_BACKEND_API_URL),
-  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  timeoutMs = config.get('backendApi.queryTimeoutMs'),
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/query`
