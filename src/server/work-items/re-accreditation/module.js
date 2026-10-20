@@ -158,6 +158,11 @@ const TRANSITIONS = [
   // array, so both due-date links render on a queried item the instant the
   // backend projects the action. The mirror is complete for every purpose
   // the frontend reads it for.
+  //
+  // RA-595 adds one frontend-only exception: `canChangeDueDate` is also true
+  // on a `duly-made` item (the `startsOnSelfAssign` from-state), where the
+  // backend projects no `sla-extend`. The deadline submit starts assessment
+  // first, so the backend never sees `sla-extend` from `duly-made`.
   // RA-410. `submit-for-decision` and `reject` (below) both became
   // NON-caller-invocable in v12, mirroring management-be. Neither is a
   // button any more: both hops are applied server-side by the single

@@ -2,7 +2,7 @@
  * "Ensure assessment started" (RA-595): the step a regulator's submit runs
  * before posting work the backend only accepts once a case is started.
  *
- * Make Determination (and, in task 005, Change determination deadline) is
+ * Make Determination and Change determination deadline are
  * offered on a Duly made case, but management-be still refuses a decision or
  * `sla-extend` from `duly-made`. So the submit runs this first. When the item
  * sits in the `fromStateId` of its type's `startsOnSelfAssign` transition
@@ -30,10 +30,10 @@
  *
  * Page loads must never call this — opening a page changes nothing.
  *
- * Reuse: the deadline-change submit (task 005) can call this as is. "Assign
- * to yourself and start" ALWAYS assigns (taking over a colleague's case), so
- * folding it in needs an always-assign option; it still runs its own copy
- * today.
+ * Callers: the decision submit and the deadline-change submit
+ * (`routes/work-items/sla.controller.js`). "Assign to yourself and start"
+ * ALWAYS assigns (taking over a colleague's case), so folding it in needs an
+ * always-assign option; it still runs its own copy today.
  */
 
 import { resolveSelfAssignTransition } from './engine.js'

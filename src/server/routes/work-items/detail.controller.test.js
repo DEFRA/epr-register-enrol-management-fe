@@ -2931,6 +2931,62 @@ describe('#workItemDetailController', () => {
       )
     })
 
+    // RA-595 (task 005). Change determination deadline shows on a Duly made
+    // case whoever holds it. management-be projects no `sla-extend` there;
+    // the frontend decides it from the state, and the submit starts
+    // assessment first.
+    test.each([
+      ['unassigned', {}],
+      ['assigned to the caller', { assignedToId: TEST_STANDARD_USER.id }],
+      ['held by a colleague', { assignedToId: 'someone-else' }]
+    ])(
+      'RA-595: renders Change determination deadline on a Duly made case %s',
+      async (_label, overrides) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId: 'duly-made',
+            availableActions: [],
+            ...overrides
+          })
+        })
+
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).toMatch(
+          new RegExp(
+            `<a(?=[^>]*data-testid="action-sla-extend")(?=[^>]*href="/work-items/${ID}/sla/extend")[^>]*>Change determination deadline</a>`
+          )
+        )
+        expect(assignWorkItem).not.toHaveBeenCalled()
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+      }
+    )
+
+    test('RA-595: a read-only user sees Change determination deadline disabled on a Duly made case', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'duly-made', availableActions: [] })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'support-readonly' }
+      })
+
+      expect(result).toMatch(
+        /<span(?=[^>]*data-testid="action-sla-extend")(?=[^>]*class="govuk-link app-action-link--disabled")/
+      )
+      expect(result).not.toContain(`href="/work-items/${ID}/sla/extend"`)
+    })
+
     test('does not render the Approve CTA when item is NOT in awaiting-decision state', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({

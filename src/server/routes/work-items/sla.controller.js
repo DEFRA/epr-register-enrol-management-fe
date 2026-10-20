@@ -25,6 +25,11 @@
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import {
+  describeStartFailure,
+  describeStartSuccess,
+  ensureAssessmentStarted
+} from '#/server/work-items/core/ensure-assessment-started.js'
 import { REASON_MAX_LENGTH, createSlaService } from './sla.service.js'
 
 const EXTEND_VIEW = 'work-items/sla-extend'
@@ -44,6 +49,7 @@ const EXTEND_DEADLINE_ANCHOR = `#${EXTEND_DEADLINE_ID}-day`
 // RA-572. This single constant drives pageTitle/heading/breadcrumb on both
 // the GET and the validation-error re-render.
 const EXTEND_HEADING = 'Change determination deadline'
+const CHANGE_FAILED_TITLE = 'Could not change the determination deadline'
 
 const logger = createLogger()
 
@@ -190,8 +196,8 @@ export function makeSubmitExtendController({
       const workItem = loaded.workItem
       const applicationRef = workItem.payload.applicationReference
 
-      const result = await service.extendSla({
-        workItemId: id,
+      const user = getUser(request)
+      const validation = service.validateChange({
         reason,
         deadline,
         currentDueDate: workItem.slaDueDate,
@@ -201,8 +207,50 @@ export function makeSubmitExtendController({
         // the work item: `payload.accreditationYear` was passed here until QA
         // showed it is the year the accreditation is valid for (ahead of
         // determination), which floored 2026 cases at 1 Jan 2027.
-        slaStartedAt: workItem.slaStartedAt,
-        user: getUser(request)
+        slaStartedAt: workItem.slaStartedAt
+      })
+      if (!validation.ok) {
+        return renderExtendInvalid(h, {
+          id,
+          workItem,
+          applicationRef,
+          reason,
+          deadline,
+          result: validation
+        })
+      }
+
+      // RA-595. The link shows on a Duly made case, but management-be still
+      // refuses `sla-extend` from `duly-made`. Start assessment first
+      // (assigning the caller only if nobody holds it) — AFTER validation, so
+      // an invalid change starts nothing. A no-op with no backend call in any
+      // other state, including on a resubmit after the start landed and the
+      // change did not.
+      const started = await ensureAssessmentStarted({ workItem, user })
+      if (!started.ok) {
+        logger.warn(
+          {
+            workItemId: id,
+            failedStep: started.failedStep,
+            assigned: started.assigned,
+            reason: started.result?.reason,
+            status: started.result?.status,
+            message: started.result?.message
+          },
+          'Could not start assessment before changing the determination deadline'
+        )
+        flashBanner(request, {
+          type: 'error',
+          title: CHANGE_FAILED_TITLE,
+          text: `${describeStartFailure(started)}, so the determination deadline was not changed. Try again.`
+        })
+        return h.redirect(detailHref(id))
+      }
+
+      const result = await service.submitChange({
+        workItemId: id,
+        change: validation.change,
+        user
       })
 
       if (result.ok) {
@@ -229,12 +277,16 @@ export function makeSubmitExtendController({
         { workItemId: id, outcome: result.outcome, message: result.message },
         'Determination deadline change failed'
       )
+      // RA-595. When the change fails AFTER this submit started assessment,
+      // say so first: the case has moved on (and may now be assigned to the
+      // caller), so the failure must not read as "nothing happened".
+      const banner = bannerForSlaFailure(result, CHANGE_FAILED_TITLE)
+      const startSuccess = describeStartSuccess(started)
       flashBanner(
         request,
-        bannerForSlaFailure(
-          result,
-          'Could not change the determination deadline'
-        )
+        startSuccess == null
+          ? banner
+          : { ...banner, text: `${startSuccess} ${banner.text}` }
       )
       return h.redirect(detailHref(id))
     }

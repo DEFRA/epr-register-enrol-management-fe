@@ -988,9 +988,17 @@ function decorate(workItem) {
     // due date", a BFF-only affordance the backend never projected). The
     // flag itself is unchanged — Change was always the one that followed
     // the `sla-extend` projection, and it still does.
-    canChangeDueDate: projectedActions.some(
-      (action) => action?.actionId === SLA_EXTEND_ACTION_ID
-    ),
+    //
+    // RA-595 adds one frontend-only case: an item sitting in the
+    // `fromStateId` of its type's `startsOnSelfAssign` transition
+    // (re-accreditation: `duly-made`). management-be projects no
+    // `sla-extend` there and still refuses it, so the submit route runs
+    // `core/ensure-assessment-started.js` first. Same marker the decision
+    // CTA and that step use, so the link and the submit cannot disagree.
+    canChangeDueDate:
+      projectedActions.some(
+        (action) => action?.actionId === SLA_EXTEND_ACTION_ID
+      ) || resolveSelfAssignTransition(type, workItem) != null,
     // RA-324 (AC08). The State badge colour is resolved from the shared
     // state-badge map so the detail page and the Applications list colour a
     // given status identically.
