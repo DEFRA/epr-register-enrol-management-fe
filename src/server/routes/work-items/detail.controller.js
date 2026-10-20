@@ -704,6 +704,10 @@ function buildAssignmentViewModel({ workItem, user }) {
 //    `awaiting-decision` — see `decision/eligibility.js` for why both entry
 //    states are allowed. The decision route guards itself with the same
 //    helper, so the button and the URL cannot disagree.
+//
+//    RA-595: it also renders from `duly-made`, whoever holds the case. That
+//    is a frontend-only rule (the backend lists no decision action there);
+//    the decision submit runs `core/ensure-assessment-started.js` first.
 //  - `logDecisionHref` — link target for the CTA.
 //  - `canContinueReview` + `continueReviewHref` (RA-372) — whether the
 //    "Continue review" CTA should render, and where it posts. The endpoint

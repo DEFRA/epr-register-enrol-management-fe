@@ -2880,6 +2880,57 @@ describe('#workItemDetailController', () => {
       )
     })
 
+    // RA-595. Make Determination shows on a Duly made case whoever holds it.
+    // The backend lists no decision action there; the frontend decides it
+    // from the state, and the submit starts assessment first.
+    test.each([
+      ['unassigned', {}],
+      ['assigned to the caller', { assignedToId: TEST_STANDARD_USER.id }],
+      ['held by a colleague', { assignedToId: 'someone-else' }]
+    ])(
+      'RA-595: renders Make Determination on a Duly made case %s',
+      async (_label, overrides) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId: 'duly-made', ...overrides })
+        })
+
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).toMatch(
+          new RegExp(
+            `<a(?=[^>]*data-testid="log-decision-cta")(?=[^>]*href="/work-items/re-accreditation/${ID}/decision")[^>]*>`
+          )
+        )
+        // Opening the detail page changes nothing.
+        expect(assignWorkItem).not.toHaveBeenCalled()
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+      }
+    )
+
+    test('RA-595: a read-only user sees Make Determination disabled on a Duly made case', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'duly-made' })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'support-readonly' }
+      })
+
+      expect(result).toMatch(
+        /<span(?=[^>]*data-testid="log-decision-cta")(?=[^>]*class="govuk-button[^"]*app-action-link--disabled)/
+      )
+    })
+
     test('does not render the Approve CTA when item is NOT in awaiting-decision state', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({

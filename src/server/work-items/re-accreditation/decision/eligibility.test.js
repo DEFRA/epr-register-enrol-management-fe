@@ -64,7 +64,15 @@ describe('evaluateLogDecisionEligibility', () => {
     ).toEqual({ allowed: true })
   })
 
-  test.each([['submitted'], ['duly-made'], ['queried'], ['updated']])(
+  test('allows a decision from duly-made (RA-595: the submit starts assessment first)', () => {
+    // A frontend-only rule. The backend still refuses `/decision` from
+    // `duly-made`; the submit route applies `start-assessment` before it.
+    expect(
+      evaluateLogDecisionEligibility(aWorkItem({ stateId: 'duly-made' }))
+    ).toEqual({ allowed: true })
+  })
+
+  test.each([['submitted'], ['queried'], ['updated']])(
     'refuses a decision from %s',
     (stateId) => {
       expect(evaluateLogDecisionEligibility(aWorkItem({ stateId }))).toEqual({

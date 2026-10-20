@@ -22,6 +22,11 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import {
+  describeStartFailure,
+  describeStartSuccess,
+  ensureAssessmentStarted
+} from '#/server/work-items/core/ensure-assessment-started.js'
 
 import {
   evaluateLogDecisionEligibility,
@@ -295,6 +300,32 @@ export function makeSubmitDecisionController({
         return h.redirect(detailHref(id))
       }
 
+      // RA-595. A Duly made case is decidable here but not at the backend,
+      // which still refuses `/decision` from `duly-made`. Start assessment
+      // first (assigning the caller only if nobody holds it). A no-op with no
+      // backend call in any other state — including on a resubmit after the
+      // start landed and the decision did not.
+      const started = await ensureAssessmentStarted({ workItem, user })
+      if (!started.ok) {
+        logger.warn(
+          {
+            workItemId: id,
+            failedStep: started.failedStep,
+            assigned: started.assigned,
+            reason: started.result?.reason,
+            status: started.result?.status,
+            message: started.result?.message
+          },
+          'Could not start assessment before logging a re-accreditation decision'
+        )
+        flashBanner(request, {
+          type: 'error',
+          title: DECISION_FAILED_TITLE,
+          text: `${describeStartFailure(started)}, so the decision was not recorded. Try again.`
+        })
+        return h.redirect(detailHref(id))
+      }
+
       const result = await service.recordWorkItemDecision({
         workItemId: id,
         outcome: decision,
@@ -319,7 +350,13 @@ export function makeSubmitDecisionController({
         },
         'Re-accreditation decision failed'
       )
-      flashBanner(request, bannerForFailure(result))
+      flashBanner(
+        request,
+        withStartSuccess(
+          bannerForFailure(result),
+          describeStartSuccess(started)
+        )
+      )
       return h.redirect(detailHref(id))
     }
   }
@@ -342,6 +379,18 @@ function successBannerFor(decision) {
     title: 'Decision logged: Refused',
     text: 'The application has been refused and the applicant will be notified.'
   }
+}
+
+/**
+ * RA-595. When the decision fails AFTER this submit started assessment, say
+ * so first: the case has moved on (and may now be assigned to the caller),
+ * and the user must not read the failure as "nothing happened".
+ */
+function withStartSuccess(banner, startSuccess) {
+  if (startSuccess == null) {
+    return banner
+  }
+  return { ...banner, text: `${startSuccess} ${banner.text}` }
 }
 
 function bannerForFailure(result) {
