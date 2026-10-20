@@ -112,7 +112,8 @@ describe('reAccreditationModule', () => {
     ['query-during-decision', 'awaiting-decision', 'queried'],
     // RA-311/MBE-1. All four share from-state `queried`.
     ['resume-during-duly-making', 'queried', 'updated'],
-    ['resume-during-duly-made', 'queried', 'updated'],
+    // RA-523 (v14): the duly-made origin resumes straight into assessment.
+    ['resume-during-duly-made', 'queried', 'assessment-in-progress'],
     ['resume-during-assessment', 'queried', 'updated'],
     ['resume-during-decision', 'queried', 'updated', false]
   ])('declares transition %s: %s -> %s', (actionId, fromStateId, toStateId) => {

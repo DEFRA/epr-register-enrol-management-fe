@@ -96,9 +96,10 @@ const TRANSITIONS = [
   //
   // Still caller-invocable, deliberately: the marker also keeps it out of
   // the actions list (see `selfAssignActionIds` in detail.controller.js),
-  // and leaving it invocable keeps the generic action route working as the
-  // backend's own contract describes it, and keeps the recovery path open
-  // if the assign half succeeds and this half does not.
+  // and both the self-assign handler and `core/ensure-assessment-started.js`
+  // (behind the Make Determination and Change determination deadline
+  // submits) apply it through the generic action route, as the backend's
+  // own contract describes it.
   //
   // RA-595 ("switch" step of add / switch / remove). This used to be
   // `payment-received`; management-be v15 added `start-assessment`
@@ -109,7 +110,12 @@ const TRANSITIONS = [
     displayName: 'Assessment started',
     fromStateId: 'duly-made',
     toStateId: STATE_ASSESSMENT_IN_PROGRESS,
-    startsOnSelfAssign: true
+    startsOnSelfAssign: true,
+    // RA-595. Appended to the self-assign banner when the assign half lands
+    // and this start does not. There is no separate start control to retry
+    // with; the determination and deadline submits start the case.
+    startRetryHint:
+      'It will be started when you make a determination or change the determination deadline.'
   },
   // RA-595. RETIRED, but still declared because management-be v15 still
   // registers (and projects) it until v16 removes it — which can only ship
@@ -314,11 +320,15 @@ const TRANSITIONS = [
     toStateId: 'updated',
     callerInvocable: false
   },
+  // RA-523 (management-be v14). The exception to "into `updated`": a case
+  // queried from Duly made already has its payment and SLA clock settled,
+  // so the operator's response returns it straight to assessment, with the
+  // querier re-assigned.
   {
     actionId: 'resume-during-duly-made',
     displayName: 'Resume',
     fromStateId: 'queried',
-    toStateId: 'updated',
+    toStateId: STATE_ASSESSMENT_IN_PROGRESS,
     callerInvocable: false
   },
   {

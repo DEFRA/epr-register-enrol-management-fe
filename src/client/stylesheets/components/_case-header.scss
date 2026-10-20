@@ -145,7 +145,7 @@
 
 // RA-295. The prototype's primary action fills the card width rather than
 // sizing to its label, so a short label ("Duly make") and a long one
-// ("Payment received") produce the same button.
+// ("Assign to yourself and start") produce the same button.
 .app-case-panel__primary-action {
   width: 100%;
   margin-bottom: govuk-spacing(3);

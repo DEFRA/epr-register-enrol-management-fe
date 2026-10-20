@@ -106,9 +106,8 @@ export function projectWorkItem(type, workItem) {
  * apply on the caller's behalf (RA-410).
  *
  * "Assign to yourself and start" is two operations, and the SECOND one is
- * type-specific: for a re-accreditation it is `start-assessment` (RA-595;
- * formerly `payment-received`), moving a
- * `duly-made` item into assessment. Rather than teach the generic
+ * type-specific: for a re-accreditation it is `start-assessment` (RA-595),
+ * moving a `duly-made` item into assessment. Rather than teach the generic
  * self-assign handler about re-accreditation, a module marks the transition
  * declaratively with `startsOnSelfAssign: true` and this helper looks it up.
  * The generic layer stays type-agnostic and the state literal stays in the

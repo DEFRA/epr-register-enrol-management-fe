@@ -859,11 +859,8 @@ describe('#workItemListController', () => {
 
     expect(result).not.toContain('data-testid="submitted-on"')
     // No clock on these fixtures, so no Due on either — the "NEITHER date"
-    // case. It is a live possibility, not just stale data:
-    // ReAccreditationSlaStampHook swallows WorkItemConcurrencyException
-    // ("clock may not be persisted"), so an item can reach
-    // assessment-in-progress with no clock. The footer must still render, with
-    // "Assigned to" alone, and must not come out empty or malformed.
+    // case. The footer must still render, with "Assigned to" alone, and must
+    // not come out empty or malformed.
     expect(result).not.toContain('data-testid="due-on"')
     expect(result).toContain('data-testid="application-card-footer"')
     expect(result).toContain('data-testid="assigned-to">Unassigned</span>')
