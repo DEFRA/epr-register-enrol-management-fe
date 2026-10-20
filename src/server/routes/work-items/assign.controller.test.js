@@ -243,11 +243,12 @@ describe('#makeShowUnassignController (RA-295 AC03)', () => {
 describe('RA-295 AC03 interstitials render end-to-end', () => {
   let server
 
+  // Booting the real server can exceed the 10s default under full-suite load.
   beforeAll(async () => {
     const { createServer } = await import('#/server/server.js')
     server = await createServer()
     await server.initialize()
-  })
+  }, 30_000)
 
   afterAll(async () => {
     await server.stop({ timeout: 0 })

@@ -232,8 +232,9 @@ export function makeAssignController({
  * handler actually starts something: after a successful assignment it
  * applies whichever transition the work item's type marks
  * `startsOnSelfAssign` for the item's CURRENT state. For a re-accreditation
- * that is `payment-received`, moving `duly-made` into assessment. The
- * separate "Payment received" button is gone.
+ * that is `start-assessment` ("Assessment started"; RA-595 switched it from
+ * `payment-received`), moving `duly-made` into assessment. The separate
+ * "Payment received" button is gone.
  *
  * ⚠ The state check is the load-bearing part. RA-295 renders the assignment
  * panel in EVERY state, so this handler is reached for `queried`,
@@ -839,7 +840,8 @@ function renderDetailFromResult({ request, h, id, result, actionLabel }) {
 const SLA_EXTEND_ACTION_ID = 'sla-extend'
 
 // RA-410. The same treatment for the transition "Assign to yourself and
-// start" now applies (re-accreditation's `payment-received`). It used to
+// start" now applies (re-accreditation's `start-assessment`, formerly
+// `payment-received`). It used to
 // render as its own "Payment received" button in the actions list, gated on
 // a task; the task is gone and the button with it, because the assignment
 // panel's primary button now performs it.

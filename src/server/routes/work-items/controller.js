@@ -222,7 +222,8 @@ const STATUS_OPTION_BY_VALUE = new Map(
 // journey, not an edge case — gating on the clock hid "Submitted on" for
 // essentially every duly-made item. Verified end-to-end: an item taken through
 // the UI reads sub=true/due=false in 'submitted', sub=true/due=true in
-// 'duly-made', and sub=false/due=true after 'payment-received'.
+// 'duly-made', and sub=false/due=true after the start step (then
+// 'payment-received', now 'start-assessment' — RA-595).
 //
 // The two dates are therefore gated on independent signals, and there is NO
 // invariant about how many of them render. Both cases below are intended:

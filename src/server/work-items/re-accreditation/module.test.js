@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v14')
+    expect(reAccreditationType.templateVersion).toBe('v15')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -88,6 +88,7 @@ describe('reAccreditationModule', () => {
   })
 
   test.each([
+    ['start-assessment', 'duly-made', 'assessment-in-progress'],
     ['payment-received', 'duly-made', 'assessment-in-progress'],
     ['sla-extend', 'assessment-in-progress', 'assessment-in-progress'],
     ['submit-for-decision', 'assessment-in-progress', 'awaiting-decision'],
@@ -175,12 +176,14 @@ describe('reAccreditationModule', () => {
   // the ones any one ticket added. RA-410 grew it from nine to eleven:
   // `submit-for-decision` and `reject` joined, because both hops of a
   // decision are now applied server-side by the `/decision` endpoint.
+  // RA-595 made it twelve: `payment-received` is retired here (hidden from
+  // the actions list) while management-be v15 still registers it.
   //
   // Getting this wrong is a live security regression, not a cosmetic
   // mismatch: dropping the flag from any of the eight would make the
   // mirror advertise a set of same-from-state transitions as caller-
   // choosable, i.e. as if the user could pick the destination state.
-  test('flags exactly the eleven server-resolved transitions the backend does', () => {
+  test('flags exactly the eleven server-resolved transitions the backend does, plus retired payment-received', () => {
     const serverResolved = reAccreditationType.transitions
       .filter((t) => t.callerInvocable === false)
       .map((t) => t.actionId)
@@ -199,6 +202,9 @@ describe('reAccreditationModule', () => {
       // duly making carries a payment date that the generic
       // `/actions/{actionId}` route has nowhere to put.
       'duly-make',
+      // RA-595. Frontend-only divergence: the backend still treats it as
+      // caller-invocable until v16 removes it; see module.js.
+      'payment-received',
       // RA-410. Same reasoning as `approve` above.
       'reject',
       'resume-during-assessment',
@@ -250,12 +256,39 @@ describe('reAccreditationModule', () => {
   // RA-410. The marker the generic self-assign handler keys on. Paired with
   // `fromStateId`, it is what makes "Assign to yourself and start" start
   // something in `duly-made` and stay a plain assignment everywhere else.
-  test('payment-received is the ONLY transition marked startsOnSelfAssign', () => {
+  //
+  // RA-595 ("switch" step). The marker moved from `payment-received` to
+  // `start-assessment` ("Assessment started"), mirroring management-be v15.
+  test('start-assessment is the ONLY transition marked startsOnSelfAssign', () => {
     expect(
       reAccreditationType.transitions
         .filter((t) => t.startsOnSelfAssign === true)
         .map((t) => [t.actionId, t.fromStateId])
-    ).toEqual([['payment-received', 'duly-made']])
+    ).toEqual([['start-assessment', 'duly-made']])
+  })
+
+  test('start-assessment mirrors the backend v15 transition', () => {
+    expect(
+      reAccreditationType.transitions.find(
+        (t) => t.actionId === 'start-assessment'
+      )
+    ).toMatchObject({
+      displayName: 'Assessment started',
+      fromStateId: 'duly-made',
+      toStateId: 'assessment-in-progress'
+    })
+  })
+
+  // RA-595. management-be v15 still projects `payment-received` (v16 removes
+  // it, once this frontend is live). Declaring it non-caller-invocable keeps
+  // the generic action loop from drawing a "Payment received" button beside
+  // the self-assign start step: nothing in this frontend applies it any more.
+  test('payment-received is retired: declared non-caller-invocable', () => {
+    expect(
+      reAccreditationType.transitions.find(
+        (t) => t.actionId === 'payment-received'
+      )
+    ).toMatchObject({ callerInvocable: false })
   })
 
   // The whole mirror, pinned in one place. RA-372 found it three blocks
@@ -289,6 +322,7 @@ describe('reAccreditationModule', () => {
       // backend's queried `sla-extend` self-loop is deliberately not mirrored
       // (see the module.js transition comment and the dedicated test above).
       'sla-extend',
+      'start-assessment',
       'submit-for-decision',
       'withdraw',
       'withdraw-during-assessment',

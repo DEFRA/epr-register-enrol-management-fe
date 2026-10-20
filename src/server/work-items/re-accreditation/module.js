@@ -82,8 +82,8 @@ const TRANSITIONS = [
     toStateId: 'duly-made',
     callerInvocable: false
   },
-  // RA-410. `startsOnSelfAssign: true` is what makes "Assign to yourself and
-  // start" actually start anything. The generic self-assign handler reads
+  // RA-410 / RA-595. `startsOnSelfAssign: true` is what makes "Assign to
+  // yourself and start" actually start anything. The generic self-assign handler reads
   // this marker via `core/engine.js#resolveSelfAssignTransition` and applies
   // the transition after the assignment, so the second half of that button's
   // label stops being a lie without the generic layer learning what a
@@ -94,17 +94,37 @@ const TRANSITIONS = [
   // self-assigning a `queried` or `awaiting-decision` item must remain a
   // plain assignment with no state change. Only `duly-made` transitions.
   //
-  // Still caller-invocable, deliberately — but the separate "Payment
-  // received" button it used to render is gone from the UI. Leaving the
-  // transition invocable keeps the generic action route working as the
+  // Still caller-invocable, deliberately: the marker also keeps it out of
+  // the actions list (see `selfAssignActionIds` in detail.controller.js),
+  // and leaving it invocable keeps the generic action route working as the
   // backend's own contract describes it, and keeps the recovery path open
   // if the assign half succeeds and this half does not.
+  //
+  // RA-595 ("switch" step of add / switch / remove). This used to be
+  // `payment-received`; management-be v15 added `start-assessment`
+  // ("Assessment started") with the same from/to states, and this
+  // frontend now applies that instead.
+  {
+    actionId: 'start-assessment',
+    displayName: 'Assessment started',
+    fromStateId: 'duly-made',
+    toStateId: STATE_ASSESSMENT_IN_PROGRESS,
+    startsOnSelfAssign: true
+  },
+  // RA-595. RETIRED, but still declared because management-be v15 still
+  // registers (and projects) it until v16 removes it — which can only ship
+  // once this frontend is live. `callerInvocable: false` DIVERGES from the
+  // backend on purpose, following the "where the two disagree we HIDE" rule
+  // in detail.controller.js#nonInvocableActionIds: without it the generic
+  // action loop would draw a "Payment received" button on every Duly made
+  // case. Nothing in this frontend applies it any more. Delete this entry
+  // with the backend's v16.
   {
     actionId: 'payment-received',
     displayName: 'Payment received',
     fromStateId: 'duly-made',
     toStateId: STATE_ASSESSMENT_IN_PROGRESS,
-    startsOnSelfAssign: true
+    callerInvocable: false
   },
   {
     actionId: 'sla-extend',
@@ -363,7 +383,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v14',
+  templateVersion: 'v15',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -405,6 +425,10 @@ export const reAccreditationModule = {
     //      `assessment-in-progress`; the queried affordance rides
     //      `canChangeDueDate` off the backend projection, not this list
     //      (see the `sla-extend` transition comment above).
+    // v15: RA-595 backend added `start-assessment` ("Assessment started",
+    //      duly-made -> assessment-in-progress) beside `payment-received`,
+    //      with a ReAccreditationStartAssessmentSnapshotMigration. The
+    //      self-assign start step moved onto it (see TRANSITIONS above).
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11
@@ -446,7 +470,8 @@ export const reAccreditationModule = {
       v11: DETAIL_TEMPLATE_V1,
       v12: DETAIL_TEMPLATE_V1,
       v13: DETAIL_TEMPLATE_V1,
-      v14: DETAIL_TEMPLATE_V1
+      v14: DETAIL_TEMPLATE_V1,
+      v15: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

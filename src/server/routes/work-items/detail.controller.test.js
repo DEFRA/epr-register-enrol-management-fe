@@ -160,12 +160,23 @@ function registerReaccreditation() {
         toStateId: 'duly-made',
         callerInvocable: false
       },
+      // RA-595. The self-assign start step is `start-assessment` now;
+      // `payment-received` is declared retired (non-invocable) exactly as
+      // the real module does, so the tests can prove a backend that still
+      // projects it never gets a button for it.
+      {
+        actionId: 'start-assessment',
+        displayName: 'Assessment started',
+        fromStateId: 'duly-made',
+        toStateId: 'assessment-in-progress',
+        startsOnSelfAssign: true
+      },
       {
         actionId: 'payment-received',
         displayName: 'Payment received',
         fromStateId: 'duly-made',
         toStateId: 'assessment-in-progress',
-        startsOnSelfAssign: true
+        callerInvocable: false
       },
       {
         actionId: 'submit-for-decision',
@@ -1502,6 +1513,85 @@ describe('#workItemDetailController', () => {
       )
     })
 
+    // RA-595 ("switch" step). On a Duly made case the start half is
+    // `start-assessment` ("Assessment started"), applied AFTER the assign,
+    // and nothing calls `payment-received` any more.
+    test.each([
+      ['unassigned', { assignedToId: null, assignedToName: null }],
+      [
+        'held by a colleague',
+        { assignedToId: 'someone-else', assignedToName: 'Someone Else' }
+      ]
+    ])(
+      'RA-595: self-assigning a %s Duly made case assigns, then applies start-assessment',
+      async (_label, who) => {
+        // The REAL declaration, so this proves what ships, not the fixture.
+        registerWorkItemType(reAccreditationType)
+        const calls = []
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId: 'duly-made', ...who })
+        })
+        assignWorkItem.mockImplementation(async () => {
+          calls.push('assign')
+          return {
+            ok: true,
+            workItem: aWorkItem({
+              stateId: 'duly-made',
+              assignedToId: 'test-standard-id'
+            })
+          }
+        })
+        applyWorkItemAction.mockImplementation(async ({ actionId }) => {
+          calls.push(`action:${actionId}`)
+          return {
+            ok: true,
+            workItem: aWorkItem({ stateId: 'assessment-in-progress' })
+          }
+        })
+
+        const { statusCode, headers } = await injectWithCrumb(server, {
+          method: 'POST',
+          url: `/work-items/${ID}/self-assign`,
+          payload: '',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' }
+        })
+
+        expect(statusCode).toBe(statusCodes.redirect)
+        expect(headers.location).toBe(`/work-items/${ID}`)
+        expect(calls).toEqual(['assign', 'action:start-assessment'])
+        expect(applyWorkItemAction).toHaveBeenCalledWith(
+          expect.objectContaining({
+            workItemId: ID,
+            actionId: 'start-assessment'
+          })
+        )
+      }
+    )
+
+    test('RA-595: self-assigning a case outside Duly made applies no start transition', async () => {
+      registerWorkItemType(reAccreditationType)
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'assessment-in-progress' })
+      })
+      assignWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'assessment-in-progress' })
+      })
+
+      const { statusCode } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/${ID}/self-assign`,
+        payload: '',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(assignWorkItem).toHaveBeenCalled()
+      expect(applyWorkItemAction).not.toHaveBeenCalled()
+    })
+
     test('Re-renders the detail page inline when the backend rejects the self-assign', async () => {
       registerReaccreditation()
       assignWorkItem.mockResolvedValue({
@@ -1733,10 +1823,11 @@ describe('#workItemDetailController', () => {
       // offered — under its own name, and posting one action rather than
       // re-running an assignment the caller already holds.
       expect(result).toContain('data-testid="start-work-submit"')
-      expect(result).toContain('Payment received')
+      expect(result).toContain('Assessment started')
       expect(result).toContain(
-        `action="/work-items/${ID}/actions/payment-received"`
+        `action="/work-items/${ID}/actions/start-assessment"`
       )
+      expect(result).not.toContain('/actions/payment-received')
     })
 
     // The state the button appears in is load-bearing for the diagnosis.
@@ -1833,6 +1924,9 @@ describe('#workItemDetailController', () => {
       // status, so the caller lands on the item they now hold.
       expect(statusCode).toBe(statusCodes.conflict)
       expect(applyWorkItemAction).toHaveBeenCalledWith(
+        expect.objectContaining({ actionId: 'start-assessment' })
+      )
+      expect(applyWorkItemAction).not.toHaveBeenCalledWith(
         expect.objectContaining({ actionId: 'payment-received' })
       )
       // The banner must name a control that is actually on the page. It used
@@ -1842,14 +1936,14 @@ describe('#workItemDetailController', () => {
         'This application has been assigned to you, but it could not be started.'
       )
       expect(result).toContain(
-        'Select &quot;Payment received&quot; to try again.'
+        'Select &quot;Assessment started&quot; to try again.'
       )
       expect(result).not.toContain('Assign to yourself and start')
       // …and the control it names is reachable, so the retry is not a
       // dead end.
       expect(result).toContain('data-testid="start-work-submit"')
       expect(result).toContain(
-        `action="/work-items/${ID}/actions/payment-received"`
+        `action="/work-items/${ID}/actions/start-assessment"`
       )
     })
 
@@ -2908,6 +3002,61 @@ describe('#workItemDetailController', () => {
       }
     )
 
+    // RA-595. management-be v15 projects BOTH `payment-received` and
+    // `start-assessment` on a Duly made case until v16 removes the former.
+    // Neither may become an actions-list button: payment-received is retired,
+    // and start-assessment belongs to the assignment panel. Paired with the
+    // Query control surviving, so the absence checks cannot pass vacuously.
+    test('RA-595: a Duly made case renders neither payment-received nor start-assessment as an action button', async () => {
+      // The REAL declaration: its retired `payment-received` entry is what
+      // hides the button the v15 backend still projects.
+      registerWorkItemType(reAccreditationType)
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'duly-made',
+          assignedToId: null,
+          assignedToName: null,
+          availableActions: [
+            {
+              actionId: 'payment-received',
+              displayName: 'Payment received',
+              fromStateId: 'duly-made',
+              toStateId: 'assessment-in-progress',
+              callerInvocable: true
+            },
+            {
+              actionId: 'start-assessment',
+              displayName: 'Assessment started',
+              fromStateId: 'duly-made',
+              toStateId: 'assessment-in-progress',
+              callerInvocable: true
+            },
+            {
+              actionId: 'query-during-duly-made',
+              displayName: 'Query',
+              fromStateId: 'duly-made',
+              toStateId: 'queried',
+              callerInvocable: true
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toContain('data-testid="action-query"')
+      expect(result).toContain('data-testid="self-assign-submit"')
+      expect(result).not.toContain('data-testid="action-payment-received"')
+      expect(result).not.toContain('data-testid="action-start-assessment"')
+      expect(result).not.toContain('Payment received')
+      expect(result).not.toContain('/actions/payment-received')
+    })
+
     test('hides a declared-non-invocable action when the backend omits the flag entirely', async () => {
       // The oldest payload shape: no `callerInvocable` key at all, which
       // `isCallerInvocable` correctly reads as invocable for forward-compat.
@@ -3141,10 +3290,11 @@ describe('#workItemDetailController', () => {
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).not.toContain(REMOVED_PAYMENT_CTA)
       // The split-button start control is unchanged: its own testid and its
-      // "Payment received" wording, asserted together — a control that kept
-      // its id while changing its label is the defect RA-523 reported.
+      // wording (RA-595: "Assessment started", from `start-assessment`),
+      // asserted together — a control that kept its id while changing its
+      // label is the defect RA-523 reported.
       expect(result).toContain('data-testid="start-work-submit"')
-      expect(result).toContain('Payment received')
+      expect(result).toContain('Assessment started')
       expect(result).not.toContain('Start assessment')
     })
   })
