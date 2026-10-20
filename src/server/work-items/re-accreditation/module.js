@@ -101,10 +101,10 @@ const TRANSITIONS = [
   // submits) apply it through the generic action route, as the backend's
   // own contract describes it.
   //
-  // RA-595 ("switch" step of add / switch / remove). This used to be
-  // `payment-received`; management-be v15 added `start-assessment`
-  // ("Assessment started") with the same from/to states, and this
-  // frontend now applies that instead.
+  // RA-595 (add / switch / remove). This used to be `payment-received`;
+  // management-be v15 added `start-assessment` ("Assessment started") with
+  // the same from/to states, this frontend switched to it, and v16 removed
+  // `payment-received` from both tiers.
   {
     actionId: 'start-assessment',
     displayName: 'Assessment started',
@@ -116,21 +116,6 @@ const TRANSITIONS = [
     // with; the determination and deadline submits start the case.
     startRetryHint:
       'It will be started when you make a determination or change the determination deadline.'
-  },
-  // RA-595. RETIRED, but still declared because management-be v15 still
-  // registers (and projects) it until v16 removes it — which can only ship
-  // once this frontend is live. `callerInvocable: false` DIVERGES from the
-  // backend on purpose, following the "where the two disagree we HIDE" rule
-  // in detail.controller.js#nonInvocableActionIds: without it the generic
-  // action loop would draw a "Payment received" button on every Duly made
-  // case. Nothing in this frontend applies it any more. Delete this entry
-  // with the backend's v16.
-  {
-    actionId: 'payment-received',
-    displayName: 'Payment received',
-    fromStateId: 'duly-made',
-    toStateId: STATE_ASSESSMENT_IN_PROGRESS,
-    callerInvocable: false
   },
   {
     actionId: 'sla-extend',
@@ -399,7 +384,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v15',
+  templateVersion: 'v16',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -445,6 +430,9 @@ export const reAccreditationModule = {
     //      duly-made -> assessment-in-progress) beside `payment-received`,
     //      with a ReAccreditationStartAssessmentSnapshotMigration. The
     //      self-assign start step moved onto it (see TRANSITIONS above).
+    // v16: RA-595 backend removed `payment-received`, with a
+    //      ReAccreditationRemovePaymentReceivedSnapshotMigration. Its
+    //      retired (non-invocable) declaration here went with it.
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11
@@ -487,7 +475,8 @@ export const reAccreditationModule = {
       v12: DETAIL_TEMPLATE_V1,
       v13: DETAIL_TEMPLATE_V1,
       v14: DETAIL_TEMPLATE_V1,
-      v15: DETAIL_TEMPLATE_V1
+      v15: DETAIL_TEMPLATE_V1,
+      v16: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

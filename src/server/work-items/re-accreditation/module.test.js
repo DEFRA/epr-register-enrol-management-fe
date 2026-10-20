@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v15')
+    expect(reAccreditationType.templateVersion).toBe('v16')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -89,7 +89,6 @@ describe('reAccreditationModule', () => {
 
   test.each([
     ['start-assessment', 'duly-made', 'assessment-in-progress'],
-    ['payment-received', 'duly-made', 'assessment-in-progress'],
     ['sla-extend', 'assessment-in-progress', 'assessment-in-progress'],
     ['submit-for-decision', 'assessment-in-progress', 'awaiting-decision'],
     ['approve', 'awaiting-decision', 'approved'],
@@ -177,14 +176,14 @@ describe('reAccreditationModule', () => {
   // the ones any one ticket added. RA-410 grew it from nine to eleven:
   // `submit-for-decision` and `reject` joined, because both hops of a
   // decision are now applied server-side by the `/decision` endpoint.
-  // RA-595 made it twelve: `payment-received` is retired here (hidden from
-  // the actions list) while management-be v15 still registers it.
+  // RA-595 briefly made it twelve with a retired `payment-received`; v16
+  // removed it from management-be, so it is gone here too.
   //
   // Getting this wrong is a live security regression, not a cosmetic
   // mismatch: dropping the flag from any of the eight would make the
   // mirror advertise a set of same-from-state transitions as caller-
   // choosable, i.e. as if the user could pick the destination state.
-  test('flags exactly the eleven server-resolved transitions the backend does, plus retired payment-received', () => {
+  test('flags exactly the eleven server-resolved transitions the backend does', () => {
     const serverResolved = reAccreditationType.transitions
       .filter((t) => t.callerInvocable === false)
       .map((t) => t.actionId)
@@ -203,9 +202,6 @@ describe('reAccreditationModule', () => {
       // duly making carries a payment date that the generic
       // `/actions/{actionId}` route has nowhere to put.
       'duly-make',
-      // RA-595. Frontend-only divergence: the backend still treats it as
-      // caller-invocable until v16 removes it; see module.js.
-      'payment-received',
       // RA-410. Same reasoning as `approve` above.
       'reject',
       'resume-during-assessment',
@@ -280,16 +276,24 @@ describe('reAccreditationModule', () => {
     })
   })
 
-  // RA-595. management-be v15 still projects `payment-received` (v16 removes
-  // it, once this frontend is live). Declaring it non-caller-invocable keeps
-  // the generic action loop from drawing a "Payment received" button beside
-  // the self-assign start step: nothing in this frontend applies it any more.
-  test('payment-received is retired: declared non-caller-invocable', () => {
+  // RA-595 ("remove" step). management-be v16 no longer declares or projects
+  // `payment-received`, so the retired declaration that hid it is gone too.
+  // `start-assessment` is the only way from Duly made into assessment.
+  test('no longer declares payment-received', () => {
     expect(
       reAccreditationType.transitions.find(
         (t) => t.actionId === 'payment-received'
       )
-    ).toMatchObject({ callerInvocable: false })
+    ).toBeUndefined()
+    expect(
+      reAccreditationType.transitions
+        .filter(
+          (t) =>
+            t.fromStateId === 'duly-made' &&
+            t.toStateId === 'assessment-in-progress'
+        )
+        .map((t) => t.actionId)
+    ).toEqual(['start-assessment'])
   })
 
   // The whole mirror, pinned in one place. RA-372 found it three blocks
@@ -309,7 +313,6 @@ describe('reAccreditationModule', () => {
       'continue-review-during-duly-made',
       'continue-review-during-duly-making',
       'duly-make',
-      'payment-received',
       'query-during-assessment',
       'query-during-decision',
       'query-during-duly-made',

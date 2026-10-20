@@ -50,7 +50,7 @@ function aWorkItem(overrides = {}) {
     id: ID,
     typeId: 're-accreditation',
     stateId: 'duly-made',
-    templateVersion: 'v15',
+    templateVersion: 'v16',
     payload: { applicationReference: 'RA-000000595' },
     availableActions: [],
     ...overrides

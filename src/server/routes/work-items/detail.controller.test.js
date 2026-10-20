@@ -161,22 +161,14 @@ function registerReaccreditation() {
         callerInvocable: false
       },
       // RA-595. The self-assign start step is `start-assessment` now;
-      // `payment-received` is declared retired (non-invocable) exactly as
-      // the real module does, so the tests can prove a backend that still
-      // projects it never gets a button for it.
+      // `payment-received` is no longer declared (management-be v16 removed
+      // it), exactly as the real module.
       {
         actionId: 'start-assessment',
         displayName: 'Assessment started',
         fromStateId: 'duly-made',
         toStateId: 'assessment-in-progress',
         startsOnSelfAssign: true
-      },
-      {
-        actionId: 'payment-received',
-        displayName: 'Payment received',
-        fromStateId: 'duly-made',
-        toStateId: 'assessment-in-progress',
-        callerInvocable: false
       },
       {
         actionId: 'submit-for-decision',
@@ -2004,17 +1996,10 @@ describe('#workItemDetailController', () => {
             aWorkItem({
               stateId,
               ...who,
-              // A v15 backend still projects both start steps on Duly made.
+              // A v16 backend projects start-assessment on Duly made.
               availableActions:
                 stateId === 'duly-made'
                   ? [
-                      {
-                        actionId: 'payment-received',
-                        displayName: 'Payment received',
-                        fromStateId: 'duly-made',
-                        toStateId: 'assessment-in-progress',
-                        callerInvocable: true
-                      },
                       {
                         actionId: 'start-assessment',
                         displayName: 'Assessment started',
@@ -3182,14 +3167,12 @@ describe('#workItemDetailController', () => {
       }
     )
 
-    // RA-595. management-be v15 projects BOTH `payment-received` and
-    // `start-assessment` on a Duly made case until v16 removes the former.
-    // Neither may become an actions-list button: payment-received is retired,
-    // and start-assessment belongs to the assignment panel. Paired with the
+    // RA-595. management-be v16 projects `start-assessment` (and no longer
+    // `payment-received`) on a Duly made case. It must not become an
+    // actions-list button: it belongs to the assignment panel. Paired with the
     // Query control surviving, so the absence checks cannot pass vacuously.
-    test('RA-595: a Duly made case renders neither payment-received nor start-assessment as an action button', async () => {
-      // The REAL declaration: its retired `payment-received` entry is what
-      // hides the button the v15 backend still projects.
+    test('RA-595: a Duly made case renders no Payment received control and no start-assessment action button', async () => {
+      // The REAL declaration, against the v16 backend projection.
       registerWorkItemType(reAccreditationType)
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -3198,13 +3181,6 @@ describe('#workItemDetailController', () => {
           assignedToId: null,
           assignedToName: null,
           availableActions: [
-            {
-              actionId: 'payment-received',
-              displayName: 'Payment received',
-              fromStateId: 'duly-made',
-              toStateId: 'assessment-in-progress',
-              callerInvocable: true
-            },
             {
               actionId: 'start-assessment',
               displayName: 'Assessment started',
