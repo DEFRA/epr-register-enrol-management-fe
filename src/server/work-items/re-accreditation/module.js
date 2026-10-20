@@ -153,8 +153,8 @@ const TRANSITIONS = [
   // (core/module.js) enforces GLOBALLY-UNIQUE transition `actionId`s — an
   // invariant `engine.js#canApplyAction`'s find-by-actionId relies on — so a
   // second `sla-extend` cannot be expressed in this list. It does not need
-  // to be: `canChangeDueDate` (detail.controller.js) derives ENTIRELY from
-  // the backend-projected `availableActions`, never from this transitions
+  // to be: `canChangeDueDate` (detail.controller.js) derives from the
+  // backend-projected `availableActions`, never from this transitions
   // array, so both due-date links render on a queried item the instant the
   // backend projects the action. The mirror is complete for every purpose
   // the frontend reads it for.
@@ -163,6 +163,7 @@ const TRANSITIONS = [
   // on a `duly-made` item (the `startsOnSelfAssign` from-state), where the
   // backend projects no `sla-extend`. The deadline submit starts assessment
   // first, so the backend never sees `sla-extend` from `duly-made`.
+
   // RA-410. `submit-for-decision` and `reject` (below) both became
   // NON-caller-invocable in v12, mirroring management-be. Neither is a
   // button any more: both hops are applied server-side by the single

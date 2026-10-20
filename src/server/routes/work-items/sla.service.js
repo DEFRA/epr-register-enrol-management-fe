@@ -2,10 +2,11 @@
  * Determination-deadline change service (RA-131, reworked by RA-447 CM6,
  * RA-601 and RA-611).
  *
- * One operation, `extendSla`: validates reason + a new deadline date → calls
- * the BE extend endpoint. RA-595 also exposes its two halves,
- * `validateChange` and `submitChange`, so the controller can start assessment
- * on a Duly made case between them. There is no upper bound (RA-447 CM6). RA-601
+ * Two halves: `validateChange` checks the reason and the new deadline date,
+ * and `submitChange` calls the BE extend endpoint with an accepted change.
+ * RA-595 split them so the controller can start assessment on a Duly made
+ * case in between, and an invalid change starts nothing. `extendSla` runs
+ * both in one call. There is no upper bound (RA-447 CM6). RA-601
  * removed the "later than the current deadline" rule, so the deadline may be
  * brought forward as well as pushed back; RA-611 then put a FLOOR back under
  * it.

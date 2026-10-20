@@ -985,9 +985,8 @@ function decorate(workItem) {
     // on a closed case.
     //
     // RA-572 removed the second link this flag used to gate ("Override the
-    // due date", a BFF-only affordance the backend never projected). The
-    // flag itself is unchanged — Change was always the one that followed
-    // the `sla-extend` projection, and it still does.
+    // due date", a BFF-only affordance the backend never projected). Change
+    // was always the one that followed the `sla-extend` projection.
     //
     // RA-595 adds one frontend-only case: an item sitting in the
     // `fromStateId` of its type's `startsOnSelfAssign` transition

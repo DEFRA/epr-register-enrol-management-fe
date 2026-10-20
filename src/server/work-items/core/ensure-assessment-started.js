@@ -141,3 +141,20 @@ export function describeStartSuccess({ assigned, started }) {
   }
   return 'This application has been started.'
 }
+
+/**
+ * A failure banner for the work that FOLLOWED a successful step, prefixed
+ * with what the step did. The case has moved on (and may now be assigned to
+ * the caller), so the failure must not read as "nothing happened". Returns
+ * the banner unchanged when the step did nothing.
+ *
+ * @param {{ text: string }} banner
+ * @param {{ assigned: boolean, started: boolean }} outcome
+ */
+export function withStartSuccess(banner, outcome) {
+  const startSuccess = describeStartSuccess(outcome)
+  if (startSuccess == null) {
+    return banner
+  }
+  return { ...banner, text: `${startSuccess} ${banner.text}` }
+}

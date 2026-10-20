@@ -27,8 +27,8 @@ import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import {
   describeStartFailure,
-  describeStartSuccess,
-  ensureAssessmentStarted
+  ensureAssessmentStarted,
+  withStartSuccess
 } from '#/server/work-items/core/ensure-assessment-started.js'
 import { REASON_MAX_LENGTH, createSlaService } from './sla.service.js'
 
@@ -277,16 +277,13 @@ export function makeSubmitExtendController({
         { workItemId: id, outcome: result.outcome, message: result.message },
         'Determination deadline change failed'
       )
-      // RA-595. When the change fails AFTER this submit started assessment,
-      // say so first: the case has moved on (and may now be assigned to the
-      // caller), so the failure must not read as "nothing happened".
-      const banner = bannerForSlaFailure(result, CHANGE_FAILED_TITLE)
-      const startSuccess = describeStartSuccess(started)
+      // RA-595. A failure after this submit started assessment says so first.
       flashBanner(
         request,
-        startSuccess == null
-          ? banner
-          : { ...banner, text: `${startSuccess} ${banner.text}` }
+        withStartSuccess(
+          bannerForSlaFailure(result, CHANGE_FAILED_TITLE),
+          started
+        )
       )
       return h.redirect(detailHref(id))
     }
