@@ -2,8 +2,11 @@
  * Determination-deadline change service (RA-131, reworked by RA-447 CM6,
  * RA-601 and RA-611).
  *
- * One operation, `extendSla`: validates reason + a new deadline date → calls
- * the BE extend endpoint. There is no upper bound (RA-447 CM6). RA-601
+ * Two halves: `validateChange` checks the reason and the new deadline date,
+ * and `submitChange` calls the BE extend endpoint with an accepted change.
+ * RA-595 split them so the controller can start assessment on a Duly made
+ * case in between, and an invalid change starts nothing. There is no upper
+ * bound (RA-447 CM6). RA-601
  * removed the "later than the current deadline" rule, so the deadline may be
  * brought forward as well as pushed back; RA-611 then put a FLOOR back under
  * it.
@@ -398,42 +401,54 @@ export function validateExtendDeadline(
  */
 export function createSlaService({ extend = defaultExtend, now } = {}) {
   const clock = now ?? (() => new Date())
-  return {
-    async extendSla({
-      workItemId,
-      reason,
+
+  /**
+   * Validate a change without sending it. RA-595 needs this half on its own:
+   * a submit from Duly made starts assessment BEFORE the change is sent, and
+   * an invalid change must be rejected before anything is started.
+   *
+   * @returns {{ ok: true, change: { reason: string, additionalDuration: string } } |
+   *   { ok: false, outcome: 'invalid', field: 'reason'|'deadline', message: string }}
+   */
+  function validateChange({ reason, deadline, currentDueDate, slaStartedAt }) {
+    const reasonValidation = validateReason(reason)
+    if (!reasonValidation.ok) {
+      return { ...reasonValidation, field: 'reason' }
+    }
+    const deadlineValidation = validateExtendDeadline(
       deadline,
       currentDueDate,
-      slaStartedAt,
-      user
-    }) {
-      const reasonValidation = validateReason(reason)
-      if (!reasonValidation.ok) {
-        return { ...reasonValidation, field: 'reason' }
-      }
-      const deadlineValidation = validateExtendDeadline(
-        deadline,
-        currentDueDate,
-        { slaStartedAt, now: clock() }
-      )
-      if (!deadlineValidation.ok) {
-        return deadlineValidation
-      }
-
-      const result = await extend({
-        workItemId,
+      { slaStartedAt, now: clock() }
+    )
+    if (!deadlineValidation.ok) {
+      return deadlineValidation
+    }
+    return {
+      ok: true,
+      change: {
         reason: reasonValidation.reason,
-        additionalDuration: deadlineValidation.additionalDuration,
-        user
-      })
-      if (result.ok) {
-        return { ok: true, workItem: result.workItem }
-      }
-      return {
-        ok: false,
-        outcome: result.reason ?? 'server',
-        message: result.message
+        additionalDuration: deadlineValidation.additionalDuration
       }
     }
   }
+
+  /** Send a change `validateChange` has already accepted. */
+  async function submitChange({ workItemId, change, user }) {
+    const result = await extend({
+      workItemId,
+      reason: change.reason,
+      additionalDuration: change.additionalDuration,
+      user
+    })
+    if (result.ok) {
+      return { ok: true, workItem: result.workItem }
+    }
+    return {
+      ok: false,
+      outcome: result.reason ?? 'server',
+      message: result.message
+    }
+  }
+
+  return { validateChange, submitChange }
 }

@@ -232,8 +232,8 @@ export function makeAssignController({
  * handler actually starts something: after a successful assignment it
  * applies whichever transition the work item's type marks
  * `startsOnSelfAssign` for the item's CURRENT state. For a re-accreditation
- * that is `payment-received`, moving `duly-made` into assessment. The
- * separate "Payment received" button is gone.
+ * that is `start-assessment` ("Assessment started", RA-595), moving
+ * `duly-made` into assessment.
  *
  * ⚠ The state check is the load-bearing part. RA-295 renders the assignment
  * panel in EVERY state, so this handler is reached for `queried`,
@@ -251,10 +251,10 @@ export function makeAssignController({
  *    told exactly that. Rolling the assignment back would need a third call
  *    that can itself fail, and would throw away a correct, useful result.
  *    The item is left assigned to the caller and still not started, which is
- *    a state they can act on: `canSelfAssign` keeps the button rendering
- *    while a `startsOnSelfAssign` transition is still pending, and both
- *    halves are idempotent, so pressing it again retries just the missing
- *    half.
+ *    a state they can act on (RA-595): Duly made offers Make Determination,
+ *    Query and Change determination deadline directly, and submitting a
+ *    determination or a deadline change runs
+ *    `core/ensure-assessment-started.js`, which applies the missing start.
  */
 export function makeSelfAssignController({
   service = createWorkItemActionsService()
@@ -281,8 +281,8 @@ export function makeSelfAssignController({
       // the state, and after a successful assign we would be reading a
       // response we did not ask for. A failure here is not fatal — the
       // assignment is still worth doing — so it degrades to "assign only"
-      // rather than blocking, and the missing transition is recoverable via
-      // the same button.
+      // rather than blocking. The missing start is recoverable: the
+      // submits that need it run core/ensure-assessment-started.js.
       const current = await getWorkItem({ workItemId: id, user })
       const startTransition = current?.ok
         ? resolveSelfAssignTransition(
@@ -326,42 +326,63 @@ export function makeSelfAssignController({
       })
 
       if (!transitionResult.ok) {
-        logger.warn(
-          {
-            workItemId: id,
-            actionId: startTransition.actionId,
-            reason: transitionResult.reason,
-            status: transitionResult.status
-          },
-          'Self-assign succeeded but the start transition failed'
-        )
-        // Render in place rather than redirecting, so the banner sits on the
-        // page showing the (now assigned, still not started) work item. The
-        // message names BOTH halves — the user must not read this as "the
-        // assignment failed" and go looking for it, nor as a generic error
-        // that leaves them unsure what landed.
-        //
-        // RA-523. The retry it points at is now the separate start control,
-        // named from the module declaration — the page it renders onto shows
-        // that button, NOT "Assign to yourself and start", because the assign
-        // half succeeded and the caller is now the assignee. Naming the old
-        // button here would send them looking for a control that is no longer
-        // on the page.
-        return renderDetailFromResult({
+        return renderAssignedButNotStarted({
           request,
           h,
           id,
-          result: {
-            ...transitionResult,
-            message: `This application has been assigned to you, but it could not be started. Select "${startTransition.displayName ?? startTransition.actionId}" to try again.`
-          },
-          actionLabel: 'start work item'
+          startTransition,
+          transitionResult
         })
       }
 
       return h.redirect(`/work-items/${encodeURIComponent(id)}`)
     }
   }
+}
+
+/**
+ * Self-assign landed but the start transition did not. Render in place
+ * rather than redirecting, so the banner sits on the page showing the (now
+ * assigned, still not started) work item. The message names BOTH halves —
+ * the user must not read this as "the assignment failed" and go looking for
+ * it, nor as a generic error that leaves them unsure what landed.
+ *
+ * RA-595. There is no separate start control to retry with, and "Assign to
+ * yourself and start" has gone because the caller now holds the case. The
+ * module declaration says what will start it instead (`startRetryHint`), so
+ * this generic handler names no type-specific action itself.
+ */
+function renderAssignedButNotStarted({
+  request,
+  h,
+  id,
+  startTransition,
+  transitionResult
+}) {
+  logger.warn(
+    {
+      workItemId: id,
+      actionId: startTransition.actionId,
+      reason: transitionResult.reason,
+      status: transitionResult.status
+    },
+    'Self-assign succeeded but the start transition failed'
+  )
+  return renderDetailFromResult({
+    request,
+    h,
+    id,
+    result: {
+      ...transitionResult,
+      message: [
+        'This application has been assigned to you, but it could not be started.',
+        startTransition.startRetryHint
+      ]
+        .filter(Boolean)
+        .join(' ')
+    },
+    actionLabel: 'start work item'
+  })
 }
 
 export function makeUnassignController({
@@ -619,11 +640,7 @@ function buildAssignmentViewModel({ workItem, user }) {
   // Unlike that one this is NOT type-scoped: any registered type reaching
   // one of these states gets the gate, which is the desired behaviour.
   const isClosed = TERMINAL_STATE_IDS.has(workItem.stateId)
-  // RA-523. The precondition BOTH affordances share: we know who the caller
-  // is, and the case is still open. Naming it once is what makes the two
-  // gates below differ in exactly one term — `callerIsAssignee` — which is
-  // the whole point: they are mutually exclusive by construction, so the
-  // panel can never render two primary buttons.
+  // We know who the caller is, and the case is still open.
   const canActOnAssignment = user?.id != null && !isClosed
 
   return {
@@ -634,50 +651,13 @@ function buildAssignmentViewModel({ workItem, user }) {
     // `canSelfAssign` because the template needs to distinguish "no button
     // because you already hold it" from "no controls because it is closed".
     isClosed,
-    // RA-523. Strictly "you do not already hold this". The RA-410
-    // `|| selfAssignStartsWork` clause that used to sit here is GONE — see
-    // `startAction` below for where its job went, and do not reinstate it.
-    //
-    // Why it had to go: `selfAssignStartsWork` is true for ANY item sitting
-    // in a `startsOnSelfAssign` state, which for re-accreditation means
-    // EVERY `duly-made` item. It could not tell "the assign half landed and
-    // the transition half did not" (the recovery case it was written for)
-    // from "assigned, and legitimately sitting in duly-made", so it fired
-    // unconditionally for the assignee. Both of RA-523's QA routes converge
-    // on exactly that: a query self-assigns the item, and either Continue
-    // review (queried from `duly-made`) or Duly make (queried from
-    // `submitted`) returns it to `duly-made` still assigned — where the page
-    // offered to assign the caller an item they already held.
-    canSelfAssign: canActOnAssignment && !callerIsAssignee,
-    // RA-523. The honest half of "Assign to yourself and start", on its own.
-    //
-    // The RA-410 concern is real and unchanged: that button is TWO
-    // operations, and if the assign lands while the transition does not,
-    // `callerIsAssignee` flips true and the only control that starts the
-    // work would vanish — the old "Payment received" button having been
-    // filtered out of the actions list. So the start half still has to be
-    // reachable for a caller who holds a not-yet-started item.
-    //
-    // It is now a separate control that performs ONE operation and says so,
-    // rather than a two-operation button whose label lies about the half
-    // that is already done. That is what makes it safe to render whenever
-    // the caller holds an item in a `startsOnSelfAssign` state, without
-    // needing to distinguish HOW it got there — which is the distinction the
-    // old clause could not draw. It covers strictly more than the clause did:
-    // an item a COLLEAGUE assigned to you in `duly-made` previously offered
-    // "Assign to yourself and start" (a lie — you already held it) and now
-    // offers the start action honestly.
-    //
-    // Posts to the generic action route, so the backend stays the single
-    // authority on whether the transition is allowed; the module declaration
-    // supplies the id and the label, so the generic layer learns nothing
-    // about re-accreditation.
-    // `decorate` always sets `selfAssignStart` (to the projected transition
-    // or to `null`), and `enriched` is the only thing ever passed in here,
-    // so there is deliberately no `?? null` guard: it would only hide a
-    // caller that skipped the decorator, which is a bug worth seeing.
-    startAction:
-      canActOnAssignment && callerIsAssignee ? workItem.selfAssignStart : null
+    // RA-523. Strictly "you do not already hold this". RA-595 removed the
+    // separate start control a caller who held a Duly made case used to get;
+    // a held Duly made case is worked through its own actions (see
+    // core/ensure-assessment-started.js). Do not reinstate a "|| in a
+    // startsOnSelfAssign state" clause here: it would offer to assign the
+    // caller a case they already hold (the RA-523 defect).
+    canSelfAssign: canActOnAssignment && !callerIsAssignee
     // RA-295 removed `isUnassigned`, `canUnassign` and `assignableUsers`
     // from this model: the reassign / unassign links are unconditional
     // WITHIN the active lifecycle (AC03, as narrowed by RA-358 above) and
@@ -703,6 +683,10 @@ function buildAssignmentViewModel({ workItem, user }) {
 //    `awaiting-decision` — see `decision/eligibility.js` for why both entry
 //    states are allowed. The decision route guards itself with the same
 //    helper, so the button and the URL cannot disagree.
+//
+//    RA-595: it also renders from `duly-made`, whoever holds the case. That
+//    is a frontend-only rule (the backend lists no decision action there);
+//    the decision submit runs `core/ensure-assessment-started.js` first.
 //  - `logDecisionHref` — link target for the CTA.
 //  - `canContinueReview` + `continueReviewHref` (RA-372) — whether the
 //    "Continue review" CTA should render, and where it posts. The endpoint
@@ -839,10 +823,9 @@ function renderDetailFromResult({ request, h, id, result, actionLabel }) {
 const SLA_EXTEND_ACTION_ID = 'sla-extend'
 
 // RA-410. The same treatment for the transition "Assign to yourself and
-// start" now applies (re-accreditation's `payment-received`). It used to
-// render as its own "Payment received" button in the actions list, gated on
-// a task; the task is gone and the button with it, because the assignment
-// panel's primary button now performs it.
+// start" applies (re-accreditation's `start-assessment`, RA-595). It is
+// never a button: the assignment panel's primary button applies it, and the
+// determination and deadline submits apply it from Duly made.
 //
 // Filtered here rather than skipped in the template for the reason spelled
 // out above `SLA_EXTEND_ACTION_ID`: `availableActions.length` has to stay
@@ -858,27 +841,6 @@ function selfAssignActionIds(type) {
       .filter((t) => t.startsOnSelfAssign === true)
       .map((t) => t.actionId)
   )
-}
-
-// RA-523. Project the `startsOnSelfAssign` transition leaving the item's
-// CURRENT state down to the two fields the assignment panel needs: the id it
-// posts to the generic action route, and the label it renders.
-//
-// Falls back to the action id when a module declares no `displayName`, so a
-// sloppy declaration produces an ugly button rather than an unlabelled one.
-// Returns `null` — and therefore renders no control at all — whenever
-// `resolveSelfAssignTransition` does: a terminal state, an unregistered type,
-// a type marking no such transition, or an item not sitting in its
-// `fromStateId`.
-function buildSelfAssignStart(type, workItem) {
-  const transition = resolveSelfAssignTransition(type, workItem)
-  if (transition == null) {
-    return null
-  }
-  return {
-    actionId: transition.actionId,
-    displayName: transition.displayName ?? transition.actionId
-  }
 }
 
 // RA-410. Actions the MODULE DECLARATION says the caller may not invoke.
@@ -957,18 +919,6 @@ function decorate(workItem) {
         !selfAssignActions.has(action?.actionId) &&
         !declaredNonInvocable.has(action?.actionId)
     ),
-    // RA-410, reshaped by RA-523. The `startsOnSelfAssign` transition
-    // leaving the item's CURRENT state, projected to just the id and label
-    // the assignment panel needs — or `null` when there is none.
-    //
-    // RA-410 exposed this as a bare boolean (`selfAssignStartsWork`) whose
-    // only job was to keep "Assign to yourself and start" rendering for a
-    // caller who already held a not-yet-started item. RA-523 replaced that
-    // clause with a separately labelled start control, which needs the
-    // action's own id and display name, so the flag became the thing it was
-    // derived from. Generic either way: the marker, the state and the label
-    // all come from the module declaration.
-    selfAssignStart: buildSelfAssignStart(type, workItem),
     // RA-295. Gates the "Change determination deadline" link in the
     // assignment panel. The backend is NOT a backstop here:
     // SlaService.ExtendAsync validates the actor, reason, duration bounds
@@ -979,12 +929,19 @@ function decorate(workItem) {
     // on a closed case.
     //
     // RA-572 removed the second link this flag used to gate ("Override the
-    // due date", a BFF-only affordance the backend never projected). The
-    // flag itself is unchanged — Change was always the one that followed
-    // the `sla-extend` projection, and it still does.
-    canChangeDueDate: projectedActions.some(
-      (action) => action?.actionId === SLA_EXTEND_ACTION_ID
-    ),
+    // due date", a BFF-only affordance the backend never projected). Change
+    // was always the one that followed the `sla-extend` projection.
+    //
+    // RA-595 adds one frontend-only case: an item sitting in the
+    // `fromStateId` of its type's `startsOnSelfAssign` transition
+    // (re-accreditation: `duly-made`). management-be projects no
+    // `sla-extend` there and still refuses it, so the submit route runs
+    // `core/ensure-assessment-started.js` first. Same marker the decision
+    // CTA and that step use, so the link and the submit cannot disagree.
+    canChangeDueDate:
+      projectedActions.some(
+        (action) => action?.actionId === SLA_EXTEND_ACTION_ID
+      ) || resolveSelfAssignTransition(type, workItem) != null,
     // RA-324 (AC08). The State badge colour is resolved from the shared
     // state-badge map so the detail page and the Applications list colour a
     // given status identically.

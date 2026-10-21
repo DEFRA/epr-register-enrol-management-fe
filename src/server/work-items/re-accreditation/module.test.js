@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v14')
+    expect(reAccreditationType.templateVersion).toBe('v16')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -88,7 +88,7 @@ describe('reAccreditationModule', () => {
   })
 
   test.each([
-    ['payment-received', 'duly-made', 'assessment-in-progress'],
+    ['start-assessment', 'duly-made', 'assessment-in-progress'],
     ['sla-extend', 'assessment-in-progress', 'assessment-in-progress'],
     ['submit-for-decision', 'assessment-in-progress', 'awaiting-decision'],
     ['approve', 'awaiting-decision', 'approved'],
@@ -111,7 +111,8 @@ describe('reAccreditationModule', () => {
     ['query-during-decision', 'awaiting-decision', 'queried'],
     // RA-311/MBE-1. All four share from-state `queried`.
     ['resume-during-duly-making', 'queried', 'updated'],
-    ['resume-during-duly-made', 'queried', 'updated'],
+    // RA-523 (v14): the duly-made origin resumes straight into assessment.
+    ['resume-during-duly-made', 'queried', 'assessment-in-progress'],
     ['resume-during-assessment', 'queried', 'updated'],
     ['resume-during-decision', 'queried', 'updated', false]
   ])('declares transition %s: %s -> %s', (actionId, fromStateId, toStateId) => {
@@ -175,6 +176,8 @@ describe('reAccreditationModule', () => {
   // the ones any one ticket added. RA-410 grew it from nine to eleven:
   // `submit-for-decision` and `reject` joined, because both hops of a
   // decision are now applied server-side by the `/decision` endpoint.
+  // RA-595 briefly made it twelve with a retired `payment-received`; v16
+  // removed it from management-be, so it is gone here too.
   //
   // Getting this wrong is a live security regression, not a cosmetic
   // mismatch: dropping the flag from any of the eight would make the
@@ -250,12 +253,47 @@ describe('reAccreditationModule', () => {
   // RA-410. The marker the generic self-assign handler keys on. Paired with
   // `fromStateId`, it is what makes "Assign to yourself and start" start
   // something in `duly-made` and stay a plain assignment everywhere else.
-  test('payment-received is the ONLY transition marked startsOnSelfAssign', () => {
+  //
+  // RA-595 ("switch" step). The marker moved from `payment-received` to
+  // `start-assessment` ("Assessment started"), mirroring management-be v15.
+  test('start-assessment is the ONLY transition marked startsOnSelfAssign', () => {
     expect(
       reAccreditationType.transitions
         .filter((t) => t.startsOnSelfAssign === true)
         .map((t) => [t.actionId, t.fromStateId])
-    ).toEqual([['payment-received', 'duly-made']])
+    ).toEqual([['start-assessment', 'duly-made']])
+  })
+
+  test('start-assessment mirrors the backend v15 transition', () => {
+    expect(
+      reAccreditationType.transitions.find(
+        (t) => t.actionId === 'start-assessment'
+      )
+    ).toMatchObject({
+      displayName: 'Assessment started',
+      fromStateId: 'duly-made',
+      toStateId: 'assessment-in-progress'
+    })
+  })
+
+  // RA-595 ("remove" step). management-be v16 no longer declares or projects
+  // `payment-received`, so the retired declaration that hid it is gone too.
+  // `start-assessment` is the only way from Duly made into assessment.
+  test('no longer declares payment-received', () => {
+    expect(
+      reAccreditationType.transitions.find(
+        (t) => t.actionId === 'payment-received'
+      )
+    ).toBeUndefined()
+    expect(
+      reAccreditationType.transitions
+        .filter(
+          (t) =>
+            t.fromStateId === 'duly-made' &&
+            t.toStateId === 'assessment-in-progress'
+        )
+        .map((t) => t.actionId)
+    ).toEqual(['start-assessment'])
   })
 
   // The whole mirror, pinned in one place. RA-372 found it three blocks
@@ -275,7 +313,6 @@ describe('reAccreditationModule', () => {
       'continue-review-during-duly-made',
       'continue-review-during-duly-making',
       'duly-make',
-      'payment-received',
       'query-during-assessment',
       'query-during-decision',
       'query-during-duly-made',
@@ -289,6 +326,7 @@ describe('reAccreditationModule', () => {
       // backend's queried `sla-extend` self-loop is deliberately not mirrored
       // (see the module.js transition comment and the dedicated test above).
       'sla-extend',
+      'start-assessment',
       'submit-for-decision',
       'withdraw',
       'withdraw-during-assessment',

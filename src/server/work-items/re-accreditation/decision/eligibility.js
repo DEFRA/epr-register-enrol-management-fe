@@ -35,6 +35,19 @@
  *    precisely so a retry completes rather than needing a rescue tool;
  *    confirmed with the backend owner.
  *
+ * RA-595 adds a THIRD, frontend-only entry state:
+ *
+ *  - `duly-made` — the state the `startsOnSelfAssign` transition
+ *    (`start-assessment`) leaves from. management-be
+ *    lists no decision actions there and still refuses `/decision` from it,
+ *    so this is a deliberate frontend rule, not a mirror of the backend: the
+ *    submit route runs `core/ensure-assessment-started.js` first (assign if
+ *    unassigned, then `start-assessment`), which moves the case into
+ *    `assessment-in-progress` before the decision is posted. Found by the
+ *    same `startsOnSelfAssign` marker that step uses, so the CTA and the
+ *    submit cannot disagree, and the `duly-made` literal stays in
+ *    `module.js`.
+ *
  * The backend remains authoritative: it applies its own server-side gate and
  * answers 409 to a forged POST regardless of what this says.
  */
@@ -109,6 +122,14 @@ function decisionEntryStates(type) {
   )
   if (submit?.fromStateId != null) {
     states.add(submit.fromStateId)
+  }
+
+  // RA-595. `duly-made` — a frontend-only rule. The submit route starts
+  // assessment before posting the decision, so the backend never sees a
+  // decision from this state.
+  const start = transitions.find((t) => t.startsOnSelfAssign === true)
+  if (start?.fromStateId != null) {
+    states.add(start.fromStateId)
   }
 
   return states

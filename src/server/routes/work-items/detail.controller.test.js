@@ -160,9 +160,12 @@ function registerReaccreditation() {
         toStateId: 'duly-made',
         callerInvocable: false
       },
+      // RA-595. The self-assign start step is `start-assessment` now;
+      // `payment-received` is no longer declared (management-be v16 removed
+      // it), exactly as the real module.
       {
-        actionId: 'payment-received',
-        displayName: 'Payment received',
+        actionId: 'start-assessment',
+        displayName: 'Assessment started',
         fromStateId: 'duly-made',
         toStateId: 'assessment-in-progress',
         startsOnSelfAssign: true
@@ -1502,6 +1505,85 @@ describe('#workItemDetailController', () => {
       )
     })
 
+    // RA-595 ("switch" step). On a Duly made case the start half is
+    // `start-assessment` ("Assessment started"), applied AFTER the assign,
+    // and nothing calls `payment-received` any more.
+    test.each([
+      ['unassigned', { assignedToId: null, assignedToName: null }],
+      [
+        'held by a colleague',
+        { assignedToId: 'someone-else', assignedToName: 'Someone Else' }
+      ]
+    ])(
+      'RA-595: self-assigning a %s Duly made case assigns, then applies start-assessment',
+      async (_label, who) => {
+        // The REAL declaration, so this proves what ships, not the fixture.
+        registerWorkItemType(reAccreditationType)
+        const calls = []
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId: 'duly-made', ...who })
+        })
+        assignWorkItem.mockImplementation(async () => {
+          calls.push('assign')
+          return {
+            ok: true,
+            workItem: aWorkItem({
+              stateId: 'duly-made',
+              assignedToId: 'test-standard-id'
+            })
+          }
+        })
+        applyWorkItemAction.mockImplementation(async ({ actionId }) => {
+          calls.push(`action:${actionId}`)
+          return {
+            ok: true,
+            workItem: aWorkItem({ stateId: 'assessment-in-progress' })
+          }
+        })
+
+        const { statusCode, headers } = await injectWithCrumb(server, {
+          method: 'POST',
+          url: `/work-items/${ID}/self-assign`,
+          payload: '',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' }
+        })
+
+        expect(statusCode).toBe(statusCodes.redirect)
+        expect(headers.location).toBe(`/work-items/${ID}`)
+        expect(calls).toEqual(['assign', 'action:start-assessment'])
+        expect(applyWorkItemAction).toHaveBeenCalledWith(
+          expect.objectContaining({
+            workItemId: ID,
+            actionId: 'start-assessment'
+          })
+        )
+      }
+    )
+
+    test('RA-595: self-assigning a case outside Duly made applies no start transition', async () => {
+      registerWorkItemType(reAccreditationType)
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'assessment-in-progress' })
+      })
+      assignWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'assessment-in-progress' })
+      })
+
+      const { statusCode } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/${ID}/self-assign`,
+        payload: '',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(assignWorkItem).toHaveBeenCalled()
+      expect(applyWorkItemAction).not.toHaveBeenCalled()
+    })
+
     test('Re-renders the detail page inline when the backend rejects the self-assign', async () => {
       registerReaccreditation()
       assignWorkItem.mockResolvedValue({
@@ -1609,9 +1691,13 @@ describe('#workItemDetailController', () => {
   // These tests pin the STATE the button appears in, because that is what
   // separates the real diagnosis from a plausible wrong one: both of QA's
   // routes converge on `duly-made`, the one state a `startsOnSelfAssign`
-  // transition (`payment-received`) leaves from, which is what makes
-  // `selfAssignStartsWork` true and fires the RA-410 recovery clause in
-  // `buildAssignmentViewModel` unconditionally for the assignee.
+  // transition (`start-assessment`) leaves from, which is what made the
+  // deleted RA-410 `selfAssignStartsWork` clause fire unconditionally for
+  // the assignee.
+  //
+  // RA-595 removed the separate start control RA-523 added for the holder:
+  // a held Duly made case now offers Make Determination, Query and Change
+  // determination deadline directly, and no start control in any state.
   // ---------------------------------------------------------------------
   describe('RA-523: an item the caller already holds must not offer "Assign to yourself and start"', () => {
     const ME = TEST_STANDARD_USER.id
@@ -1699,8 +1785,25 @@ describe('#workItemDetailController', () => {
       applied('duly-make', 'updated', 'duly-made', '2026-04-28T10:00:00Z')
     ]
 
+    // What management-be projects on a Duly made case, bar the start steps
+    // (which never become buttons).
+    const DULY_MADE_QUERY = {
+      actionId: 'query-during-duly-made',
+      displayName: 'Query',
+      fromStateId: 'duly-made',
+      toStateId: 'queried',
+      callerInvocable: true
+    }
+
     async function render(workItem) {
       registerReaccreditation()
+      // The decision CTA lives in the type-specific template, so the RA-595
+      // positive checks below need it registered.
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
       getWorkItem.mockResolvedValue({ ok: true, workItem })
       const { statusCode, result } = await server.inject({
         method: 'GET',
@@ -1722,21 +1825,26 @@ describe('#workItemDetailController', () => {
           stateId: 'duly-made',
           assignedToId: ME,
           assignedToName: 'Test Caseworker',
-          auditLog
+          auditLog,
+          availableActions: [DULY_MADE_QUERY]
         })
       )
 
       expect(result).toContain('Assigned to you')
       expect(result).not.toContain('data-testid="self-assign-submit"')
       expect(result).not.toContain('Assign to yourself and start')
-      // The item genuinely still has to be started, so the START half is
-      // offered — under its own name, and posting one action rather than
-      // re-running an assignment the caller already holds.
-      expect(result).toContain('data-testid="start-work-submit"')
-      expect(result).toContain('Payment received')
-      expect(result).toContain(
-        `action="/work-items/${ID}/actions/payment-received"`
-      )
+      // RA-595. The caller who holds a Duly made case uses the actions Duly
+      // made offers directly; there is no separate start control. Make
+      // Determination, Query and Change determination deadline start the
+      // assessment themselves when submitted.
+      expect(result).toContain('data-testid="log-decision-cta"')
+      expect(result).toContain('data-testid="action-query"')
+      expect(result).toContain('data-testid="action-sla-extend"')
+      expect(result).not.toContain('data-testid="start-work-submit"')
+      expect(result).not.toContain('Assessment started')
+      expect(result).not.toContain('Payment received')
+      expect(result).not.toContain('/actions/start-assessment')
+      expect(result).not.toContain('/actions/payment-received')
     })
 
     // The state the button appears in is load-bearing for the diagnosis.
@@ -1776,22 +1884,26 @@ describe('#workItemDetailController', () => {
 
         expect(result).toContain('data-testid="self-assign-submit"')
         expect(result).toContain('Assign to yourself and start')
-        // …and only the assign-and-start button. The start control is for a
-        // caller who already holds the item; offering both would put two
-        // primary buttons in the panel.
-        expect(result).not.toContain('data-testid="start-work-submit"')
       }
     )
 
     // ------------------------------------------------------------------
-    // The RA-410 case the deleted `|| selfAssignStartsWork` clause existed
-    // for. "Assign to yourself and start" is two operations; if the assign
-    // lands and the transition does not, `callerIsAssignee` flips true and
-    // the caller must STILL have a way to start the work. A fix for RA-523
-    // that reintroduces the stranded caller is not a fix.
+    // RA-410 / RA-595. "Assign to yourself and start" is two operations; if
+    // the assign lands and the transition does not, `callerIsAssignee` flips
+    // true and the self-assign button goes. The caller is NOT stranded: a
+    // Duly made case offers Make Determination, Query and Change
+    // determination deadline directly, and submitting a determination or a
+    // deadline change starts the assessment itself. So there is no separate
+    // start control to retry with, and the banner must not name one.
     // ------------------------------------------------------------------
-    test('RA-410: a caller stranded by a failed start transition is left with a working start control', async () => {
-      registerReaccreditation()
+    test('RA-595: a failed start after self-assign leaves the caller with the Duly made actions, not a start control', async () => {
+      // The REAL declaration: the banner's retry hint comes from it.
+      registerWorkItemType(reAccreditationType)
+      registerDetailTemplate(
+        're-accreditation',
+        'v1',
+        're-accreditation/detail-v1'
+      )
       // The pre-read the handler does BEFORE assigning still sees the item
       // unassigned; every later read (including the in-place re-render) sees
       // the assignment that landed.
@@ -1833,40 +1945,80 @@ describe('#workItemDetailController', () => {
       // status, so the caller lands on the item they now hold.
       expect(statusCode).toBe(statusCodes.conflict)
       expect(applyWorkItemAction).toHaveBeenCalledWith(
+        expect.objectContaining({ actionId: 'start-assessment' })
+      )
+      expect(applyWorkItemAction).not.toHaveBeenCalledWith(
         expect.objectContaining({ actionId: 'payment-received' })
       )
-      // The banner must name a control that is actually on the page. It used
-      // to say "Select 'Assign to yourself and start' again" — a button that
-      // is now (correctly) gone, because the assign half succeeded.
+      // The banner names both halves, and points at the actions that are
+      // actually on the page rather than at a start control that is not.
       expect(result).toContain(
-        'This application has been assigned to you, but it could not be started.'
+        'This application has been assigned to you, but it could not be started. It will be started when you make a determination or change the determination deadline.'
       )
-      expect(result).toContain(
-        'Select &quot;Payment received&quot; to try again.'
-      )
+      expect(result).not.toContain('to try again')
       expect(result).not.toContain('Assign to yourself and start')
-      // …and the control it names is reachable, so the retry is not a
-      // dead end.
-      expect(result).toContain('data-testid="start-work-submit"')
-      expect(result).toContain(
-        `action="/work-items/${ID}/actions/payment-received"`
-      )
+      // Those actions are reachable, so the caller is not stranded…
+      expect(result).toContain('data-testid="log-decision-cta"')
+      expect(result).toContain('data-testid="action-sla-extend"')
+      // …and there is no separate start control.
+      expect(result).not.toContain('data-testid="start-work-submit"')
+      expect(result).not.toContain('/actions/start-assessment')
     })
 
-    // The RA-358 closed-case gate still wins: a terminal item offers no
-    // assignment affordance at all, start control included.
-    test('offers no start control on a closed case', async () => {
-      const result = await render(
-        aWorkItem({
-          stateId: 'withdrawn',
-          assignedToId: ME,
-          assignedToName: 'Test Caseworker'
-        })
-      )
+    // RA-595. No start control renders in any state, for any holder. Paired
+    // with the assignment panel rendering, so the absence checks cannot pass
+    // because the whole panel vanished.
+    describe.each([
+      ['submitted'],
+      ['duly-made'],
+      ['assessment-in-progress'],
+      ['awaiting-decision'],
+      ['queried'],
+      ['updated'],
+      ['approved'],
+      ['rejected'],
+      ['withdrawn']
+    ])('RA-595: in `%s`', (stateId) => {
+      test.each([
+        ['unassigned', { assignedToId: null, assignedToName: null }],
+        [
+          'held by the caller',
+          { assignedToId: ME, assignedToName: 'Test Caseworker' }
+        ],
+        [
+          'held by a colleague',
+          { assignedToId: 'someone-else', assignedToName: 'Someone Else' }
+        ]
+      ])(
+        'a case %s renders no start or Payment received control',
+        async (_label, who) => {
+          const result = await render(
+            aWorkItem({
+              stateId,
+              ...who,
+              // A v16 backend projects start-assessment on Duly made.
+              availableActions:
+                stateId === 'duly-made'
+                  ? [
+                      {
+                        actionId: 'start-assessment',
+                        displayName: 'Assessment started',
+                        fromStateId: 'duly-made',
+                        toStateId: 'assessment-in-progress',
+                        callerInvocable: true
+                      },
+                      DULY_MADE_QUERY
+                    ]
+                  : []
+            })
+          )
 
-      expect(result).toContain('data-testid="assignment-closed"')
-      expect(result).not.toContain('data-testid="start-work-submit"')
-      expect(result).not.toContain('data-testid="self-assign-submit"')
+          expect(result).not.toContain('data-testid="start-work-submit"')
+          expect(result).not.toContain('Payment received')
+          expect(result).not.toContain('/actions/payment-received')
+          expect(result).not.toContain('/actions/start-assessment')
+        }
+      )
     })
   })
 
@@ -2786,6 +2938,113 @@ describe('#workItemDetailController', () => {
       )
     })
 
+    // RA-595. Make Determination shows on a Duly made case whoever holds it.
+    // The backend lists no decision action there; the frontend decides it
+    // from the state, and the submit starts assessment first.
+    test.each([
+      ['unassigned', {}],
+      ['assigned to the caller', { assignedToId: TEST_STANDARD_USER.id }],
+      ['held by a colleague', { assignedToId: 'someone-else' }]
+    ])(
+      'RA-595: renders Make Determination on a Duly made case %s',
+      async (_label, overrides) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId: 'duly-made', ...overrides })
+        })
+
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).toMatch(
+          new RegExp(
+            `<a(?=[^>]*data-testid="log-decision-cta")(?=[^>]*href="/work-items/re-accreditation/${ID}/decision")[^>]*>`
+          )
+        )
+        // Opening the detail page changes nothing.
+        expect(assignWorkItem).not.toHaveBeenCalled()
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+      }
+    )
+
+    test('RA-595: a read-only user sees Make Determination disabled on a Duly made case', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'duly-made' })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'support-readonly' }
+      })
+
+      expect(result).toMatch(
+        /<span(?=[^>]*data-testid="log-decision-cta")(?=[^>]*class="govuk-button[^"]*app-action-link--disabled)/
+      )
+    })
+
+    // RA-595 (task 005). Change determination deadline shows on a Duly made
+    // case whoever holds it. management-be projects no `sla-extend` there;
+    // the frontend decides it from the state, and the submit starts
+    // assessment first.
+    test.each([
+      ['unassigned', {}],
+      ['assigned to the caller', { assignedToId: TEST_STANDARD_USER.id }],
+      ['held by a colleague', { assignedToId: 'someone-else' }]
+    ])(
+      'RA-595: renders Change determination deadline on a Duly made case %s',
+      async (_label, overrides) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId: 'duly-made',
+            availableActions: [],
+            ...overrides
+          })
+        })
+
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).toMatch(
+          new RegExp(
+            `<a(?=[^>]*data-testid="action-sla-extend")(?=[^>]*href="/work-items/${ID}/sla/extend")[^>]*>Change determination deadline</a>`
+          )
+        )
+        expect(assignWorkItem).not.toHaveBeenCalled()
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+      }
+    )
+
+    test('RA-595: a read-only user sees Change determination deadline disabled on a Duly made case', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'duly-made', availableActions: [] })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`,
+        headers: { 'x-test-user-role': 'support-readonly' }
+      })
+
+      expect(result).toMatch(
+        /<span(?=[^>]*data-testid="action-sla-extend")(?=[^>]*class="govuk-link app-action-link--disabled")/
+      )
+      expect(result).not.toContain(`href="/work-items/${ID}/sla/extend"`)
+    })
+
     test('does not render the Approve CTA when item is NOT in awaiting-decision state', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
@@ -2907,6 +3166,52 @@ describe('#workItemDetailController', () => {
         )
       }
     )
+
+    // RA-595. management-be v16 projects `start-assessment` (and no longer
+    // `payment-received`) on a Duly made case. It must not become an
+    // actions-list button: it belongs to the assignment panel. Paired with the
+    // Query control surviving, so the absence checks cannot pass vacuously.
+    test('RA-595: a Duly made case renders no Payment received control and no start-assessment action button', async () => {
+      // The REAL declaration, against the v16 backend projection.
+      registerWorkItemType(reAccreditationType)
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          stateId: 'duly-made',
+          assignedToId: null,
+          assignedToName: null,
+          availableActions: [
+            {
+              actionId: 'start-assessment',
+              displayName: 'Assessment started',
+              fromStateId: 'duly-made',
+              toStateId: 'assessment-in-progress',
+              callerInvocable: true
+            },
+            {
+              actionId: 'query-during-duly-made',
+              displayName: 'Query',
+              fromStateId: 'duly-made',
+              toStateId: 'queried',
+              callerInvocable: true
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toContain('data-testid="action-query"')
+      expect(result).toContain('data-testid="self-assign-submit"')
+      expect(result).not.toContain('data-testid="action-payment-received"')
+      expect(result).not.toContain('data-testid="action-start-assessment"')
+      expect(result).not.toContain('Payment received')
+      expect(result).not.toContain('/actions/payment-received')
+    })
 
     test('hides a declared-non-invocable action when the backend omits the flag entirely', async () => {
       // The oldest payload shape: no `callerInvocable` key at all, which
@@ -3114,10 +3419,9 @@ describe('#workItemDetailController', () => {
       expect(result).toContain(CONTINUE_CTA)
     })
 
-    // A live `duly-made` item belongs to the assignment panel's own start
-    // control (the first half of RA-523, unchanged), never to any `updated`
-    // CTA and never to the removed forward hop.
-    test('a live `duly-made` item gets the split-button start control, not the removed hop', async () => {
+    // A live `duly-made` item gets the Duly made actions directly (RA-595),
+    // never any `updated` CTA, the removed forward hop or a start control.
+    test('a live `duly-made` item gets Make Determination, not a start control or the removed hop', async () => {
       registerReaccreditation()
       registerDetailTemplate(
         're-accreditation',
@@ -3140,11 +3444,9 @@ describe('#workItemDetailController', () => {
 
       expect(statusCode).toBe(statusCodes.ok)
       expect(result).not.toContain(REMOVED_PAYMENT_CTA)
-      // The split-button start control is unchanged: its own testid and its
-      // "Payment received" wording, asserted together — a control that kept
-      // its id while changing its label is the defect RA-523 reported.
-      expect(result).toContain('data-testid="start-work-submit"')
-      expect(result).toContain('Payment received')
+      expect(result).toContain('data-testid="log-decision-cta"')
+      expect(result).not.toContain('data-testid="start-work-submit"')
+      expect(result).not.toContain('Assessment started')
       expect(result).not.toContain('Start assessment')
     })
   })

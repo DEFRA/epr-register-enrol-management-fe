@@ -222,19 +222,17 @@ const STATUS_OPTION_BY_VALUE = new Map(
 // journey, not an edge case — gating on the clock hid "Submitted on" for
 // essentially every duly-made item. Verified end-to-end: an item taken through
 // the UI reads sub=true/due=false in 'submitted', sub=true/due=true in
-// 'duly-made', and sub=false/due=true after 'payment-received'.
+// 'duly-made', and sub=false/due=true after the start step
+// ('start-assessment', RA-595).
 //
 // The two dates are therefore gated on independent signals, and there is NO
 // invariant about how many of them render. Both cases below are intended:
 //   - BOTH render for a clock-carrying 'duly-made' item, i.e. the normal case
 //     above. Correct: the submission date is still the relevant one to show,
 //     and the clock genuinely is running, so the deadline is real.
-//   - NEITHER renders for a post-'duly-made' item with no clock. This is a
-//     live possibility, not just stale data: ReAccreditationSlaStampHook
-//     catches WorkItemConcurrencyException, logs "clock may not be persisted"
-//     and swallows it, so an item can reach 'assessment-in-progress' with no
-//     clock at all. The footer then carries "Assigned to" alone, which is
-//     better than inventing a date.
+//   - NEITHER renders for a post-'duly-made' item with no clock (for
+//     example, legacy data). The footer then carries "Assigned to" alone,
+//     which is better than inventing a date.
 //
 // KNOWN PARTIAL MISS (bead epr-r2s4, separate story): 'queried' and 'updated'
 // are reachable from BOTH pre-assessment ('query-during-duly-making',

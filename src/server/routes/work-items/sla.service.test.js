@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   REASON_MAX_LENGTH,
   createSlaService,
@@ -29,8 +29,8 @@ const NOW = new Date('2026-10-05T09:00:00Z')
 const SLA_STARTED_AT = '2026-03-03T00:00:00Z'
 const BOUNDS = { slaStartedAt: SLA_STARTED_AT, now: NOW }
 
-// What the controller passes through to `extendSla`, which reads its clock
-// from the service rather than from its arguments: only the work item's own
+// What the controller passes to `validateChange`, which reads its clock from
+// the service rather than from its arguments: only the work item's own
 // duly-made anchor travels with the submission.
 const ITEM_BOUNDS = { slaStartedAt: SLA_STARTED_AT }
 
@@ -51,26 +51,34 @@ const JANUARY_BOUND = {
   now: NOW
 }
 
+// An accepted change, as `validateChange` hands it to `submitChange`.
+const A_CHANGE = { reason: 'Need more time', additionalDuration: 'P30D' }
+
 describe('createSlaService', () => {
-  describe('#extendSla', () => {
+  // `validateChange` must never reach the backend: RA-595 runs it BEFORE
+  // starting assessment on a Duly made case, so an invalid change starts
+  // nothing and sends nothing. Every case checks `extend` was not called.
+  describe('#validateChange', () => {
     let extend
     let service
 
     beforeEach(() => {
       extend = vi.fn()
-      // The clock is pinned for every service case: `extendSla` reads it
-      // once per submission to resolve the 1-January bound's year.
+      // The clock is pinned for every service case: `validateChange` reads
+      // it once per submission to resolve the 1-January bound's year.
       service = createSlaService({ extend, now: () => NOW })
     })
 
-    it('returns invalid when reason is empty', async () => {
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    afterEach(() => {
+      expect(extend).not.toHaveBeenCalled()
+    })
+
+    it('returns invalid when reason is empty', () => {
+      const result = service.validateChange({
         reason: '',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
+        ...ITEM_BOUNDS
       })
       expect(result).toEqual({
         ok: false,
@@ -78,30 +86,25 @@ describe('createSlaService', () => {
         field: 'reason',
         message: 'Reason is required'
       })
-      expect(extend).not.toHaveBeenCalled()
     })
 
-    it('returns invalid when reason is whitespace only', async () => {
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    it('returns invalid when reason is whitespace only', () => {
+      const result = service.validateChange({
         reason: '   ',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
+        ...ITEM_BOUNDS
       })
       expect(result.ok).toBe(false)
       expect(result.outcome).toBe('invalid')
     })
 
-    it('returns invalid when reason exceeds max length', async () => {
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    it('returns invalid when reason exceeds max length', () => {
+      const result = service.validateChange({
         reason: 'x'.repeat(REASON_MAX_LENGTH + 1),
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
+        ...ITEM_BOUNDS
       })
       expect(result).toEqual({
         ok: false,
@@ -109,17 +112,14 @@ describe('createSlaService', () => {
         field: 'reason',
         message: `Reason must be ${REASON_MAX_LENGTH} characters or fewer`
       })
-      expect(extend).not.toHaveBeenCalled()
     })
 
-    it('returns invalid when the deadline is empty', async () => {
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    it('returns invalid when the deadline is empty', () => {
+      const result = service.validateChange({
         reason: 'valid reason',
         deadline: { day: '', month: '', year: '' },
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
+        ...ITEM_BOUNDS
       })
       expect(result).toEqual({
         ok: false,
@@ -127,7 +127,6 @@ describe('createSlaService', () => {
         field: 'deadline',
         message: 'Enter the new determination deadline'
       })
-      expect(extend).not.toHaveBeenCalled()
     })
 
     // 31/2 is well-formed but not a real day, so it is caught by the
@@ -139,35 +138,12 @@ describe('createSlaService', () => {
       ['non-numeric day', { day: 'abc', month: '7', year: '2026' }],
       ['two-digit year', { day: '1', month: '7', year: '26' }],
       ['whitespace month', { day: '1', month: ' ', year: '2026' }]
-    ])(
-      'returns invalid for a malformed deadline (%s)',
-      async (_label, deadline) => {
-        const result = await service.extendSla({
-          workItemId: 'abc',
-          reason: 'valid reason',
-          deadline,
-          currentDueDate: CURRENT_DUE_DATE,
-          ...ITEM_BOUNDS,
-          user: null
-        })
-        expect(result).toEqual({
-          ok: false,
-          outcome: 'invalid',
-          field: 'deadline',
-          message: 'Determination deadline must be a real date'
-        })
-        expect(extend).not.toHaveBeenCalled()
-      }
-    )
-
-    it('returns invalid when the deadline is not a real date', async () => {
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    ])('returns invalid for a malformed deadline (%s)', (_label, deadline) => {
+      const result = service.validateChange({
         reason: 'valid reason',
-        deadline: { day: '31', month: '2', year: '2026' },
+        deadline,
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
+        ...ITEM_BOUNDS
       })
       expect(result).toEqual({
         ok: false,
@@ -175,20 +151,32 @@ describe('createSlaService', () => {
         field: 'deadline',
         message: 'Determination deadline must be a real date'
       })
-      expect(extend).not.toHaveBeenCalled()
+    })
+
+    it('returns invalid when the deadline is not a real date', () => {
+      const result = service.validateChange({
+        reason: 'valid reason',
+        deadline: { day: '31', month: '2', year: '2026' },
+        currentDueDate: CURRENT_DUE_DATE,
+        ...ITEM_BOUNDS
+      })
+      expect(result).toEqual({
+        ok: false,
+        outcome: 'invalid',
+        field: 'deadline',
+        message: 'Determination deadline must be a real date'
+      })
     })
 
     // RA-601: the extension-only rule is gone. Resubmitting the CURRENT
     // deadline is the one surviving date rejection — it is a no-op, not a
     // change, so it must not reach the backend or the audit log.
-    it('returns invalid when the deadline is unchanged', async () => {
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    it('returns invalid when the deadline is unchanged', () => {
+      const result = service.validateChange({
         reason: 'valid reason',
         deadline: { day: '1', month: '6', year: '2026' },
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
+        ...ITEM_BOUNDS
       })
       expect(result).toEqual({
         ok: false,
@@ -197,42 +185,36 @@ describe('createSlaService', () => {
         message:
           'The new determination deadline must be different from the current deadline'
       })
-      expect(extend).not.toHaveBeenCalled()
     })
 
     // RA-601's still-valid half, kept alive by RA-611: moving the deadline
     // BACKWARDS is legitimate as long as it lands on or above the floor.
     // 2026-05-27 is earlier than the current 2026-06-01 and well after the
     // duly-made date, so it is accepted and the derived duration is negative.
-    it('accepts an earlier deadline above the floor and sends a negative duration', async () => {
-      const workItem = { id: 'abc' }
-      extend.mockResolvedValue({ ok: true, workItem })
-
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    it('accepts an earlier deadline above the floor with a negative duration', () => {
+      const result = service.validateChange({
         reason: 'Determination brought forward',
         deadline: { day: '27', month: '5', year: '2026' },
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: { id: 'u1' }
+        ...ITEM_BOUNDS
       })
-
-      expect(result).toEqual({ ok: true, workItem })
-      expect(extend).toHaveBeenCalledWith(
-        expect.objectContaining({ additionalDuration: '-P5D' })
-      )
+      expect(result).toEqual({
+        ok: true,
+        change: {
+          reason: 'Determination brought forward',
+          additionalDuration: '-P5D'
+        }
+      })
     })
 
     // RA-611 as respecified: a deadline below the floor is rejected before it
     // can reach the backend. 2 March 2026 is the day before the duly-made date.
-    it('returns invalid when the deadline is earlier than the duly-made date', async () => {
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    it('returns invalid when the deadline is earlier than the duly-made date', () => {
+      const result = service.validateChange({
         reason: 'valid reason',
         deadline: { day: '2', month: '3', year: '2026' },
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
+        ...ITEM_BOUNDS
       })
       expect(result).toEqual({
         ok: false,
@@ -240,43 +222,37 @@ describe('createSlaService', () => {
         field: 'deadline',
         message: DULY_MADE_MESSAGE
       })
-      expect(extend).not.toHaveBeenCalled()
     })
 
-    // The case the today-floor got wrong, end to end through the service: a
-    // date in the PAST is legitimate as long as it is on or above the floor.
-    // 15 April 2026 is after the 3 March duly-made date and before the current
-    // 1 June deadline, so it is accepted with a negative duration.
-    it('accepts a past deadline that is still above the floor', async () => {
-      const workItem = { id: 'abc' }
-      extend.mockResolvedValue({ ok: true, workItem })
-
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    // The case the today-floor got wrong, through the service: a date in the
+    // PAST is legitimate as long as it is on or above the floor. 15 April 2026
+    // is after the 3 March duly-made date and before the current 1 June
+    // deadline, so it is accepted with a negative duration.
+    it('accepts a past deadline that is still above the floor', () => {
+      const result = service.validateChange({
         reason: 'Backdated to the duly made date',
         deadline: { day: '15', month: '4', year: '2026' },
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: { id: 'u1' }
+        ...ITEM_BOUNDS
       })
-
-      expect(result).toEqual({ ok: true, workItem })
-      expect(extend).toHaveBeenCalledWith(
-        expect.objectContaining({ additionalDuration: '-P47D' })
-      )
+      expect(result).toEqual({
+        ok: true,
+        change: {
+          reason: 'Backdated to the duly made date',
+          additionalDuration: '-P47D'
+        }
+      })
     })
 
     // management-be projects `slaDueDate` and `slaStartedAt` off the same clock,
     // so a work item without one has neither. The service reports that rather
-    // than dropping the floor and calling the backend unbounded.
-    it('returns invalid when the work item has no SLA clock', async () => {
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    // than dropping the floor and accepting an unbounded change.
+    it('returns invalid when the work item has no SLA clock', () => {
+      const result = service.validateChange({
         reason: 'valid reason',
         deadline: A_LATER_DEADLINE,
         currentDueDate: null,
-        slaStartedAt: null,
-        user: null
+        slaStartedAt: null
       })
       expect(result).toEqual({
         ok: false,
@@ -284,57 +260,75 @@ describe('createSlaService', () => {
         field: 'deadline',
         message: NO_CLOCK_MESSAGE
       })
-      expect(extend).not.toHaveBeenCalled()
     })
 
     // The service's clock defaults to the real one — the controller injects
     // nothing — so the 1-January bound is live in production. Year-agnostic
     // assertion, for the same reason as the validator's default case.
-    it('falls back to the real clock when none is injected', async () => {
-      const result = await createSlaService({ extend }).extendSla({
-        workItemId: 'abc',
+    it('falls back to the real clock when none is injected', () => {
+      const result = createSlaService({ extend }).validateChange({
         reason: 'valid reason',
         deadline: { day: '1', month: '1', year: '1990' },
         currentDueDate: CURRENT_DUE_DATE,
-        slaStartedAt: '1989-01-01T00:00:00Z',
-        user: null
+        slaStartedAt: '1989-01-01T00:00:00Z'
       })
       expect(result.ok).toBe(false)
       expect(result.message).toMatch(/1 January \d{4}$/)
-      expect(extend).not.toHaveBeenCalled()
     })
 
     // RA-447 CM6 removed the cap entirely — a deadline far beyond the old
     // 31-day maximum is accepted.
-    it('accepts a deadline far beyond the old 31-day cap', async () => {
-      const workItem = { id: 'abc' }
-      extend.mockResolvedValue({ ok: true, workItem })
-
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    it('accepts a deadline far beyond the old 31-day cap', () => {
+      const result = service.validateChange({
         reason: 'valid reason',
         deadline: { day: '1', month: '1', year: '2027' },
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
+        ...ITEM_BOUNDS
       })
-
-      expect(result).toEqual({ ok: true, workItem })
-      expect(extend).toHaveBeenCalledWith(
-        expect.objectContaining({ additionalDuration: 'P214D' })
-      )
+      expect(result).toEqual({
+        ok: true,
+        change: { reason: 'valid reason', additionalDuration: 'P214D' }
+      })
     })
 
-    it('calls extend with ISO 8601 duration derived from the date gap and returns ok on success', async () => {
-      const workItem = { id: 'abc', stateId: 'submitted' }
-      extend.mockResolvedValue({ ok: true, workItem })
-
-      const result = await service.extendSla({
-        workItemId: 'abc',
+    it('derives an ISO 8601 duration from the date gap', () => {
+      const result = service.validateChange({
         reason: 'Need more time',
         deadline: A_LATER_DEADLINE,
         currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
+        ...ITEM_BOUNDS
+      })
+      expect(result).toEqual({ ok: true, change: A_CHANGE })
+    })
+
+    it('trims the reason', () => {
+      const result = service.validateChange({
+        reason: '  trimmed  ',
+        deadline: A_LATER_DEADLINE,
+        currentDueDate: CURRENT_DUE_DATE,
+        ...ITEM_BOUNDS
+      })
+      expect(result.ok).toBe(true)
+      expect(result.change.reason).toBe('trimmed')
+    })
+  })
+
+  describe('#submitChange', () => {
+    let extend
+    let service
+
+    beforeEach(() => {
+      extend = vi.fn()
+      service = createSlaService({ extend, now: () => NOW })
+    })
+
+    it('calls extend with the accepted change and returns ok on success', async () => {
+      const workItem = { id: 'abc', stateId: 'submitted' }
+      extend.mockResolvedValue({ ok: true, workItem })
+
+      const result = await service.submitChange({
+        workItemId: 'abc',
+        change: A_CHANGE,
         user: { id: 'u1' }
       })
 
@@ -347,117 +341,29 @@ describe('createSlaService', () => {
       expect(result).toEqual({ ok: true, workItem })
     })
 
-    it('maps conflict backend result', async () => {
-      extend.mockResolvedValue({
-        ok: false,
-        reason: 'conflict',
-        message: 'Conflict'
-      })
-      const result = await service.extendSla({
+    it.each([
+      ['conflict', 'Conflict'],
+      ['forbidden', 'Forbidden'],
+      ['not-found', 'Not found'],
+      ['network', 'Timeout']
+    ])('maps a %s backend result', async (reason, message) => {
+      extend.mockResolvedValue({ ok: false, reason, message })
+      const result = await service.submitChange({
         workItemId: 'abc',
-        reason: 'reason',
-        deadline: A_LATER_DEADLINE,
-        currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
+        change: A_CHANGE,
         user: null
       })
-      expect(result).toEqual({
-        ok: false,
-        outcome: 'conflict',
-        message: 'Conflict'
-      })
-    })
-
-    it('maps forbidden backend result', async () => {
-      extend.mockResolvedValue({
-        ok: false,
-        reason: 'forbidden',
-        message: 'Forbidden'
-      })
-      const result = await service.extendSla({
-        workItemId: 'abc',
-        reason: 'reason',
-        deadline: A_LATER_DEADLINE,
-        currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
-      })
-      expect(result).toEqual({
-        ok: false,
-        outcome: 'forbidden',
-        message: 'Forbidden'
-      })
-    })
-
-    it('maps not-found backend result', async () => {
-      extend.mockResolvedValue({
-        ok: false,
-        reason: 'not-found',
-        message: 'Not found'
-      })
-      const result = await service.extendSla({
-        workItemId: 'abc',
-        reason: 'reason',
-        deadline: A_LATER_DEADLINE,
-        currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
-      })
-      expect(result).toEqual({
-        ok: false,
-        outcome: 'not-found',
-        message: 'Not found'
-      })
-    })
-
-    it('maps network backend result', async () => {
-      extend.mockResolvedValue({
-        ok: false,
-        reason: 'network',
-        message: 'Timeout'
-      })
-      const result = await service.extendSla({
-        workItemId: 'abc',
-        reason: 'reason',
-        deadline: A_LATER_DEADLINE,
-        currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
-      })
-      expect(result).toEqual({
-        ok: false,
-        outcome: 'network',
-        message: 'Timeout'
-      })
+      expect(result).toEqual({ ok: false, outcome: reason, message })
     })
 
     it('defaults outcome to server when backend reason missing', async () => {
       extend.mockResolvedValue({ ok: false, message: 'Boom' })
-      const result = await service.extendSla({
+      const result = await service.submitChange({
         workItemId: 'abc',
-        reason: 'reason',
-        deadline: A_LATER_DEADLINE,
-        currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
+        change: A_CHANGE,
         user: null
       })
       expect(result).toEqual({ ok: false, outcome: 'server', message: 'Boom' })
-    })
-
-    it('trims reason before calling backend', async () => {
-      const workItem = { id: 'abc' }
-      extend.mockResolvedValue({ ok: true, workItem })
-      await service.extendSla({
-        workItemId: 'abc',
-        reason: '  trimmed  ',
-        deadline: A_LATER_DEADLINE,
-        currentDueDate: CURRENT_DUE_DATE,
-        ...ITEM_BOUNDS,
-        user: null
-      })
-      expect(extend).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: 'trimmed' })
-      )
     })
   })
 

@@ -108,7 +108,7 @@ describe('makeShowDecisionController', () => {
     // Guards the ROUTE, not just the CTA: the URL is guessable and
     // bookmarkable, and the state may have moved on since the detail page
     // was rendered.
-    mockDecidable({ stateId: 'duly-made' })
+    mockDecidable({ stateId: 'submitted' })
     const request = makeRequest()
     const h = makeToolkit()
 

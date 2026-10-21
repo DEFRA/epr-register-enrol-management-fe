@@ -82,8 +82,8 @@ const TRANSITIONS = [
     toStateId: 'duly-made',
     callerInvocable: false
   },
-  // RA-410. `startsOnSelfAssign: true` is what makes "Assign to yourself and
-  // start" actually start anything. The generic self-assign handler reads
+  // RA-410 / RA-595. `startsOnSelfAssign: true` is what makes "Assign to
+  // yourself and start" actually start anything. The generic self-assign handler reads
   // this marker via `core/engine.js#resolveSelfAssignTransition` and applies
   // the transition after the assignment, so the second half of that button's
   // label stops being a lie without the generic layer learning what a
@@ -94,17 +94,28 @@ const TRANSITIONS = [
   // self-assigning a `queried` or `awaiting-decision` item must remain a
   // plain assignment with no state change. Only `duly-made` transitions.
   //
-  // Still caller-invocable, deliberately — but the separate "Payment
-  // received" button it used to render is gone from the UI. Leaving the
-  // transition invocable keeps the generic action route working as the
-  // backend's own contract describes it, and keeps the recovery path open
-  // if the assign half succeeds and this half does not.
+  // Still caller-invocable, deliberately: the marker also keeps it out of
+  // the actions list (see `selfAssignActionIds` in detail.controller.js),
+  // and both the self-assign handler and `core/ensure-assessment-started.js`
+  // (behind the Make Determination and Change determination deadline
+  // submits) apply it through the generic action route, as the backend's
+  // own contract describes it.
+  //
+  // RA-595 (add / switch / remove). This used to be `payment-received`;
+  // management-be v15 added `start-assessment` ("Assessment started") with
+  // the same from/to states, this frontend switched to it, and v16 removed
+  // `payment-received` from both tiers.
   {
-    actionId: 'payment-received',
-    displayName: 'Payment received',
+    actionId: 'start-assessment',
+    displayName: 'Assessment started',
     fromStateId: 'duly-made',
     toStateId: STATE_ASSESSMENT_IN_PROGRESS,
-    startsOnSelfAssign: true
+    startsOnSelfAssign: true,
+    // RA-595. Appended to the self-assign banner when the assign half lands
+    // and this start does not. There is no separate start control to retry
+    // with; the determination and deadline submits start the case.
+    startRetryHint:
+      'It will be started when you make a determination or change the determination deadline.'
   },
   {
     actionId: 'sla-extend',
@@ -133,11 +144,17 @@ const TRANSITIONS = [
   // (core/module.js) enforces GLOBALLY-UNIQUE transition `actionId`s — an
   // invariant `engine.js#canApplyAction`'s find-by-actionId relies on — so a
   // second `sla-extend` cannot be expressed in this list. It does not need
-  // to be: `canChangeDueDate` (detail.controller.js) derives ENTIRELY from
-  // the backend-projected `availableActions`, never from this transitions
+  // to be: `canChangeDueDate` (detail.controller.js) derives from the
+  // backend-projected `availableActions`, never from this transitions
   // array, so both due-date links render on a queried item the instant the
   // backend projects the action. The mirror is complete for every purpose
   // the frontend reads it for.
+  //
+  // RA-595 adds one frontend-only exception: `canChangeDueDate` is also true
+  // on a `duly-made` item (the `startsOnSelfAssign` from-state), where the
+  // backend projects no `sla-extend`. The deadline submit starts assessment
+  // first, so the backend never sees `sla-extend` from `duly-made`.
+
   // RA-410. `submit-for-decision` and `reject` (below) both became
   // NON-caller-invocable in v12, mirroring management-be. Neither is a
   // button any more: both hops are applied server-side by the single
@@ -288,11 +305,15 @@ const TRANSITIONS = [
     toStateId: 'updated',
     callerInvocable: false
   },
+  // RA-523 (management-be v14). The exception to "into `updated`": a case
+  // queried from Duly made already has its payment and SLA clock settled,
+  // so the operator's response returns it straight to assessment, with the
+  // querier re-assigned.
   {
     actionId: 'resume-during-duly-made',
     displayName: 'Resume',
     fromStateId: 'queried',
-    toStateId: 'updated',
+    toStateId: STATE_ASSESSMENT_IN_PROGRESS,
     callerInvocable: false
   },
   {
@@ -363,7 +384,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v14',
+  templateVersion: 'v16',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -405,6 +426,13 @@ export const reAccreditationModule = {
     //      `assessment-in-progress`; the queried affordance rides
     //      `canChangeDueDate` off the backend projection, not this list
     //      (see the `sla-extend` transition comment above).
+    // v15: RA-595 backend added `start-assessment` ("Assessment started",
+    //      duly-made -> assessment-in-progress) beside `payment-received`,
+    //      with a ReAccreditationStartAssessmentSnapshotMigration. The
+    //      self-assign start step moved onto it (see TRANSITIONS above).
+    // v16: RA-595 backend removed `payment-received`, with a
+    //      ReAccreditationRemovePaymentReceivedSnapshotMigration. Its
+    //      retired (non-invocable) declaration here went with it.
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11
@@ -446,7 +474,9 @@ export const reAccreditationModule = {
       v11: DETAIL_TEMPLATE_V1,
       v12: DETAIL_TEMPLATE_V1,
       v13: DETAIL_TEMPLATE_V1,
-      v14: DETAIL_TEMPLATE_V1
+      v14: DETAIL_TEMPLATE_V1,
+      v15: DETAIL_TEMPLATE_V1,
+      v16: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

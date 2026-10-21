@@ -18,12 +18,6 @@
  * onward hop at all — it arrives decision-ready. This service is unchanged
  * in behaviour and still handles the other three origins.
  *
- * This flow used to share its mechanics with a second "payment received"
- * onward hop via a `../onward-hop.js` factory. RA-523 deleted that second
- * flow (the behaviour moved into the backend resume transition), leaving
- * the factory with a single consumer; it has been folded back here where
- * it can be read at a glance.
- *
  * Result shape — controllers branch on `outcome` rather than parsing HTTP
  * status codes:
  *  - { ok: true, workItem }                            on success, which
