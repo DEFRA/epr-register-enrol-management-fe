@@ -5,8 +5,8 @@
  * Two halves: `validateChange` checks the reason and the new deadline date,
  * and `submitChange` calls the BE extend endpoint with an accepted change.
  * RA-595 split them so the controller can start assessment on a Duly made
- * case in between, and an invalid change starts nothing. `extendSla` runs
- * both in one call. There is no upper bound (RA-447 CM6). RA-601
+ * case in between, and an invalid change starts nothing. There is no upper
+ * bound (RA-447 CM6). RA-601
  * removed the "later than the current deadline" rule, so the deadline may be
  * brought forward as well as pushed back; RA-611 then put a FLOOR back under
  * it.
@@ -450,27 +450,5 @@ export function createSlaService({ extend = defaultExtend, now } = {}) {
     }
   }
 
-  return {
-    validateChange,
-    submitChange,
-    async extendSla({
-      workItemId,
-      reason,
-      deadline,
-      currentDueDate,
-      slaStartedAt,
-      user
-    }) {
-      const validation = validateChange({
-        reason,
-        deadline,
-        currentDueDate,
-        slaStartedAt
-      })
-      if (!validation.ok) {
-        return validation
-      }
-      return submitChange({ workItemId, change: validation.change, user })
-    }
-  }
+  return { validateChange, submitChange }
 }

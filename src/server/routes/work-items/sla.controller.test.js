@@ -429,7 +429,7 @@ describe('#makeSubmitExtendController', () => {
   })
 
   // These two used to mock `outcome:` on the backend client's result. The
-  // client returns `reason:` — `extendSla` maps `reason` onto `outcome` —
+  // client returns `reason:` — `submitChange` maps `reason` onto `outcome` —
   // so the mocks fell through to the unmapped-failure default and the
   // forbidden / conflict banners they are named after were never reached.
   // Mocking `reason` is what the real client does, and the banner text is
