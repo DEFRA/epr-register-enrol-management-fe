@@ -174,19 +174,47 @@ function renderExtendInvalid(
     .code(400)
 }
 
+/** The submitted reason and deadline parts, defaulted to empty strings so
+ * the form re-renders with whatever the user typed. */
+function readExtendPayload(request) {
+  const payload = request.payload ?? {}
+  return {
+    reason: typeof payload.reason === 'string' ? payload.reason : '',
+    deadline: {
+      day: payload[`${EXTEND_DEADLINE_ID}-day`] ?? '',
+      month: payload[`${EXTEND_DEADLINE_ID}-month`] ?? '',
+      year: payload[`${EXTEND_DEADLINE_ID}-year`] ?? ''
+    }
+  }
+}
+
+function startFailedResponse(request, h, { id, started }) {
+  logger.warn(
+    {
+      workItemId: id,
+      failedStep: started.failedStep,
+      assigned: started.assigned,
+      reason: started.result?.reason,
+      status: started.result?.status,
+      message: started.result?.message
+    },
+    'Could not start assessment before changing the determination deadline'
+  )
+  flashBanner(request, {
+    type: 'error',
+    title: CHANGE_FAILED_TITLE,
+    text: `${describeStartFailure(started)}, so the determination deadline was not changed. Try again.`
+  })
+  return h.redirect(detailHref(id))
+}
+
 export function makeSubmitExtendController({
   service = createSlaService()
 } = {}) {
   return {
     async handler(request, h) {
       const id = request.params.id
-      const payload = request.payload ?? {}
-      const reason = typeof payload.reason === 'string' ? payload.reason : ''
-      const deadline = {
-        day: payload[`${EXTEND_DEADLINE_ID}-day`] ?? '',
-        month: payload[`${EXTEND_DEADLINE_ID}-month`] ?? '',
-        year: payload[`${EXTEND_DEADLINE_ID}-year`] ?? ''
-      }
+      const { reason, deadline } = readExtendPayload(request)
 
       const loaded = await loadWorkItemForExtend(request, h, id)
       if (loaded.response) {
@@ -194,7 +222,13 @@ export function makeSubmitExtendController({
       }
 
       const workItem = loaded.workItem
-      const applicationRef = workItem.payload.applicationReference
+      const form = {
+        id,
+        workItem,
+        applicationRef: workItem.payload.applicationReference,
+        reason,
+        deadline
+      }
 
       const user = getUser(request)
       const validation = service.validateChange({
@@ -210,14 +244,7 @@ export function makeSubmitExtendController({
         slaStartedAt: workItem.slaStartedAt
       })
       if (!validation.ok) {
-        return renderExtendInvalid(h, {
-          id,
-          workItem,
-          applicationRef,
-          reason,
-          deadline,
-          result: validation
-        })
+        return renderExtendInvalid(h, { ...form, result: validation })
       }
 
       // RA-595. The link shows on a Duly made case, but management-be still
@@ -228,23 +255,7 @@ export function makeSubmitExtendController({
       // change did not.
       const started = await ensureAssessmentStarted({ workItem, user })
       if (!started.ok) {
-        logger.warn(
-          {
-            workItemId: id,
-            failedStep: started.failedStep,
-            assigned: started.assigned,
-            reason: started.result?.reason,
-            status: started.result?.status,
-            message: started.result?.message
-          },
-          'Could not start assessment before changing the determination deadline'
-        )
-        flashBanner(request, {
-          type: 'error',
-          title: CHANGE_FAILED_TITLE,
-          text: `${describeStartFailure(started)}, so the determination deadline was not changed. Try again.`
-        })
-        return h.redirect(detailHref(id))
+        return startFailedResponse(request, h, { id, started })
       }
 
       const result = await service.submitChange({
@@ -263,14 +274,7 @@ export function makeSubmitExtendController({
       }
 
       if (result.outcome === 'invalid') {
-        return renderExtendInvalid(h, {
-          id,
-          workItem,
-          applicationRef,
-          reason,
-          deadline,
-          result
-        })
+        return renderExtendInvalid(h, { ...form, result })
       }
 
       logger.warn(

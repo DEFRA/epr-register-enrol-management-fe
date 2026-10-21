@@ -326,46 +326,63 @@ export function makeSelfAssignController({
       })
 
       if (!transitionResult.ok) {
-        logger.warn(
-          {
-            workItemId: id,
-            actionId: startTransition.actionId,
-            reason: transitionResult.reason,
-            status: transitionResult.status
-          },
-          'Self-assign succeeded but the start transition failed'
-        )
-        // Render in place rather than redirecting, so the banner sits on the
-        // page showing the (now assigned, still not started) work item. The
-        // message names BOTH halves — the user must not read this as "the
-        // assignment failed" and go looking for it, nor as a generic error
-        // that leaves them unsure what landed.
-        //
-        // RA-595. There is no separate start control to retry with, and
-        // "Assign to yourself and start" has gone because the caller now holds
-        // the case. The module declaration says what will start it instead
-        // (`startRetryHint`), so this generic handler names no type-specific
-        // action itself.
-        return renderDetailFromResult({
+        return renderAssignedButNotStarted({
           request,
           h,
           id,
-          result: {
-            ...transitionResult,
-            message: [
-              'This application has been assigned to you, but it could not be started.',
-              startTransition.startRetryHint
-            ]
-              .filter(Boolean)
-              .join(' ')
-          },
-          actionLabel: 'start work item'
+          startTransition,
+          transitionResult
         })
       }
 
       return h.redirect(`/work-items/${encodeURIComponent(id)}`)
     }
   }
+}
+
+/**
+ * Self-assign landed but the start transition did not. Render in place
+ * rather than redirecting, so the banner sits on the page showing the (now
+ * assigned, still not started) work item. The message names BOTH halves —
+ * the user must not read this as "the assignment failed" and go looking for
+ * it, nor as a generic error that leaves them unsure what landed.
+ *
+ * RA-595. There is no separate start control to retry with, and "Assign to
+ * yourself and start" has gone because the caller now holds the case. The
+ * module declaration says what will start it instead (`startRetryHint`), so
+ * this generic handler names no type-specific action itself.
+ */
+function renderAssignedButNotStarted({
+  request,
+  h,
+  id,
+  startTransition,
+  transitionResult
+}) {
+  logger.warn(
+    {
+      workItemId: id,
+      actionId: startTransition.actionId,
+      reason: transitionResult.reason,
+      status: transitionResult.status
+    },
+    'Self-assign succeeded but the start transition failed'
+  )
+  return renderDetailFromResult({
+    request,
+    h,
+    id,
+    result: {
+      ...transitionResult,
+      message: [
+        'This application has been assigned to you, but it could not be started.',
+        startTransition.startRetryHint
+      ]
+        .filter(Boolean)
+        .join(' ')
+    },
+    actionLabel: 'start work item'
+  })
 }
 
 export function makeUnassignController({
