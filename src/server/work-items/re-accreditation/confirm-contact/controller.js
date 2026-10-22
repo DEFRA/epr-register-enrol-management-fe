@@ -122,9 +122,9 @@ function pageView(
  * Loads the work item and settles the cases where there is no page to show.
  * Returns `{ response }` to hand straight back, or `{ workItem }`.
  */
-async function loadPendingWorkItem(request, h) {
+async function loadPendingWorkItem(request, h, user) {
   const id = request.params.id
-  const result = await getWorkItem({ workItemId: id, user: getUser(request) })
+  const result = await getWorkItem({ workItemId: id, user })
 
   if (result.ok === false && result.status === 404) {
     return { response: renderNotFound(h, id) }
@@ -162,7 +162,11 @@ function failureBannerFor(result) {
 export function makeShowConfirmContactController() {
   return {
     async handler(request, h) {
-      const { response, workItem } = await loadPendingWorkItem(request, h)
+      const { response, workItem } = await loadPendingWorkItem(
+        request,
+        h,
+        getUser(request)
+      )
       if (response) {
         return response
       }
@@ -183,7 +187,7 @@ export function makeSubmitConfirmContactController({
       const id = request.params.id
       const user = getUser(request)
 
-      const { response, workItem } = await loadPendingWorkItem(request, h)
+      const { response, workItem } = await loadPendingWorkItem(request, h, user)
       if (response) {
         return response
       }
@@ -214,7 +218,10 @@ export function makeSubmitConfirmContactController({
       })
 
       if (result.ok) {
-        request.yar?.flash?.('flashBanner', SUCCESS_BANNERS[workItem.stateId])
+        const banner = SUCCESS_BANNERS[workItem.stateId]
+        if (banner) {
+          request.yar?.flash?.('flashBanner', banner)
+        }
         return h.redirect(detailHref(id))
       }
 

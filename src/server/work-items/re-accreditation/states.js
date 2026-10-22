@@ -19,9 +19,9 @@ export const STATE_APPROVED_PENDING_CONTACT = 'approved-pending-contact'
  * "Confirm applicant contact" (step 2) is the only way on. One list, read by
  * the detail page and the confirm-contact routes alike.
  */
-export const PENDING_CONTACT_STATE_IDS = Object.freeze(
-  new Set([STATE_APPROVED_PENDING_CONTACT])
-)
+export const PENDING_CONTACT_STATE_IDS = new Set([
+  STATE_APPROVED_PENDING_CONTACT
+])
 
 /**
  * Is the work item a re-accreditation awaiting confirmation of applicant
