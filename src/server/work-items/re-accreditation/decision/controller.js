@@ -41,6 +41,9 @@ const UNAVAILABLE_VIEW = 'work-items/detail-error'
 const WORK_ITEMS_HREF = '/work-items'
 
 const PAGE_TITLE = 'Make determination for this application'
+// RA-527: the H1 is the shorter Figma Design 3 copy; the <title> keeps the
+// longer, more descriptive PAGE_TITLE.
+const PAGE_HEADING = 'Make determination'
 const DECISION_FAILED_TITLE = 'Could not log a decision'
 
 // The GOV.UK error-summary link must target the FIRST radio in the group,
@@ -92,7 +95,7 @@ function breadcrumbs(id, ref) {
     { text: 'Work items', href: WORK_ITEMS_HREF },
     { text: ref ?? 'Work item', href: detailHref(id) },
     // RA-505: the current-page crumb mirrors the page's H1 ("Make
-    // determination for this application"), NOT the "Log decision" CTA on the
+    // determination", PAGE_HEADING), NOT the "Log decision" CTA on the
     // detail page that navigates here. Both renders of this page — the initial
     // GET and the validation-error re-render — share this single helper.
     { text: 'Make determination' }
@@ -160,7 +163,7 @@ export function makeShowDecisionController() {
 
       return h.view(VIEW_PATH, {
         pageTitle: PAGE_TITLE,
-        heading: PAGE_TITLE,
+        heading: PAGE_HEADING,
         breadcrumbs: breadcrumbs(id, applicationRef),
         workItem: { ...workItem, applicationRef },
         formAction: decisionHref(id),
@@ -262,7 +265,7 @@ export function makeSubmitDecisionController({
         return h
           .view(VIEW_PATH, {
             pageTitle: `Error: ${PAGE_TITLE}`,
-            heading: PAGE_TITLE,
+            heading: PAGE_HEADING,
             breadcrumbs: breadcrumbs(id, applicationRef),
             workItem: { ...workItem, applicationRef },
             formAction: decisionHref(id),

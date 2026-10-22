@@ -212,8 +212,8 @@ describe('makeSubmitDecisionController', () => {
     )
   })
 
-  // RA-203. The note is the rationale that reaches the operator's email via
-  // the backend's `decision_notes` placeholder.
+  // RA-203. The note is the determination's rationale, recorded in the
+  // application history.
   test('forwards a decision note to the service', async () => {
     mockDecidable()
     const recordWorkItemDecision = vi

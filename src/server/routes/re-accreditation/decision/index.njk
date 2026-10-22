@@ -90,13 +90,13 @@
           errorMessage: { text: fieldErrors["decision"], attributes: { "data-testid": "decision-error" } } if fieldErrors["decision"] else null
         }) }}
 
-        {# RA-203. The decision rationale. Optional, but NOT decorative: the  #}
-        {# backend's Decision notification reads `decision_notes` from the    #}
-        {# latest work-item note, so whatever is typed here is what reaches   #}
-        {# the operator's email. Leaving it out (as the first cut of RA-410   #}
-        {# did, when the approve interstitial that used to carry it was       #}
-        {# retired) makes that placeholder resolve to empty on every          #}
-        {# decision — silently, because the template still renders.           #}
+        {# RA-203. The decision rationale. Optional, but NOT decorative: it   #}
+        {# is posted as a work-item note just before the decision, so it is   #}
+        {# the determination's own entry in the application history. It no   #}
+        {# longer reaches the operator's email: RA-581 removed the Decision   #}
+        {# template's `decision_notes` personalisation.                       #}
+        {# RA-527: label and hint copy are Figma Design 3. The hint carries   #}
+        {# the "contact the applicant" instruction.                           #}
         {# ⚠ `id` is CONTRACT, not incidental. Three things select on it: the #}
         {# error summary's `#field-decisionNote` anchor, the `<label for>`    #}
         {# govuk-frontend generates, and the mgmt-tests page object — which   #}
@@ -109,11 +109,11 @@
           name: "decisionNote",
           maxlength: decisionNoteMaxLength,
           label: {
-            text: "Determination note (optional)",
+            text: "Notes (optional)",
             classes: "govuk-label--s"
           },
           hint: {
-            text: "The determination will be recorded in the audit log (application history). Contact the applicant when the determination has been made."
+            text: "The determination will be recorded in the application history (audit log). You need to contact the applicant when the determination has been made."
           },
           value: values.decisionNote,
           errorMessage: { text: fieldErrors["decisionNote"] } if fieldErrors["decisionNote"] else null,
