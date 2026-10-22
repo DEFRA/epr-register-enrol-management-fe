@@ -169,10 +169,10 @@ describe('targetStateForOutcome', () => {
     expect(targetStateForOutcome('approved')).toBe('approved-pending-contact')
   })
 
-  test('rejected lands on the rejected state — NOT a "refused" state', () => {
-    // "Refused" is a label change only. The state id, the transition id and
-    // the notification templates are all unchanged.
-    expect(targetStateForOutcome('rejected')).toBe('rejected')
+  test('rejected lands on step 1 of a refusal — NOT a "refused" state', () => {
+    // RA-527: a refusal is two steps; step 1 lands in rejected-pending-contact.
+    // "Refused" is a label change only: the state ids are unchanged.
+    expect(targetStateForOutcome('rejected')).toBe('rejected-pending-contact')
   })
 
   test('returns null for an invalid outcome', () => {
@@ -181,10 +181,10 @@ describe('targetStateForOutcome', () => {
 })
 
 describe('DECISION_OUTCOMES', () => {
-  test('maps the two wire values onto the unchanged transition ids', () => {
+  test('maps the two wire values onto the step 1 transition ids', () => {
     expect(DECISION_OUTCOMES).toEqual({
       approved: 'make-determination-approved',
-      rejected: 'reject'
+      rejected: 'make-determination-rejected'
     })
   })
 

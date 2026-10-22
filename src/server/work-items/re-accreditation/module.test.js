@@ -42,6 +42,8 @@ describe('reAccreditationModule', () => {
       // RA-527. Step 1 of an approval: approved, applicant not yet contacted.
       'approved-pending-contact': 'Approved',
       approved: 'Granted',
+      // RA-527. Step 1 of a refusal: refused, applicant not yet contacted.
+      'rejected-pending-contact': 'Refusing',
       rejected: 'Refused',
       withdrawn: 'Withdrawn'
     })
@@ -65,6 +67,7 @@ describe('reAccreditationModule', () => {
     expect(states.updated.isTerminal).toBeFalsy()
     // RA-527: an approval awaiting applicant contact is not yet applied.
     expect(states['approved-pending-contact'].isTerminal).toBeFalsy()
+    expect(states['rejected-pending-contact'].isTerminal).toBeFalsy()
   })
 
   test('declares the queried state so its label resolves (RA-211/RA-291)', () => {
@@ -101,7 +104,13 @@ describe('reAccreditationModule', () => {
       'awaiting-decision',
       'approved-pending-contact'
     ],
-    ['reject', 'awaiting-decision', 'rejected'],
+    // RA-527. So does step 1 of a refusal, and step 2 applies it.
+    [
+      'make-determination-rejected',
+      'awaiting-decision',
+      'rejected-pending-contact'
+    ],
+    ['confirm-contact-rejected', 'rejected-pending-contact', 'rejected'],
     ['withdraw', 'submitted', 'withdrawn'],
     ['withdraw-during-duly-made', 'duly-made', 'withdrawn'],
     [
@@ -188,7 +197,8 @@ describe('reAccreditationModule', () => {
   // RA-595 briefly made it twelve with a retired `payment-received`; v16
   // removed it from management-be, so it is gone here too. RA-527 (v17)
   // swapped the frontend-only `approve` for the backend's real step 1
-  // transition, `make-determination-approved`.
+  // transition, `make-determination-approved`, and the refusal's two steps
+  // replaced `reject`.
   //
   // Getting this wrong is a live security regression, not a cosmetic
   // mismatch: dropping the flag from any of the eight would make the
@@ -204,6 +214,7 @@ describe('reAccreditationModule', () => {
       // RA-527. Step 2 of an approval: the confirm-contact endpoint applies
       // it, because it pushes to the operator journey before the write.
       'confirm-contact-approved',
+      'confirm-contact-rejected',
       'continue-review-during-assessment',
       'continue-review-during-decision',
       'continue-review-during-duly-made',
@@ -216,8 +227,8 @@ describe('reAccreditationModule', () => {
       // RA-527. Step 1 of an approval: the decision endpoint applies it,
       // because it mints the accreditation number in the same write.
       'make-determination-approved',
-      // RA-410. Applied by the decision endpoint, never the generic route.
-      'reject',
+      // RA-527. Step 1 of a refusal, also applied by the decision endpoint.
+      'make-determination-rejected',
       'resume-during-assessment',
       'resume-during-decision',
       'resume-during-duly-made',
@@ -265,19 +276,34 @@ describe('reAccreditationModule', () => {
     ])
   })
 
-  // RA-410. `reject` keeps its id, its states and its "Reject" displayName.
-  // The user-visible rename to "Refused" is a label on the decision page's
-  // radio and nothing else — renaming the declaration would desynchronise
-  // the mirror to purely cosmetic effect.
-  test('reject keeps its unchanged id, states and displayName', () => {
+  // RA-527. A refusal takes the same two steps, mirrored from
+  // management-be v17, which removed the single-step `reject`.
+  test('declares the two refusal steps and no single-step reject', () => {
     expect(
-      reAccreditationType.transitions.find((t) => t.actionId === 'reject')
+      reAccreditationType.transitions.find(
+        (t) => t.actionId === 'make-determination-rejected'
+      )
     ).toMatchObject({
-      displayName: 'Reject',
       fromStateId: 'awaiting-decision',
-      toStateId: 'rejected',
+      toStateId: 'rejected-pending-contact',
       callerInvocable: false
     })
+    expect(
+      reAccreditationType.transitions.filter(
+        (t) => t.fromStateId === 'rejected-pending-contact'
+      )
+    ).toEqual([
+      {
+        actionId: 'confirm-contact-rejected',
+        displayName: 'Confirm applicant contact',
+        fromStateId: 'rejected-pending-contact',
+        toStateId: 'rejected',
+        callerInvocable: false
+      }
+    ])
+    expect(
+      reAccreditationType.transitions.find((t) => t.actionId === 'reject')
+    ).toBeUndefined()
   })
 
   // RA-410. The marker the generic self-assign handler keys on. Paired with
@@ -337,17 +363,18 @@ describe('reAccreditationModule', () => {
       reAccreditationType.transitions.map((t) => t.actionId).sort()
     ).toEqual([
       'confirm-contact-approved',
+      'confirm-contact-rejected',
       'continue-review-during-assessment',
       'continue-review-during-decision',
       'continue-review-during-duly-made',
       'continue-review-during-duly-making',
       'duly-make',
       'make-determination-approved',
+      'make-determination-rejected',
       'query-during-assessment',
       'query-during-decision',
       'query-during-duly-made',
       'query-during-duly-making',
-      'reject',
       'resume-during-assessment',
       'resume-during-decision',
       'resume-during-duly-made',

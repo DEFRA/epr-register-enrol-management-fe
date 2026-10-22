@@ -20,6 +20,8 @@ describe('#stateTagClass', () => {
     ['updated', 'govuk-tag--turquoise'],
     // RA-527 (provisional colour): approved, applicant not yet contacted.
     ['approved-pending-contact', 'govuk-tag--light-blue'],
+    // RA-527 (provisional colour): refused, applicant not yet contacted.
+    ['rejected-pending-contact', 'govuk-tag--orange'],
     ['approved', 'govuk-tag--green'],
     ['rejected', 'govuk-tag--red'],
     ['withdrawn', 'govuk-tag--grey']
@@ -39,7 +41,12 @@ describe('#stateTagClass', () => {
 
   test('exposes the raw map for callers that need the full set', () => {
     expect(STATE_TAG_CLASSES.queried).toBe('govuk-tag--yellow')
-    // The retired RA-291 orange must not reappear anywhere in the map.
-    expect(Object.values(STATE_TAG_CLASSES)).not.toContain('govuk-tag--orange')
+    // The retired RA-291 orange must not reappear on queried. RA-527 gave
+    // orange to "Refusing" (rejected-pending-contact) alone.
+    expect(
+      Object.entries(STATE_TAG_CLASSES)
+        .filter(([, tagClass]) => tagClass === 'govuk-tag--orange')
+        .map(([stateId]) => stateId)
+    ).toEqual(['rejected-pending-contact'])
   })
 })

@@ -335,3 +335,109 @@ describe('RA-527: confirm applicant contact', () => {
     })
   })
 })
+
+/**
+ * RA-527 (task 005). The confirm page works identically after a refusal at
+ * step 1; only the one-time success banner's wording differs.
+ */
+describe('RA-527: confirm applicant contact after a refusal', () => {
+  function aRefusingItem(overrides = {}) {
+    return aWorkItem({
+      stateId: 'rejected-pending-contact',
+      payload: { applicationReference: REF },
+      ...overrides
+    })
+  }
+
+  beforeAll(async () => {
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: aRefusingItem() })
+  })
+
+  test('GET renders the same confirm page', async () => {
+    const { statusCode, result } = await getConfirmPage()
+
+    expect(statusCode).toBe(statusCodes.ok)
+    const $ = cheerio.load(result)
+    expect(squash($('h1').text())).toBe('Confirm applicant contact')
+    expect(squash($('[data-testid="app-heading-caption"]').text())).toBe(
+      `Application number: ${REF}`
+    )
+    expect($('[data-testid="confirm-contact-checkbox"]').length).toBe(1)
+    expect(squash($('[data-testid="confirm-contact-submit"]').text())).toBe(
+      'Confirm and continue'
+    )
+    expect($('[data-testid="confirm-contact-cancel"]').attr('href')).toBe(
+      DETAIL_URL
+    )
+  })
+
+  test('an unticked box shows the same error and changes nothing', async () => {
+    const response = await postConfirm('')
+
+    expect(response.statusCode).toBe(statusCodes.badRequest)
+    expect(
+      squash(
+        cheerio
+          .load(response.result)('[data-testid="confirm-contact-error"]')
+          .text()
+      )
+    ).toContain(ERROR_MESSAGE)
+    expect(confirmApplicantContact).not.toHaveBeenCalled()
+  })
+
+  test('a ticked box confirms contact, then the detail page shows "accreditation is refused" once', async () => {
+    confirmApplicantContact.mockResolvedValue({
+      ok: true,
+      workItem: aRefusingItem({ stateId: 'rejected' })
+    })
+
+    const posted = await postConfirm()
+
+    expect(confirmApplicantContact).toHaveBeenCalledWith({
+      workItemId: ID,
+      user: expect.objectContaining({ id: TEST_STANDARD_USER.id })
+    })
+    expect(posted.statusCode).toBe(statusCodes.redirect)
+    expect(posted.headers.location).toBe(DETAIL_URL)
+
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aRefusingItem({ stateId: 'rejected' })
+    })
+    const cookie = sessionCookie(posted)
+    const first = await server.inject({
+      method: 'GET',
+      url: DETAIL_URL,
+      headers: { cookie }
+    })
+    const $ = cheerio.load(first.result)
+    const banner = $('[data-testid="work-item-flash-banner"]')
+    expect(banner.hasClass('govuk-notification-banner--success')).toBe(true)
+    expect(
+      squash(banner.find('.govuk-notification-banner__title').text())
+    ).toBe('Applicant contacted')
+    expect(
+      squash(banner.find('.govuk-notification-banner__content').text())
+    ).toBe('The applicant has been contacted and accreditation is refused.')
+
+    const second = await server.inject({
+      method: 'GET',
+      url: DETAIL_URL,
+      headers: { cookie: [cookie, sessionCookie(first)].join('; ') }
+    })
+    expect(
+      cheerio.load(second.result)('[data-testid="work-item-flash-banner"]')
+        .length
+    ).toBe(0)
+  })
+})

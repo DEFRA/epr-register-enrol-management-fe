@@ -5,7 +5,10 @@ import { buildCreateWorkItemRoutes } from './create/routes.js'
 import { buildConfirmContactRoutes } from './confirm-contact/routes.js'
 import { buildDecisionRoutes } from './decision/routes.js'
 import { buildDulyMakingRoutes } from './duly-making/routes.js'
-import { STATE_APPROVED_PENDING_CONTACT } from './states.js'
+import {
+  STATE_APPROVED_PENDING_CONTACT,
+  STATE_REJECTED_PENDING_CONTACT
+} from './states.js'
 
 /**
  * Re-accreditation work item module (RA-98).
@@ -64,6 +67,11 @@ const STATES = [
   // entry (it mirrors the backend's display name).
   { id: STATE_APPROVED_PENDING_CONTACT, displayName: 'Approved' },
   { id: 'approved', displayName: 'Granted', isTerminal: true },
+  // RA-527 (management-be v17). Step 1 of a refusal: refused, no number
+  // minted, the applicant not yet contacted. NOT terminal. The "Refusing"
+  // label is provisional — keep it to this one entry (it mirrors the
+  // backend's display name).
+  { id: STATE_REJECTED_PENDING_CONTACT, displayName: 'Refusing' },
   { id: 'rejected', displayName: 'Refused', isTerminal: true },
   { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
 ]
@@ -191,11 +199,12 @@ const TRANSITIONS = [
   // `make-determination-approved` is).
   //
   // Not decorative: `decision/eligibility.js` reads this declaration (and
-  // `reject` below) to resolve which state a decision is taken from and
-  // where each radio choice lands, so those literals live here and only here.
+  // `make-determination-rejected` below) to resolve which state a decision is
+  // taken from and where each radio choice lands, so those literals live here
+  // and only here.
   //
-  // `callerInvocable: false`, like `reject`: neither is reachable through the
-  // generic `/actions/{actionId}` route, only through
+  // `callerInvocable: false`, like the refusal's step 1: neither is reachable
+  // through the generic `/actions/{actionId}` route, only through
   // `POST /work-items/re-accreditation/{id}/decision`, which mints the
   // accreditation number in the same write.
   {
@@ -218,18 +227,26 @@ const TRANSITIONS = [
     toStateId: 'approved',
     callerInvocable: false
   },
-  // RA-410. `displayName` stays "Reject" deliberately. The user-visible
-  // relabel to "Refused" is a LABEL change only and lives in the decision
-  // page's radio, not here: this declaration mirrors the backend's
-  // `WorkItemTransition`, where the action id, the `rejected` state id and
-  // the notification templates are all unchanged. Renaming it here would
-  // desynchronise the mirror to cosmetic effect. The one place a user reads
-  // a state name — the terminal Outcome tag — already says "Refused", from
-  // the `rejected` STATE's `displayName` in STATES above (RA-324).
+  // RA-527 (management-be v17). A refusal takes the same two steps. Step 1:
+  // awaiting-decision -> rejected-pending-contact (no number is minted).
+  // It replaced the single-step `reject` (awaiting-decision -> rejected),
+  // which the backend removed from v17, so nothing refuses an application
+  // without both steps. `callerInvocable: false`: only
+  // `POST /work-items/re-accreditation/{id}/decision` reaches it.
   {
-    actionId: 'reject',
-    displayName: 'Reject',
+    actionId: 'make-determination-rejected',
+    displayName: 'Make determination: Refused',
     fromStateId: STATE_AWAITING_DECISION,
+    toStateId: STATE_REJECTED_PENDING_CONTACT,
+    callerInvocable: false
+  },
+  // RA-527 (management-be v17). Step 2 of a refusal ("confirm applicant
+  // contact"): rejected-pending-contact -> rejected. Only
+  // `POST /work-items/re-accreditation/{id}/confirm-contact` reaches it.
+  {
+    actionId: 'confirm-contact-rejected',
+    displayName: 'Confirm applicant contact',
+    fromStateId: STATE_REJECTED_PENDING_CONTACT,
     toStateId: 'rejected',
     callerInvocable: false
   },
@@ -445,7 +462,10 @@ export const reAccreditationModule = {
     // v17: RA-527 backend added the non-terminal `approved-pending-contact`
     //      state, the `make-determination-approved` step 1 transition into
     //      it and the `confirm-contact-approved` step 2 transition out of
-    //      it, with a ReAccreditationPendingContactSnapshotMigration.
+    //      it, with a ReAccreditationPendingContactSnapshotMigration; then
+    //      (still unreleased, so in v17) the refusal half: the non-terminal
+    //      `rejected-pending-contact` state, `make-determination-rejected`
+    //      and `confirm-contact-rejected`, removing the single-step `reject`.
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11

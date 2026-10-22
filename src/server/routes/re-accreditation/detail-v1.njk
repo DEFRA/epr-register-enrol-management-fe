@@ -48,9 +48,9 @@
   </div>
 {% endblock %}
 
-{# RA-527. Step 1 of an approval is done but the applicant has not been   #}
-{# contacted. Shown on EVERY visit while the item sits in                 #}
-{# `approved-pending-contact` (it replaces the one-time "Decision logged" #}
+{# RA-527. Step 1 of a determination is done but the applicant has not  #}
+{# been contacted. Shown on EVERY visit while the item sits in a         #}
+{# pending-contact state (it replaces the one-time "Decision logged"    #}
 {# flash), so the outstanding action is never lost. disableAutoFocus and  #}
 {# role "region" because it persists: it must not steal focus or be       #}
 {# announced as an alert on each load. The accreditation ID is escaped by #}
@@ -114,7 +114,7 @@
     </p>
   {% elif workItem.isPendingContact %}
     {# RA-527. Step 2 of the two-step determination. The ONLY forward      #}
-    {# action while an approval awaits applicant contact: no Make          #}
+    {# action while a determination awaits applicant contact: no Make      #}
     {# determination, Query or generic actions (`super()` is not called).  #}
     {# A LINK to the confirm page (task 004), so clicking it changes       #}
     {# nothing. `data-testid` is a contract with mgmt-tests.               #}

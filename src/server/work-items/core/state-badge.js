@@ -47,6 +47,9 @@ const STATE_TAG_CLASSES = {
   // RA-527. Approved at step 1, applicant not yet contacted. PROVISIONAL
   // colour (may change later) — keep it to this one entry.
   'approved-pending-contact': 'govuk-tag--light-blue', // Approved
+  // RA-527. Refused at step 1, applicant not yet contacted. PROVISIONAL
+  // colour (may change later) — keep it to this one entry.
+  'rejected-pending-contact': 'govuk-tag--orange', // Refusing
   approved: 'govuk-tag--green', // Granted
   rejected: 'govuk-tag--red', // Refused
   withdrawn: DEFAULT_STATE_TAG_CLASS // Withdrawn

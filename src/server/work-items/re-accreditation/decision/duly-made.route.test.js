@@ -136,15 +136,29 @@ describe('RA-595: make a determination from Duly made', () => {
       }
     )
 
-    test('records rejected from Duly made with the success banner', async () => {
+    // RA-527. Step 1 of a refusal: the detail page's persistent
+    // "Application refused" banner replaces the one-time success flash.
+    test('records rejected from Duly made and lands on the pending-contact banner', async () => {
       recordBackendCalls(aWorkItem())
+      const pending = aWorkItem({
+        stateId: 'rejected-pending-contact',
+        templateVersion: 'v17'
+      })
+      recordReAccreditationDecision.mockImplementation(async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: pending })
+        return { ok: true, workItem: pending }
+      })
 
       const page = await followRedirect(await submitDecision('rejected'))
 
       expect(recordReAccreditationDecision).toHaveBeenCalledWith(
         expect.objectContaining({ workItemId: ID, outcome: 'rejected' })
       )
-      expect(page).toContain('Decision logged: Refused')
+      expect(page).not.toContain('Decision logged: Refused')
+      expect(page).toContain(
+        'data-testid="re-accreditation-pending-contact-banner"'
+      )
+      expect(page).toContain('Application refused')
     })
 
     // RA-527. Step 1 of an approval: the detail page's persistent

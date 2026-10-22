@@ -13,6 +13,12 @@
 export const STATE_APPROVED_PENDING_CONTACT = 'approved-pending-contact'
 
 /**
+ * Step 1 of the two-step determination for a refusal: refused (no number is
+ * minted), but the applicant not yet contacted. Not terminal.
+ */
+export const STATE_REJECTED_PENDING_CONTACT = 'rejected-pending-contact'
+
+/**
  * The states in which a determination has been made (step 1) but not yet
  * applied, because the applicant has not been contacted. Not closed: the
  * case stays reassignable so someone else can make the contact, and
@@ -20,7 +26,8 @@ export const STATE_APPROVED_PENDING_CONTACT = 'approved-pending-contact'
  * the detail page and the confirm-contact routes alike.
  */
 export const PENDING_CONTACT_STATE_IDS = new Set([
-  STATE_APPROVED_PENDING_CONTACT
+  STATE_APPROVED_PENDING_CONTACT,
+  STATE_REJECTED_PENDING_CONTACT
 ])
 
 /**

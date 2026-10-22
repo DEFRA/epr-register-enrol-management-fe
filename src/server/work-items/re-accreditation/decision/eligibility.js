@@ -11,7 +11,7 @@
  * ⚠ WHY THIS DOES NOT CALL `canApplyAction`.
  *
  * Same reason as `duly-making/eligibility.js`. Both decision transitions
- * (`make-determination-approved` since RA-527, and `reject`)
+ * (`make-determination-approved` / `make-determination-rejected`, RA-527)
  * are declared `callerInvocable: false` in `module.js` (v12) because neither
  * is reachable through the generic `/actions/{actionId}` route any more —
  * they are applied server-side by `POST /work-items/re-accreditation/{id}/decision`.
@@ -21,7 +21,7 @@
  *
  * The fix is NOT to drop the flag from the declaration — it is a truthful
  * mirror of the backend and it is what stops the generic action loop
- * rendering a bare "Reject" button beside the Log decision CTA. Instead this
+ * rendering a bare decision button beside the Log decision CTA. Instead this
  * helper reads the SAME declared transitions and applies the state rules
  * only, so the state literals still live exactly once, in `module.js`.
  *
@@ -62,21 +62,21 @@ export const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
  * The two decision outcomes, keyed by the value the radio posts.
  *
  * `actionId` names the transition in `module.js` whose `toStateId` is the
- * state the outcome lands on (RA-527: for an approval, the non-terminal
- * `approved-pending-contact` of step 1), and whose `fromStateId` is the state
+ * state the outcome lands on (RA-527: step 1's non-terminal
+ * `approved-pending-contact` / `rejected-pending-contact`), and whose `fromStateId` is the state
  * a decision is taken from. Nothing here hardcodes `approved` / `rejected` /
  * `awaiting-decision` — those are read off the declaration.
  *
  * ⚠ The KEYS are the wire values management-be accepts in the `outcome`
  * field (`"approved"` | `"rejected"`), NOT display labels. "Refused" is a
- * label change only: the wire value stays `rejected`, the transition id
- * stays `reject`, the state id stays `rejected` and the notification
+ * label change only: the wire value stays `rejected`, the state id stays
+ * `rejected` and the notification
  * templates are unchanged. The visible word lives in the radio's label in
  * `routes/re-accreditation/decision/index.njk` and nowhere else.
  */
 export const DECISION_OUTCOMES = Object.freeze({
   approved: 'make-determination-approved',
-  rejected: 'reject'
+  rejected: 'make-determination-rejected'
 })
 
 // The transition whose `fromStateId` is the EARLIER of the two entry states.
@@ -207,8 +207,8 @@ export function evaluateLogDecisionEligibility(workItem) {
 }
 
 /**
- * The state id an outcome lands on (RA-527: `approved-pending-contact`
- * for an approval, `rejected` for a refusal), read off the module
+ * The state id an outcome lands on (RA-527: step 1's `approved-pending-contact`
+ * or `rejected-pending-contact`), read off the module
  * declaration.
  *
  * Used only for logging and for the success banner's wording, never as a

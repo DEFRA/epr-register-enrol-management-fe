@@ -24,7 +24,11 @@ import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
-import { STATE_APPROVED_PENDING_CONTACT, isPendingContact } from '../states.js'
+import {
+  STATE_APPROVED_PENDING_CONTACT,
+  STATE_REJECTED_PENDING_CONTACT,
+  isPendingContact
+} from '../states.js'
 import { createConfirmContactService } from './service.js'
 
 const VIEW_PATH = 're-accreditation/confirm-contact/index'
@@ -50,6 +54,12 @@ const SUCCESS_BANNERS = Object.freeze({
     type: 'success',
     title: 'Applicant contacted',
     text: 'The applicant has been contacted and accreditation is granted.'
+  }),
+  // Provisional refusal copy (extrapolated from Design 3's approval screens).
+  [STATE_REJECTED_PENDING_CONTACT]: Object.freeze({
+    type: 'success',
+    title: 'Applicant contacted',
+    text: 'The applicant has been contacted and accreditation is refused.'
   })
 })
 

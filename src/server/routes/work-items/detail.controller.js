@@ -15,7 +15,11 @@ import {
   RE_ACCREDITATION_TYPE_ID
 } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
-import { PENDING_CONTACT_STATE_IDS } from '#/server/work-items/re-accreditation/states.js'
+import {
+  PENDING_CONTACT_STATE_IDS,
+  STATE_APPROVED_PENDING_CONTACT,
+  STATE_REJECTED_PENDING_CONTACT
+} from '#/server/work-items/re-accreditation/states.js'
 import {
   isContinueReviewState,
   isPreDulyMadeWaypoint
@@ -731,6 +735,20 @@ function buildAssignmentViewModel({ workItem, user }) {
 // consulting this list. The two rules are independent and both must hold.
 const TERMINAL_STATE_IDS = new Set(['approved', 'rejected', 'withdrawn'])
 
+// RA-527. The persistent banner on a determination awaiting applicant
+// contact, keyed by pending state. The refusal copy is provisional (it
+// extrapolates Design 3's approval-only screens) — keep it to this entry.
+const PENDING_CONTACT_BANNERS = Object.freeze({
+  [STATE_APPROVED_PENDING_CONTACT]: Object.freeze({
+    title: 'Application approved',
+    text: 'The application was approved. You now need to contact the applicant about the decision.'
+  }),
+  [STATE_REJECTED_PENDING_CONTACT]: Object.freeze({
+    title: 'Application refused',
+    text: 'The application was refused. You now need to contact the applicant about the decision.'
+  })
+})
+
 function applyReAccreditationViewModel({ workItem, source = workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
@@ -782,19 +800,21 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
 
   const decisionMetadata = buildDecisionMetadata(workItem)
 
-  // RA-527. Step 1 of an approval is done but the applicant has not been
-  // contacted: a persistent banner says so on every visit, and the only
+  // RA-527. Step 1 of the determination is done but the applicant has not
+  // been contacted: a persistent banner says so on every visit, and the only
   // forward action is "Confirm applicant contact" (step 2). No
   // determination, query or due-date change may be offered from here.
   const isPendingContact = PENDING_CONTACT_STATE_IDS.has(workItem.stateId)
+  const pendingContactCopy = PENDING_CONTACT_BANNERS[workItem.stateId]
 
   return {
     ...workItem,
     isPendingContact,
-    pendingContactBanner: isPendingContact
+    // Only an approval has an accreditation ID to show (decision metadata is
+    // never built for a refusal).
+    pendingContactBanner: pendingContactCopy
       ? {
-          title: 'Application approved',
-          text: 'The application was approved. You now need to contact the applicant about the decision.',
+          ...pendingContactCopy,
           accreditationId: decisionMetadata?.accreditationId ?? null
         }
       : null,

@@ -256,3 +256,152 @@ describe('RA-527: detail page while an approval is pending applicant contact', (
     expect($('[data-testid="re-accreditation-approval-panel"]').length).toBe(1)
   })
 })
+
+/**
+ * RA-527 (task 005). The same page after a refusal at step 1
+ * (`rejected-pending-contact`): no accreditation number exists, so there are
+ * no accreditation rows, but the banner, sidebar and Confirm button follow
+ * the approval's pattern.
+ */
+describe('RA-527: detail page while a refusal is pending applicant contact', () => {
+  function aRefusingItem(overrides = {}) {
+    return aPendingContactItem({
+      stateId: 'rejected-pending-contact',
+      payload: { applicationReference: 'RA-000000527' },
+      ...overrides
+    })
+  }
+
+  beforeAll(async () => {
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  test('the status tag reads "Refusing" in orange', async () => {
+    const $ = await renderDetail({ workItem: aRefusingItem() })
+
+    const tag = $('[data-testid="work-item-state-tag"]')
+    expect(squash(tag.text())).toBe('Refusing')
+    expect(tag.hasClass('govuk-tag--orange')).toBe(true)
+  })
+
+  test('shows the persistent "Application refused" banner, with no accreditation ID', async () => {
+    const $ = await renderDetail({ workItem: aRefusingItem() })
+
+    const banner = $('[data-testid="re-accreditation-pending-contact-banner"]')
+    expect(banner.length).toBe(1)
+    expect(
+      squash(banner.find('.govuk-notification-banner__title').text())
+    ).toBe('Application refused')
+    const body = squash(
+      banner.find('.govuk-notification-banner__content').text()
+    )
+    expect(body).toBe(
+      'The application was refused. You now need to contact the applicant about the decision.'
+    )
+    expect(
+      banner.find(
+        '[data-testid="re-accreditation-pending-contact-accreditation-id"]'
+      ).length
+    ).toBe(0)
+  })
+
+  test('the banner shows on every visit, not from a flash', async () => {
+    await renderDetail({ workItem: aRefusingItem() })
+    const $ = await renderDetail({ workItem: aRefusingItem() })
+
+    expect(
+      $('[data-testid="re-accreditation-pending-contact-banner"]').length
+    ).toBe(1)
+    expect($('[data-testid="work-item-flash-banner"]').length).toBe(0)
+  })
+
+  test('shows no accreditation rows and no accreditation panel', async () => {
+    // Even a stray accreditationId on the payload must not suggest an
+    // accreditation exists for a refusal.
+    const $ = await renderDetail({
+      workItem: aRefusingItem({
+        payload: {
+          applicationReference: 'RA-000000527',
+          accreditationId: ACCREDITATION_ID
+        }
+      })
+    })
+
+    expect($('[data-testid="re-accreditation-decision-metadata"]').length).toBe(
+      0
+    )
+    expect($('[data-testid="re-accreditation-accreditation-id"]').length).toBe(
+      0
+    )
+    expect($('[data-testid="re-accreditation-approval-panel"]').length).toBe(0)
+    expect($.text()).not.toContain('Accreditation ID')
+  })
+
+  test('the assignment box offers only Reassign and Unassign', async () => {
+    const $ = await renderDetail({ workItem: aRefusingItem() })
+
+    const panel = $('[data-testid="case-assignment-panel"]')
+    expect(
+      squash(panel.find('[data-testid="assignment-current"]').text())
+    ).toBe('Assigned to you')
+    expect(panel.find('[data-testid="reassign-link"]').length).toBe(1)
+    expect(panel.find('[data-testid="unassign-link"]').length).toBe(1)
+    expect(panel.find('[data-testid="self-assign-submit"]').length).toBe(0)
+    expect(panel.find('[data-testid="action-sla-extend"]').length).toBe(0)
+    expect(panel.find('[data-testid="assignment-closed"]').length).toBe(0)
+  })
+
+  test('a separate box carries the primary "Confirm applicant contact" button', async () => {
+    const $ = await renderDetail({ workItem: aRefusingItem() })
+
+    const button = $('[data-testid="actions-panel"]').find(
+      '[data-testid="confirm-applicant-contact-cta"]'
+    )
+    expect(button.length).toBe(1)
+    expect(squash(button.text())).toBe('Confirm applicant contact')
+    expect(button.attr('href')).toBe(
+      `/work-items/re-accreditation/${ID}/confirm-contact`
+    )
+  })
+
+  test('the Confirm button is disabled for a read-only user', async () => {
+    const $ = await renderDetail({
+      workItem: aRefusingItem(),
+      headers: { 'x-test-user-role': 'support-readonly' }
+    })
+
+    const button = $('[data-testid="confirm-applicant-contact-cta"]')
+    expect(button.length).toBe(1)
+    expect(button.is('a')).toBe(false)
+    expect(button.hasClass('app-action-link--disabled')).toBe(true)
+  })
+
+  test('hides Make determination, Query and the due-date link', async () => {
+    const $ = await renderDetail({ workItem: aRefusingItem() })
+
+    expect($('[data-testid="log-decision-cta"]').length).toBe(0)
+    expect($('[data-testid="action-query"]').length).toBe(0)
+    expect($('[data-testid="action-sla-extend"]').length).toBe(0)
+    expect($('[data-testid="duly-make-cta"]').length).toBe(0)
+  })
+
+  test('nothing pending-contact renders on a Refused item', async () => {
+    const $ = await renderDetail({
+      workItem: aRefusingItem({ stateId: 'rejected' })
+    })
+
+    expect(
+      $('[data-testid="re-accreditation-pending-contact-banner"]').length
+    ).toBe(0)
+    expect($('[data-testid="confirm-applicant-contact-cta"]').length).toBe(0)
+  })
+})
