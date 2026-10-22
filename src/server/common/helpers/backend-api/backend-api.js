@@ -520,10 +520,9 @@ export async function addWorkItemNote({
   })
 }
 
-// Shared by every type-specific POST client below (continue-review,
-// ...). Nothing in it is specific to any one of them —
-// it is just the HTTP-status-to-reason translation the whole backend
-// speaks.
+// Shared by every type-specific POST client below. Nothing in it is
+// specific to any one of them — it is just the HTTP-status-to-reason
+// translation the whole backend speaks.
 const REASON_BY_STATUS = {
   400: 'invalid',
   401: 'unauthorized',
