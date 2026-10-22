@@ -23,7 +23,6 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
   recordReAccreditationDecision: vi.fn(),
-  approveReAccreditation: vi.fn(),
   continueReviewReAccreditation: vi.fn(),
   dulyMakeReAccreditation: vi.fn(),
   extendWorkItemSla: vi.fn(),

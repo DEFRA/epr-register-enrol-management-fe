@@ -178,9 +178,11 @@ const TRANSITIONS = [
   },
   // ⚠ RA-346. This entry is FRONTEND-ONLY. Unlike every other transition
   // here, the backend deliberately does NOT register `approve` as a
-  // `WorkItemTransition` — approval runs through `ReAccreditationApprovalService`
-  // and its own endpoint (`POST /work-items/re-accreditation/{id}/approve`),
-  // so `approve` never appears in the projected `availableActions`.
+  // `WorkItemTransition` — approval runs through `ReAccreditationApprovalService`,
+  // reached only via the decision endpoint
+  // (`POST /work-items/re-accreditation/{id}/decision`; RA-527 removed the
+  // old bespoke `/approve` route), so `approve` never appears in the
+  // projected `availableActions`.
   //
   // Two consequences. First, the "mirror the backend type declaration"
   // discipline that protects the other entries cannot protect this one:

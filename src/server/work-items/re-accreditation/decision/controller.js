@@ -14,9 +14,10 @@
  *    that does NOT redirect — the user needs the radio back with their
  *    context intact.
  *
- * Replaces the RA-132 approve interstitial. The `/approve` endpoint still
- * exists backend-side but is no longer reachable from this UI: one page now
- * covers both outcomes, which is the point of the story.
+ * Replaces the RA-132 approve interstitial: one page now covers both
+ * outcomes, which is the point of the story. The backend's bespoke
+ * `/approve` endpoint was removed in RA-527; `/decision` is the only route
+ * to approval.
  */
 
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
