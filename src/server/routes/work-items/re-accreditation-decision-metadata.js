@@ -27,8 +27,10 @@ import { STATE_APPROVED_PENDING_CONTACT } from '#/server/work-items/re-accredita
 const logger = createLogger()
 
 // RA-527. The accreditation number is minted and stamped at step 1, so the
-// rows show while the approval awaits applicant contact as well as once it
-// is Granted.
+// ID row shows while the approval awaits applicant contact as well as once it
+// is Granted. The start date and year are stamped at step 2 (task 007), so
+// their rows show only once Granted (`showIssuedDetails`) — even if an item
+// from an earlier build still carries step 1 values for them.
 const APPROVED_STATE_IDS = new Set(['approved', STATE_APPROVED_PENDING_CONTACT])
 
 export function buildDecisionMetadata(workItem) {
@@ -78,6 +80,7 @@ export function buildDecisionMetadata(workItem) {
   }
 
   return {
+    showIssuedDetails: workItem.stateId !== STATE_APPROVED_PENDING_CONTACT,
     accreditationId: accreditationId ?? '—',
     accreditationStartDate,
     accreditationStartDateFormatted,

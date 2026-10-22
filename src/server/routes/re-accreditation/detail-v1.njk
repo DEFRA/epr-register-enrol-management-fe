@@ -209,9 +209,13 @@
 {# confirmation panel + a summary list, so the success message is the   #}
 {# first thing the user sees after approving.                           #}
 {# RA-527. While an approval awaits applicant contact the number is minted #}
-{# and its rows show, but nothing has been issued yet: the "Accreditation  #}
+{# and its row shows, but nothing has been issued yet: the "Accreditation  #}
 {# issued" panel waits for Granted, and the pending-contact banner above   #}
-{# carries the ID instead.                                                 #}
+{# carries the ID instead. The start date and year are stamped at step 2  #}
+{# (task 007), so their rows wait for Granted too (`showIssuedDetails`).   #}
+{# No templateVersion bump for this: it only changes what the unreleased  #}
+{# `approved-pending-contact` state (v17, this same ticket) shows, and    #}
+{# Granted items render exactly as before.                               #}
 {% block summaryListBefore %}
   {% if workItem.decisionMetadata %}
     {% if not workItem.isPendingContact %}
@@ -222,33 +226,38 @@
       attributes: { "data-testid": "re-accreditation-approval-panel" }
     }) }}
     {% endif %}
+    {% set metadataRows = [
+      {
+        key: { text: "Accreditation ID" },
+        value: {
+          html: '<span data-testid="re-accreditation-accreditation-id">'
+                + (workItem.decisionMetadata.accreditationId | escape) + '</span>'
+        }
+      }
+    ] %}
+    {% if workItem.decisionMetadata.showIssuedDetails %}
+    {% set metadataRows = metadataRows.concat([
+      {
+        key: { text: "Accreditation start date" },
+        value: {
+          html: '<span data-testid="re-accreditation-accreditation-start-date">'
+                + (workItem.decisionMetadata.accreditationStartDateFormatted | escape)
+                + '</span>'
+        }
+      },
+      {
+        key: { text: "Accreditation year" },
+        value: {
+          html: '<span data-testid="re-accreditation-accreditation-year">'
+                + ((workItem.decisionMetadata.accreditationYear or '—') | escape)
+                + '</span>'
+        }
+      }
+    ]) %}
+    {% endif %}
     {{ govukSummaryList({
       attributes: { "data-testid": "re-accreditation-decision-metadata" },
-      rows: [
-        {
-          key: { text: "Accreditation ID" },
-          value: {
-            html: '<span data-testid="re-accreditation-accreditation-id">'
-                  + (workItem.decisionMetadata.accreditationId | escape) + '</span>'
-          }
-        },
-        {
-          key: { text: "Accreditation start date" },
-          value: {
-            html: '<span data-testid="re-accreditation-accreditation-start-date">'
-                  + (workItem.decisionMetadata.accreditationStartDateFormatted | escape)
-                  + '</span>'
-          }
-        },
-        {
-          key: { text: "Accreditation year" },
-          value: {
-            html: '<span data-testid="re-accreditation-accreditation-year">'
-                  + ((workItem.decisionMetadata.accreditationYear or '—') | escape)
-                  + '</span>'
-          }
-        }
-      ]
+      rows: metadataRows
     }) }}
   {% endif %}
 {% endblock %}

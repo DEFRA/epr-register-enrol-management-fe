@@ -190,8 +190,10 @@ describe('RA-595: make a determination from Duly made', () => {
     })
 
     test('posts the decision note after the start and before the decision', async () => {
-      // The operator's decision email reads the LATEST note, so the note
-      // must still go immediately before the decision.
+      // The note is the determination's rationale in the application
+      // history, posted before the decision so a decision is never recorded
+      // without its stated reason. (It no longer reaches the operator's
+      // email: RA-581 removed that.)
       const calls = recordBackendCalls(aWorkItem())
 
       await submitDecision('approved', '&decisionNote=Looks+good')

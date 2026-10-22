@@ -50,11 +50,10 @@ function aPendingContactItem(overrides = {}) {
     lastModifiedAt: '2026-10-20T10:00:00Z',
     assignedToId: TEST_STANDARD_USER.id,
     assignedToName: TEST_STANDARD_USER.name,
+    // RA-527 task 007: step 1 stamps only the accreditation ID.
     payload: {
       applicationReference: 'RA-000000527',
-      accreditationId: ACCREDITATION_ID,
-      accreditationStartDate: '2026-10-20',
-      accreditationYear: 2026
+      accreditationId: ACCREDITATION_ID
     },
     // management-be projects nothing from this state: no query, withdraw,
     // due-date change or re-determination.
@@ -143,22 +142,55 @@ describe('RA-527: detail page while an approval is pending applicant contact', (
     expect($('[data-testid="work-item-flash-banner"]').length).toBe(0)
   })
 
-  test('shows the accreditation ID, start date and year rows', async () => {
+  // RA-527 task 007: the start date and year are stamped at step 2, so only
+  // the ID row shows until the approval is Granted.
+  test('shows the accreditation ID row but no start date or year rows', async () => {
     const $ = await renderDetail()
 
+    const metadata = $('[data-testid="re-accreditation-decision-metadata"]')
+    expect(
+      squash(
+        metadata
+          .find('[data-testid="re-accreditation-accreditation-id"]')
+          .text()
+      )
+    ).toBe(ACCREDITATION_ID)
+    const keys = metadata
+      .find('.govuk-summary-list__key')
+      .map((_, el) => squash($(el).text()))
+      .get()
+    expect(keys).toEqual(['Accreditation ID'])
+    expect(
+      $('[data-testid="re-accreditation-accreditation-start-date"]').length
+    ).toBe(0)
+    expect(
+      $('[data-testid="re-accreditation-accreditation-year"]').length
+    ).toBe(0)
+    // The outcome is not applied yet, so nothing says it has been issued.
+    expect($('[data-testid="re-accreditation-approval-panel"]').length).toBe(0)
+  })
+
+  test('hides a start date and year stamped at step 1 by an earlier build', async () => {
+    const $ = await renderDetail({
+      workItem: aPendingContactItem({
+        payload: {
+          applicationReference: 'RA-000000527',
+          accreditationId: ACCREDITATION_ID,
+          accreditationStartDate: '2026-10-20',
+          accreditationYear: 2026
+        }
+      })
+    })
+
+    expect(
+      $('[data-testid="re-accreditation-accreditation-start-date"]').length
+    ).toBe(0)
+    expect(
+      $('[data-testid="re-accreditation-accreditation-year"]').length
+    ).toBe(0)
     expect(
       squash($('[data-testid="re-accreditation-accreditation-id"]').text())
     ).toBe(ACCREDITATION_ID)
-    expect(
-      squash(
-        $('[data-testid="re-accreditation-accreditation-start-date"]').text()
-      )
-    ).toBe('20 October 2026')
-    expect(
-      squash($('[data-testid="re-accreditation-accreditation-year"]').text())
-    ).toBe('2026')
-    // The outcome is not applied yet, so nothing says it has been issued.
-    expect($('[data-testid="re-accreditation-approval-panel"]').length).toBe(0)
   })
 
   test('the assignment box offers only Reassign and Unassign', async () => {
