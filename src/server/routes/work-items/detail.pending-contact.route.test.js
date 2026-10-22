@@ -96,12 +96,12 @@ describe('RA-527: detail page while an approval is pending applicant contact', (
     vi.clearAllMocks()
   })
 
-  test('the status tag reads "Approved" in light blue', async () => {
+  test('the status tag reads "Approved" in green, like Granted', async () => {
     const $ = await renderDetail()
 
     const tag = $('[data-testid="work-item-state-tag"]')
     expect(squash(tag.text())).toBe('Approved')
-    expect(tag.hasClass('govuk-tag--light-blue')).toBe(true)
+    expect(tag.hasClass('govuk-tag--green')).toBe(true)
   })
 
   test('shows the persistent "Application approved" banner with the accreditation ID', async () => {
@@ -296,7 +296,7 @@ describe('RA-527: detail page while an approval is pending applicant contact', (
  * the approval's pattern.
  */
 describe('RA-527: detail page while a refusal is pending applicant contact', () => {
-  function aRefusingItem(overrides = {}) {
+  function aRefusalItem(overrides = {}) {
     return aPendingContactItem({
       stateId: 'rejected-pending-contact',
       payload: { applicationReference: 'RA-000000527' },
@@ -317,16 +317,16 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
     vi.clearAllMocks()
   })
 
-  test('the status tag reads "Refusing" in orange', async () => {
-    const $ = await renderDetail({ workItem: aRefusingItem() })
+  test('the status tag reads "Refused" in red, like the final Refused', async () => {
+    const $ = await renderDetail({ workItem: aRefusalItem() })
 
     const tag = $('[data-testid="work-item-state-tag"]')
-    expect(squash(tag.text())).toBe('Refusing')
-    expect(tag.hasClass('govuk-tag--orange')).toBe(true)
+    expect(squash(tag.text())).toBe('Refused')
+    expect(tag.hasClass('govuk-tag--red')).toBe(true)
   })
 
   test('shows the persistent "Application refused" banner, with no accreditation ID', async () => {
-    const $ = await renderDetail({ workItem: aRefusingItem() })
+    const $ = await renderDetail({ workItem: aRefusalItem() })
 
     const banner = $('[data-testid="re-accreditation-pending-contact-banner"]')
     expect(banner.length).toBe(1)
@@ -347,8 +347,8 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
   })
 
   test('the banner shows on every visit, not from a flash', async () => {
-    await renderDetail({ workItem: aRefusingItem() })
-    const $ = await renderDetail({ workItem: aRefusingItem() })
+    await renderDetail({ workItem: aRefusalItem() })
+    const $ = await renderDetail({ workItem: aRefusalItem() })
 
     expect(
       $('[data-testid="re-accreditation-pending-contact-banner"]').length
@@ -360,7 +360,7 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
     // Even a stray accreditationId on the payload must not suggest an
     // accreditation exists for a refusal.
     const $ = await renderDetail({
-      workItem: aRefusingItem({
+      workItem: aRefusalItem({
         payload: {
           applicationReference: 'RA-000000527',
           accreditationId: ACCREDITATION_ID
@@ -379,7 +379,7 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
   })
 
   test('the assignment box offers only Reassign and Unassign', async () => {
-    const $ = await renderDetail({ workItem: aRefusingItem() })
+    const $ = await renderDetail({ workItem: aRefusalItem() })
 
     const panel = $('[data-testid="case-assignment-panel"]')
     expect(
@@ -393,7 +393,7 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
   })
 
   test('a separate box carries the primary "Confirm applicant contact" button', async () => {
-    const $ = await renderDetail({ workItem: aRefusingItem() })
+    const $ = await renderDetail({ workItem: aRefusalItem() })
 
     const button = $('[data-testid="actions-panel"]').find(
       '[data-testid="confirm-applicant-contact-cta"]'
@@ -407,7 +407,7 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
 
   test('the Confirm button is disabled for a read-only user', async () => {
     const $ = await renderDetail({
-      workItem: aRefusingItem(),
+      workItem: aRefusalItem(),
       headers: { 'x-test-user-role': 'support-readonly' }
     })
 
@@ -418,7 +418,7 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
   })
 
   test('hides Make determination, Query and the due-date link', async () => {
-    const $ = await renderDetail({ workItem: aRefusingItem() })
+    const $ = await renderDetail({ workItem: aRefusalItem() })
 
     expect($('[data-testid="log-decision-cta"]').length).toBe(0)
     expect($('[data-testid="action-query"]').length).toBe(0)
@@ -428,7 +428,7 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
 
   test('nothing pending-contact renders on a Refused item', async () => {
     const $ = await renderDetail({
-      workItem: aRefusingItem({ stateId: 'rejected' })
+      workItem: aRefusalItem({ stateId: 'rejected' })
     })
 
     expect(

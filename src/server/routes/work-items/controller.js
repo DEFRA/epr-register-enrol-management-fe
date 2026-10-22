@@ -197,20 +197,22 @@ const STATUS_FILTER_OPTIONS = [
     stateIds: ['awaiting-decision']
   },
   { value: 'queried', text: 'Queried', stateIds: ['queried'] },
-  // RA-527. Determination made, applicant not yet contacted. The labels match
-  // the module's state display names. "Refusing" is PROVISIONAL and may change.
+  // RA-527. Approved at step 1, applicant not yet contacted. Its own option,
+  // separate from "Granted".
   {
     value: 'approved-pending-contact',
     text: 'Approved',
     stateIds: ['approved-pending-contact']
   },
-  {
-    value: 'rejected-pending-contact',
-    text: 'Refusing',
-    stateIds: ['rejected-pending-contact']
-  },
   { value: 'approved', text: 'Granted', stateIds: ['approved'] },
-  { value: 'rejected', text: 'Refused', stateIds: ['rejected'] },
+  // RA-527. A step 1 refusal (`rejected-pending-contact`) reads "Refused",
+  // the same as the final `rejected` state, so the one "Refused" option
+  // covers both, as "Updated" does above.
+  {
+    value: 'rejected',
+    text: 'Refused',
+    stateIds: ['rejected', 'rejected-pending-contact']
+  },
   { value: 'withdrawn', text: 'Withdrawn', stateIds: ['withdrawn'] }
 ]
 const STATUS_OPTION_BY_VALUE = new Map(
@@ -485,7 +487,7 @@ function readFilters(query, user) {
 
   // Status is a UI grouping over backend state ids. Validate the submitted
   // `status` group tokens, then expand to the flattened set of backend state
-  // ids (the single "Updated" group expands to two ids).
+  // ids (the "Updated" and "Refused" groups each expand to two ids).
   const statusGroups = uniqueStringList(query.status).filter((v) =>
     STATUS_OPTION_BY_VALUE.has(v)
   )

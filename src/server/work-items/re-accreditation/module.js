@@ -63,15 +63,14 @@ const STATES = [
   // RA-527 (management-be v17). Step 1 of the two-step determination: the
   // regulator has approved and the accreditation number is minted, but the
   // applicant has not been contacted, so nothing is applied yet. Deliberately
-  // NOT terminal. The "Approved" label is provisional — keep it to this one
-  // entry (it mirrors the backend's display name).
+  // NOT terminal. The label mirrors the backend's display name.
   { id: STATE_APPROVED_PENDING_CONTACT, displayName: 'Approved' },
   { id: 'approved', displayName: 'Granted', isTerminal: true },
   // RA-527 (management-be v17). Step 1 of a refusal: refused, no number
-  // minted, the applicant not yet contacted. NOT terminal. The "Refusing"
-  // label is provisional — keep it to this one entry (it mirrors the
-  // backend's display name).
-  { id: STATE_REJECTED_PENDING_CONTACT, displayName: 'Refusing' },
+  // minted, the applicant not yet contacted. NOT terminal. It reads
+  // "Refused", the same as the final `rejected` state (user decision,
+  // 2026-10-22). The label mirrors the backend's display name.
+  { id: STATE_REJECTED_PENDING_CONTACT, displayName: 'Refused' },
   { id: 'rejected', displayName: 'Refused', isTerminal: true },
   { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
 ]

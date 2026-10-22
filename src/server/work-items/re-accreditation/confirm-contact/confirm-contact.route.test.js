@@ -341,7 +341,7 @@ describe('RA-527: confirm applicant contact', () => {
  * step 1; only the one-time success banner's wording differs.
  */
 describe('RA-527: confirm applicant contact after a refusal', () => {
-  function aRefusingItem(overrides = {}) {
+  function aRefusalItem(overrides = {}) {
     return aWorkItem({
       stateId: 'rejected-pending-contact',
       payload: { applicationReference: REF },
@@ -360,7 +360,10 @@ describe('RA-527: confirm applicant contact after a refusal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    getWorkItem.mockResolvedValue({ ok: true, workItem: aRefusingItem() })
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aRefusalItem()
+    })
   })
 
   test('GET renders the same confirm page', async () => {
@@ -398,7 +401,7 @@ describe('RA-527: confirm applicant contact after a refusal', () => {
   test('a ticked box confirms contact, then the detail page shows "accreditation is refused" once', async () => {
     confirmApplicantContact.mockResolvedValue({
       ok: true,
-      workItem: aRefusingItem({ stateId: 'rejected' })
+      workItem: aRefusalItem({ stateId: 'rejected' })
     })
 
     const posted = await postConfirm()
@@ -412,7 +415,7 @@ describe('RA-527: confirm applicant contact after a refusal', () => {
 
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: aRefusingItem({ stateId: 'rejected' })
+      workItem: aRefusalItem({ stateId: 'rejected' })
     })
     const cookie = sessionCookie(posted)
     const first = await server.inject({

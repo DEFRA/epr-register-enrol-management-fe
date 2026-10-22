@@ -18,10 +18,10 @@ describe('#stateTagClass', () => {
     ['awaiting-decision', 'govuk-tag--light-blue'],
     ['queried', 'govuk-tag--yellow'],
     ['updated', 'govuk-tag--turquoise'],
-    // RA-527 (provisional colour): approved, applicant not yet contacted.
-    ['approved-pending-contact', 'govuk-tag--light-blue'],
-    // RA-527 (provisional colour): refused, applicant not yet contacted.
-    ['rejected-pending-contact', 'govuk-tag--orange'],
+    // RA-527: approved, applicant not yet contacted. Same colour as Granted.
+    ['approved-pending-contact', 'govuk-tag--green'],
+    // RA-527: refused, applicant not yet contacted. Same colour as Refused.
+    ['rejected-pending-contact', 'govuk-tag--red'],
     ['approved', 'govuk-tag--green'],
     ['rejected', 'govuk-tag--red'],
     ['withdrawn', 'govuk-tag--grey']
@@ -41,12 +41,25 @@ describe('#stateTagClass', () => {
 
   test('exposes the raw map for callers that need the full set', () => {
     expect(STATE_TAG_CLASSES.queried).toBe('govuk-tag--yellow')
-    // The retired RA-291 orange must not reappear on queried. RA-527 gave
-    // orange to "Refusing" (rejected-pending-contact) alone.
+    // The retired RA-291 orange must not reappear, on queried or anywhere.
+    expect(Object.values(STATE_TAG_CLASSES)).not.toContain('govuk-tag--orange')
+  })
+
+  // RA-527. Each step 1 (pending-contact) state shares its final state's
+  // colour: Approved matches Granted, and the step 1 Refused matches the
+  // final Refused.
+  test.each([
+    ['approved-pending-contact', 'approved'],
+    ['rejected-pending-contact', 'rejected']
+  ])('%s has the same colour as %s', (pendingStateId, finalStateId) => {
+    expect(stateTagClass(pendingStateId)).toBe(stateTagClass(finalStateId))
+  })
+
+  test('only "Awaiting decision" is light blue', () => {
     expect(
       Object.entries(STATE_TAG_CLASSES)
-        .filter(([, tagClass]) => tagClass === 'govuk-tag--orange')
+        .filter(([, tagClass]) => tagClass === 'govuk-tag--light-blue')
         .map(([stateId]) => stateId)
-    ).toEqual(['rejected-pending-contact'])
+    ).toEqual(['awaiting-decision'])
   })
 })

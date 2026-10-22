@@ -43,7 +43,7 @@ describe('reAccreditationModule', () => {
       'approved-pending-contact': 'Approved',
       approved: 'Granted',
       // RA-527. Step 1 of a refusal: refused, applicant not yet contacted.
-      'rejected-pending-contact': 'Refusing',
+      'rejected-pending-contact': 'Refused',
       rejected: 'Refused',
       withdrawn: 'Withdrawn'
     })
