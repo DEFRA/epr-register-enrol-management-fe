@@ -197,6 +197,18 @@ const STATUS_FILTER_OPTIONS = [
     stateIds: ['awaiting-decision']
   },
   { value: 'queried', text: 'Queried', stateIds: ['queried'] },
+  // RA-527. Determination made, applicant not yet contacted. The labels match
+  // the module's state display names. "Refusing" is PROVISIONAL and may change.
+  {
+    value: 'approved-pending-contact',
+    text: 'Approved',
+    stateIds: ['approved-pending-contact']
+  },
+  {
+    value: 'rejected-pending-contact',
+    text: 'Refusing',
+    stateIds: ['rejected-pending-contact']
+  },
   { value: 'approved', text: 'Granted', stateIds: ['approved'] },
   { value: 'rejected', text: 'Refused', stateIds: ['rejected'] },
   { value: 'withdrawn', text: 'Withdrawn', stateIds: ['withdrawn'] }
