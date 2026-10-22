@@ -1,5 +1,7 @@
 /**
- * Approved-item display metadata for a re-accreditation work item.
+ * Approved-item display metadata for a re-accreditation work item — Granted
+ * (`approved`) or, since RA-527, approved at step 1 and awaiting applicant
+ * contact (`approved-pending-contact`), when the number is already minted.
  *
  * Split out of `detail.controller.js` (RA-523) because it answers a
  * different question from everything around it: the rest of that file
@@ -17,14 +19,20 @@
 import { formatDate } from '#/config/nunjucks/filters/format-date.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { STATE_APPROVED_PENDING_CONTACT } from '#/server/work-items/re-accreditation/states.js'
 
 // Its own logger instance rather than one passed in: this module is a pure
 // formatter with a single caller, and threading a logger through the call
 // would put a parameter on it for the sake of one warning.
 const logger = createLogger()
 
+// RA-527. The accreditation number is minted and stamped at step 1, so the
+// rows show while the approval awaits applicant contact as well as once it
+// is Granted.
+const APPROVED_STATE_IDS = new Set(['approved', STATE_APPROVED_PENDING_CONTACT])
+
 export function buildDecisionMetadata(workItem) {
-  if (workItem.stateId !== 'approved') {
+  if (!APPROVED_STATE_IDS.has(workItem.stateId)) {
     return null
   }
 

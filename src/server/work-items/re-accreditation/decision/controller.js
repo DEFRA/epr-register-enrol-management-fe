@@ -338,7 +338,13 @@ export function makeSubmitDecisionController({
       })
 
       if (result.ok) {
-        flashBanner(request, successBannerFor(decision))
+        // RA-527. An approval is step 1 of two: the detail page shows a
+        // persistent "Application approved" banner for as long as the item
+        // awaits applicant contact, so a one-time flash would only repeat it.
+        // A refusal is still single-step until task 005.
+        if (decision !== 'approved') {
+          flashBanner(request, REFUSED_SUCCESS_BANNER)
+        }
         return h.redirect(detailHref(id))
       }
 
@@ -361,23 +367,16 @@ export function makeSubmitDecisionController({
 }
 
 /**
- * Success copy. The only place the user-visible word for `rejected` appears
- * outside the radio label — and it says "Refused", per the RA-410 relabel.
+ * Success copy for a refusal. The only place the user-visible word for
+ * `rejected` appears outside the radio label — and it says "Refused", per the
+ * RA-410 relabel. RA-527: an approval has no one-time banner any more (the
+ * detail page's persistent pending-contact banner replaces it).
  */
-function successBannerFor(decision) {
-  if (decision === 'approved') {
-    return {
-      type: 'success',
-      title: 'Decision logged: Approved',
-      text: 'The accreditation has been issued and the applicant will be notified.'
-    }
-  }
-  return {
-    type: 'success',
-    title: 'Decision logged: Refused',
-    text: 'The application has been refused and the applicant will be notified.'
-  }
-}
+const REFUSED_SUCCESS_BANNER = Object.freeze({
+  type: 'success',
+  title: 'Decision logged: Refused',
+  text: 'The application has been refused and the applicant will be notified.'
+})
 
 function bannerForFailure(result) {
   // RA-203. Distinct copy because the user's next step differs: nothing was

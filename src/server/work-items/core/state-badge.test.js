@@ -18,6 +18,8 @@ describe('#stateTagClass', () => {
     ['awaiting-decision', 'govuk-tag--light-blue'],
     ['queried', 'govuk-tag--yellow'],
     ['updated', 'govuk-tag--turquoise'],
+    // RA-527 (provisional colour): approved, applicant not yet contacted.
+    ['approved-pending-contact', 'govuk-tag--light-blue'],
     ['approved', 'govuk-tag--green'],
     ['rejected', 'govuk-tag--red'],
     ['withdrawn', 'govuk-tag--grey']

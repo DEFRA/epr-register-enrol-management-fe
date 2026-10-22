@@ -178,6 +178,11 @@
     }) }}
   {% endif %}
 
+  {# RA-527. Type-specific banners that persist across visits (unlike the   #}
+  {# one-shot flash banners above), e.g. re-accreditation's "Application    #}
+  {# approved" banner while an approval awaits applicant contact.          #}
+  {% block typeBanners %}{% endblock %}
+
   {% if notice %}
     {% if notice.kind == 'error' %}
       {{ govukErrorSummary({

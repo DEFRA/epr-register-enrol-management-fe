@@ -15,6 +15,7 @@ import {
   RE_ACCREDITATION_TYPE_ID
 } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
+import { STATE_APPROVED_PENDING_CONTACT } from '#/server/work-items/re-accreditation/states.js'
 import {
   isContinueReviewState,
   isPreDulyMadeWaypoint
@@ -657,7 +658,13 @@ function buildAssignmentViewModel({ workItem, user }) {
     // core/ensure-assessment-started.js). Do not reinstate a "|| in a
     // startsOnSelfAssign state" clause here: it would offer to assign the
     // caller a case they already hold (the RA-523 defect).
-    canSelfAssign: canActOnAssignment && !callerIsAssignee
+    // RA-527: not while a determination awaits applicant contact either —
+    // "Assign to yourself and start" means nothing there, and the design
+    // offers only Reassign / Unassign.
+    canSelfAssign:
+      canActOnAssignment &&
+      !callerIsAssignee &&
+      !PENDING_CONTACT_STATE_IDS.has(workItem.stateId)
     // RA-295 removed `isUnassigned`, `canUnassign` and `assignableUsers`
     // from this model: the reassign / unassign links are unconditional
     // WITHIN the active lifecycle (AC03, as narrowed by RA-358 above) and
@@ -724,6 +731,11 @@ function buildAssignmentViewModel({ workItem, user }) {
 // consulting this list. The two rules are independent and both must hold.
 const TERMINAL_STATE_IDS = new Set(['approved', 'rejected', 'withdrawn'])
 
+// RA-527. States in which a determination has been made (step 1) but not yet
+// applied because the applicant has not been contacted. Not closed: the case
+// stays reassignable so someone else can make the contact.
+const PENDING_CONTACT_STATE_IDS = new Set([STATE_APPROVED_PENDING_CONTACT])
+
 function applyReAccreditationViewModel({ workItem, source = workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
@@ -775,8 +787,26 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
 
   const decisionMetadata = buildDecisionMetadata(workItem)
 
+  // RA-527. Step 1 of an approval is done but the applicant has not been
+  // contacted: a persistent banner says so on every visit, and the only
+  // forward action is "Confirm applicant contact" (step 2). No
+  // determination, query or due-date change may be offered from here.
+  const isPendingContact = PENDING_CONTACT_STATE_IDS.has(workItem.stateId)
+
   return {
     ...workItem,
+    isPendingContact,
+    pendingContactBanner: isPendingContact
+      ? {
+          title: 'Application approved',
+          text: 'The application was approved. You now need to contact the applicant about the decision.',
+          accreditationId: decisionMetadata?.accreditationId ?? null
+        }
+      : null,
+    confirmContactHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/confirm-contact`,
+    // Belt and braces: management-be projects no `sla-extend` here, but a
+    // determination already made must never show a deadline control.
+    canChangeDueDate: isPendingContact ? false : workItem.canChangeDueDate,
     canLogDecision,
     logDecisionHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/decision`,
     canDulyMake,

@@ -44,6 +44,9 @@ const STATE_TAG_CLASSES = {
   'awaiting-decision': 'govuk-tag--light-blue', // Awaiting decision (distinct)
   queried: 'govuk-tag--yellow', // Queried
   updated: 'govuk-tag--turquoise', // Updated (RA-311 turquoise parity with the Registration & Accreditation service)
+  // RA-527. Approved at step 1, applicant not yet contacted. PROVISIONAL
+  // colour (may change later) — keep it to this one entry.
+  'approved-pending-contact': 'govuk-tag--light-blue', // Approved
   approved: 'govuk-tag--green', // Granted
   rejected: 'govuk-tag--red', // Refused
   withdrawn: DEFAULT_STATE_TAG_CLASS // Withdrawn

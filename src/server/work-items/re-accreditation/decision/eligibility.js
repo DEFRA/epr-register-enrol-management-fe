@@ -10,7 +10,8 @@
  *
  * ⚠ WHY THIS DOES NOT CALL `canApplyAction`.
  *
- * Same reason as `duly-making/eligibility.js`. Both `approve` and `reject`
+ * Same reason as `duly-making/eligibility.js`. Both decision transitions
+ * (`make-determination-approved` since RA-527, and `reject`)
  * are declared `callerInvocable: false` in `module.js` (v12) because neither
  * is reachable through the generic `/actions/{actionId}` route any more —
  * they are applied server-side by `POST /work-items/re-accreditation/{id}/decision`.
@@ -61,7 +62,8 @@ export const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
  * The two decision outcomes, keyed by the value the radio posts.
  *
  * `actionId` names the transition in `module.js` whose `toStateId` is the
- * terminal state the outcome lands on, and whose `fromStateId` is the state
+ * state the outcome lands on (RA-527: for an approval, the non-terminal
+ * `approved-pending-contact` of step 1), and whose `fromStateId` is the state
  * a decision is taken from. Nothing here hardcodes `approved` / `rejected` /
  * `awaiting-decision` — those are read off the declaration.
  *
@@ -73,7 +75,7 @@ export const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
  * `routes/re-accreditation/decision/index.njk` and nowhere else.
  */
 export const DECISION_OUTCOMES = Object.freeze({
-  approved: 'approve',
+  approved: 'make-determination-approved',
   rejected: 'reject'
 })
 
@@ -107,7 +109,7 @@ function decisionEntryStates(type) {
   const transitions = type?.transitions ?? []
   const states = new Set()
 
-  // `awaiting-decision` — the state `approve` / `reject` fire from.
+  // `awaiting-decision` — the state both outcome transitions fire from.
   for (const actionId of Object.values(DECISION_OUTCOMES)) {
     const transition = transitions.find((t) => t.actionId === actionId)
     if (transition?.fromStateId != null) {
@@ -205,7 +207,8 @@ export function evaluateLogDecisionEligibility(workItem) {
 }
 
 /**
- * The terminal state id an outcome lands on, read off the module
+ * The state id an outcome lands on (RA-527: `approved-pending-contact`
+ * for an approval, `rejected` for a refusal), read off the module
  * declaration.
  *
  * Used only for logging and for the success banner's wording, never as a
@@ -214,7 +217,7 @@ export function evaluateLogDecisionEligibility(workItem) {
  * @param {string} outcome `'approved'` | `'rejected'`
  * @returns {string|null}
  */
-export function terminalStateForOutcome(outcome) {
+export function targetStateForOutcome(outcome) {
   if (!isValidDecisionOutcome(outcome)) {
     return null
   }

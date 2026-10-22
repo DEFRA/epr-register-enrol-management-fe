@@ -4,6 +4,7 @@ import { buildContinueReviewRoutes } from './continue-review/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
 import { buildDecisionRoutes } from './decision/routes.js'
 import { buildDulyMakingRoutes } from './duly-making/routes.js'
+import { STATE_APPROVED_PENDING_CONTACT } from './states.js'
 
 /**
  * Re-accreditation work item module (RA-98).
@@ -55,6 +56,12 @@ const STATES = [
   // back to the raw id — see the RA-291 comment above for the class of bug
   // this guards against.
   { id: 'updated', displayName: 'Updated' },
+  // RA-527 (management-be v17). Step 1 of the two-step determination: the
+  // regulator has approved and the accreditation number is minted, but the
+  // applicant has not been contacted, so nothing is applied yet. Deliberately
+  // NOT terminal. The "Approved" label is provisional — keep it to this one
+  // entry (it mirrors the backend's display name).
+  { id: STATE_APPROVED_PENDING_CONTACT, displayName: 'Approved' },
   { id: 'approved', displayName: 'Granted', isTerminal: true },
   { id: 'rejected', displayName: 'Refused', isTerminal: true },
   { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
@@ -176,39 +183,25 @@ const TRANSITIONS = [
     toStateId: STATE_AWAITING_DECISION,
     callerInvocable: false
   },
-  // ⚠ RA-346. This entry is FRONTEND-ONLY. Unlike every other transition
-  // here, the backend deliberately does NOT register `approve` as a
-  // `WorkItemTransition` — approval runs through `ReAccreditationApprovalService`,
-  // reached only via the decision endpoint
-  // (`POST /work-items/re-accreditation/{id}/decision`; RA-527 removed the
-  // old bespoke `/approve` route), so `approve` never appears in the
-  // projected `availableActions`.
+  // RA-527 (management-be v17). Step 1 of an approval: awaiting-decision ->
+  // approved-pending-contact. It replaced the frontend-only `approve` entry
+  // RA-346/RA-410 kept here, so this list is now a one-for-one mirror of the
+  // backend's declaration again (`approve` was never a backend transition;
+  // `make-determination-approved` is).
   //
-  // Two consequences. First, the "mirror the backend type declaration"
-  // discipline that protects the other entries cannot protect this one:
-  // there is nothing upstream to diff it against, so a drift between this
-  // declaration and `ReAccreditationApprovalService`'s own rules will not
-  // show up as a mismatch. Second, this entry is not decorative — it is
-  // what `decision/eligibility.js` reads to resolve the terminal state each
-  // radio choice lands on, so the `approved` / `rejected` literals live here
-  // and only here.
+  // Not decorative: `decision/eligibility.js` reads this declaration (and
+  // `reject` below) to resolve which state a decision is taken from and
+  // where each radio choice lands, so those literals live here and only here.
   //
-  // RA-410. The `requiresAllTasksComplete: true` that used to sit on both
-  // this and `reject` is gone — management-be deleted the property from
-  // `WorkItemTransition` entirely. It was the RA-346 fix (the Approve CTA
-  // was offered while `record-decision-rationale` was pending); that gate is
-  // now moot because the task it waited on no longer exists.
-  //
-  // Both are declared `callerInvocable: false`: neither is reachable through
-  // the generic `/actions/{actionId}` route, only through
-  // `POST /work-items/re-accreditation/{id}/decision`. `approve` was already
-  // effectively so (the backend never registered it as a transition at all);
-  // `reject` joins it in v12.
+  // `callerInvocable: false`, like `reject`: neither is reachable through the
+  // generic `/actions/{actionId}` route, only through
+  // `POST /work-items/re-accreditation/{id}/decision`, which mints the
+  // accreditation number in the same write.
   {
-    actionId: 'approve',
-    displayName: 'Approve',
+    actionId: 'make-determination-approved',
+    displayName: 'Make determination: Approved',
     fromStateId: STATE_AWAITING_DECISION,
-    toStateId: 'approved',
+    toStateId: STATE_APPROVED_PENDING_CONTACT,
     callerInvocable: false
   },
   // RA-410. `displayName` stays "Reject" deliberately. The user-visible
@@ -386,7 +379,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v16',
+  templateVersion: 'v17',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -435,6 +428,9 @@ export const reAccreditationModule = {
     // v16: RA-595 backend removed `payment-received`, with a
     //      ReAccreditationRemovePaymentReceivedSnapshotMigration. Its
     //      retired (non-invocable) declaration here went with it.
+    // v17: RA-527 backend added the non-terminal `approved-pending-contact`
+    //      state and the `make-determination-approved` step 1 transition
+    //      into it, with a ReAccreditationPendingContactSnapshotMigration.
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11
@@ -478,7 +474,8 @@ export const reAccreditationModule = {
       v13: DETAIL_TEMPLATE_V1,
       v14: DETAIL_TEMPLATE_V1,
       v15: DETAIL_TEMPLATE_V1,
-      v16: DETAIL_TEMPLATE_V1
+      v16: DETAIL_TEMPLATE_V1,
+      v17: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

@@ -162,7 +162,9 @@ describe('makeShowDecisionController', () => {
 })
 
 describe('makeSubmitDecisionController', () => {
-  test('records an Approved decision and redirects with a success banner', async () => {
+  // RA-527. Step 1 of an approval: the persistent "Application approved"
+  // banner on the detail page replaces the one-time success flash.
+  test('records an Approved decision and redirects with no one-time banner', async () => {
     mockDecidable()
     const recordWorkItemDecision = vi
       .fn()
@@ -180,12 +182,9 @@ describe('makeSubmitDecisionController', () => {
       decisionNote: '',
       user: { id: 'u-1', name: 'Alice' }
     })
-    expect(request.yar.flash).toHaveBeenCalledWith(
+    expect(request.yar.flash).not.toHaveBeenCalledWith(
       'flashBanner',
-      expect.objectContaining({
-        type: 'success',
-        title: 'Decision logged: Approved'
-      })
+      expect.anything()
     )
     expect(h.redirect).toHaveBeenCalledWith(DETAIL_HREF)
   })
