@@ -2418,7 +2418,7 @@ describe('#workItemDetailController', () => {
         expect(result).toContain('data-testid="case-assignment-panel"')
         expect(result).toContain('data-testid="assignment-closed"')
         expect(result).toContain(
-          'This application is closed. It cannot be assigned or reassigned.'
+          'This application is closed and can no longer be assigned or reassigned.'
         )
 
         for (const testId of AFFORDANCES) {

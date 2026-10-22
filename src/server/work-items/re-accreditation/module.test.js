@@ -201,6 +201,9 @@ describe('reAccreditationModule', () => {
       .sort()
 
     expect(serverResolved).toEqual([
+      // RA-527. Step 2 of an approval: the confirm-contact endpoint applies
+      // it, because it pushes to the operator journey before the write.
+      'confirm-contact-approved',
       'continue-review-during-assessment',
       'continue-review-during-decision',
       'continue-review-during-duly-made',
@@ -241,6 +244,25 @@ describe('reAccreditationModule', () => {
     expect(
       reAccreditationType.transitions.find((t) => t.actionId === 'approve')
     ).toBeUndefined()
+  })
+
+  // RA-527. Step 2 of an approval, mirrored from management-be v17: the only
+  // way out of `approved-pending-contact`, applied by the confirm-contact
+  // endpoint.
+  test('declares the step 2 confirm-contact transition out of approved-pending-contact', () => {
+    expect(
+      reAccreditationType.transitions.filter(
+        (t) => t.fromStateId === 'approved-pending-contact'
+      )
+    ).toEqual([
+      {
+        actionId: 'confirm-contact-approved',
+        displayName: 'Confirm applicant contact',
+        fromStateId: 'approved-pending-contact',
+        toStateId: 'approved',
+        callerInvocable: false
+      }
+    ])
   })
 
   // RA-410. `reject` keeps its id, its states and its "Reject" displayName.
@@ -314,6 +336,7 @@ describe('reAccreditationModule', () => {
     expect(
       reAccreditationType.transitions.map((t) => t.actionId).sort()
     ).toEqual([
+      'confirm-contact-approved',
       'continue-review-during-assessment',
       'continue-review-during-decision',
       'continue-review-during-duly-made',
@@ -432,8 +455,8 @@ describe('reAccreditationModule', () => {
       // (RA-316) routes are always mounted; create routes (RA-127) are
       // only mounted when the flag is on. RA-523 removed the bespoke
       // payment-received route, dropping the always-on count from four
-      // to three.
-      expect(server.route).toHaveBeenCalledTimes(4)
+      // to three; RA-527's confirm-contact routes brought it back to four.
+      expect(server.route).toHaveBeenCalledTimes(5)
       const createCall = server.route.mock.calls.find(([routes]) =>
         routes.some((r) => r.path === '/work-items/re-accreditation/new')
       )
@@ -464,13 +487,31 @@ describe('reAccreditationModule', () => {
       }
     })
 
+    // RA-527.
+    test('always mounts the confirm-contact routes regardless of the create flag', async () => {
+      for (const flag of [true, false]) {
+        config.set(flagKey, flag)
+        const server = { route: vi.fn() }
+        await reAccreditationModule.register(server)
+        const methods = server.route.mock.calls
+          .flatMap(([routes]) => routes)
+          .map((r) => `${r.method} ${r.path}`)
+        expect(methods).toContain(
+          'GET /work-items/re-accreditation/{id}/confirm-contact'
+        )
+        expect(methods).toContain(
+          'POST /work-items/re-accreditation/{id}/confirm-contact'
+        )
+      }
+    })
+
     test('does not mount the create routes when the flag is off', async () => {
       config.set(flagKey, false)
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
-      // Only the always-on decision (RA-410), continue-review (RA-372) and
-      // duly-making (RA-316) routes are mounted.
-      expect(server.route).toHaveBeenCalledTimes(3)
+      // Only the always-on decision (RA-410), confirm-contact (RA-527),
+      // continue-review (RA-372) and duly-making (RA-316) routes are mounted.
+      expect(server.route).toHaveBeenCalledTimes(4)
       expect(
         server.route.mock.calls.every(([routes]) =>
           routes.every((r) => r.path !== '/work-items/re-accreditation/new')

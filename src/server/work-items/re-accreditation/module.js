@@ -2,6 +2,7 @@ import { config } from '#/config/config.js'
 import { registerModuleDetailTemplates } from '../core/templates.js'
 import { buildContinueReviewRoutes } from './continue-review/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
+import { buildConfirmContactRoutes } from './confirm-contact/routes.js'
 import { buildDecisionRoutes } from './decision/routes.js'
 import { buildDulyMakingRoutes } from './duly-making/routes.js'
 import { STATE_APPROVED_PENDING_CONTACT } from './states.js'
@@ -202,6 +203,19 @@ const TRANSITIONS = [
     displayName: 'Make determination: Approved',
     fromStateId: STATE_AWAITING_DECISION,
     toStateId: STATE_APPROVED_PENDING_CONTACT,
+    callerInvocable: false
+  },
+  // RA-527 (management-be v17). Step 2 of an approval ("confirm applicant
+  // contact"): approved-pending-contact -> approved. `callerInvocable: false`
+  // like step 1: only `POST /work-items/re-accreditation/{id}/confirm-contact`
+  // reaches it, because the backend pushes the outcome to the operator
+  // journey before the write. The confirm page's own route guard reads the
+  // pending state from `states.js`, not from this declaration.
+  {
+    actionId: 'confirm-contact-approved',
+    displayName: 'Confirm applicant contact',
+    fromStateId: STATE_APPROVED_PENDING_CONTACT,
+    toStateId: 'approved',
     callerInvocable: false
   },
   // RA-410. `displayName` stays "Reject" deliberately. The user-visible
@@ -429,8 +443,9 @@ export const reAccreditationModule = {
     //      ReAccreditationRemovePaymentReceivedSnapshotMigration. Its
     //      retired (non-invocable) declaration here went with it.
     // v17: RA-527 backend added the non-terminal `approved-pending-contact`
-    //      state and the `make-determination-approved` step 1 transition
-    //      into it, with a ReAccreditationPendingContactSnapshotMigration.
+    //      state, the `make-determination-approved` step 1 transition into
+    //      it and the `confirm-contact-approved` step 2 transition out of
+    //      it, with a ReAccreditationPendingContactSnapshotMigration.
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11
@@ -507,6 +522,13 @@ export const reAccreditationModule = {
     // Always mounted; the CTA and the GET handler share one eligibility
     // gate so the button and the URL cannot disagree.
     server.route(buildDecisionRoutes())
+
+    // RA-527. Confirm-contact flow: step 2 of the two-step determination.
+    // The page and its POST handler, which calls the type-specific
+    // `/confirm-contact` endpoint to apply the outcome step 1 recorded.
+    // Always mounted; the CTA only renders, and both handlers only proceed,
+    // for a work item actually pending contact.
+    server.route(buildConfirmContactRoutes())
 
     // RA-127. The create-work-item demo form is feature-flagged so it
     // can be hidden in production. When the flag is off the routes are

@@ -747,6 +747,66 @@ export async function recordReAccreditationDecision({
 }
 
 /**
+ * Confirm the applicant has been contacted about a re-accreditation
+ * determination (RA-527, step 2 of the two-step determination).
+ *
+ * Wraps `POST /work-items/re-accreditation/{id}/confirm-contact`. No body:
+ * the outcome was fixed at step 1. This is what applies it — management-be
+ * pushes the final status to the operator journey first, then moves the
+ * item to its terminal state, stops the SLA clock, queues publishing and
+ * (for an approval) sends the Decision email. A repeat call on an item
+ * already applied answers 200 + `x-idempotent-replay: true`; any state other
+ * than pending contact is a 409.
+ *
+ * Same result shape as {@link continueReviewReAccreditation}: there is no
+ * field to bind a failure to, so no `errorCode`.
+ */
+export async function confirmApplicantContact({
+  workItemId,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  // NOT the shared backendApi.timeoutMs, for the same reason as
+  // recordReAccreditationDecision: the backend gates this on an
+  // operator-journey push it retries for up to ~28s before writing anything,
+  // and aborting first would turn its clean 500 into a client cancellation.
+  timeoutMs = config.get('backendApi.decisionTimeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/confirm-contact`
+
+  const result = await postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'confirmApplicantContact'
+  })
+
+  if (result.ok) {
+    return { ok: true, workItem: result.workItem }
+  }
+
+  // `postJson` reports transport failures without a status.
+  if (result.status == null) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: result.error ?? REQUEST_FAILED
+    }
+  }
+
+  return {
+    ok: false,
+    reason: REASON_BY_STATUS[result.status] ?? 'server',
+    status: result.status,
+    message:
+      result.problem?.detail ??
+      result.problem?.title ??
+      `Backend returned ${result.status}`
+  }
+}
+
+/**
  * Extend the SLA clock on a work item (RA-131).
  *
  * Wraps `POST /work-items/{id}/sla/extend`.

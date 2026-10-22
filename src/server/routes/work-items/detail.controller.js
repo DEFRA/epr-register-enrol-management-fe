@@ -15,7 +15,7 @@ import {
   RE_ACCREDITATION_TYPE_ID
 } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
-import { STATE_APPROVED_PENDING_CONTACT } from '#/server/work-items/re-accreditation/states.js'
+import { PENDING_CONTACT_STATE_IDS } from '#/server/work-items/re-accreditation/states.js'
 import {
   isContinueReviewState,
   isPreDulyMadeWaypoint
@@ -730,11 +730,6 @@ function buildAssignmentViewModel({ workItem, user }) {
 // `isTerminal` flag before anything else, so a closed case fails it without
 // consulting this list. The two rules are independent and both must hold.
 const TERMINAL_STATE_IDS = new Set(['approved', 'rejected', 'withdrawn'])
-
-// RA-527. States in which a determination has been made (step 1) but not yet
-// applied because the applicant has not been contacted. Not closed: the case
-// stays reassignable so someone else can make the contact.
-const PENDING_CONTACT_STATE_IDS = new Set([STATE_APPROVED_PENDING_CONTACT])
 
 function applyReAccreditationViewModel({ workItem, source = workItem }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {

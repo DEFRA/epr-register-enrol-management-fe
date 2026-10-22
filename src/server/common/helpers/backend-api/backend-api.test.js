@@ -6,6 +6,7 @@ import {
   applyWorkItemAction,
   assertSafeHeaderValue,
   assignWorkItem,
+  confirmApplicantContact,
   continueReviewReAccreditation,
   createWorkItem,
   extendWorkItemSla,
@@ -1671,6 +1672,145 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
       expect(capturedSignal.aborted).toBe(false)
 
       // Past the decision-specific budget: now, and only now, it aborts.
+      await vi.advanceTimersByTimeAsync(decisionTimeout - sharedTimeout)
+      expect(capturedSignal.aborted).toBe(true)
+
+      const result = await promise
+      expect(result).toEqual({
+        ok: false,
+        reason: 'network',
+        message: 'Request timed out'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('#confirmApplicantContact (RA-527)', () => {
+  test('POSTs to the confirm-contact endpoint and returns the work item on 200', async () => {
+    const workItem = { id: 'wi-1', stateId: 'approved' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await confirmApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi-1/confirm-contact',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          accept: 'application/json',
+          'x-cdp-user-id': 'u-1',
+          'x-cdp-user-name': 'Alice'
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  // The operator journey could not be told the outcome: management-be
+  // applies nothing and answers a generic 500.
+  test('maps a generic 500 (Registration & Accreditation service unreachable) to reason server', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () =>
+        Promise.resolve({
+          title: 'Could not confirm applicant contact',
+          detail: 'The operator journey could not be notified.'
+        })
+    })
+
+    const result = await confirmApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'server',
+      status: 500,
+      message: 'The operator journey could not be notified.'
+    })
+  })
+
+  test('maps a 409 (not pending contact) to a conflict', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ detail: 'Not pending contact' })
+    })
+
+    const result = await confirmApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      message: 'Not pending contact'
+    })
+  })
+
+  test('reports a network reason on a transport failure', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+
+    const result = await confirmApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({ ok: false, reason: 'network' })
+    )
+  })
+
+  // Like the decision call, management-be gates this on an operator-journey
+  // push it retries for up to ~28s before writing anything, so it must not
+  // inherit the short shared backendApi.timeoutMs.
+  test('defaults its abort to backendApi.decisionTimeoutMs, not the shared backendApi.timeoutMs', async () => {
+    vi.useFakeTimers()
+    try {
+      let capturedSignal
+      const fetchImpl = vi.fn((_url, init) => {
+        capturedSignal = init.signal
+        return new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => {
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+          })
+        })
+      })
+
+      const promise = confirmApplicantContact({
+        workItemId: 'wi-1',
+        baseUrl: 'http://backend:8085',
+        fetchImpl
+      })
+
+      const sharedTimeout = config.get('backendApi.timeoutMs')
+      const decisionTimeout = config.get('backendApi.decisionTimeoutMs')
+
+      await vi.advanceTimersByTimeAsync(sharedTimeout + 1000)
+      expect(capturedSignal.aborted).toBe(false)
+
       await vi.advanceTimersByTimeAsync(decisionTimeout - sharedTimeout)
       expect(capturedSignal.aborted).toBe(true)
 
