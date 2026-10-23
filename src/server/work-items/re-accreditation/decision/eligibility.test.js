@@ -9,7 +9,7 @@ import {
   DECISION_OUTCOMES,
   evaluateLogDecisionEligibility,
   isValidDecisionOutcome,
-  terminalStateForOutcome
+  targetStateForOutcome
 } from './eligibility.js'
 
 /**
@@ -72,15 +72,18 @@ describe('evaluateLogDecisionEligibility', () => {
     ).toEqual({ allowed: true })
   })
 
-  test.each([['submitted'], ['queried'], ['updated']])(
-    'refuses a decision from %s',
-    (stateId) => {
-      expect(evaluateLogDecisionEligibility(aWorkItem({ stateId }))).toEqual({
-        allowed: false,
-        reason: 'invalid-transition'
-      })
-    }
-  )
+  // RA-527: an approval awaiting applicant contact is already determined.
+  test.each([
+    ['submitted'],
+    ['queried'],
+    ['updated'],
+    ['approved-pending-contact']
+  ])('refuses a decision from %s', (stateId) => {
+    expect(evaluateLogDecisionEligibility(aWorkItem({ stateId }))).toEqual({
+      allowed: false,
+      reason: 'invalid-transition'
+    })
+  })
 
   test.each([['approved'], ['rejected'], ['withdrawn']])(
     'reports terminal-state (not invalid-transition) for an already-closed %s item',
@@ -155,32 +158,33 @@ describe('isValidDecisionOutcome', () => {
   })
 })
 
-describe('terminalStateForOutcome', () => {
+describe('targetStateForOutcome', () => {
   beforeEach(() => {
     clearWorkItemRegistry()
     registerWorkItemType(reAccreditationType)
   })
 
-  test('approved lands on the approved state', () => {
-    expect(terminalStateForOutcome('approved')).toBe('approved')
+  // RA-527: step 1 of an approval, not yet the terminal 'approved'.
+  test('approved lands on the approved-pending-contact state', () => {
+    expect(targetStateForOutcome('approved')).toBe('approved-pending-contact')
   })
 
-  test('rejected lands on the rejected state — NOT a "refused" state', () => {
-    // "Refused" is a label change only. The state id, the transition id and
-    // the notification templates are all unchanged.
-    expect(terminalStateForOutcome('rejected')).toBe('rejected')
+  test('rejected lands on step 1 of a refusal — NOT a "refused" state', () => {
+    // RA-527: a refusal is two steps; step 1 lands in rejected-pending-contact.
+    // "Refused" is a label change only: the state ids are unchanged.
+    expect(targetStateForOutcome('rejected')).toBe('rejected-pending-contact')
   })
 
   test('returns null for an invalid outcome', () => {
-    expect(terminalStateForOutcome('refused')).toBeNull()
+    expect(targetStateForOutcome('refused')).toBeNull()
   })
 })
 
 describe('DECISION_OUTCOMES', () => {
-  test('maps the two wire values onto the unchanged transition ids', () => {
+  test('maps the two wire values onto the step 1 transition ids', () => {
     expect(DECISION_OUTCOMES).toEqual({
-      approved: 'approve',
-      rejected: 'reject'
+      approved: 'make-determination-approved',
+      rejected: 'make-determination-rejected'
     })
   })
 

@@ -23,7 +23,6 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
   recordReAccreditationDecision: vi.fn(),
-  approveReAccreditation: vi.fn(),
   continueReviewReAccreditation: vi.fn(),
   dulyMakeReAccreditation: vi.fn(),
   extendWorkItemSla: vi.fn(),
@@ -137,27 +136,64 @@ describe('RA-595: make a determination from Duly made', () => {
       }
     )
 
-    test.each([['approved'], ['rejected']])(
-      'records %s from Duly made with the success banner',
-      async (decision) => {
-        recordBackendCalls(aWorkItem())
+    // RA-527. Step 1 of a refusal: the detail page's persistent
+    // "Application refused" banner replaces the one-time success flash.
+    test('records rejected from Duly made and lands on the pending-contact banner', async () => {
+      recordBackendCalls(aWorkItem())
+      const pending = aWorkItem({
+        stateId: 'rejected-pending-contact',
+        templateVersion: 'v17'
+      })
+      recordReAccreditationDecision.mockImplementation(async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: pending })
+        return { ok: true, workItem: pending }
+      })
 
-        const page = await followRedirect(await submitDecision(decision))
+      const page = await followRedirect(await submitDecision('rejected'))
 
-        expect(recordReAccreditationDecision).toHaveBeenCalledWith(
-          expect.objectContaining({ workItemId: ID, outcome: decision })
-        )
-        expect(page).toContain(
-          decision === 'approved'
-            ? 'Decision logged: Approved'
-            : 'Decision logged: Refused'
-        )
-      }
-    )
+      expect(recordReAccreditationDecision).toHaveBeenCalledWith(
+        expect.objectContaining({ workItemId: ID, outcome: 'rejected' })
+      )
+      expect(page).not.toContain('Decision logged: Refused')
+      expect(page).toContain(
+        'data-testid="re-accreditation-pending-contact-banner"'
+      )
+      expect(page).toContain('Application refused')
+    })
+
+    // RA-527. Step 1 of an approval: the detail page's persistent
+    // "Application approved" banner replaces the one-time success flash.
+    test('records approved from Duly made and lands on the pending-contact banner', async () => {
+      recordBackendCalls(aWorkItem())
+      const pending = aWorkItem({
+        stateId: 'approved-pending-contact',
+        templateVersion: 'v17',
+        payload: {
+          applicationReference: 'RA-000000595',
+          accreditationId: 'A26ER5000270036WO'
+        }
+      })
+      recordReAccreditationDecision.mockImplementation(async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: pending })
+        return { ok: true, workItem: pending }
+      })
+
+      const page = await followRedirect(await submitDecision('approved'))
+
+      expect(recordReAccreditationDecision).toHaveBeenCalledWith(
+        expect.objectContaining({ workItemId: ID, outcome: 'approved' })
+      )
+      expect(page).not.toContain('Decision logged: Approved')
+      expect(page).toContain(
+        'data-testid="re-accreditation-pending-contact-banner"'
+      )
+    })
 
     test('posts the decision note after the start and before the decision', async () => {
-      // The operator's decision email reads the LATEST note, so the note
-      // must still go immediately before the decision.
+      // The note is the determination's rationale in the application
+      // history, posted before the decision so a decision is never recorded
+      // without its stated reason. (It no longer reaches the operator's
+      // email: RA-581 removed that.)
       const calls = recordBackendCalls(aWorkItem())
 
       await submitDecision('approved', '&decisionNote=Looks+good')

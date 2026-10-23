@@ -106,19 +106,15 @@ export function createDecisionService({
         }
       }
 
-      // RA-203. The note is posted FIRST, and the ordering is the whole
-      // mechanism — not incidental sequencing.
+      // RA-203. The note is posted FIRST: it is the determination's audit
+      // note, the regulator's rationale in the application history, and
+      // posting it before the decision means a decision is never recorded
+      // with its stated reason missing (see the note-failed branch below).
       //
-      // management-be's Decision notification reads `decision_notes` from
-      // `LatestWorkItemNoteText`, i.e. the most recent work-item note by
-      // `CreatedAt`. Posting after the decision would race the notification
-      // hook, which fires during the decision write, and the operator's email
-      // would carry the PREVIOUS note (or nothing) instead of this rationale.
+      // It no longer reaches the operator's email. RA-581 removed the
+      // `decision_notes` personalisation from management-be's Decision
+      // template, so nothing reads the latest note at notification time.
       //
-      // RA-410 note: this is the same ordering the RA-132 approval service
-      // used. It was momentarily lost when the approve interstitial was
-      // retired, which left `decision_notes` resolving to empty on every
-      // decision — the placeholder still rendered, so nothing failed loudly.
       // Do not "simplify" by folding the note into the `/decision` payload:
       // that endpoint has no note field, and adding one would duplicate a
       // notes API that already exists and already audits.

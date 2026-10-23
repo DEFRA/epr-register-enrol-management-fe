@@ -26,10 +26,11 @@ function okReply(workItem = { id: 'wi-1', stateId: 'approved' }) {
   return { ok: true, workItem }
 }
 
-// RA-203. The decision note reaches the operator's email through
-// management-be's `decision_notes` placeholder, which resolves to the LATEST
-// work-item note. That makes ordering load-bearing, so it is asserted
-// directly rather than left implied.
+// RA-203. The decision note is the determination's audit note. It is posted
+// before the decision so a decision is never recorded without its stated
+// reason (RA-581 removed the `decision_notes` email field, so this is no
+// longer about the operator's email). The ordering is asserted directly
+// rather than left implied.
 describe('createDecisionService — decision note (RA-203)', () => {
   test('posts the note BEFORE the decision', async () => {
     const calls = []
@@ -49,9 +50,8 @@ describe('createDecisionService — decision note (RA-203)', () => {
       decisionNote: 'Rationale'
     })
 
-    // Reversed, the notification hook (which fires during the decision write)
-    // would read the PREVIOUS note and the operator's email would carry the
-    // wrong rationale — or none.
+    // Reversed, a failed note post would leave an irreversible decision on
+    // record with its stated rationale missing.
     expect(calls).toEqual(['note', 'decision'])
     expect(addNote).toHaveBeenCalledWith({
       workItemId: 'wi-1',

@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v16')
+    expect(reAccreditationType.templateVersion).toBe('v17')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -39,7 +39,11 @@ describe('reAccreditationModule', () => {
       'awaiting-decision': 'Awaiting decision',
       queried: 'Queried',
       updated: 'Updated',
+      // RA-527. Step 1 of an approval: approved, applicant not yet contacted.
+      'approved-pending-contact': 'Approved',
       approved: 'Granted',
+      // RA-527. Step 1 of a refusal: refused, applicant not yet contacted.
+      'rejected-pending-contact': 'Refused',
       rejected: 'Refused',
       withdrawn: 'Withdrawn'
     })
@@ -61,6 +65,9 @@ describe('reAccreditationModule', () => {
     // RA-337: a resumed-but-not-yet-reviewed application is likewise not
     // a closed outcome.
     expect(states.updated.isTerminal).toBeFalsy()
+    // RA-527: an approval awaiting applicant contact is not yet applied.
+    expect(states['approved-pending-contact'].isTerminal).toBeFalsy()
+    expect(states['rejected-pending-contact'].isTerminal).toBeFalsy()
   })
 
   test('declares the queried state so its label resolves (RA-211/RA-291)', () => {
@@ -91,8 +98,19 @@ describe('reAccreditationModule', () => {
     ['start-assessment', 'duly-made', 'assessment-in-progress'],
     ['sla-extend', 'assessment-in-progress', 'assessment-in-progress'],
     ['submit-for-decision', 'assessment-in-progress', 'awaiting-decision'],
-    ['approve', 'awaiting-decision', 'approved'],
-    ['reject', 'awaiting-decision', 'rejected'],
+    // RA-527. Step 1 of an approval lands in the pending-contact state.
+    [
+      'make-determination-approved',
+      'awaiting-decision',
+      'approved-pending-contact'
+    ],
+    // RA-527. So does step 1 of a refusal, and step 2 applies it.
+    [
+      'make-determination-rejected',
+      'awaiting-decision',
+      'rejected-pending-contact'
+    ],
+    ['confirm-contact-rejected', 'rejected-pending-contact', 'rejected'],
     ['withdraw', 'submitted', 'withdrawn'],
     ['withdraw-during-duly-made', 'duly-made', 'withdrawn'],
     [
@@ -177,22 +195,26 @@ describe('reAccreditationModule', () => {
   // `submit-for-decision` and `reject` joined, because both hops of a
   // decision are now applied server-side by the `/decision` endpoint.
   // RA-595 briefly made it twelve with a retired `payment-received`; v16
-  // removed it from management-be, so it is gone here too.
+  // removed it from management-be, so it is gone here too. RA-527 (v17)
+  // swapped the frontend-only `approve` for the backend's real step 1
+  // transition, `make-determination-approved`, and the refusal's two steps
+  // replaced `reject`.
   //
   // Getting this wrong is a live security regression, not a cosmetic
   // mismatch: dropping the flag from any of the eight would make the
   // mirror advertise a set of same-from-state transitions as caller-
   // choosable, i.e. as if the user could pick the destination state.
-  test('flags exactly the eleven server-resolved transitions the backend does', () => {
+  test('flags exactly the server-resolved transitions the backend does', () => {
     const serverResolved = reAccreditationType.transitions
       .filter((t) => t.callerInvocable === false)
       .map((t) => t.actionId)
       .sort()
 
     expect(serverResolved).toEqual([
-      // RA-410. Frontend-only, and non-invocable because the decision
-      // endpoint applies it — never the generic action route.
-      'approve',
+      // RA-527. Step 2 of an approval: the confirm-contact endpoint applies
+      // it, because it pushes to the operator journey before the write.
+      'confirm-contact-approved',
+      'confirm-contact-rejected',
       'continue-review-during-assessment',
       'continue-review-during-decision',
       'continue-review-during-duly-made',
@@ -202,8 +224,11 @@ describe('reAccreditationModule', () => {
       // duly making carries a payment date that the generic
       // `/actions/{actionId}` route has nowhere to put.
       'duly-make',
-      // RA-410. Same reasoning as `approve` above.
-      'reject',
+      // RA-527. Step 1 of an approval: the decision endpoint applies it,
+      // because it mints the accreditation number in the same write.
+      'make-determination-approved',
+      // RA-527. Step 1 of a refusal, also applied by the decision endpoint.
+      'make-determination-rejected',
       'resume-during-assessment',
       'resume-during-decision',
       'resume-during-duly-made',
@@ -212,42 +237,73 @@ describe('reAccreditationModule', () => {
     ])
   })
 
-  // ⚠ DO NOT DELETE THE `approve` TRANSITION. It looks like mirror drift
-  // — the backend deliberately omits `approve` from
-  // `ReAccreditationType.Transitions` so its generic engine refuses
-  // `/actions/approve` — and RA-372 removed it on exactly that reasoning
-  // before restoring it.
-  //
-  // It is load-bearing on THIS side: RA-410's `decision/eligibility.js`
-  // reads this declaration to work out which states a decision may be taken
-  // from and which terminal state each outcome lands on. Deleting it strands
-  // the Log decision CTA — and because the deletion merges CLEANLY rather
-  // than conflicting, nothing else would flag it. `decision/eligibility.test.js`
-  // guards the same declaration from the consumer side; this is the
-  // declaration-side guard.
-  test('still declares the approve transition the decision flow depends on', () => {
+  // RA-527. The decision flow reads this declaration (see
+  // `decision/eligibility.js`) to work out which state an Approved decision
+  // is taken from. It replaced the frontend-only `approve` entry RA-410
+  // relied on: management-be now declares the step 1 transition itself, so
+  // the mirror is one-for-one with the backend again.
+  test('declares the step 1 approval transition the decision flow depends on', () => {
+    expect(
+      reAccreditationType.transitions.find(
+        (t) => t.actionId === 'make-determination-approved'
+      )
+    ).toMatchObject({
+      fromStateId: 'awaiting-decision',
+      toStateId: 'approved-pending-contact',
+      callerInvocable: false
+    })
     expect(
       reAccreditationType.transitions.find((t) => t.actionId === 'approve')
-    ).toMatchObject({
-      fromStateId: 'awaiting-decision',
-      toStateId: 'approved',
-      callerInvocable: false
-    })
+    ).toBeUndefined()
   })
 
-  // RA-410. `reject` keeps its id, its states and its "Reject" displayName.
-  // The user-visible rename to "Refused" is a label on the decision page's
-  // radio and nothing else — renaming the declaration would desynchronise
-  // the mirror to purely cosmetic effect.
-  test('reject keeps its unchanged id, states and displayName', () => {
+  // RA-527. Step 2 of an approval, mirrored from management-be v17: the only
+  // way out of `approved-pending-contact`, applied by the confirm-contact
+  // endpoint.
+  test('declares the step 2 confirm-contact transition out of approved-pending-contact', () => {
     expect(
-      reAccreditationType.transitions.find((t) => t.actionId === 'reject')
+      reAccreditationType.transitions.filter(
+        (t) => t.fromStateId === 'approved-pending-contact'
+      )
+    ).toEqual([
+      {
+        actionId: 'confirm-contact-approved',
+        displayName: 'Confirm applicant contact',
+        fromStateId: 'approved-pending-contact',
+        toStateId: 'approved',
+        callerInvocable: false
+      }
+    ])
+  })
+
+  // RA-527. A refusal takes the same two steps, mirrored from
+  // management-be v17, which removed the single-step `reject`.
+  test('declares the two refusal steps and no single-step reject', () => {
+    expect(
+      reAccreditationType.transitions.find(
+        (t) => t.actionId === 'make-determination-rejected'
+      )
     ).toMatchObject({
-      displayName: 'Reject',
       fromStateId: 'awaiting-decision',
-      toStateId: 'rejected',
+      toStateId: 'rejected-pending-contact',
       callerInvocable: false
     })
+    expect(
+      reAccreditationType.transitions.filter(
+        (t) => t.fromStateId === 'rejected-pending-contact'
+      )
+    ).toEqual([
+      {
+        actionId: 'confirm-contact-rejected',
+        displayName: 'Confirm applicant contact',
+        fromStateId: 'rejected-pending-contact',
+        toStateId: 'rejected',
+        callerInvocable: false
+      }
+    ])
+    expect(
+      reAccreditationType.transitions.find((t) => t.actionId === 'reject')
+    ).toBeUndefined()
   })
 
   // RA-410. The marker the generic self-assign handler keys on. Paired with
@@ -299,25 +355,26 @@ describe('reAccreditationModule', () => {
   // The whole mirror, pinned in one place. RA-372 found it three blocks
   // short; this is what stops that recurring silently.
   //
-  // One KNOWN divergence from the backend, deliberately kept and now
-  // documented at the declaration itself: `approve` is declared here but
-  // not there, because it is frontend-only (see the guard test above).
-  // Everything else is one-for-one with `ReAccreditationType.Transitions`.
-  test('pins the full declared transition set (backend set, plus approve)', () => {
+  // RA-527 removed the one KNOWN divergence (the frontend-only `approve`):
+  // this is one-for-one with `ReAccreditationType.Transitions`, apart from
+  // the queried `sla-extend` self-loop noted below.
+  test('pins the full declared transition set (the backend set)', () => {
     expect(
       reAccreditationType.transitions.map((t) => t.actionId).sort()
     ).toEqual([
-      'approve',
+      'confirm-contact-approved',
+      'confirm-contact-rejected',
       'continue-review-during-assessment',
       'continue-review-during-decision',
       'continue-review-during-duly-made',
       'continue-review-during-duly-making',
       'duly-make',
+      'make-determination-approved',
+      'make-determination-rejected',
       'query-during-assessment',
       'query-during-decision',
       'query-during-duly-made',
       'query-during-duly-making',
-      'reject',
       'resume-during-assessment',
       'resume-during-decision',
       'resume-during-duly-made',
@@ -425,8 +482,8 @@ describe('reAccreditationModule', () => {
       // (RA-316) routes are always mounted; create routes (RA-127) are
       // only mounted when the flag is on. RA-523 removed the bespoke
       // payment-received route, dropping the always-on count from four
-      // to three.
-      expect(server.route).toHaveBeenCalledTimes(4)
+      // to three; RA-527's confirm-contact routes brought it back to four.
+      expect(server.route).toHaveBeenCalledTimes(5)
       const createCall = server.route.mock.calls.find(([routes]) =>
         routes.some((r) => r.path === '/work-items/re-accreditation/new')
       )
@@ -457,13 +514,31 @@ describe('reAccreditationModule', () => {
       }
     })
 
+    // RA-527.
+    test('always mounts the confirm-contact routes regardless of the create flag', async () => {
+      for (const flag of [true, false]) {
+        config.set(flagKey, flag)
+        const server = { route: vi.fn() }
+        await reAccreditationModule.register(server)
+        const methods = server.route.mock.calls
+          .flatMap(([routes]) => routes)
+          .map((r) => `${r.method} ${r.path}`)
+        expect(methods).toContain(
+          'GET /work-items/re-accreditation/{id}/confirm-contact'
+        )
+        expect(methods).toContain(
+          'POST /work-items/re-accreditation/{id}/confirm-contact'
+        )
+      }
+    })
+
     test('does not mount the create routes when the flag is off', async () => {
       config.set(flagKey, false)
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
-      // Only the always-on decision (RA-410), continue-review (RA-372) and
-      // duly-making (RA-316) routes are mounted.
-      expect(server.route).toHaveBeenCalledTimes(3)
+      // Only the always-on decision (RA-410), confirm-contact (RA-527),
+      // continue-review (RA-372) and duly-making (RA-316) routes are mounted.
+      expect(server.route).toHaveBeenCalledTimes(4)
       expect(
         server.route.mock.calls.every(([routes]) =>
           routes.every((r) => r.path !== '/work-items/re-accreditation/new')

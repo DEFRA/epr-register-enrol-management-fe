@@ -178,6 +178,11 @@
     }) }}
   {% endif %}
 
+  {# RA-527. Type-specific banners that persist across visits (unlike the   #}
+  {# one-shot flash banners above), e.g. re-accreditation's "Application    #}
+  {# approved" banner while an approval awaits applicant contact.          #}
+  {% block typeBanners %}{% endblock %}
+
   {% if notice %}
     {% if notice.kind == 'error' %}
       {{ govukErrorSummary({
@@ -565,7 +570,7 @@
         {% if assignment.isClosed %}
           <p class="govuk-body govuk-!-margin-bottom-0"
              data-testid="assignment-closed">
-            This application is closed. It cannot be assigned or reassigned.
+            This application is closed and can no longer be assigned or reassigned.
           </p>
         {% else %}
         {% if assignment.canSelfAssign %}

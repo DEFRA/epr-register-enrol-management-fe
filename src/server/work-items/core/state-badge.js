@@ -44,6 +44,12 @@ const STATE_TAG_CLASSES = {
   'awaiting-decision': 'govuk-tag--light-blue', // Awaiting decision (distinct)
   queried: 'govuk-tag--yellow', // Queried
   updated: 'govuk-tag--turquoise', // Updated (RA-311 turquoise parity with the Registration & Accreditation service)
+  // RA-527. Step 1 of the two-step determination, applicant not yet
+  // contacted. Each shares its final state's colour (user decision,
+  // 2026-10-22): Approved matches Granted, and the step 1 Refused matches the
+  // final Refused.
+  'approved-pending-contact': 'govuk-tag--green', // Approved
+  'rejected-pending-contact': 'govuk-tag--red', // Refused
   approved: 'govuk-tag--green', // Granted
   rejected: 'govuk-tag--red', // Refused
   withdrawn: DEFAULT_STATE_TAG_CLASS // Withdrawn
