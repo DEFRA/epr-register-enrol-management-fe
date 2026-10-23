@@ -20,6 +20,7 @@
  * only the success banner's wording depends on the outcome.
  */
 
+import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
@@ -84,7 +85,7 @@ function renderNotFound(h, id) {
         { text: 'Not found' }
       ]
     })
-    .code(404)
+    .code(statusCodes.notFound)
 }
 
 function renderUnavailable(h, id, result) {
@@ -96,7 +97,7 @@ function renderUnavailable(h, id, result) {
       error: result.error ?? `Backend returned ${result.status}`,
       breadcrumbs: [{ text: 'Work items', href: WORK_ITEMS_HREF }, { text: id }]
     })
-    .code(502)
+    .code(statusCodes.badGateway)
 }
 
 /**
@@ -136,7 +137,7 @@ async function loadPendingWorkItem(request, h, user) {
   const id = request.params.id
   const result = await getWorkItem({ workItemId: id, user })
 
-  if (result.ok === false && result.status === 404) {
+  if (result.ok === false && result.status === statusCodes.notFound) {
     return { response: renderNotFound(h, id) }
   }
   if (!result.ok) {
@@ -219,7 +220,7 @@ export function makeSubmitConfirmContactController({
               fieldError: MISSING_CONFIRMATION_MESSAGE
             })
           )
-          .code(400)
+          .code(statusCodes.badRequest)
       }
 
       const result = await service.confirmApplicantContact({
@@ -249,7 +250,11 @@ export function makeSubmitConfirmContactController({
           VIEW_PATH,
           pageView(workItem, { failureBanner: failureBannerFor(result) })
         )
-        .code(result.outcome === 'conflict' ? 409 : 502)
+        .code(
+          result.outcome === 'conflict'
+            ? statusCodes.conflict
+            : statusCodes.badGateway
+        )
     }
   }
 }

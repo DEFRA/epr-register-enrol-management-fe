@@ -2781,7 +2781,7 @@ describe('#workItemDetailController', () => {
 
     // Driving the state list off the module declaration (rather than
     // repeating a literal) also pins the invariant the merge resolution
-    // leans on: `TERMINAL_STATE_IDS` in detail.controller.js is a hardcoded
+    // leans on: `TERMINAL_STATE_IDS` in assignment-view-model.js is a hardcoded
     // list (epr-uf42 tracks deriving it from `states[].isTerminal`). If the
     // module ever declares a terminal state that list does not know about,
     // the closed-case gate silently stops firing for it and this fails.
