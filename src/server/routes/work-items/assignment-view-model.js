@@ -14,7 +14,8 @@ import { PENDING_CONTACT_STATE_IDS } from '#/server/work-items/re-accreditation/
 // decision gate in detail.controller.js: there is deliberately none.
 // `canLogDecision` is answered by `evaluateLogDecisionEligibility`, which
 // checks the type's own `isTerminal` flag before anything else, so a closed
-// case fails it without consulting this list. The two rules are independent and both must hold.
+// case fails it without consulting this list. The two rules are independent
+// and both must hold.
 export const TERMINAL_STATE_IDS = new Set(['approved', 'rejected', 'withdrawn'])
 
 /**
