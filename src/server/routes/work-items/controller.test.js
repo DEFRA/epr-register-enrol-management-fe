@@ -1283,6 +1283,172 @@ describe('#workItemListController', () => {
     )
   })
 
+  // RA-527. Regulators find work items waiting for applicant contact through
+  // the Status filter. "Approved" (step 1) sits between "Queried" and
+  // "Granted" and maps to its own pending-contact state id. A step 1 refusal
+  // reads "Refused", the same as a final refusal, so there is one "Refused"
+  // option covering both refusal states.
+  describe('RA-527 pending-contact Status filter options', () => {
+    function statusCheckboxes(html) {
+      return [
+        ...html.matchAll(
+          /<input[^>]*name="status"[^>]*value="([^"]+)"[^>]*>\s*<label[^>]*>\s*([^<]+?)\s*<\/label>/g
+        )
+      ].map(([, value, label]) => ({ value, label }))
+    }
+
+    test('Renders the Status options in order, with Approved between Queried and Granted and a single Refused', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      expect(statusCheckboxes(result)).toEqual([
+        { value: 'submitted', label: 'Not started' },
+        { value: 'duly-made', label: 'Duly made' },
+        { value: 'updated', label: 'Updated' },
+        { value: 'awaiting-decision', label: 'Awaiting decision' },
+        { value: 'queried', label: 'Queried' },
+        { value: 'approved-pending-contact', label: 'Approved' },
+        { value: 'approved', label: 'Granted' },
+        { value: 'rejected', label: 'Refused' },
+        { value: 'withdrawn', label: 'Withdrawn' }
+      ])
+    })
+
+    test.each([
+      ['approved-pending-contact', 'Approved', ['approved-pending-contact']],
+      ['approved', 'Granted', ['approved']],
+      ['rejected', 'Refused', ['rejected', 'rejected-pending-contact']]
+    ])(
+      'status=%s renders a checked option and a "%s" chip, and sends %j to the backend',
+      async (status, label, stateIds) => {
+        getWorkItems.mockResolvedValue(emptyPage())
+
+        const { result } = await server.inject({
+          method: 'GET',
+          url: `/work-items?status=${status}&filtersApplied=1`
+        })
+
+        expect(getWorkItems).toHaveBeenCalledWith(
+          expect.objectContaining({ stateIds })
+        )
+        expect(result).toMatch(
+          new RegExp(
+            `<input[^>]*name="status"[^>]*value="${status}"[^>]*checked`
+          )
+        )
+        expect(result).toContain(
+          `data-testid="active-filter-label">${label}</span>`
+        )
+      }
+    )
+
+    test('The retired rejected-pending-contact status token is no longer an option and is dropped', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?status=rejected-pending-contact&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ stateIds: [] })
+      )
+    })
+
+    test('The status= tokens round-trip through the chip removal links', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?status=approved-pending-contact&status=rejected&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stateIds: [
+            'approved-pending-contact',
+            'rejected',
+            'rejected-pending-contact'
+          ]
+        })
+      )
+      // Removing one chip keeps the other token, unchanged.
+      expect(result).toContain(
+        'href="/work-items?status=rejected&amp;filtersApplied=1"'
+      )
+      expect(result).toContain(
+        'href="/work-items?status=approved-pending-contact&amp;filtersApplied=1"'
+      )
+    })
+
+    test('Pending-contact items show in the default (non-archived) list with their tags', async () => {
+      clearWorkItemRegistry()
+      registerWorkItemType({
+        id: 're-accreditation',
+        displayName: 'Re-accreditation',
+        initialState: { id: 'submitted', displayName: 'Not started' },
+        states: [
+          { id: 'submitted', displayName: 'Not started' },
+          { id: 'approved-pending-contact', displayName: 'Approved' },
+          { id: 'rejected-pending-contact', displayName: 'Refused' },
+          { id: 'approved', displayName: 'Granted', isTerminal: true }
+        ],
+        getTasksForState: () => []
+      })
+      const items = [
+        {
+          id: '52700000-0000-0000-0000-000000000001',
+          stateId: 'approved-pending-contact',
+          label: 'Approved',
+          cls: 'govuk-tag--green'
+        },
+        {
+          id: '52700000-0000-0000-0000-000000000002',
+          stateId: 'rejected-pending-contact',
+          label: 'Refused',
+          cls: 'govuk-tag--red'
+        }
+      ]
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: items.map(({ id, stateId }) => ({
+            id,
+            typeId: 're-accreditation',
+            stateId,
+            submittedAt: '2026-04-27T10:00:00Z',
+            submittedBy: 'frontend',
+            payload: {}
+          })),
+          totalCount: items.length
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      // The default landing does not ask for archived items, so the backend
+      // must return pending-contact items without it.
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ includeArchived: false, stateIds: [] })
+      )
+      for (const item of items) {
+        const badgeIdx = result.indexOf(
+          `data-testid="work-item-state-tag-${item.id}"`
+        )
+        expect(badgeIdx).toBeGreaterThan(-1)
+        expect(result.slice(badgeIdx - 120, badgeIdx)).toContain(item.cls)
+        const badgeEnd = result.indexOf('</', badgeIdx)
+        expect(result.slice(badgeIdx, badgeEnd)).toContain(item.label)
+      }
+    })
+  })
+
   // RA-299 AC01/15. "Application type" is a second, independent filter
   // section from "Applicant type" (typeId) above; both merge into the same
   // backend typeIds query.

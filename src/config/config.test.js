@@ -405,61 +405,6 @@ describe('config backend API decision timeout (RA-410)', () => {
   })
 })
 
-// RA-448 phase 2. The re-accreditation approve call also has its OWN
-// timeout, for the same class of reason as decisionTimeoutMs above:
-// management-be now resolves a real accreditation number from a second
-// backend before committing anything, with a firm ~19s worst case
-// (3 attempts x 5s + 2 x 2s capped backoff). fe must not abort before be
-// finishes retrying — a premature abort re-opens the same stranding-bug
-// class, and a caseworker retry can ask the backend to needlessly
-// reapply/orphan a just-issued number. See `backendApi.approveTimeoutMs`
-// and `approveReAccreditation`.
-describe('config backend API approve timeout (RA-448 phase 2)', () => {
-  const originalEnv = process.env
-
-  // be's firm worst-case accreditation-number retry budget, in ms. The
-  // default approve timeout MUST clear this with margin.
-  const BE_WORST_CASE_RETRY_BUDGET_MS = 19000
-
-  beforeEach(() => {
-    vi.resetModules()
-    process.env = { ...originalEnv }
-  })
-
-  afterEach(() => {
-    process.env = originalEnv
-  })
-
-  test('defaults approveTimeoutMs to 25000', async () => {
-    delete process.env.BACKEND_API_APPROVE_TIMEOUT_MS
-    const mod = await import('./config.js')
-    expect(mod.config.get('backendApi.approveTimeoutMs')).toBe(25000)
-  })
-
-  test('default clears be worst-case retry budget with comfortable margin', async () => {
-    delete process.env.BACKEND_API_APPROVE_TIMEOUT_MS
-    const mod = await import('./config.js')
-    expect(mod.config.get('backendApi.approveTimeoutMs')).toBeGreaterThan(
-      BE_WORST_CASE_RETRY_BUDGET_MS
-    )
-  })
-
-  test('default approve timeout is longer than the shared backend timeout', async () => {
-    delete process.env.BACKEND_API_APPROVE_TIMEOUT_MS
-    delete process.env.BACKEND_API_TIMEOUT_MS
-    const mod = await import('./config.js')
-    expect(mod.config.get('backendApi.approveTimeoutMs')).toBeGreaterThan(
-      mod.config.get('backendApi.timeoutMs')
-    )
-  })
-
-  test('BACKEND_API_APPROVE_TIMEOUT_MS overrides the default', async () => {
-    process.env.BACKEND_API_APPROVE_TIMEOUT_MS = '40000'
-    const mod = await import('./config.js')
-    expect(mod.config.get('backendApi.approveTimeoutMs')).toBe(40000)
-  })
-})
-
 // Raising a query makes management-be assign the item, apply the transition,
 // send a GOV.UK Notify email and push the change to the operator backend before
 // it responds. The shared 5s timeout aborted that mid-way (the 24 Sep ext-test

@@ -1,0 +1,85 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/checkboxes/macro.njk" import govukCheckboxes %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+{% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+
+{# ----------------------------------------------------------------- #}
+{# Confirm applicant contact (RA-527, Figma Design 3).                #}
+{#                                                                    #}
+{# Step 2 of the two-step determination. Reached from the "Confirm    #}
+{# applicant contact" button on the detail page while an item is      #}
+{# pending contact. Posting the ticked box is what applies the        #}
+{# determination: the operator sees the outcome, the SLA clock stops  #}
+{# and (for an approval) the Decision email is sent.                  #}
+{#                                                                    #}
+{# Controls are disabled for a read-only user; the POST route enforces #}
+{# it as well.                                                        #}
+{#                                                                    #}
+{# `data-testid` hooks here are an EXTERNAL CONTRACT consumed by the  #}
+{# mgmt-tests journey suite; renaming one breaks those specs.         #}
+{# ----------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: caption
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "confirm-contact-error-summary" }
+        }) }}
+      {% endif %}
+
+      {% if failureBanner %}
+        {{ govukNotificationBanner({
+          type: 'error',
+          titleText: failureBanner.title,
+          text: failureBanner.text,
+          classes: 'app-notification-banner--error',
+          attributes: { "data-testid": "confirm-contact-failure-banner" }
+        }) }}
+      {% endif %}
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="confirm-contact-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {{ govukCheckboxes({
+          name: fieldId,
+          idPrefix: fieldId,
+          items: [
+            {
+              id: fieldId,
+              value: "yes",
+              text: "I have contacted the applicant about the decision",
+              disabled: user.isReadOnly,
+              attributes: { "data-testid": "confirm-contact-checkbox" }
+            }
+          ],
+          errorMessage: { text: fieldError, attributes: { "data-testid": "confirm-contact-error" } } if fieldError else null
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Confirm and continue",
+            disabled: user.isReadOnly,
+            attributes: { "data-testid": "confirm-contact-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="confirm-contact-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

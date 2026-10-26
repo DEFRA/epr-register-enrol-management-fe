@@ -14,9 +14,10 @@
  *    that does NOT redirect — the user needs the radio back with their
  *    context intact.
  *
- * Replaces the RA-132 approve interstitial. The `/approve` endpoint still
- * exists backend-side but is no longer reachable from this UI: one page now
- * covers both outcomes, which is the point of the story.
+ * Replaces the RA-132 approve interstitial: one page now covers both
+ * outcomes, which is the point of the story. The backend's bespoke
+ * `/approve` endpoint was removed in RA-527; `/decision` is the only route
+ * to approval.
  */
 
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
@@ -40,6 +41,9 @@ const UNAVAILABLE_VIEW = 'work-items/detail-error'
 const WORK_ITEMS_HREF = '/work-items'
 
 const PAGE_TITLE = 'Make determination for this application'
+// RA-527: the H1 is the shorter Figma Design 3 copy; the <title> keeps the
+// longer, more descriptive PAGE_TITLE.
+const PAGE_HEADING = 'Make determination'
 const DECISION_FAILED_TITLE = 'Could not log a decision'
 
 // The GOV.UK error-summary link must target the FIRST radio in the group,
@@ -91,7 +95,7 @@ function breadcrumbs(id, ref) {
     { text: 'Work items', href: WORK_ITEMS_HREF },
     { text: ref ?? 'Work item', href: detailHref(id) },
     // RA-505: the current-page crumb mirrors the page's H1 ("Make
-    // determination for this application"), NOT the "Log decision" CTA on the
+    // determination", PAGE_HEADING), NOT the "Log decision" CTA on the
     // detail page that navigates here. Both renders of this page — the initial
     // GET and the validation-error re-render — share this single helper.
     { text: 'Make determination' }
@@ -159,7 +163,7 @@ export function makeShowDecisionController() {
 
       return h.view(VIEW_PATH, {
         pageTitle: PAGE_TITLE,
-        heading: PAGE_TITLE,
+        heading: PAGE_HEADING,
         breadcrumbs: breadcrumbs(id, applicationRef),
         workItem: { ...workItem, applicationRef },
         formAction: decisionHref(id),
@@ -261,7 +265,7 @@ export function makeSubmitDecisionController({
         return h
           .view(VIEW_PATH, {
             pageTitle: `Error: ${PAGE_TITLE}`,
-            heading: PAGE_TITLE,
+            heading: PAGE_HEADING,
             breadcrumbs: breadcrumbs(id, applicationRef),
             workItem: { ...workItem, applicationRef },
             formAction: decisionHref(id),
@@ -334,7 +338,10 @@ export function makeSubmitDecisionController({
       })
 
       if (result.ok) {
-        flashBanner(request, successBannerFor(decision))
+        // RA-527. A determination is step 1 of two, for either outcome: the
+        // detail page shows a persistent "Application approved" / "Application
+        // refused" banner for as long as the item awaits applicant contact,
+        // so a one-time success flash would only repeat it.
         return h.redirect(detailHref(id))
       }
 
@@ -353,25 +360,6 @@ export function makeSubmitDecisionController({
       flashBanner(request, withStartSuccess(bannerForFailure(result), started))
       return h.redirect(detailHref(id))
     }
-  }
-}
-
-/**
- * Success copy. The only place the user-visible word for `rejected` appears
- * outside the radio label — and it says "Refused", per the RA-410 relabel.
- */
-function successBannerFor(decision) {
-  if (decision === 'approved') {
-    return {
-      type: 'success',
-      title: 'Decision logged: Approved',
-      text: 'The accreditation has been issued and the applicant will be notified.'
-    }
-  }
-  return {
-    type: 'success',
-    title: 'Decision logged: Refused',
-    text: 'The application has been refused and the applicant will be notified.'
   }
 }
 

@@ -520,88 +520,9 @@ export async function addWorkItemNote({
   })
 }
 
-/**
- * Approve a re-accreditation work item via the type-specific endpoint
- * (RA-132).
- *
- * Wraps `POST /work-items/re-accreditation/{id}/approve` on the backend.
- * No request body. The backend enforces actor identity and the
- * `assessment-in-progress` state precondition; decision-maker role
- * membership and tenant scoping are this BFF's responsibility, not the
- * backend's. This client just forwards the call and the acting user's
- * identity via the standard headers.
- *
- * Result shape mirrors {@link createWorkItem}:
- *  - 200 → { ok: true, workItem }
- *  - 400 → { ok: false, reason: 'invalid', status: 400, message }
- *  - 401 → { ok: false, reason: 'unauthorized', status: 401, message }
- *  - 403 → { ok: false, reason: 'forbidden', status: 403, message }
- *  - 404 → { ok: false, reason: 'not-found', status: 404, message }
- *  - 409 → { ok: false, reason: 'conflict', status: 409, message }
- *  - other → { ok: false, reason: 'server', status, message }
- *  - network → { ok: false, reason: 'network', message }
- *
- * RA-448 phase 2: uses `backendApi.approveTimeoutMs`, NOT the shared
- * `backendApi.timeoutMs`. This endpoint now resolves a real accreditation
- * number from a second backend before committing anything, with a firm
- * worst-case budget of ~19s — see the config doc for why fe must not abort
- * before be finishes retrying (same stranding-bug class approveTimeoutMs's
- * sibling decisionTimeoutMs already guards against on /decision).
- */
-export async function approveReAccreditation({
-  workItemId,
-  user = null,
-  baseUrl = config.get(CONFIG_BACKEND_API_URL),
-  timeoutMs = config.get('backendApi.approveTimeoutMs'),
-  fetchImpl = fetch
-}) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/approve`
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const response = await fetchImpl(url, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' }, user)
-    })
-
-    if (response.ok) {
-      const workItem = await response.json()
-      return { ok: true, workItem }
-    }
-
-    const problem = await safeReadJson(response)
-    const detail =
-      (problem && (problem.detail || problem.title)) ||
-      `Backend returned ${response.status}`
-
-    const reason = REASON_BY_STATUS[response.status] ?? 'server'
-    return {
-      ok: false,
-      reason,
-      status: response.status,
-      message: detail
-    }
-  } catch (error) {
-    logger.warn(
-      { err: error, url },
-      'Backend API approveReAccreditation failed'
-    )
-    return {
-      ok: false,
-      reason: 'network',
-      message: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
-    }
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-// Shared by every type-specific POST client below (approve,
-// continue-review, ...). Nothing in it is specific to any one of them —
-// it is just the HTTP-status-to-reason translation the whole backend
-// speaks.
+// Shared by every type-specific POST client below. Nothing in it is
+// specific to any one of them — it is just the HTTP-status-to-reason
+// translation the whole backend speaks.
 const REASON_BY_STATUS = {
   400: 'invalid',
   401: 'unauthorized',
@@ -628,7 +549,15 @@ const REASON_BY_STATUS = {
  * `submitted` auto-transition to `duly-made` that can fire when the last
  * task is completed while in `updated`, must not look like an error.
  *
- * Result shape mirrors {@link approveReAccreditation}.
+ * Result shape:
+ *  - 200 → { ok: true, workItem }
+ *  - 400 → { ok: false, reason: 'invalid', status: 400, message }
+ *  - 401 → { ok: false, reason: 'unauthorized', status: 401, message }
+ *  - 403 → { ok: false, reason: 'forbidden', status: 403, message }
+ *  - 404 → { ok: false, reason: 'not-found', status: 404, message }
+ *  - 409 → { ok: false, reason: 'conflict', status: 409, message }
+ *  - other → { ok: false, reason: 'server', status, message }
+ *  - network → { ok: false, reason: 'network', message }
  */
 export async function continueReviewReAccreditation({
   workItemId,
@@ -810,6 +739,66 @@ export async function recordReAccreditationDecision({
       typeof result.problem?.errorCode === 'string'
         ? result.problem.errorCode
         : null,
+    message:
+      result.problem?.detail ??
+      result.problem?.title ??
+      `Backend returned ${result.status}`
+  }
+}
+
+/**
+ * Confirm the applicant has been contacted about a re-accreditation
+ * determination (RA-527, step 2 of the two-step determination).
+ *
+ * Wraps `POST /work-items/re-accreditation/{id}/confirm-contact`. No body:
+ * the outcome was fixed at step 1. This is what applies it — management-be
+ * pushes the final status to the operator journey first, then moves the
+ * item to its terminal state, stops the SLA clock, queues publishing and
+ * (for an approval) sends the Decision email. A repeat call on an item
+ * already applied answers 200 + `x-idempotent-replay: true`; any state other
+ * than pending contact is a 409.
+ *
+ * Same result shape as {@link continueReviewReAccreditation}: there is no
+ * field to bind a failure to, so no `errorCode`.
+ */
+export async function confirmApplicantContact({
+  workItemId,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  // NOT the shared backendApi.timeoutMs, for the same reason as
+  // recordReAccreditationDecision: the backend gates this on an
+  // operator-journey push it retries for up to ~28s before writing anything,
+  // and aborting first would turn its clean 500 into a client cancellation.
+  timeoutMs = config.get('backendApi.decisionTimeoutMs'),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/confirm-contact`
+
+  const result = await postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'confirmApplicantContact'
+  })
+
+  if (result.ok) {
+    return { ok: true, workItem: result.workItem }
+  }
+
+  // `postJson` reports transport failures without a status.
+  if (result.status == null) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: result.error ?? REQUEST_FAILED
+    }
+  }
+
+  return {
+    ok: false,
+    reason: REASON_BY_STATUS[result.status] ?? 'server',
+    status: result.status,
     message:
       result.problem?.detail ??
       result.problem?.title ??

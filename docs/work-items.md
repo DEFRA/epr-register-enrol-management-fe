@@ -78,13 +78,13 @@ export const myTypeModule = {
     // any threat model should rely on. What the flag buys is that the
     // frontend never RENDERS an affordance the backend would refuse.
     //
-    // `canApplyAction` itself DOES have one production caller — RA-346's
-    // `re-accreditation/approve-eligibility.js`, which gates the Approve
-    // CTA and the approve route against the declared `approve` transition.
-    // That does not make the BFF authoritative either: the bespoke approve
-    // endpoint applies the same rule server-side and rejects a forged POST
-    // regardless. Frontend gate for the affordance, backend gate for the
-    // action — the same division as above.
+    // The declared `approve` transition is read by
+    // `re-accreditation/decision/eligibility.js` to gate the decision CTA.
+    // That does not make the BFF authoritative either: management-be only
+    // approves via its `/decision` endpoint, which applies the same rule
+    // server-side and rejects a forged POST regardless. Frontend gate for
+    // the affordance, backend gate for the action — the same division as
+    // above.
     transitions: [
       {
         actionId: 'approve',

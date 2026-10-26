@@ -64,4 +64,22 @@ describe('every mutating route requires the standard role', () => {
 
     expect(offenders).toEqual([])
   })
+
+  // RA-527. Confirming applicant contact APPLIES a determination (the
+  // operator is told the outcome, the SLA clock stops, the Decision email is
+  // sent), so it is pinned here by name as well as caught by the sweep above.
+  test('the confirm-contact POST is mounted and requires the standard role', () => {
+    const route = server
+      .table()
+      .find(
+        (r) =>
+          r.method === 'post' &&
+          r.path === '/work-items/re-accreditation/{id}/confirm-contact'
+      )
+
+    expect(route).toBeDefined()
+    expect(route.settings.auth?.access?.[0]?.scope?.selection).toContain(
+      ROLE_STANDARD
+    )
+  })
 })

@@ -4,9 +4,9 @@ import { config } from '#/config/config.js'
 import {
   addWorkItemNote,
   applyWorkItemAction,
-  approveReAccreditation,
   assertSafeHeaderValue,
   assignWorkItem,
+  confirmApplicantContact,
   continueReviewReAccreditation,
   createWorkItem,
   extendWorkItemSla,
@@ -1036,129 +1036,6 @@ describe('#buildHeaders signing integration', () => {
   })
 })
 
-describe('#approveReAccreditation (RA-132)', () => {
-  test('POSTs to the type-specific approve endpoint and returns the work item on 200', async () => {
-    const workItem = { id: 'wi-1', stateId: 'approved' }
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve(workItem)
-    })
-
-    const result = await approveReAccreditation({
-      workItemId: 'wi-1',
-      baseUrl: 'http://backend:8085/',
-      timeoutMs: 1000,
-      fetchImpl,
-      user: { id: 'u-1', name: 'Alice' }
-    })
-
-    expect(fetchImpl).toHaveBeenCalledWith(
-      'http://backend:8085/work-items/re-accreditation/wi-1/approve',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          accept: 'application/json',
-          'x-cdp-user-id': 'u-1',
-          'x-cdp-user-name': 'Alice'
-        })
-      })
-    )
-    expect(result).toEqual({ ok: true, workItem })
-  })
-
-  test.each([
-    [400, 'invalid'],
-    [401, 'unauthorized'],
-    [403, 'forbidden'],
-    [404, 'not-found'],
-    [409, 'conflict'],
-    [500, 'server']
-  ])(
-    'maps HTTP %s to reason %s with the problem detail',
-    async (status, reason) => {
-      const fetchImpl = vi.fn().mockResolvedValue({
-        ok: false,
-        status,
-        json: () => Promise.resolve({ detail: `boom ${status}` })
-      })
-
-      const result = await approveReAccreditation({
-        workItemId: 'wi-1',
-        baseUrl: 'http://backend:8085',
-        timeoutMs: 1000,
-        fetchImpl
-      })
-
-      expect(result).toEqual({
-        ok: false,
-        reason,
-        status,
-        message: `boom ${status}`
-      })
-    }
-  )
-
-  test('falls back to a generic message when the problem body has neither detail nor title', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 503,
-      json: () => Promise.resolve({})
-    })
-
-    const result = await approveReAccreditation({
-      workItemId: 'wi-1',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'server',
-      status: 503,
-      message: 'Backend returned 503'
-    })
-  })
-
-  test('returns a network reason and the abort message when the request times out', async () => {
-    const abortError = Object.assign(new Error('aborted'), {
-      name: 'AbortError'
-    })
-    const fetchImpl = vi.fn().mockRejectedValue(abortError)
-
-    const result = await approveReAccreditation({
-      workItemId: 'wi-1',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1,
-      fetchImpl
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'network',
-      message: 'Request timed out'
-    })
-  })
-
-  test('returns a network reason and the underlying error message on other transport errors', async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(new Error('connection refused'))
-
-    const result = await approveReAccreditation({
-      workItemId: 'wi-1',
-      baseUrl: 'http://backend:8085',
-      timeoutMs: 1000,
-      fetchImpl
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'network',
-      message: 'connection refused'
-    })
-  })
-})
-
 describe('#continueReviewReAccreditation (RA-372)', () => {
   test('POSTs to the type-specific continue-review endpoint with no body and returns the work item on 200', async () => {
     const workItem = { id: 'wi-1', stateId: 'assessment-in-progress' }
@@ -1810,16 +1687,106 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
   })
 })
 
-// RA-448 phase 2: the same class of fix as RA-410's decision timeout above,
-// for /approve — management-be now resolves a real accreditation number
-// from a second backend before committing anything.
-describe('#approveReAccreditation approve-specific timeout (RA-448 phase 2)', () => {
-  // The whole point of this fe change: the approve call must NOT inherit
-  // the short shared backendApi.timeoutMs, or fe would abort mid-retry and
-  // re-open the stranding-bug class RA-410 already fixed for /decision.
-  // This proves the default abort fires at the approve-specific budget,
-  // well after the shared one would have.
-  test('defaults its abort to backendApi.approveTimeoutMs, not the shared backendApi.timeoutMs', async () => {
+describe('#confirmApplicantContact (RA-527)', () => {
+  test('POSTs to the confirm-contact endpoint and returns the work item on 200', async () => {
+    const workItem = { id: 'wi-1', stateId: 'approved' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await confirmApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi-1/confirm-contact',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          accept: 'application/json',
+          'x-cdp-user-id': 'u-1',
+          'x-cdp-user-name': 'Alice'
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  // The operator journey could not be told the outcome: management-be
+  // applies nothing and answers a generic 500.
+  test('maps a generic 500 (Registration & Accreditation service unreachable) to reason server', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () =>
+        Promise.resolve({
+          title: 'Could not confirm applicant contact',
+          detail: 'The operator journey could not be notified.'
+        })
+    })
+
+    const result = await confirmApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'server',
+      status: 500,
+      message: 'The operator journey could not be notified.'
+    })
+  })
+
+  test('maps a 409 (not pending contact) to a conflict', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ detail: 'Not pending contact' })
+    })
+
+    const result = await confirmApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      message: 'Not pending contact'
+    })
+  })
+
+  test('reports a network reason on a transport failure', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+
+    const result = await confirmApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({ ok: false, reason: 'network' })
+    )
+  })
+
+  // Like the decision call, management-be gates this on an operator-journey
+  // push it retries for up to ~28s before writing anything, so it must not
+  // inherit the short shared backendApi.timeoutMs.
+  test('defaults its abort to backendApi.decisionTimeoutMs, not the shared backendApi.timeoutMs', async () => {
     vi.useFakeTimers()
     try {
       let capturedSignal
@@ -1832,21 +1799,19 @@ describe('#approveReAccreditation approve-specific timeout (RA-448 phase 2)', ()
         })
       })
 
-      const promise = approveReAccreditation({
+      const promise = confirmApplicantContact({
         workItemId: 'wi-1',
         baseUrl: 'http://backend:8085',
         fetchImpl
       })
 
       const sharedTimeout = config.get('backendApi.timeoutMs')
-      const approveTimeout = config.get('backendApi.approveTimeoutMs')
+      const decisionTimeout = config.get('backendApi.decisionTimeoutMs')
 
-      // Past the shared timeout: a call using it would already have aborted.
       await vi.advanceTimersByTimeAsync(sharedTimeout + 1000)
       expect(capturedSignal.aborted).toBe(false)
 
-      // Past the approve-specific budget: now, and only now, it aborts.
-      await vi.advanceTimersByTimeAsync(approveTimeout - sharedTimeout)
+      await vi.advanceTimersByTimeAsync(decisionTimeout - sharedTimeout)
       expect(capturedSignal.aborted).toBe(true)
 
       const result = await promise

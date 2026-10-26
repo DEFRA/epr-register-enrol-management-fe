@@ -162,7 +162,9 @@ describe('makeShowDecisionController', () => {
 })
 
 describe('makeSubmitDecisionController', () => {
-  test('records an Approved decision and redirects with a success banner', async () => {
+  // RA-527. Step 1 of an approval: the persistent "Application approved"
+  // banner on the detail page replaces the one-time success flash.
+  test('records an Approved decision and redirects with no one-time banner', async () => {
     mockDecidable()
     const recordWorkItemDecision = vi
       .fn()
@@ -180,19 +182,18 @@ describe('makeSubmitDecisionController', () => {
       decisionNote: '',
       user: { id: 'u-1', name: 'Alice' }
     })
-    expect(request.yar.flash).toHaveBeenCalledWith(
+    expect(request.yar.flash).not.toHaveBeenCalledWith(
       'flashBanner',
-      expect.objectContaining({
-        type: 'success',
-        title: 'Decision logged: Approved'
-      })
+      expect.anything()
     )
     expect(h.redirect).toHaveBeenCalledWith(DETAIL_HREF)
   })
 
-  test('records a Refused decision as the `rejected` wire value', async () => {
-    // The banner says "Refused"; the payload says `rejected`. Both matter:
-    // the label is the story's AC, the wire value is the backend contract.
+  // RA-527. Step 1 of a refusal: the persistent "Application refused" banner
+  // on the detail page replaces the one-time success flash.
+  test('records a Refused decision as the `rejected` wire value with no one-time banner', async () => {
+    // The radio says "Refused"; the payload says `rejected` (the backend
+    // contract).
     mockDecidable()
     const recordWorkItemDecision = vi
       .fn()
@@ -206,14 +207,14 @@ describe('makeSubmitDecisionController', () => {
     expect(recordWorkItemDecision).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'rejected' })
     )
-    expect(request.yar.flash).toHaveBeenCalledWith(
+    expect(request.yar.flash).not.toHaveBeenCalledWith(
       'flashBanner',
-      expect.objectContaining({ title: 'Decision logged: Refused' })
+      expect.anything()
     )
   })
 
-  // RA-203. The note is the rationale that reaches the operator's email via
-  // the backend's `decision_notes` placeholder.
+  // RA-203. The note is the determination's rationale, recorded in the
+  // application history.
   test('forwards a decision note to the service', async () => {
     mockDecidable()
     const recordWorkItemDecision = vi
