@@ -27,8 +27,7 @@ import { slaDeadlineDisplay } from '#/server/work-items/core/sla-duration.js'
  * The optional `workItemSnapshot` adds a consistent set of work-item
  * context rows (Org ID, Type, State, Submitted at, Submitted by,
  * Last modified, Assigned to) to the disclosure of every audit entry
- * EXCEPT `routed-to-nation`/`nation-corrected` — see
- * `NO_SNAPSHOT_CONTEXT_ACTIONS`.
+ * EXCEPT the routing/correction actions in `NO_SNAPSHOT_CONTEXT_ACTIONS`.
  *
  * The "State" row is special: it is per-entry, resolved from each entry's
  * OWN `stateId` (the work-item state as-of that event — epr-rr9s) via the
@@ -79,9 +78,9 @@ export function decorateAuditLog(
  * `task-completed` / `task-status-changed` entries — carries no state in
  * its own rows, so it DOES get the context-block State row: that is where
  * a caseworker learns which state the item was in when the event happened.
- * The two exceptions to THAT are `routed-to-nation`/`nation-corrected`,
- * which get no context-block rows at all — see `NO_SNAPSHOT_CONTEXT_ACTIONS`
- * below, a stronger exclusion than this set.
+ * The exceptions to THAT are the routing/correction actions, which get no
+ * context-block rows at all — see `NO_SNAPSHOT_CONTEXT_ACTIONS` below, a
+ * stronger exclusion than this set.
  *
  * RA-410 removed the task framework and purged the `task-completed` /
  * `task-status-changed` cases from `detailRowsForAuditEntry`, so those
@@ -104,6 +103,11 @@ const ACTION_STATUS_PUSH_SKIPPED = 'status-push-skipped'
 const ACTION_STATUS_PUSH_FAILED = 'status-push-failed'
 const ACTION_ROUTED_TO_NATION = 'routed-to-nation'
 const ACTION_NATION_CORRECTED = 'nation-corrected'
+// RA-691: the entry the one-off accreditation-reference migration appends
+// when it corrects a wrongly generated `accreditationId`, carrying the
+// incorrect (`from`) and corrected (`to`) references plus a `reason`. It
+// changes no state.
+const ACTION_ACCREDITATION_NUMBER_CORRECTED = 'accreditation-number-corrected'
 // RA-291: the query-detail entry ReAccreditationQueryService appends after a
 // `query-during-*` transition, carrying the selected sections and the
 // (RA-534: optional) free-text reason in its `details`.
@@ -186,15 +190,17 @@ const STATE_BEARING_ACTIONS = new Set([
  * Audit actions that get NO context-block rows at all (Org ID, Type, State,
  * Submitted at, Submitted by, Last modified, Assigned to) — unlike every
  * other action, for which that context is exactly what a caseworker needs
- * alongside the entry. RA-526's routing/correction entries are a
- * system-derived side effect of submission rather than a workflow action
- * against the item, so none of that context — including who the item
- * happens to be assigned to — has anything to do with why a nation was
- * chosen or corrected.
+ * alongside the entry. RA-526's routing/correction entries and RA-691's
+ * accreditation-number correction are system-written (by a submission hook
+ * or a one-off data migration) rather than a workflow action against the
+ * item, so none of that context — including who the item happens to be
+ * assigned to — has anything to do with why a nation was chosen or a value
+ * was corrected.
  */
 const NO_SNAPSHOT_CONTEXT_ACTIONS = new Set([
   ACTION_ROUTED_TO_NATION,
-  ACTION_NATION_CORRECTED
+  ACTION_NATION_CORRECTED,
+  ACTION_ACCREDITATION_NUMBER_CORRECTED
 ])
 
 /**
@@ -317,6 +323,7 @@ const ACTION_DISPLAY_NAMES = {
     'Status failed to send to the Registration & Accreditation service',
   [ACTION_ROUTED_TO_NATION]: 'Routed to nation',
   [ACTION_NATION_CORRECTED]: 'Nation corrected',
+  [ACTION_ACCREDITATION_NUMBER_CORRECTED]: 'Accreditation number corrected',
   [ACTION_APPLICATION_QUERIED]: 'Application queried'
 }
 
@@ -441,6 +448,10 @@ export function summariseAuditEntry(entry) {
       return details.reason ?? ''
     case ACTION_STATUS_PUSH_FAILED:
       return details.errorMessage ?? ''
+    case ACTION_ACCREDITATION_NUMBER_CORRECTED:
+      // RA-691: the old and new reference are the whole point of the entry,
+      // so both show on the timeline line without opening the disclosure.
+      return details.from && details.to ? `${details.from} → ${details.to}` : ''
     default:
       return ''
   }
@@ -648,6 +659,23 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
           key: 'Corrected nation',
           value: nationLabel(details.to)
         })
+      }
+      if (details.reason) {
+        rows.push({ key: 'Reason', value: details.reason, multiline: true })
+      }
+      return rows
+    }
+    case ACTION_ACCREDITATION_NUMBER_CORRECTED: {
+      // RA-691: the one-off migration stamps `from`/`to` (the incorrect and
+      // corrected accreditation references) and `reason` onto this entry.
+      // References are rendered verbatim — they are already the
+      // caseworker-facing form (e.g. `A27ER5005270246PL`).
+      const rows = []
+      if (details.from) {
+        rows.push({ key: 'Previous accreditation number', value: details.from })
+      }
+      if (details.to) {
+        rows.push({ key: 'Corrected accreditation number', value: details.to })
       }
       if (details.reason) {
         rows.push({ key: 'Reason', value: details.reason, multiline: true })

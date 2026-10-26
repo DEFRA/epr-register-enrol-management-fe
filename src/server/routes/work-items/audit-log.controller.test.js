@@ -599,4 +599,65 @@ describe('#workItemAuditLogController', () => {
     expect(result).not.toEqual(expect.stringContaining('P30D'))
     expect(result).toEqual(expect.stringContaining('Changed by'))
   })
+
+  // RA-691 AC: the Application history tab shows an "Accreditation number
+  // corrected" entry with the old and new reference.
+  test('Shows the previous and corrected reference for an accreditation-number-corrected entry', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        auditLog: [
+          {
+            id: 'eeee5555-eeee-eeee-eeee-eeeeeeeeeeee',
+            action: 'accreditation-number-corrected',
+            actionDisplayName: 'Accreditation number corrected',
+            // The shape the RA-691 migration writes: no stateId (no state
+            // change) and a system actor.
+            details: {
+              from: 'A27ER5005270322PL',
+              to: 'A27ER5005270246PL',
+              reason: 'RA-691'
+            },
+            createdAt: '2026-10-26T09:00:00Z',
+            createdBy: 'migration',
+            createdByName: 'Migration: RA-691 accreditation number correction'
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(
+      expect.stringContaining('data-action="accreditation-number-corrected"')
+    )
+    expect(result).toEqual(
+      expect.stringContaining('<strong>Accreditation number corrected</strong>')
+    )
+    expect(result).toEqual(
+      expect.stringContaining('A27ER5005270322PL → A27ER5005270246PL')
+    )
+    expect(result).toEqual(
+      expect.stringContaining('data-testid="work-item-audit-entry-details"')
+    )
+    expect(result).toEqual(
+      expect.stringContaining('Previous accreditation number')
+    )
+    expect(result).toEqual(
+      expect.stringContaining('Corrected accreditation number')
+    )
+    expect(result).toEqual(expect.stringContaining('RA-691'))
+    // A migration correction, not a workflow action: no work-item context
+    // block (same as nation-corrected).
+    expect(result).not.toEqual(
+      expect.stringContaining(
+        '<dt class="govuk-summary-list__key">Assigned to</dt>'
+      )
+    )
+  })
 })
