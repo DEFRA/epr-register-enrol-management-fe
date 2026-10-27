@@ -1,6 +1,11 @@
 import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
 import { nationLabel } from '#/server/work-items/core/nations.js'
 import { slaDeadlineDisplay } from '#/server/work-items/core/sla-duration.js'
+import {
+  changePaymentDateRows,
+  isChangePaymentDateEntry,
+  summariseChangePaymentDate
+} from './audit-log-payment-date.js'
 
 /**
  * Audit log helpers (RA-97).
@@ -94,15 +99,6 @@ export function decorateAuditLog(
 const ACTION_WORK_ITEM_SUBMITTED = 'work-item-submitted'
 const ACTION_APPLIED = 'action-applied'
 
-// RA-576. Stamped by management-be's change-payment-date service on an
-// `action-applied` entry whose from and to states are identical.
-const CHANGE_PAYMENT_DATE_ACTION_ID = 'change-payment-date'
-
-/** `YYYY-MM-DD` -> `dd/mm/yyyy`; anything else yields `null`. */
-function formatIsoDate(value) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value ?? ''))
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : null
-}
 const ACTION_ASSIGNED = 'assigned'
 const ACTION_UNASSIGNED = 'unassigned'
 const ACTION_NOTE_ADDED = 'note-added'
@@ -419,10 +415,9 @@ export function summariseAuditEntry(entry) {
       const action = details.actionDisplayName ?? details.actionId ?? ''
       const from = details.fromStateId
       const to = details.toStateId
-      // RA-576: a payment date change is not a state change (from === to), so
-      // it reads "(updated)" rather than "(Duly made → Duly made)".
-      if (details.actionId === CHANGE_PAYMENT_DATE_ACTION_ID) {
-        return `${action} (updated)`
+      // RA-576: a payment date change is not a state change.
+      if (isChangePaymentDateEntry(details)) {
+        return summariseChangePaymentDate(details)
       }
       if (from && to) {
         return action ? `${action} (${from} → ${to})` : `${from} → ${to}`
@@ -506,30 +501,8 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       }
       // RA-576: no state moved, so show the date change instead of the
       // (identical) previous / new state rows.
-      if (details.actionId === CHANGE_PAYMENT_DATE_ACTION_ID) {
-        const previous = formatIsoDate(details.previousPaymentDate)
-        if (previous) {
-          rows.push({ key: 'Previous payment date', value: previous })
-        }
-        const next = formatIsoDate(details.paymentDate)
-        if (next) {
-          rows.push({ key: 'New payment date', value: next })
-        }
-        const changedBy = entry.createdByName ?? entry.createdBy
-        if (changedBy) {
-          rows.push({ key: 'Changed by', value: changedBy })
-        }
-        if (
-          typeof details.reason === 'string' &&
-          details.reason.trim() !== ''
-        ) {
-          rows.push({
-            key: 'Reason',
-            value: details.reason.replaceAll('\r\n', '\n'),
-            multiline: true
-          })
-        }
-        return rows
+      if (isChangePaymentDateEntry(details)) {
+        return changePaymentDateRows(entry)
       }
       if (details.fromStateId) {
         rows.push({ key: 'Previous state', value: details.fromStateId })

@@ -17,6 +17,8 @@ import {
   makeSubmitChangePaymentDateController
 } from './controller.js'
 
+const MAX_BODY_BYTES = 20 * 1024
+
 export function buildChangePaymentDateRoutes() {
   return [
     {
@@ -33,7 +35,7 @@ export function buildChangePaymentDateRoutes() {
         payload: {
           parse: true,
           allow: 'application/x-www-form-urlencoded',
-          maxBytes: 20 * 1024
+          maxBytes: MAX_BODY_BYTES
         }
       },
       ...makeSubmitChangePaymentDateController()

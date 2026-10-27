@@ -19,6 +19,7 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { statusCodes } from '#/server/common/constants/status-codes.js'
 
 import {
   PAYMENT_DATE_ANCHOR,
@@ -45,6 +46,7 @@ const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
 
 const PAGE_TITLE = 'Change payment date'
+const APPLICATIONS_LABEL = 'Applications'
 
 const logger = createLogger()
 
@@ -58,7 +60,7 @@ function changePaymentDateHref(id) {
 
 function breadcrumbs(id, ref) {
   return [
-    { text: 'Applications', href: '/work-items' },
+    { text: APPLICATIONS_LABEL, href: '/work-items' },
     { text: ref ?? 'Application', href: detailHref(id) },
     { text: PAGE_TITLE }
   ]
@@ -85,7 +87,7 @@ function renderForm(
     values = { day: '', month: '', year: '', reason: '' },
     dateErrorCode = null,
     reasonErrorCode = null,
-    statusCode = 200
+    statusCode = statusCodes.ok
   }
 ) {
   const dateErrorMessage = messageForErrorCode(dateErrorCode)
@@ -121,7 +123,7 @@ async function loadWorkItem(request, h, id) {
   const user = getUser(request)
   const result = await getWorkItem({ workItemId: id, user })
 
-  if (result.ok === false && result.status === 404) {
+  if (result.ok === false && result.status === statusCodes.notFound) {
     return {
       response: h
         .view(NOT_FOUND_VIEW, {
@@ -129,11 +131,11 @@ async function loadWorkItem(request, h, id) {
           heading: 'Application not found',
           workItemId: id,
           breadcrumbs: [
-            { text: 'Applications', href: '/work-items' },
+            { text: APPLICATIONS_LABEL, href: '/work-items' },
             { text: 'Not found' }
           ]
         })
-        .code(404)
+        .code(statusCodes.notFound)
     }
   }
 
@@ -146,11 +148,11 @@ async function loadWorkItem(request, h, id) {
           workItemId: id,
           error: result.error ?? `Backend returned ${result.status}`,
           breadcrumbs: [
-            { text: 'Applications', href: '/work-items' },
+            { text: APPLICATIONS_LABEL, href: '/work-items' },
             { text: 'Application' }
           ]
         })
-        .code(502)
+        .code(statusCodes.badGateway)
     }
   }
 
@@ -190,6 +192,30 @@ export function makeShowChangePaymentDateController() {
   }
 }
 
+function readFormValues(payload) {
+  const body = payload ?? {}
+  return {
+    day: body[`${PAYMENT_DATE_ID}-day`] ?? '',
+    month: body[`${PAYMENT_DATE_ID}-month`] ?? '',
+    year: body[`${PAYMENT_DATE_ID}-year`] ?? '',
+    reason: body[REASON_ID] ?? ''
+  }
+}
+
+/**
+ * Bind a backend 400's `errorCode` to its field. `null` for anything else (a
+ * 409, a 404, an unrecognised code), which is a page-level problem.
+ */
+function fieldErrorsFromBackend(errorCode) {
+  if (isPaymentDateErrorCode(errorCode)) {
+    return { dateErrorCode: errorCode, reasonErrorCode: null }
+  }
+  if (isReasonErrorCode(errorCode)) {
+    return { dateErrorCode: null, reasonErrorCode: errorCode }
+  }
+  return null
+}
+
 /** POST — validate, submit, PRG. */
 export function makeSubmitChangePaymentDateController({
   service = createChangePaymentDateService()
@@ -198,13 +224,7 @@ export function makeSubmitChangePaymentDateController({
     async handler(request, h) {
       const id = request.params.id
       const user = getUser(request)
-      const payload = request.payload ?? {}
-      const values = {
-        day: payload[`${PAYMENT_DATE_ID}-day`] ?? '',
-        month: payload[`${PAYMENT_DATE_ID}-month`] ?? '',
-        year: payload[`${PAYMENT_DATE_ID}-year`] ?? '',
-        reason: payload[REASON_ID] ?? ''
-      }
+      const values = readFormValues(request.payload)
 
       // Both fields are validated before anything is rejected so the user
       // sees every problem at once.
@@ -246,21 +266,9 @@ export function makeSubmitChangePaymentDateController({
         'Re-accreditation payment date change failed'
       )
 
-      if (
-        isPaymentDateErrorCode(result.errorCode) ||
-        isReasonErrorCode(result.errorCode)
-      ) {
-        return renderInvalid(h, {
-          id,
-          user,
-          values,
-          dateErrorCode: isPaymentDateErrorCode(result.errorCode)
-            ? result.errorCode
-            : null,
-          reasonErrorCode: isReasonErrorCode(result.errorCode)
-            ? result.errorCode
-            : null
-        })
+      const fieldErrors = fieldErrorsFromBackend(result.errorCode)
+      if (fieldErrors) {
+        return renderInvalid(h, { id, user, values, ...fieldErrors })
       }
 
       flashBanner(request, bannerForFailure(result))
@@ -288,7 +296,7 @@ async function renderInvalid(
     values,
     dateErrorCode,
     reasonErrorCode,
-    statusCode: 400
+    statusCode: statusCodes.badRequest
   })
 }
 

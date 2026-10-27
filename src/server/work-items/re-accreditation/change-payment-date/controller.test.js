@@ -297,3 +297,58 @@ describe('POST the change-payment-date form (RA-576)', () => {
     expect(headers.location).toBe(DETAIL_HREF)
   })
 })
+
+describe('degraded and failure paths (RA-576)', () => {
+  const urlencoded = { 'content-type': 'application/x-www-form-urlencoded' }
+  const date = daysAgo(3)
+  const body = [
+    `payment-date-day=${date.day}`,
+    `payment-date-month=${date.month}`,
+    `payment-date-year=${date.year}`,
+    'reason=Typo'
+  ].join('&')
+
+  const post = (payload = body) =>
+    injectWithCrumb(server, {
+      method: 'POST',
+      url: CHANGE_HREF,
+      payload,
+      headers: urlencoded
+    })
+
+  test('GET shows the unavailable page when the backend read fails', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 500, error: 'boom' })
+    const { statusCode } = await server.inject({
+      method: 'GET',
+      url: CHANGE_HREF
+    })
+    expect(statusCode).toBe(statusCodes.badGateway)
+  })
+
+  test('a validation error still renders when the work item cannot be re-read', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 500, error: 'boom' })
+    const { statusCode, result } = await post('reason=')
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toContain('Enter a reason for the payment date change')
+    expect(result).not.toContain('The current payment date is')
+  })
+
+  test('a 404 from the backend redirects with a not-found banner', async () => {
+    changePaymentDateReAccreditation.mockResolvedValue({
+      ok: false,
+      reason: 'not-found',
+      status: 404,
+      message: 'gone'
+    })
+    const { statusCode, headers } = await post()
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(DETAIL_HREF)
+  })
+
+  test('an empty form body is treated as every field missing', async () => {
+    getWorkItem.mockResolvedValue(okWorkItem())
+    const { statusCode, result } = await post('x=1')
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toContain('Enter the payment date')
+  })
+})
