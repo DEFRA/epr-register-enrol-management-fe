@@ -202,6 +202,25 @@
   {% endif %}
 {% endblock %}
 
+{# RA-576. "Change payment date" in the side panel's link list. A LINK to #}
+{# the change page, so clicking it changes nothing. Gated by              #}
+{# `workItem.canChangePaymentDate`, which goes through the same helper    #}
+{# that guards the route itself: hidden on terminal items and on items    #}
+{# with no payment date to change.                                        #}
+{% block panelLinksExtra %}
+  {% if workItem.canChangePaymentDate %}
+    <li>
+      {{ appActionLink({
+        text: "Change payment date",
+        href: workItem.changePaymentDateHref,
+        classes: "govuk-link",
+        disabled: user.isReadOnly,
+        testId: "change-payment-date-link"
+      }) }}
+    </li>
+  {% endif %}
+{% endblock %}
+
 {# RA-132 / RA-133 / RA-177. When the work item has been approved,      #}
 {# surface the issued accreditation metadata from the backend           #}
 {# (`payload.accreditationId`, `payload.accreditationStartDate`,        #}

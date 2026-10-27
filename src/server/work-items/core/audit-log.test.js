@@ -1693,3 +1693,64 @@ describe('determination-deadline audit entries (RA-572 follow-up)', () => {
     })
   })
 })
+
+describe('change-payment-date audit entries (RA-576)', () => {
+  const entry = {
+    action: 'action-applied',
+    createdBy: 'user-1',
+    createdByName: 'Reg Ulator',
+    details: {
+      actionId: 'change-payment-date',
+      actionDisplayName: 'Change payment date',
+      fromStateId: 'duly-made',
+      toStateId: 'duly-made',
+      previousPaymentDate: '2026-07-15',
+      paymentDate: '2026-07-20',
+      reason: 'Operator keyed the wrong date.\r\nSee email.'
+    }
+  }
+
+  test('summarises as an update, not a state change', () => {
+    expect(summariseAuditEntry(entry)).toBe('Change payment date (updated)')
+  })
+
+  test('other action-applied entries still show the state change', () => {
+    expect(
+      summariseAuditEntry({
+        action: 'action-applied',
+        details: {
+          actionDisplayName: 'Duly make',
+          fromStateId: 'submitted',
+          toStateId: 'duly-made'
+        }
+      })
+    ).toBe('Duly make (submitted → duly-made)')
+  })
+
+  test('projects previous date, new date, actor and a multiline reason', () => {
+    expect(detailRowsForAuditEntry(entry)).toEqual([
+      { key: 'Action', value: 'Change payment date' },
+      { key: 'Previous payment date', value: '15/07/2026' },
+      { key: 'New payment date', value: '20/07/2026' },
+      { key: 'Changed by', value: 'Reg Ulator' },
+      {
+        key: 'Reason',
+        value: 'Operator keyed the wrong date.\nSee email.',
+        multiline: true
+      }
+    ])
+  })
+
+  test('omits rows whose values are absent or malformed', () => {
+    const rows = detailRowsForAuditEntry({
+      ...entry,
+      details: {
+        ...entry.details,
+        previousPaymentDate: undefined,
+        paymentDate: 'garbage',
+        reason: '  '
+      }
+    })
+    expect(rows.map((r) => r.key)).toEqual(['Action', 'Changed by'])
+  })
+})
