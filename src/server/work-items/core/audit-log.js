@@ -2,9 +2,9 @@ import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
 import { nationLabel } from '#/server/work-items/core/nations.js'
 import { slaDeadlineDisplay } from '#/server/work-items/core/sla-duration.js'
 import {
-  changePaymentDateRows,
-  isChangePaymentDateEntry,
-  summariseChangePaymentDate
+  PAYMENT_DATE_CHANGED_ACTION,
+  paymentDateChangedRows,
+  summarisePaymentDateChanged
 } from './audit-log-payment-date.js'
 
 /**
@@ -415,15 +415,13 @@ export function summariseAuditEntry(entry) {
       const action = details.actionDisplayName ?? details.actionId ?? ''
       const from = details.fromStateId
       const to = details.toStateId
-      // RA-576: a payment date change is not a state change.
-      if (isChangePaymentDateEntry(details)) {
-        return summariseChangePaymentDate(details)
-      }
       if (from && to) {
         return action ? `${action} (${from} → ${to})` : `${from} → ${to}`
       }
       return action
     }
+    case PAYMENT_DATE_CHANGED_ACTION:
+      return summarisePaymentDateChanged(details)
     case ACTION_ASSIGNED: {
       const to = details.assigneeName ?? details.assigneeId ?? 'unknown user'
       const from = details.previousAssigneeName ?? details.previousAssigneeId
@@ -499,11 +497,6 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       if (action) {
         rows.push({ key: 'Action', value: action })
       }
-      // RA-576: no state moved, so show the date change instead of the
-      // (identical) previous / new state rows.
-      if (isChangePaymentDateEntry(details)) {
-        return changePaymentDateRows(entry)
-      }
       if (details.fromStateId) {
         rows.push({ key: 'Previous state', value: details.fromStateId })
       }
@@ -516,6 +509,8 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       }
       return rows
     }
+    case PAYMENT_DATE_CHANGED_ACTION:
+      return paymentDateChangedRows(entry)
     case ACTION_ASSIGNED: {
       const rows = []
       const previous =

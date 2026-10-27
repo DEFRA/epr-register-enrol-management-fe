@@ -1,14 +1,12 @@
 /**
  * Audit log rendering for payment date changes (RA-576).
  *
- * management-be's change-payment-date service stamps an `action-applied`
- * entry whose from and to states are identical, plus the previous and new
- * dates and the reason. Rendered with the generic `action-applied` rules it
- * would read "(Duly made → Duly made)", so `audit-log.js` hands these entries
- * to the helpers here instead.
+ * management-be's change-payment-date service stamps a dedicated
+ * `payment-date-changed` entry (not a state transition, so no from / to
+ * states) carrying the previous and new dates and the reason.
  */
 
-export const CHANGE_PAYMENT_DATE_ACTION_ID = 'change-payment-date'
+export const PAYMENT_DATE_CHANGED_ACTION = 'payment-date-changed'
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
 
@@ -22,21 +20,17 @@ function formatIsoDate(value) {
   return `${day}/${month}/${year}`
 }
 
-export function isChangePaymentDateEntry(details) {
-  return details?.actionId === CHANGE_PAYMENT_DATE_ACTION_ID
+/** At-a-glance summary: "15/07/2026 → 20/07/2026" (empty if either is bad). */
+export function summarisePaymentDateChanged(details) {
+  const previous = formatIsoDate(details?.previousPaymentDate)
+  const next = formatIsoDate(details?.paymentDate)
+  return previous && next ? `${previous} → ${next}` : ''
 }
 
-/** A payment date change is not a state change, so it reads "(updated)". */
-export function summariseChangePaymentDate(details) {
-  const action = details.actionDisplayName ?? details.actionId
-  return `${action} (updated)`
-}
-
-/** Detail rows: the action, previous / new date, actor and a multiline reason. */
-export function changePaymentDateRows(entry) {
+/** Detail rows: previous / new date, actor and a multiline reason. */
+export function paymentDateChangedRows(entry) {
   const details = entry.details ?? {}
   const rows = [
-    { key: 'Action', value: details.actionDisplayName ?? details.actionId },
     {
       key: 'Previous payment date',
       value: formatIsoDate(details.previousPaymentDate)

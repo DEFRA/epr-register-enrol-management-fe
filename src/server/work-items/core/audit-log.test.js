@@ -1696,22 +1696,18 @@ describe('determination-deadline audit entries (RA-572 follow-up)', () => {
 
 describe('change-payment-date audit entries (RA-576)', () => {
   const entry = {
-    action: 'action-applied',
+    action: 'payment-date-changed',
     createdBy: 'user-1',
     createdByName: 'Reg Ulator',
     details: {
-      actionId: 'change-payment-date',
-      actionDisplayName: 'Change payment date',
-      fromStateId: 'duly-made',
-      toStateId: 'duly-made',
       previousPaymentDate: '2026-07-15',
       paymentDate: '2026-07-20',
       reason: 'Operator keyed the wrong date.\r\nSee email.'
     }
   }
 
-  test('summarises as an update, not a state change', () => {
-    expect(summariseAuditEntry(entry)).toBe('Change payment date (updated)')
+  test('summarises as the date range', () => {
+    expect(summariseAuditEntry(entry)).toBe('15/07/2026 → 20/07/2026')
   })
 
   test('other action-applied entries still show the state change', () => {
@@ -1729,7 +1725,6 @@ describe('change-payment-date audit entries (RA-576)', () => {
 
   test('projects previous date, new date, actor and a multiline reason', () => {
     expect(detailRowsForAuditEntry(entry)).toEqual([
-      { key: 'Action', value: 'Change payment date' },
       { key: 'Previous payment date', value: '15/07/2026' },
       { key: 'New payment date', value: '20/07/2026' },
       { key: 'Changed by', value: 'Reg Ulator' },
@@ -1751,6 +1746,6 @@ describe('change-payment-date audit entries (RA-576)', () => {
         reason: '  '
       }
     })
-    expect(rows.map((r) => r.key)).toEqual(['Action', 'Changed by'])
+    expect(rows.map((r) => r.key)).toEqual(['Changed by'])
   })
 })
