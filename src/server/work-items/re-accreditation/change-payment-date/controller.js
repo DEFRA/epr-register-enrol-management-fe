@@ -47,6 +47,7 @@ const UNAVAILABLE_VIEW = 'work-items/detail-error'
 
 const PAGE_TITLE = 'Change payment date'
 const APPLICATIONS_LABEL = 'Applications'
+const WORK_ITEMS_HREF = '/work-items'
 
 const logger = createLogger()
 
@@ -60,7 +61,7 @@ function changePaymentDateHref(id) {
 
 function breadcrumbs(id, ref) {
   return [
-    { text: APPLICATIONS_LABEL, href: '/work-items' },
+    { text: APPLICATIONS_LABEL, href: WORK_ITEMS_HREF },
     { text: ref ?? 'Application', href: detailHref(id) },
     { text: PAGE_TITLE }
   ]
@@ -131,7 +132,7 @@ async function loadWorkItem(request, h, id) {
           heading: 'Application not found',
           workItemId: id,
           breadcrumbs: [
-            { text: APPLICATIONS_LABEL, href: '/work-items' },
+            { text: APPLICATIONS_LABEL, href: WORK_ITEMS_HREF },
             { text: 'Not found' }
           ]
         })
@@ -148,7 +149,7 @@ async function loadWorkItem(request, h, id) {
           workItemId: id,
           error: result.error ?? `Backend returned ${result.status}`,
           breadcrumbs: [
-            { text: APPLICATIONS_LABEL, href: '/work-items' },
+            { text: APPLICATIONS_LABEL, href: WORK_ITEMS_HREF },
             { text: 'Application' }
           ]
         })

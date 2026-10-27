@@ -24,7 +24,7 @@ describe('buildChangePaymentDateRoutes', () => {
   test('the POST accepts only form-encoded bodies, with a size cap', () => {
     const post = routes.find((r) => r.method === 'POST')
     expect(post.options.payload.allow).toBe('application/x-www-form-urlencoded')
-    expect(post.options.payload.maxBytes).toBeLessThanOrEqual(20 * 1024)
+    expect(post.options.payload.maxBytes).toBeLessThanOrEqual(20_480)
   })
 
   test('every route has a handler', () => {

@@ -17,7 +17,7 @@ import {
   makeSubmitChangePaymentDateController
 } from './controller.js'
 
-const MAX_BODY_BYTES = 20 * 1024
+const MAX_BODY_BYTES = 20_480 // 20 KiB
 
 export function buildChangePaymentDateRoutes() {
   return [
