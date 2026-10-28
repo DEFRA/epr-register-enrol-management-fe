@@ -122,6 +122,32 @@ jobs:
           docker build -t defradigital/epr-register-enrol-management-be:$SHA .
           echo "tag=$SHA" >> "$GITHUB_OUTPUT"
 
+      # The stack also runs the operator backend. A cross-repo change to it
+      # must be tested here too, not the last published image.
+      - name: Check for matching epr-register-enrol-backend branch
+        id: operator-be-branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          BRANCH="$HEAD_REF"
+          if git ls-remote --heads https://github.com/DEFRA/epr-register-enrol-backend.git "$BRANCH" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout and build matching epr-register-enrol-backend
+        if: steps.operator-be-branch.outputs.exists == 'true'
+        id: build-operator-be
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git clone --branch "$HEAD_REF" --depth 1 https://github.com/DEFRA/epr-register-enrol-backend.git _operator_be
+          cd _operator_be
+          SHA=$(git rev-parse --short HEAD)
+          docker build -t defradigital/epr-register-enrol-backend:$SHA .
+          echo "tag=$SHA" >> "$GITHUB_OUTPUT"
+
       # Diagnostic only — never fails the job. A cross-repo story lands as
       # three branches sharing one name, and when a sibling's branch is not
       # pushed yet the run silently substitutes something else: an unmatched
@@ -142,10 +168,14 @@ jobs:
             echo "management-be : latest (published image)"
             echo "::warning title=Skewed e2e stack::No management-be branch named '${{ github.head_ref }}', so the stack runs on the published 'latest' image. If this PR depends on unreleased management-be changes, failures below are expected and are NOT evidence of a defect in this repo."
           fi
+          echo "operator-be   : ${OPERATOR_BE_TAG:-latest (published image)}"
+        env:
+          OPERATOR_BE_TAG: ${{ steps.build-operator-be.outputs.tag }}
 
       - name: Run e2e tests on ${{ steps.e2e-branch.outputs.ref }}
         uses: DEFRA/epr-register-enrol-mgmt-tests/run-journey-tests@main
         with:
           management-fe: ${{ github.sha }}
           management-be: ${{ steps.build-be.outputs.tag }}
+          operator-be: ${{ steps.build-operator-be.outputs.tag }}
           branch: ${{ steps.e2e-branch.outputs.ref }}
