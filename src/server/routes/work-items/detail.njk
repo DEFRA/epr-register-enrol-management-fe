@@ -632,6 +632,9 @@
               }) }}
             </li>
           {% endif %}
+          {# RA-576. Type-specific side-panel links (e.g. re-accreditation's  #}
+          {# "Change payment date").                                         #}
+          {% block panelLinksExtra %}{% endblock %}
         </ul>
         {% endif %}
       </div>

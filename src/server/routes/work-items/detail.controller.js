@@ -15,6 +15,7 @@ import {
   RE_ACCREDITATION_TYPE_ID
 } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
+import { evaluateChangePaymentDateEligibility } from '#/server/work-items/re-accreditation/change-payment-date/eligibility.js'
 import {
   PENDING_CONTACT_STATE_IDS,
   STATE_APPROVED_PENDING_CONTACT,
@@ -654,6 +655,12 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
   // transition declaration, not here.
   const canDulyMake = evaluateDulyMakeEligibility(source).allowed
 
+  // RA-576. Same discipline: the raw DTO, through the helper the change
+  // page's own route guard uses. Hidden for terminal items and for items
+  // with no payment date to change.
+  const canChangePaymentDate =
+    evaluateChangePaymentDateEligibility(source).allowed
+
   // RA-372 / RA-410. Read off the module's own `continue-review-during-*`
   // declarations rather than testing for `'updated'` here, so that literal
   // stays in `re-accreditation/module.js`. All four share
@@ -714,6 +721,8 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     logDecisionHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/decision`,
     canDulyMake,
     dulyMakeHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/duly-make`,
+    canChangePaymentDate,
+    changePaymentDateHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/change-payment-date`,
     canContinueReview,
     continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
     isReadOnlyState,

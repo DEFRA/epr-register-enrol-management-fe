@@ -2499,6 +2499,69 @@ describe('#workItemDetailController', () => {
       )
     }
 
+    // RA-576. The side-panel "Change payment date" link: shown for a
+    // non-terminal item that has a payment date, hidden otherwise.
+    test.each(['duly-made', 'queried', 'updated', 'awaiting-decision'])(
+      'shows the Change payment date link for a %s item with a payment date',
+      async (stateId) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId,
+            payload: { paymentDate: '2026-07-15' }
+          })
+        })
+
+        const { statusCode, result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).toContain('data-testid="change-payment-date-link"')
+        expect(result).toContain(
+          `/work-items/re-accreditation/${ID}/change-payment-date`
+        )
+      }
+    )
+
+    test.each(['approved', 'rejected', 'withdrawn'])(
+      'hides the Change payment date link for a terminal %s item',
+      async (stateId) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId,
+            payload: { paymentDate: '2026-07-15' }
+          })
+        })
+
+        const { result } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(result).not.toContain('data-testid="change-payment-date-link"')
+      }
+    )
+
+    test('hides the Change payment date link when there is no payment date', async () => {
+      registerReaccreditationWithDetailV1()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId: 'duly-made', payload: {} })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}`
+      })
+
+      expect(result).not.toContain('data-testid="change-payment-date-link"')
+    })
+
     test('renders the confirmation panel, ID, formatted start date and year when approved', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({

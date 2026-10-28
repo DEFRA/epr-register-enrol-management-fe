@@ -483,7 +483,8 @@ describe('reAccreditationModule', () => {
       // only mounted when the flag is on. RA-523 removed the bespoke
       // payment-received route, dropping the always-on count from four
       // to three; RA-527's confirm-contact routes brought it back to four.
-      expect(server.route).toHaveBeenCalledTimes(5)
+      // RA-576 adds the change-payment-date routes.
+      expect(server.route).toHaveBeenCalledTimes(6)
       const createCall = server.route.mock.calls.find(([routes]) =>
         routes.some((r) => r.path === '/work-items/re-accreditation/new')
       )
@@ -537,8 +538,9 @@ describe('reAccreditationModule', () => {
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
       // Only the always-on decision (RA-410), confirm-contact (RA-527),
-      // continue-review (RA-372) and duly-making (RA-316) routes are mounted.
-      expect(server.route).toHaveBeenCalledTimes(4)
+      // continue-review (RA-372), duly-making (RA-316) and change-payment-date
+      // (RA-576) routes are mounted.
+      expect(server.route).toHaveBeenCalledTimes(5)
       expect(
         server.route.mock.calls.every(([routes]) =>
           routes.every((r) => r.path !== '/work-items/re-accreditation/new')
@@ -564,5 +566,26 @@ describe('reAccreditationModule', () => {
         ).toEqual(['POST /work-items/re-accreditation/{id}/continue-review'])
       }
     })
+  })
+})
+
+describe('RA-576 change-payment-date routes', () => {
+  test('are always mounted, regardless of the create flag', async () => {
+    for (const flag of [true, false]) {
+      config.set('featureFlags.workItemCreationEnabled', flag)
+      const server = { route: vi.fn() }
+      await reAccreditationModule.register(server)
+      const call = server.route.mock.calls.find(([routes]) =>
+        routes.some(
+          (r) =>
+            r.path === '/work-items/re-accreditation/{id}/change-payment-date'
+        )
+      )
+      expect(call).toBeDefined()
+      expect(call[0].map((r) => `${r.method} ${r.path}`)).toEqual([
+        'GET /work-items/re-accreditation/{id}/change-payment-date',
+        'POST /work-items/re-accreditation/{id}/change-payment-date'
+      ])
+    }
   })
 })
