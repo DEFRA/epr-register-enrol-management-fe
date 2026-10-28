@@ -1770,3 +1770,59 @@ describe('accreditation-number-corrected audit entries (RA-691)', () => {
     expect(decorated.isFailure).toBe(false)
   })
 })
+
+describe('change-payment-date audit entries (RA-576)', () => {
+  const entry = {
+    action: 'payment-date-changed',
+    createdBy: 'user-1',
+    createdByName: 'Reg Ulator',
+    details: {
+      previousPaymentDate: '2026-07-15',
+      paymentDate: '2026-07-20',
+      reason: 'Operator keyed the wrong date.\r\nSee email.'
+    }
+  }
+
+  test('summarises as the date range', () => {
+    expect(summariseAuditEntry(entry)).toBe('15/07/2026 → 20/07/2026')
+  })
+
+  test('other action-applied entries still show the state change', () => {
+    expect(
+      summariseAuditEntry({
+        action: 'action-applied',
+        details: {
+          actionDisplayName: 'Duly make',
+          fromStateId: 'submitted',
+          toStateId: 'duly-made'
+        }
+      })
+    ).toBe('Duly make (submitted → duly-made)')
+  })
+
+  test('projects previous date, new date, actor and a multiline reason', () => {
+    expect(detailRowsForAuditEntry(entry)).toEqual([
+      { key: 'Previous payment date', value: '15/07/2026' },
+      { key: 'New payment date', value: '20/07/2026' },
+      { key: 'Changed by', value: 'Reg Ulator' },
+      {
+        key: 'Reason',
+        value: 'Operator keyed the wrong date.\nSee email.',
+        multiline: true
+      }
+    ])
+  })
+
+  test('omits rows whose values are absent or malformed', () => {
+    const rows = detailRowsForAuditEntry({
+      ...entry,
+      details: {
+        ...entry.details,
+        previousPaymentDate: undefined,
+        paymentDate: 'garbage',
+        reason: '  '
+      }
+    })
+    expect(rows.map((r) => r.key)).toEqual(['Changed by'])
+  })
+})

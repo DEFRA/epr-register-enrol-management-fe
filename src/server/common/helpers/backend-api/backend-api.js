@@ -670,6 +670,66 @@ export async function dulyMakeReAccreditation({
 }
 
 /**
+ * Change the payment date of a re-accreditation work item (RA-576).
+ *
+ * Wraps `POST /work-items/re-accreditation/{id}/change-payment-date`.
+ * Body: `{ paymentDate, reason }` — `paymentDate` is a plain `YYYY-MM-DD`
+ * string, as for {@link dulyMakeReAccreditation}.
+ *
+ * Same result shape as {@link dulyMakeReAccreditation}, including
+ * `errorCode`: a 400 carries `payment-date-*` (bind to the date input) or
+ * `payment-date-reason-*` (bind to the reason) plus a `field` member, while a
+ * 409 means the item is closed or has no payment date to change.
+ */
+export async function changePaymentDateReAccreditation({
+  workItemId,
+  paymentDate,
+  reason,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/change-payment-date`
+
+  const result = await postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    body: { paymentDate, reason },
+    label: 'changePaymentDateReAccreditation'
+  })
+
+  if (result.ok) {
+    return { ok: true, workItem: result.workItem }
+  }
+
+  // `postJson` reports transport failures without a status.
+  if (result.status == null) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: result.error ?? REQUEST_FAILED
+    }
+  }
+
+  return {
+    ok: false,
+    reason: REASON_BY_STATUS[result.status] ?? 'server',
+    status: result.status,
+    errorCode:
+      typeof result.problem?.errorCode === 'string'
+        ? result.problem.errorCode
+        : null,
+    message:
+      result.problem?.detail ??
+      result.problem?.title ??
+      `Backend returned ${result.status}`
+  }
+}
+
+/**
  * Record a re-accreditation decision (RA-410).
  *
  * Wraps `POST /work-items/re-accreditation/{id}/decision`.

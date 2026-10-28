@@ -1,5 +1,6 @@
 import { config } from '#/config/config.js'
 import { registerModuleDetailTemplates } from '../core/templates.js'
+import { buildChangePaymentDateRoutes } from './change-payment-date/routes.js'
 import { buildContinueReviewRoutes } from './continue-review/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
 import { buildConfirmContactRoutes } from './confirm-contact/routes.js'
@@ -528,6 +529,13 @@ export const reAccreditationModule = {
     // actually in `submitted`, and both the CTA and the GET handler go
     // through the same `evaluateDulyMakeEligibility` gate.
     server.route(buildDulyMakingRoutes())
+
+    // RA-576. Change-payment-date flow: corrects the payment date entered at
+    // duly making without moving the application's status or SLA clock. Hits
+    // the type-specific `/change-payment-date` endpoint. Always mounted; the
+    // side-panel link only renders, and both handlers only proceed, for a
+    // work item that is eligible (`evaluateChangePaymentDateEligibility`).
+    server.route(buildChangePaymentDateRoutes())
 
     // RA-410. Log-decision flow: the Approved / Refused radio page and its
     // POST handler, replacing the task-gated approve interstitial as the

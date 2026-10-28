@@ -6,6 +6,7 @@ import {
   applyWorkItemAction,
   assertSafeHeaderValue,
   assignWorkItem,
+  changePaymentDateReAccreditation,
   confirmApplicantContact,
   continueReviewReAccreditation,
   createWorkItem,
@@ -2194,5 +2195,103 @@ describe('#updateRecyclingOperations (RA-469)', () => {
       reason: 'network',
       message: 'ECONNREFUSED'
     })
+  })
+})
+
+describe('#changePaymentDateReAccreditation (RA-576)', () => {
+  const base = {
+    workItemId: 'wi-1',
+    paymentDate: '2026-07-20',
+    reason: 'Typo',
+    baseUrl: 'http://backend:8085/',
+    timeoutMs: 1000
+  }
+
+  test('POSTs the date and reason to the change-payment-date endpoint and returns the work item', async () => {
+    const workItem = { id: 'wi-1', stateId: 'duly-made' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await changePaymentDateReAccreditation({
+      ...base,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi-1/change-payment-date',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ paymentDate: '2026-07-20', reason: 'Typo' }),
+        headers: expect.objectContaining({
+          'x-cdp-user-id': 'u-1',
+          'x-cdp-user-name': 'Alice'
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('surfaces the errorCode of a 400 so the controller can bind it to a field', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () =>
+        Promise.resolve({
+          errorCode: 'payment-date-reason-required',
+          field: 'reason',
+          detail: 'A reason is required.'
+        })
+    })
+
+    const result = await changePaymentDateReAccreditation({
+      ...base,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid',
+      status: 400,
+      errorCode: 'payment-date-reason-required',
+      message: 'A reason is required.'
+    })
+  })
+
+  test('maps a 409 to a conflict with a null errorCode and falls back to the title', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ title: 'Could not change payment date' })
+    })
+
+    const result = await changePaymentDateReAccreditation({
+      ...base,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      errorCode: null,
+      message: 'Could not change payment date'
+    })
+  })
+
+  test('reports a transport failure as a network error with no status', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('connect refused'))
+
+    const result = await changePaymentDateReAccreditation({
+      ...base,
+      fetchImpl
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.reason).toBe('network')
+    expect(result.status).toBeUndefined()
   })
 })
