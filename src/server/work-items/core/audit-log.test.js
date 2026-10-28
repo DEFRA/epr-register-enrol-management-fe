@@ -635,7 +635,11 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
     expect(keys).toContain('Assigned to')
   })
 
-  test.each(['routed-to-nation', 'nation-corrected'])(
+  test.each([
+    'routed-to-nation',
+    'nation-corrected',
+    'accreditation-number-corrected'
+  ])(
     'omits ALL snapshot context rows for a %s entry, unlike every other action',
     (action) => {
       const snapshot = {
@@ -1691,6 +1695,79 @@ describe('determination-deadline audit entries (RA-572 follow-up)', () => {
       value: fullDetails.reason,
       multiline: true
     })
+  })
+})
+
+describe('accreditation-number-corrected audit entries (RA-691)', () => {
+  // The one-off RA-691 migration stamps this exact shape when it corrects a
+  // wrongly generated accreditation reference. It changes no state.
+  const fullDetails = {
+    from: 'A27ER5005270322PL',
+    to: 'A27ER5005270246PL',
+    reason: 'RA-691'
+  }
+
+  test('falls back to "Accreditation number corrected" when the backend supplies no display name', () => {
+    const [decorated] = decorateAuditLog([
+      { action: 'accreditation-number-corrected', details: fullDetails }
+    ])
+    expect(decorated.actionDisplayName).toBe('Accreditation number corrected')
+  })
+
+  test('summarises the entry as the previous and corrected reference', () => {
+    expect(
+      summariseAuditEntry({
+        action: 'accreditation-number-corrected',
+        details: fullDetails
+      })
+    ).toBe('A27ER5005270322PL → A27ER5005270246PL')
+  })
+
+  test.each([
+    ['only the previous reference', { from: 'A27ER5005270322PL' }],
+    ['only the corrected reference', { to: 'A27ER5005270246PL' }],
+    ['no details', {}]
+  ])('has no summary when the entry carries %s', (_label, details) => {
+    expect(
+      summariseAuditEntry({ action: 'accreditation-number-corrected', details })
+    ).toBe('')
+  })
+
+  test('projects previous accreditation number, corrected accreditation number and reason', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'accreditation-number-corrected',
+        details: fullDetails
+      })
+    ).toEqual([
+      { key: 'Previous accreditation number', value: 'A27ER5005270322PL' },
+      { key: 'Corrected accreditation number', value: 'A27ER5005270246PL' },
+      { key: 'Reason', value: 'RA-691', multiline: true }
+    ])
+  })
+
+  test('omits rows for absent fields', () => {
+    expect(
+      detailRowsForAuditEntry({
+        action: 'accreditation-number-corrected',
+        details: { to: 'A27ER5005270246PL' }
+      })
+    ).toEqual([
+      { key: 'Corrected accreditation number', value: 'A27ER5005270246PL' }
+    ])
+  })
+
+  test('returns an empty array when the entry has no details', () => {
+    expect(
+      detailRowsForAuditEntry({ action: 'accreditation-number-corrected' })
+    ).toEqual([])
+  })
+
+  test('is not flagged as a failure', () => {
+    const [decorated] = decorateAuditLog([
+      { action: 'accreditation-number-corrected', details: fullDetails }
+    ])
+    expect(decorated.isFailure).toBe(false)
   })
 })
 
