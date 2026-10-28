@@ -1,6 +1,11 @@
 import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
 import { nationLabel } from '#/server/work-items/core/nations.js'
 import { slaDeadlineDisplay } from '#/server/work-items/core/sla-duration.js'
+import {
+  PAYMENT_DATE_CHANGED_ACTION,
+  paymentDateChangedRows,
+  summarisePaymentDateChanged
+} from './audit-log-payment-date.js'
 
 /**
  * Audit log helpers (RA-97).
@@ -93,6 +98,7 @@ export function decorateAuditLog(
  */
 const ACTION_WORK_ITEM_SUBMITTED = 'work-item-submitted'
 const ACTION_APPLIED = 'action-applied'
+
 const ACTION_ASSIGNED = 'assigned'
 const ACTION_UNASSIGNED = 'unassigned'
 const ACTION_NOTE_ADDED = 'note-added'
@@ -414,6 +420,8 @@ export function summariseAuditEntry(entry) {
       }
       return action
     }
+    case PAYMENT_DATE_CHANGED_ACTION:
+      return summarisePaymentDateChanged(details)
     case ACTION_ASSIGNED: {
       const to = details.assigneeName ?? details.assigneeId ?? 'unknown user'
       const from = details.previousAssigneeName ?? details.previousAssigneeId
@@ -501,6 +509,8 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       }
       return rows
     }
+    case PAYMENT_DATE_CHANGED_ACTION:
+      return paymentDateChangedRows(entry)
     case ACTION_ASSIGNED: {
       const rows = []
       const previous =

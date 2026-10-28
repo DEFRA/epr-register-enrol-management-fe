@@ -1,0 +1,109 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
+{% from "govuk/components/date-input/macro.njk" import govukDateInput %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+
+{# ------------------------------------------------------------------- #}
+{# Change payment date (RA-576).                                        #}
+{#                                                                      #}
+{# Reached from the "Change payment date" link in the detail page's     #}
+{# side panel. Posts back to its own URL and PRG-redirects to the       #}
+{# detail page on success.                                              #}
+{#                                                                      #}
+{# No browser JavaScript (RA-94): the date input is three plain text    #}
+{# boxes, the 200-word limit on the reason is enforced server-side, and #}
+{# Cancel is an ordinary link rather than a form control.               #}
+{#                                                                      #}
+{# `data-testid` hooks are an EXTERNAL CONTRACT consumed by the         #}
+{# mgmt-tests journey suite. They are prefixed `change-payment-date-*`. #}
+{# ------------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: ("Application " + workItem.applicationRef) if workItem.applicationRef else null
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "change-payment-date-error-summary" }
+        }) }}
+      {% endif %}
+
+      {% if currentPaymentDate %}
+        <p class="govuk-body" data-testid="change-payment-date-current">
+          The current payment date is {{ currentPaymentDate }}
+        </p>
+      {% endif %}
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="change-payment-date-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {{ govukDateInput({
+          id: dateInputId,
+          namePrefix: dateInputId,
+          fieldset: {
+            legend: {
+              text: "New payment date",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          hint: { text: "For example, 27 3 2026" },
+          items: [
+            {
+              name: "day",
+              classes: "govuk-input--width-2" + (" govuk-input--error" if dateErrorMessage else ""),
+              value: values.day
+            },
+            {
+              name: "month",
+              classes: "govuk-input--width-2" + (" govuk-input--error" if dateErrorMessage else ""),
+              value: values.month
+            },
+            {
+              name: "year",
+              classes: "govuk-input--width-4" + (" govuk-input--error" if dateErrorMessage else ""),
+              value: values.year
+            }
+          ],
+          errorMessage: { text: dateErrorMessage } if dateErrorMessage else null,
+          attributes: { "data-testid": "change-payment-date-payment-date" }
+        }) }}
+
+        {{ govukCharacterCount({
+          id: reasonId,
+          name: reasonId,
+          maxwords: 200,
+          label: {
+            text: "Reason for payment change",
+            classes: "govuk-label--m"
+          },
+          value: values.reason,
+          errorMessage: { text: reasonErrorMessage } if reasonErrorMessage else null,
+          attributes: { "data-testid": "change-payment-date-reason" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Save",
+            disabled: user.isReadOnly,
+            attributes: { "data-testid": "change-payment-date-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="change-payment-date-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
