@@ -517,10 +517,11 @@ export const reAccreditationModule = {
     //      and `confirm-contact-rejected`, removing the single-step `reject`.
     // v18: RA-527 follow-up backend added the non-terminal
     //      `assessment-started` state ("Duly made"), retargeted
-    //      `start-assessment` to it and added `submit-for-decision` from it,
-    //      so starting a case keeps it "Duly made"; and `sla-extend` from it
-    //      to `assessment-in-progress` (not caller-invocable), so a deadline
-    //      change on a started case still ends at "Updated".
+    //      `start-assessment` to it and added `submit-for-decision`,
+    //      `query-during-assessment` and `withdraw-during-assessment` from
+    //      it, so starting a case keeps it "Duly made"; and `sla-extend`
+    //      from it to `assessment-in-progress` (not caller-invocable), so a
+    //      deadline change on a started case still ends at "Updated".
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11

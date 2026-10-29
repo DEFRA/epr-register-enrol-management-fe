@@ -151,7 +151,8 @@ export function resolveSelfAssignTransition(type, workItem) {
  *
  * The backend declares a second copy of some transitions from that state
  * (management-be v18: `submit-for-decision`, `sla-extend`,
- * `query-during-assessment`), which a module cannot mirror because
+ * `query-during-assessment`, `withdraw-during-assessment`), which a module
+ * cannot mirror because
  * `assertValidWorkItemModule` requires unique action ids. Callers that need
  * to treat a started case like the backend does key off this state instead,
  * read off the declaration so the literal stays in the module.
