@@ -383,6 +383,46 @@ describe('#workItemDetailController', () => {
     )
   })
 
+  // RA-527 follow-up + RA-317. management-be v18 declares (and projects)
+  // `withdraw-during-assessment` from `assessment-started` too, so an
+  // operator can withdraw a started case. Withdraw stays an operator action:
+  // the Case Management service still strips it from a started case.
+  test('Does not offer Withdraw on a started case', async () => {
+    registerWorkItemType(reAccreditationType)
+    registerDetailTemplate(
+      're-accreditation',
+      'v18',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        stateId: 'assessment-started',
+        templateVersion: 'v18',
+        assignedToId: 'test-standard-id',
+        assignedToName: 'Test Standard User',
+        availableActions: [
+          {
+            actionId: 'withdraw-during-assessment',
+            displayName: 'Withdraw',
+            fromStateId: 'assessment-started',
+            toStateId: 'withdrawn',
+            callerInvocable: true
+          }
+        ]
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toContain('action-withdraw-during-assessment')
+    expect(result).not.toContain('/actions/withdraw-during-assessment')
+  })
+
   // RA-196: the caption and the final breadcrumb show the user-facing
   // application reference, while the assign/tasks/audit-log routes keep using
   // the internal id.

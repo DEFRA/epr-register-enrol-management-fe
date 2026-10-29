@@ -293,6 +293,13 @@ const TRANSITIONS = [
     fromStateId: 'duly-made',
     toStateId: 'withdrawn'
   },
+  // RA-527 follow-up (management-be v18). The backend ALSO declares
+  // `withdraw-during-assessment` from `assessment-started` (same action id),
+  // so an operator can withdraw a started case. That second entry cannot be
+  // expressed here (`assertValidWorkItemModule` requires globally-unique
+  // action ids), and does not need to be: withdraw is an operator action
+  // that the Case Management service never offers (RA-317,
+  // `routes/work-items/detail.controller.js` strips every `withdraw-*`).
   {
     actionId: 'withdraw-during-assessment',
     displayName: 'Withdraw',
