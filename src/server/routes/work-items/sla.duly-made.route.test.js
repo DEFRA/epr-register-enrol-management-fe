@@ -124,19 +124,23 @@ describe('RA-595: change the determination deadline from Duly made', () => {
       }
     )
 
-    test.each([['assessment-in-progress'], ['queried']])(
-      'from %s: changes the deadline with no extra calls',
-      async (stateId) => {
-        const calls = recordBackendCalls(
-          aWorkItem({ stateId, assignedToId: TEST_STANDARD_USER.id })
-        )
+    // RA-527 follow-up. A started case (`assessment-started`) is already
+    // started: the submit goes straight to the deadline change, which
+    // management-be applies as a move to `assessment-in-progress` ("Updated").
+    test.each([
+      ['assessment-started'],
+      ['assessment-in-progress'],
+      ['queried']
+    ])('from %s: changes the deadline with no extra calls', async (stateId) => {
+      const calls = recordBackendCalls(
+        aWorkItem({ stateId, assignedToId: TEST_STANDARD_USER.id })
+      )
 
-        const page = await followRedirect(await submitChange())
+      const page = await followRedirect(await submitChange())
 
-        expect(calls).toEqual(['sla-extend'])
-        expect(page).toContain('Determination deadline changed')
-      }
-    )
+      expect(calls).toEqual(['sla-extend'])
+      expect(page).toContain('Determination deadline changed')
+    })
 
     test('a missing reason re-renders the form and starts nothing', async () => {
       const calls = recordBackendCalls(aWorkItem())

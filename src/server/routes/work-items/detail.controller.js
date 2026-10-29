@@ -28,6 +28,7 @@ import {
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import {
   isCallerInvocable,
+  resolveSelfAssignLandingState,
   resolveSelfAssignTransition
 } from '#/server/work-items/core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
@@ -785,6 +786,50 @@ function selfAssignActionIds(type) {
   )
 }
 
+/**
+ * RA-295. Whether to offer the "Change determination deadline" link in the
+ * assignment panel. The backend is NOT a backstop here:
+ * SlaService.ExtendAsync validates the actor, reason, duration bounds and the
+ * existence of the item and its clock, but has no terminal-state check — so
+ * leaving the link ungated would let a caseworker change the due date on an
+ * approved, rejected or withdrawn case. AC03's "available throughout" is
+ * about ASSIGNMENT; nothing asked for deadline controls on a closed case.
+ *
+ * RA-572 removed the second link this flag used to gate ("Override the due
+ * date", a BFF-only affordance the backend never projected). Change was
+ * always the one that followed the `sla-extend` projection.
+ *
+ * RA-595 adds one frontend-only case: an item sitting in the `fromStateId` of
+ * its type's `startsOnSelfAssign` transition (re-accreditation: `duly-made`).
+ * management-be projects no `sla-extend` there and still refuses it, so the
+ * submit route runs `core/ensure-assessment-started.js` first. Same marker
+ * the decision CTA and that step use, so the link and the submit cannot
+ * disagree.
+ *
+ * RA-527 follow-up adds the state that transition LANDS on
+ * (re-accreditation: `assessment-started`, a started case that still reads
+ * "Duly made"). management-be v18 declares `sla-extend` from it as a move to
+ * `assessment-in-progress`, applied only by the deadline endpoint (not
+ * caller-invocable), so it is never projected. `module.js` cannot mirror that
+ * second `sla-extend` (action ids are unique there), so it is read off the
+ * start transition's `toStateId` via `core/engine.js#
+ * resolveSelfAssignLandingState`, the same helper `decision/eligibility.js`
+ * uses for Make determination.
+ *
+ * Kept out of `decorate` so that function stays within the cognitive
+ * complexity limit.
+ */
+function canChangeDueDateFor(type, workItem, projectedActions) {
+  const landingStateId = resolveSelfAssignLandingState(type)
+  return (
+    projectedActions.some(
+      (action) => action?.actionId === SLA_EXTEND_ACTION_ID
+    ) ||
+    resolveSelfAssignTransition(type, workItem) != null ||
+    (landingStateId != null && landingStateId === workItem?.stateId)
+  )
+}
+
 // RA-410. Actions the MODULE DECLARATION says the caller may not invoke.
 //
 // `isCallerInvocable` (core/engine.js) covers the same ground by reading the
@@ -862,28 +907,8 @@ function decorate(workItem) {
         !declaredNonInvocable.has(action?.actionId)
     ),
     // RA-295. Gates the "Change determination deadline" link in the
-    // assignment panel. The backend is NOT a backstop here:
-    // SlaService.ExtendAsync validates the actor, reason, duration bounds
-    // and the existence of the item and its clock, but has no terminal-state
-    // check — so leaving the link ungated would let a caseworker change the
-    // due date on an approved, rejected or withdrawn case. AC03's "available
-    // throughout" is about ASSIGNMENT; nothing asked for deadline controls
-    // on a closed case.
-    //
-    // RA-572 removed the second link this flag used to gate ("Override the
-    // due date", a BFF-only affordance the backend never projected). Change
-    // was always the one that followed the `sla-extend` projection.
-    //
-    // RA-595 adds one frontend-only case: an item sitting in the
-    // `fromStateId` of its type's `startsOnSelfAssign` transition
-    // (re-accreditation: `duly-made`). management-be projects no
-    // `sla-extend` there and still refuses it, so the submit route runs
-    // `core/ensure-assessment-started.js` first. Same marker the decision
-    // CTA and that step use, so the link and the submit cannot disagree.
-    canChangeDueDate:
-      projectedActions.some(
-        (action) => action?.actionId === SLA_EXTEND_ACTION_ID
-      ) || resolveSelfAssignTransition(type, workItem) != null,
+    // assignment panel. See `canChangeDueDateFor`.
+    canChangeDueDate: canChangeDueDateFor(type, workItem, projectedActions),
     // RA-324 (AC08). The State badge colour is resolved from the shared
     // state-badge map so the detail page and the Applications list colour a
     // given status identically.

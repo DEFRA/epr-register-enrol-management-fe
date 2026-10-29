@@ -305,6 +305,124 @@ describe('#workItemDetailController', () => {
     expect(result.slice(badgeIdx - 120, badgeIdx)).toContain('govuk-tag--green')
   })
 
+  // RA-527 follow-up. Starting a case keeps it "Duly made": a started case
+  // shows the same purple "Duly made" badge as a Duly made one, and Make
+  // determination is still offered on it.
+  test('Renders a started case as Duly made, in purple, with Make determination offered', async () => {
+    registerWorkItemType(reAccreditationType)
+    registerDetailTemplate(
+      're-accreditation',
+      'v18',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        stateId: 'assessment-started',
+        templateVersion: 'v18',
+        assignedToId: 'test-standard-id',
+        assignedToName: 'Test Standard User'
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    const badgeIdx = result.indexOf('data-testid="work-item-state-tag"')
+    expect(badgeIdx).toBeGreaterThan(-1)
+    expect(result.slice(badgeIdx - 120, badgeIdx)).toContain(
+      'govuk-tag--purple'
+    )
+    expect(result.slice(badgeIdx, badgeIdx + 120)).toContain('Duly made')
+    expect(result).not.toContain('>Updated<')
+    expect(result).toContain('data-testid="log-decision-cta"')
+  })
+
+  // RA-527 follow-up. A started case can be queried: management-be v18
+  // declares `query-during-assessment` from `assessment-started` too and
+  // projects it, and the Query link follows the projection.
+  test('Offers Query on a started case', async () => {
+    registerWorkItemType(reAccreditationType)
+    registerDetailTemplate(
+      're-accreditation',
+      'v18',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        stateId: 'assessment-started',
+        templateVersion: 'v18',
+        assignedToId: 'test-standard-id',
+        assignedToName: 'Test Standard User',
+        availableActions: [
+          {
+            actionId: 'query-during-assessment',
+            displayName: 'Query',
+            fromStateId: 'assessment-started',
+            toStateId: 'queried',
+            callerInvocable: true
+          }
+        ]
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toMatch(
+      new RegExp(
+        `<a(?=[^>]*data-testid="action-query")(?=[^>]*href="/work-items/${ID}/query")[^>]*>`
+      )
+    )
+  })
+
+  // RA-527 follow-up + RA-317. management-be v18 declares (and projects)
+  // `withdraw-during-assessment` from `assessment-started` too, so an
+  // operator can withdraw a started case. Withdraw stays an operator action:
+  // the Case Management service still strips it from a started case.
+  test('Does not offer Withdraw on a started case', async () => {
+    registerWorkItemType(reAccreditationType)
+    registerDetailTemplate(
+      're-accreditation',
+      'v18',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        stateId: 'assessment-started',
+        templateVersion: 'v18',
+        assignedToId: 'test-standard-id',
+        assignedToName: 'Test Standard User',
+        availableActions: [
+          {
+            actionId: 'withdraw-during-assessment',
+            displayName: 'Withdraw',
+            fromStateId: 'assessment-started',
+            toStateId: 'withdrawn',
+            callerInvocable: true
+          }
+        ]
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toContain('action-withdraw-during-assessment')
+    expect(result).not.toContain('/actions/withdraw-during-assessment')
+  })
+
   // RA-196: the caption and the final breadcrumb show the user-facing
   // application reference, while the assign/tasks/audit-log routes keep using
   // the internal id.
@@ -1561,28 +1679,34 @@ describe('#workItemDetailController', () => {
       }
     )
 
-    test('RA-595: self-assigning a case outside Duly made applies no start transition', async () => {
-      registerWorkItemType(reAccreditationType)
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({ stateId: 'assessment-in-progress' })
-      })
-      assignWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({ stateId: 'assessment-in-progress' })
-      })
+    // RA-527 follow-up: a started case (`assessment-started`) still reads
+    // "Duly made", but it is already started, so self-assign on it is a plain
+    // assignment.
+    test.each([['assessment-started'], ['assessment-in-progress']])(
+      'RA-595: self-assigning a %s case applies no start transition',
+      async (stateId) => {
+        registerWorkItemType(reAccreditationType)
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId })
+        })
+        assignWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId })
+        })
 
-      const { statusCode } = await injectWithCrumb(server, {
-        method: 'POST',
-        url: `/work-items/${ID}/self-assign`,
-        payload: '',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' }
-      })
+        const { statusCode } = await injectWithCrumb(server, {
+          method: 'POST',
+          url: `/work-items/${ID}/self-assign`,
+          payload: '',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' }
+        })
 
-      expect(statusCode).toBe(statusCodes.redirect)
-      expect(assignWorkItem).toHaveBeenCalled()
-      expect(applyWorkItemAction).not.toHaveBeenCalled()
-    })
+        expect(statusCode).toBe(statusCodes.redirect)
+        expect(assignWorkItem).toHaveBeenCalled()
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+      }
+    )
 
     test('Re-renders the detail page inline when the backend rejects the self-assign', async () => {
       registerReaccreditation()
@@ -3086,6 +3210,42 @@ describe('#workItemDetailController', () => {
         )
         expect(assignWorkItem).not.toHaveBeenCalled()
         expect(applyWorkItemAction).not.toHaveBeenCalled()
+      }
+    )
+
+    // RA-527 follow-up. A started case (`assessment-started`, "Duly made")
+    // offers Change determination deadline too. management-be applies its
+    // `sla-extend` from there only through the deadline endpoint (not
+    // caller-invocable), so it projects no `sla-extend`; the frontend decides
+    // it from the state the start transition lands on.
+    test.each([
+      ['unassigned', {}],
+      ['assigned to the caller', { assignedToId: TEST_STANDARD_USER.id }],
+      ['held by a colleague', { assignedToId: 'someone-else' }]
+    ])(
+      'RA-527: renders Change determination deadline on a started case %s',
+      async (_label, overrides) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId: 'assessment-started',
+            availableActions: [],
+            ...overrides
+          })
+        })
+
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).toMatch(
+          new RegExp(
+            `<a(?=[^>]*data-testid="action-sla-extend")(?=[^>]*href="/work-items/${ID}/sla/extend")[^>]*>Change determination deadline</a>`
+          )
+        )
       }
     )
 

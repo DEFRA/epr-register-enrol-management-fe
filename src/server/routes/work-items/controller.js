@@ -183,9 +183,17 @@ const APPLICATION_TYPE_LABEL = new Map(
 // the UI shows one checkbox while the backend receives both state ids. The
 // `value` is the stable UI/URL token (submitted via `status=`), decoupled from
 // the raw `stateId` backend param.
+//
+// RA-527 follow-up. "Duly made" likewise expands to `duly-made` AND
+// `assessment-started` (a started case, which still reads "Duly made"), so a
+// started case is found under "Duly made" and never under "Updated".
 const STATUS_FILTER_OPTIONS = [
   { value: 'submitted', text: 'Not started', stateIds: ['submitted'] },
-  { value: 'duly-made', text: 'Duly made', stateIds: ['duly-made'] },
+  {
+    value: 'duly-made',
+    text: 'Duly made',
+    stateIds: ['duly-made', 'assessment-started']
+  },
   {
     value: 'updated',
     text: 'Updated',
@@ -237,7 +245,8 @@ const STATUS_OPTION_BY_VALUE = new Map(
 // essentially every duly-made item. Verified end-to-end: an item taken through
 // the UI reads sub=true/due=false in 'submitted', sub=true/due=true in
 // 'duly-made', and sub=false/due=true after the start step
-// ('start-assessment', RA-595).
+// ('start-assessment', RA-595) — until the RA-527 follow-up kept a started
+// case "Duly made" (see below), after which it reads sub=true/due=true too.
 //
 // The two dates are therefore gated on independent signals, and there is NO
 // invariant about how many of them render. Both cases below are intended:
@@ -255,7 +264,15 @@ const STATUS_OPTION_BY_VALUE = new Map(
 // assessment ever started. Such items do not show "Submitted on" even when it
 // never did. Resolving that needs the originating state; do not try to patch
 // it here.
-const PRE_ASSESSMENT_STATE_IDS = new Set(['submitted', 'duly-made'])
+//
+// RA-527 follow-up. 'assessment-started' (a started case that still reads
+// "Duly made") is included so its card is identical to a Duly made card:
+// "Submitted on" and the due date.
+const PRE_ASSESSMENT_STATE_IDS = new Set([
+  'submitted',
+  'duly-made',
+  'assessment-started'
+])
 
 // RA-324 phase-2. Server-side sort of the FULL filtered result set. Tokens are
 // the wire contract agreed with the backend (epr-z069.6); absent = the
