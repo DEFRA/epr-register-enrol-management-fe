@@ -184,6 +184,13 @@ const TRANSITIONS = [
   // on a `duly-made` item (the `startsOnSelfAssign` from-state), where the
   // backend projects no `sla-extend`. The deadline submit starts assessment
   // first, so the backend never sees `sla-extend` from `duly-made`.
+  //
+  // RA-527 follow-up (management-be v18) adds a THIRD backend `sla-extend`:
+  // `assessment-started` -> `assessment-in-progress`, a real move to
+  // "Updated", not caller-invocable (only the deadline endpoint applies it),
+  // so it is never projected. It cannot be mirrored here either (unique
+  // action ids), so `canChangeDueDate` is also true on the state
+  // `start-assessment` lands on, read off its `toStateId`.
 
   // RA-410. `submit-for-decision` and `reject` (below) both became
   // NON-caller-invocable in v12, mirroring management-be. Neither is a
@@ -493,7 +500,9 @@ export const reAccreditationModule = {
     // v18: RA-527 follow-up backend added the non-terminal
     //      `assessment-started` state ("Duly made"), retargeted
     //      `start-assessment` to it and added `submit-for-decision` from it,
-    //      so starting a case keeps it "Duly made".
+    //      so starting a case keeps it "Duly made"; and `sla-extend` from it
+    //      to `assessment-in-progress` (not caller-invocable), so a deadline
+    //      change on a started case still ends at "Updated".
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11

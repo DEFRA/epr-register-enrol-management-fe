@@ -785,6 +785,19 @@ function selfAssignActionIds(type) {
   )
 }
 
+/**
+ * RA-527 follow-up. Is the item sitting in the state its type's
+ * `startsOnSelfAssign` transition lands on (re-accreditation:
+ * `assessment-started`)? Read off the declaration so the literal stays in
+ * `module.js`.
+ */
+function isInStartedState(type, workItem) {
+  const start = (type?.transitions ?? []).find(
+    (t) => t.startsOnSelfAssign === true
+  )
+  return start?.toStateId != null && start.toStateId === workItem?.stateId
+}
+
 // RA-410. Actions the MODULE DECLARATION says the caller may not invoke.
 //
 // `isCallerInvocable` (core/engine.js) covers the same ground by reading the
@@ -880,10 +893,21 @@ function decorate(workItem) {
     // `sla-extend` there and still refuses it, so the submit route runs
     // `core/ensure-assessment-started.js` first. Same marker the decision
     // CTA and that step use, so the link and the submit cannot disagree.
+    //
+    // RA-527 follow-up adds the state that transition LANDS on
+    // (re-accreditation: `assessment-started`, a started case that still
+    // reads "Duly made"). management-be v18 declares `sla-extend` from it as
+    // a move to `assessment-in-progress`, applied only by the deadline
+    // endpoint (not caller-invocable), so it is never projected. `module.js`
+    // cannot mirror that second `sla-extend` (action ids are unique there),
+    // so it is read off the start transition's `toStateId`, the same rule
+    // `decision/eligibility.js` uses for Make determination.
     canChangeDueDate:
       projectedActions.some(
         (action) => action?.actionId === SLA_EXTEND_ACTION_ID
-      ) || resolveSelfAssignTransition(type, workItem) != null,
+      ) ||
+      resolveSelfAssignTransition(type, workItem) != null ||
+      isInStartedState(type, workItem),
     // RA-324 (AC08). The State badge colour is resolved from the shared
     // state-badge map so the detail page and the Applications list colour a
     // given status identically.

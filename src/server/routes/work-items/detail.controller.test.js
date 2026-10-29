@@ -3131,6 +3131,42 @@ describe('#workItemDetailController', () => {
       }
     )
 
+    // RA-527 follow-up. A started case (`assessment-started`, "Duly made")
+    // offers Change determination deadline too. management-be applies its
+    // `sla-extend` from there only through the deadline endpoint (not
+    // caller-invocable), so it projects no `sla-extend`; the frontend decides
+    // it from the state the start transition lands on.
+    test.each([
+      ['unassigned', {}],
+      ['assigned to the caller', { assignedToId: TEST_STANDARD_USER.id }],
+      ['held by a colleague', { assignedToId: 'someone-else' }]
+    ])(
+      'RA-527: renders Change determination deadline on a started case %s',
+      async (_label, overrides) => {
+        registerReaccreditationWithDetailV1()
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({
+            stateId: 'assessment-started',
+            availableActions: [],
+            ...overrides
+          })
+        })
+
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ID}`
+        })
+
+        expect(statusCode).toBe(statusCodes.ok)
+        expect(result).toMatch(
+          new RegExp(
+            `<a(?=[^>]*data-testid="action-sla-extend")(?=[^>]*href="/work-items/${ID}/sla/extend")[^>]*>Change determination deadline</a>`
+          )
+        )
+      }
+    )
+
     test('RA-595: a read-only user sees Change determination deadline disabled on a Duly made case', async () => {
       registerReaccreditationWithDetailV1()
       getWorkItem.mockResolvedValue({
