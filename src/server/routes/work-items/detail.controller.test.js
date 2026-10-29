@@ -305,6 +305,42 @@ describe('#workItemDetailController', () => {
     expect(result.slice(badgeIdx - 120, badgeIdx)).toContain('govuk-tag--green')
   })
 
+  // RA-527 follow-up. Starting a case keeps it "Duly made": a started case
+  // shows the same purple "Duly made" badge as a Duly made one, and Make
+  // determination is still offered on it.
+  test('Renders a started case as Duly made, in purple, with Make determination offered', async () => {
+    registerWorkItemType(reAccreditationType)
+    registerDetailTemplate(
+      're-accreditation',
+      'v18',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        stateId: 'assessment-started',
+        templateVersion: 'v18',
+        assignedToId: 'test-standard-id',
+        assignedToName: 'Test Standard User'
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    const badgeIdx = result.indexOf('data-testid="work-item-state-tag"')
+    expect(badgeIdx).toBeGreaterThan(-1)
+    expect(result.slice(badgeIdx - 120, badgeIdx)).toContain(
+      'govuk-tag--purple'
+    )
+    expect(result.slice(badgeIdx, badgeIdx + 120)).toContain('Duly made')
+    expect(result).not.toContain('>Updated<')
+    expect(result).toContain('data-testid="log-decision-cta"')
+  })
+
   // RA-196: the caption and the final breadcrumb show the user-facing
   // application reference, while the assign/tasks/audit-log routes keep using
   // the internal id.
@@ -1561,28 +1597,34 @@ describe('#workItemDetailController', () => {
       }
     )
 
-    test('RA-595: self-assigning a case outside Duly made applies no start transition', async () => {
-      registerWorkItemType(reAccreditationType)
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({ stateId: 'assessment-in-progress' })
-      })
-      assignWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aWorkItem({ stateId: 'assessment-in-progress' })
-      })
+    // RA-527 follow-up: a started case (`assessment-started`) still reads
+    // "Duly made", but it is already started, so self-assign on it is a plain
+    // assignment.
+    test.each([['assessment-started'], ['assessment-in-progress']])(
+      'RA-595: self-assigning a %s case applies no start transition',
+      async (stateId) => {
+        registerWorkItemType(reAccreditationType)
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId })
+        })
+        assignWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aWorkItem({ stateId })
+        })
 
-      const { statusCode } = await injectWithCrumb(server, {
-        method: 'POST',
-        url: `/work-items/${ID}/self-assign`,
-        payload: '',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' }
-      })
+        const { statusCode } = await injectWithCrumb(server, {
+          method: 'POST',
+          url: `/work-items/${ID}/self-assign`,
+          payload: '',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' }
+        })
 
-      expect(statusCode).toBe(statusCodes.redirect)
-      expect(assignWorkItem).toHaveBeenCalled()
-      expect(applyWorkItemAction).not.toHaveBeenCalled()
-    })
+        expect(statusCode).toBe(statusCodes.redirect)
+        expect(assignWorkItem).toHaveBeenCalled()
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+      }
+    )
 
     test('Re-renders the detail page inline when the backend rejects the self-assign', async () => {
       registerReaccreditation()

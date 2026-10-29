@@ -40,6 +40,9 @@ const DEFAULT_STATE_TAG_CLASS = 'govuk-tag--grey'
 const STATE_TAG_CLASSES = {
   submitted: DEFAULT_STATE_TAG_CLASS, // Not started
   'duly-made': 'govuk-tag--purple', // Duly made
+  // RA-527 follow-up. A started case still reads "Duly made", so it shares
+  // that colour and looks identical in the list and on the detail page.
+  'assessment-started': 'govuk-tag--purple', // Duly made
   'assessment-in-progress': 'govuk-tag--blue', // Updated
   'awaiting-decision': 'govuk-tag--light-blue', // Awaiting decision (distinct)
   queried: 'govuk-tag--yellow', // Queried

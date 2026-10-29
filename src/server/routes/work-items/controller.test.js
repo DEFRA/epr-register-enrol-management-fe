@@ -1283,6 +1283,71 @@ describe('#workItemListController', () => {
     )
   })
 
+  // RA-527 follow-up. Starting a case keeps it "Duly made": a started case
+  // (`assessment-started`) looks exactly like a Duly made one on the
+  // Applications list and is found by the "Duly made" filter, not "Updated".
+  describe('RA-527 follow-up: a started case reads Duly made', () => {
+    const STARTED_ID = 'cccccccc-0000-0000-0000-000000000527'
+
+    test('its card shows the purple "Duly made" badge, Submitted on and the due date', async () => {
+      const { reAccreditationType } =
+        await import('#/server/work-items/re-accreditation/module.js')
+      clearWorkItemRegistry()
+      registerWorkItemType(reAccreditationType)
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: STARTED_ID,
+              typeId: 're-accreditation',
+              stateId: 'assessment-started',
+              submittedAt: '2026-01-15T10:00:00Z',
+              submittedBy: null,
+              slaState: 'OnTrack',
+              slaDueDate: '2026-04-09T00:00:00Z',
+              payload: {}
+            }
+          ],
+          totalCount: 1
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      const badgeIdx = result.indexOf(
+        `data-testid="work-item-state-tag-${STARTED_ID}"`
+      )
+      expect(badgeIdx).toBeGreaterThan(-1)
+      expect(result.slice(badgeIdx - 120, badgeIdx)).toContain(
+        'govuk-tag--purple'
+      )
+      expect(result.slice(badgeIdx, badgeIdx + 120)).toContain('Duly made')
+      expect(result).toContain(
+        'data-testid="submitted-on">15 January 2026</span>'
+      )
+      expect(result).toContain('data-testid="due-on">9 April 2026</span>')
+    })
+
+    test.each([
+      ['duly-made', ['duly-made', 'assessment-started']],
+      ['updated', ['assessment-in-progress', 'updated']]
+    ])('status=%s sends %j to the backend', async (status, stateIds) => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: `/work-items?status=${status}&filtersApplied=1`
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ stateIds })
+      )
+    })
+  })
+
   // RA-527. Regulators find work items waiting for applicant contact through
   // the Status filter. "Approved" (step 1) sits between "Queried" and
   // "Granted" and maps to its own pending-contact state id. A step 1 refusal

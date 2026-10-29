@@ -14,6 +14,8 @@ describe('#stateTagClass', () => {
   test.each([
     ['submitted', 'govuk-tag--grey'],
     ['duly-made', 'govuk-tag--purple'],
+    // RA-527 follow-up: a started case still reads "Duly made", in purple.
+    ['assessment-started', 'govuk-tag--purple'],
     ['assessment-in-progress', 'govuk-tag--blue'],
     ['awaiting-decision', 'govuk-tag--light-blue'],
     ['queried', 'govuk-tag--yellow'],
@@ -53,6 +55,14 @@ describe('#stateTagClass', () => {
     ['rejected-pending-contact', 'rejected']
   ])('%s has the same colour as %s', (pendingStateId, finalStateId) => {
     expect(stateTagClass(pendingStateId)).toBe(stateTagClass(finalStateId))
+  })
+
+  // RA-527 follow-up. A started case looks exactly like a Duly made one, and
+  // both "Updated" badges keep their own colours.
+  test('assessment-started has the same colour as duly-made', () => {
+    expect(stateTagClass('assessment-started')).toBe(stateTagClass('duly-made'))
+    expect(stateTagClass('assessment-in-progress')).toBe('govuk-tag--blue')
+    expect(stateTagClass('updated')).toBe('govuk-tag--turquoise')
   })
 
   test('only "Awaiting decision" is light blue', () => {

@@ -37,6 +37,7 @@ import {
 
 // State ids shared with the backend's `ReAccreditationType` — never renamed.
 const STATE_ASSESSMENT_IN_PROGRESS = 'assessment-in-progress'
+const STATE_ASSESSMENT_STARTED = 'assessment-started'
 const STATE_AWAITING_DECISION = 'awaiting-decision'
 
 // Shared task display name and the single detail template every current
@@ -47,6 +48,13 @@ const DETAIL_TEMPLATE_V1 = 're-accreditation/detail-v1'
 const STATES = [
   { id: 'submitted', displayName: 'Not started' },
   { id: 'duly-made', displayName: 'Duly made' },
+  // RA-527 follow-up (management-be v18). A Duly made case a regulator has
+  // started work on ("Assessment started"). It reads "Duly made", exactly
+  // like `duly-made`: starting a case is not a response to anything, so
+  // "Updated" is kept for a query response or a deadline change. Declared
+  // straight after `duly-made`, mirroring the backend, whose status sort rank
+  // is the declaration order.
+  { id: STATE_ASSESSMENT_STARTED, displayName: 'Duly made' },
   { id: STATE_ASSESSMENT_IN_PROGRESS, displayName: 'Updated' },
   { id: STATE_AWAITING_DECISION, displayName: 'Awaiting decision' },
   // RA-211 / RA-291. Deliberately NOT terminal: a queried application is
@@ -121,11 +129,17 @@ const TRANSITIONS = [
   // management-be v15 added `start-assessment` ("Assessment started") with
   // the same from/to states, this frontend switched to it, and v16 removed
   // `payment-received` from both tiers.
+  //
+  // RA-527 follow-up (management-be v18). Retargeted to `assessment-started`
+  // ("Duly made"), so starting a case no longer shows "Updated". The
+  // from-state is unchanged, so self-assign and "ensure assessment started"
+  // still start only from `duly-made`; from `assessment-started` self-assign
+  // is a plain assignment.
   {
     actionId: 'start-assessment',
     displayName: 'Assessment started',
     fromStateId: 'duly-made',
-    toStateId: STATE_ASSESSMENT_IN_PROGRESS,
+    toStateId: STATE_ASSESSMENT_STARTED,
     startsOnSelfAssign: true,
     // RA-595. Appended to the self-assign banner when the assign half lands
     // and this start does not. There is no separate start control to retry
@@ -185,6 +199,16 @@ const TRANSITIONS = [
   // from `awaiting-decision` — see `decision/eligibility.js` — precisely so
   // items already parked there when this shipped are still resolvable, but
   // that is a rescue path, not an invitation to create more.)
+  //
+  // RA-527 follow-up (management-be v18). The backend ALSO declares
+  // `submit-for-decision` from `assessment-started` (same action id, still
+  // not caller-invocable), so a determination works from a started case.
+  // As with the second `sla-extend` above, that second entry cannot be
+  // expressed here: `assertValidWorkItemModule` requires globally-unique
+  // action ids. It does not need to be: the only reader of this declaration's
+  // from-state is `decision/eligibility.js`, which also accepts the state
+  // `start-assessment` lands on (read off that transition's `toStateId`), so
+  // the Make determination CTA is offered on a started case.
   {
     actionId: 'submit-for-decision',
     displayName: 'Submit for decision',
@@ -410,7 +434,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v17',
+  templateVersion: 'v18',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -466,6 +490,10 @@ export const reAccreditationModule = {
     //      (still unreleased, so in v17) the refusal half: the non-terminal
     //      `rejected-pending-contact` state, `make-determination-rejected`
     //      and `confirm-contact-rejected`, removing the single-step `reject`.
+    // v18: RA-527 follow-up backend added the non-terminal
+    //      `assessment-started` state ("Duly made"), retargeted
+    //      `start-assessment` to it and added `submit-for-decision` from it,
+    //      so starting a case keeps it "Duly made".
     //
     // ⚠ RA-316. v10 MUST STAY REGISTERED PERMANENTLY, not just through the
     // release. The backend's snapshot migration restamps live items to v11
@@ -510,7 +538,8 @@ export const reAccreditationModule = {
       v14: DETAIL_TEMPLATE_V1,
       v15: DETAIL_TEMPLATE_V1,
       v16: DETAIL_TEMPLATE_V1,
-      v17: DETAIL_TEMPLATE_V1
+      v17: DETAIL_TEMPLATE_V1,
+      v18: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

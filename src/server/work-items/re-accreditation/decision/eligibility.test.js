@@ -72,6 +72,16 @@ describe('evaluateLogDecisionEligibility', () => {
     ).toEqual({ allowed: true })
   })
 
+  test('allows a decision from assessment-started (RA-527 follow-up: a started case still reads Duly made)', () => {
+    // management-be v18 takes `submit-for-decision` from the started state
+    // and then the decision, as it does from `assessment-in-progress`.
+    expect(
+      evaluateLogDecisionEligibility(
+        aWorkItem({ stateId: 'assessment-started' })
+      )
+    ).toEqual({ allowed: true })
+  })
+
   // RA-527: an approval awaiting applicant contact is already determined.
   test.each([
     ['submitted'],

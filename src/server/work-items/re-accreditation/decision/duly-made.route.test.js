@@ -206,16 +206,19 @@ describe('RA-595: make a determination from Duly made', () => {
       ])
     })
 
-    test.each([['assessment-in-progress'], ['awaiting-decision']])(
-      'from %s: logs the decision with no extra calls',
-      async (stateId) => {
-        const calls = recordBackendCalls(aWorkItem({ stateId }))
+    // RA-527 follow-up: a started case (`assessment-started`) still reads
+    // "Duly made"; Make determination is offered on it and logs straight away.
+    test.each([
+      ['assessment-started'],
+      ['assessment-in-progress'],
+      ['awaiting-decision']
+    ])('from %s: logs the decision with no extra calls', async (stateId) => {
+      const calls = recordBackendCalls(aWorkItem({ stateId }))
 
-        await submitDecision('approved')
+      await submitDecision('approved')
 
-        expect(calls).toEqual(['decision:approved'])
-      }
-    )
+      expect(calls).toEqual(['decision:approved'])
+    })
 
     test('a missing choice re-renders the form and starts nothing', async () => {
       const calls = recordBackendCalls(aWorkItem())
@@ -313,15 +316,22 @@ describe('RA-595: make a determination from Duly made', () => {
         'This application has been assigned to you and started. There was a problem recording this decision. Try again.'
       )
 
-      // The case is now in assessment, held by the caller.
+      // RA-527 follow-up: the case is now started (still "Duly made"), held
+      // by the caller, and the decision page still opens on it.
       calls.length = 0
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
-          stateId: 'assessment-in-progress',
+          stateId: 'assessment-started',
+          templateVersion: 'v18',
           assignedToId: TEST_STANDARD_USER.id
         })
       })
+      const reopened = await server.inject({ method: 'GET', url: DECISION_URL })
+      expect(reopened.statusCode).toBe(statusCodes.ok)
+      expect(reopened.result).toContain(
+        'Make determination for this application'
+      )
 
       await submitDecision('approved')
 

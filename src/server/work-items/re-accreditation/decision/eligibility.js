@@ -49,6 +49,13 @@
  *    submit cannot disagree, and the `duly-made` literal stays in
  *    `module.js`.
  *
+ * RA-527 follow-up adds a FOURTH, mirroring management-be v18:
+ *
+ *  - `assessment-started` — where `start-assessment` now lands. A started
+ *    case still reads "Duly made"; the backend takes `submit-for-decision`
+ *    from it and then the decision. Read off the start transition's
+ *    `toStateId`, so the literal stays in `module.js`.
+ *
  * The backend remains authoritative: it applies its own server-side gate and
  * answers 409 to a forged POST regardless of what this says.
  */
@@ -132,6 +139,14 @@ function decisionEntryStates(type) {
   const start = transitions.find((t) => t.startsOnSelfAssign === true)
   if (start?.fromStateId != null) {
     states.add(start.fromStateId)
+  }
+
+  // RA-527 follow-up. `assessment-started` — the state the start lands on, a
+  // started case that still reads "Duly made". management-be v18 declares a
+  // second `submit-for-decision` from it, which `module.js` cannot mirror
+  // (action ids are unique there), so it is read off the start's `toStateId`.
+  if (start?.toStateId != null) {
+    states.add(start.toStateId)
   }
 
   return states

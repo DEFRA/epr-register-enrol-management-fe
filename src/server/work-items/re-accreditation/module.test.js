@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v17')
+    expect(reAccreditationType.templateVersion).toBe('v18')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -35,6 +35,8 @@ describe('reAccreditationModule', () => {
     expect(labels).toMatchObject({
       submitted: 'Not started',
       'duly-made': 'Duly made',
+      // RA-527 follow-up (v18). A started case still reads "Duly made".
+      'assessment-started': 'Duly made',
       'assessment-in-progress': 'Updated',
       'awaiting-decision': 'Awaiting decision',
       queried: 'Queried',
@@ -57,6 +59,7 @@ describe('reAccreditationModule', () => {
     expect(states.rejected.isTerminal).toBe(true)
     expect(states.withdrawn.isTerminal).toBe(true)
     expect(states.submitted.isTerminal).toBeFalsy()
+    expect(states['assessment-started'].isTerminal).toBeFalsy()
     expect(states['assessment-in-progress'].isTerminal).toBeFalsy()
     expect(states['awaiting-decision'].isTerminal).toBeFalsy()
     // RA-291: a queried application is paused awaiting the operator's
@@ -95,7 +98,7 @@ describe('reAccreditationModule', () => {
   })
 
   test.each([
-    ['start-assessment', 'duly-made', 'assessment-in-progress'],
+    ['start-assessment', 'duly-made', 'assessment-started'],
     ['sla-extend', 'assessment-in-progress', 'assessment-in-progress'],
     ['submit-for-decision', 'assessment-in-progress', 'awaiting-decision'],
     // RA-527. Step 1 of an approval lands in the pending-contact state.
@@ -320,7 +323,9 @@ describe('reAccreditationModule', () => {
     ).toEqual([['start-assessment', 'duly-made']])
   })
 
-  test('start-assessment mirrors the backend v15 transition', () => {
+  // RA-527 follow-up: management-be v18 retargeted it to
+  // `assessment-started`, so starting a case keeps it "Duly made".
+  test('start-assessment mirrors the backend v18 transition', () => {
     expect(
       reAccreditationType.transitions.find(
         (t) => t.actionId === 'start-assessment'
@@ -328,8 +333,25 @@ describe('reAccreditationModule', () => {
     ).toMatchObject({
       displayName: 'Assessment started',
       fromStateId: 'duly-made',
-      toStateId: 'assessment-in-progress'
+      toStateId: 'assessment-started'
     })
+  })
+
+  // RA-527 follow-up. Mirrors the backend's guard: nothing but the start
+  // enters the started state, so no route leads back to "Duly made".
+  test('only start-assessment enters assessment-started', () => {
+    expect(
+      reAccreditationType.transitions
+        .filter((t) => t.toStateId === 'assessment-started')
+        .map((t) => t.actionId)
+    ).toEqual(['start-assessment'])
+  })
+
+  // RA-527 follow-up. Declared straight after `duly-made`, as the backend
+  // does (its status sort rank is the declaration order).
+  test('declares assessment-started straight after duly-made', () => {
+    const ids = reAccreditationType.states.map((s) => s.id)
+    expect(ids[ids.indexOf('duly-made') + 1]).toBe('assessment-started')
   })
 
   // RA-595 ("remove" step). management-be v16 no longer declares or projects
@@ -346,7 +368,9 @@ describe('reAccreditationModule', () => {
         .filter(
           (t) =>
             t.fromStateId === 'duly-made' &&
-            t.toStateId === 'assessment-in-progress'
+            ['assessment-started', 'assessment-in-progress'].includes(
+              t.toStateId
+            )
         )
         .map((t) => t.actionId)
     ).toEqual(['start-assessment'])
