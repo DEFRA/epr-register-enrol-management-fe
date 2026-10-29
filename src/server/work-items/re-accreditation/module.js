@@ -335,6 +335,17 @@ const TRANSITIONS = [
     fromStateId: 'duly-made',
     toStateId: 'queried'
   },
+  // RA-527 follow-up (management-be v18). The backend ALSO declares
+  // `query-during-assessment` from `assessment-started` (same action id,
+  // caller-invocable), so a started case can be queried. Its response and
+  // Continue review then follow the assessment route: `updated`, then
+  // `assessment-in-progress`, never back to `assessment-started`. As with
+  // the extra `sla-extend` and `submit-for-decision` above, that second entry
+  // cannot be expressed here (`assertValidWorkItemModule` requires
+  // globally-unique action ids). It does not need to be: the Query link
+  // follows the backend projection (`hasQueryAction` in
+  // `routes/work-items/query.controller.js`), which carries it on a started
+  // case.
   {
     actionId: 'query-during-assessment',
     displayName: 'Query',

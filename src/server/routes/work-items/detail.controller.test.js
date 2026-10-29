@@ -341,6 +341,48 @@ describe('#workItemDetailController', () => {
     expect(result).toContain('data-testid="log-decision-cta"')
   })
 
+  // RA-527 follow-up. A started case can be queried: management-be v18
+  // declares `query-during-assessment` from `assessment-started` too and
+  // projects it, and the Query link follows the projection.
+  test('Offers Query on a started case', async () => {
+    registerWorkItemType(reAccreditationType)
+    registerDetailTemplate(
+      're-accreditation',
+      'v18',
+      're-accreditation/detail-v1'
+    )
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        stateId: 'assessment-started',
+        templateVersion: 'v18',
+        assignedToId: 'test-standard-id',
+        assignedToName: 'Test Standard User',
+        availableActions: [
+          {
+            actionId: 'query-during-assessment',
+            displayName: 'Query',
+            fromStateId: 'assessment-started',
+            toStateId: 'queried',
+            callerInvocable: true
+          }
+        ]
+      })
+    })
+
+    const { result, statusCode } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toMatch(
+      new RegExp(
+        `<a(?=[^>]*data-testid="action-query")(?=[^>]*href="/work-items/${ID}/query")[^>]*>`
+      )
+    )
+  })
+
   // RA-196: the caption and the final breadcrumb show the user-facing
   // application reference, while the assign/tasks/audit-log routes keep using
   // the internal id.
