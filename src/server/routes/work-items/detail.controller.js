@@ -28,6 +28,7 @@ import {
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import {
   isCallerInvocable,
+  resolveSelfAssignLandingState,
   resolveSelfAssignTransition
 } from '#/server/work-items/core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
@@ -786,19 +787,6 @@ function selfAssignActionIds(type) {
 }
 
 /**
- * RA-527 follow-up. Is the item sitting in the state its type's
- * `startsOnSelfAssign` transition lands on (re-accreditation:
- * `assessment-started`)? Read off the declaration so the literal stays in
- * `module.js`.
- */
-function isInStartedState(type, workItem) {
-  const start = (type?.transitions ?? []).find(
-    (t) => t.startsOnSelfAssign === true
-  )
-  return start?.toStateId != null && start.toStateId === workItem?.stateId
-}
-
-/**
  * RA-295. Whether to offer the "Change determination deadline" link in the
  * assignment panel. The backend is NOT a backstop here:
  * SlaService.ExtendAsync validates the actor, reason, duration bounds and the
@@ -824,19 +812,21 @@ function isInStartedState(type, workItem) {
  * `assessment-in-progress`, applied only by the deadline endpoint (not
  * caller-invocable), so it is never projected. `module.js` cannot mirror that
  * second `sla-extend` (action ids are unique there), so it is read off the
- * start transition's `toStateId`, the same rule `decision/eligibility.js`
+ * start transition's `toStateId` via `core/engine.js#
+ * resolveSelfAssignLandingState`, the same helper `decision/eligibility.js`
  * uses for Make determination.
  *
  * Kept out of `decorate` so that function stays within the cognitive
  * complexity limit.
  */
 function canChangeDueDateFor(type, workItem, projectedActions) {
+  const landingStateId = resolveSelfAssignLandingState(type)
   return (
     projectedActions.some(
       (action) => action?.actionId === SLA_EXTEND_ACTION_ID
     ) ||
     resolveSelfAssignTransition(type, workItem) != null ||
-    isInStartedState(type, workItem)
+    (landingStateId != null && landingStateId === workItem?.stateId)
   )
 }
 

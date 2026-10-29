@@ -1,6 +1,11 @@
 import { describe, test, expect } from 'vitest'
 
-import { canApplyAction, isCallerInvocable, projectWorkItem } from './engine.js'
+import {
+  canApplyAction,
+  isCallerInvocable,
+  projectWorkItem,
+  resolveSelfAssignLandingState
+} from './engine.js'
 
 const sampleType = (overrides = {}) => ({
   id: 'sample',
@@ -336,5 +341,58 @@ describe('isCallerInvocable', () => {
       'withdraw-during-query',
       'query-during-assessment'
     ])
+  })
+})
+
+describe('resolveSelfAssignLandingState', () => {
+  const startType = (startOverrides = {}) =>
+    sampleType({
+      states: [
+        { id: 'submitted', displayName: 'Submitted' },
+        { id: 'started', displayName: 'Started' },
+        { id: 'approved', displayName: 'Approved', isTerminal: true }
+      ],
+      transitions: [
+        {
+          actionId: 'approve',
+          displayName: 'Approve',
+          fromStateId: 'started',
+          toStateId: 'approved'
+        },
+        {
+          actionId: 'start',
+          displayName: 'Start',
+          fromStateId: 'submitted',
+          toStateId: 'started',
+          startsOnSelfAssign: true,
+          ...startOverrides
+        }
+      ]
+    })
+
+  test('returns the toStateId of the startsOnSelfAssign transition', () => {
+    expect(resolveSelfAssignLandingState(startType())).toBe('started')
+  })
+
+  test('returns null when no transition is marked startsOnSelfAssign', () => {
+    expect(resolveSelfAssignLandingState(sampleType())).toBeNull()
+  })
+
+  test('is not fooled by a truthy-but-not-true marker', () => {
+    expect(
+      resolveSelfAssignLandingState(startType({ startsOnSelfAssign: 'yes' }))
+    ).toBeNull()
+  })
+
+  test('returns null when the marked transition has no toStateId', () => {
+    expect(
+      resolveSelfAssignLandingState(startType({ toStateId: undefined }))
+    ).toBeNull()
+  })
+
+  test('returns null for a missing type or transitions list', () => {
+    expect(resolveSelfAssignLandingState(undefined)).toBeNull()
+    expect(resolveSelfAssignLandingState(null)).toBeNull()
+    expect(resolveSelfAssignLandingState({ id: 'bare' })).toBeNull()
   })
 })

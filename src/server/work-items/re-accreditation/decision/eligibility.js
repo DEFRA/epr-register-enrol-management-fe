@@ -61,6 +61,7 @@
  */
 
 import { getWorkItemType } from '../../core/registry.js'
+import { resolveSelfAssignLandingState } from '../../core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
 export const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
@@ -144,9 +145,12 @@ function decisionEntryStates(type) {
   // RA-527 follow-up. `assessment-started` — the state the start lands on, a
   // started case that still reads "Duly made". management-be v18 declares a
   // second `submit-for-decision` from it, which `module.js` cannot mirror
-  // (action ids are unique there), so it is read off the start's `toStateId`.
-  if (start?.toStateId != null) {
-    states.add(start.toStateId)
+  // (action ids are unique there), so it is read off the start's `toStateId`
+  // by `core/engine.js#resolveSelfAssignLandingState`, the same helper behind
+  // the change-deadline link.
+  const landingStateId = resolveSelfAssignLandingState(type)
+  if (landingStateId != null) {
+    states.add(landingStateId)
   }
 
   return states

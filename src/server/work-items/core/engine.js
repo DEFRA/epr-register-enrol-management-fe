@@ -145,6 +145,33 @@ export function resolveSelfAssignTransition(type, workItem) {
 }
 
 /**
+ * RA-527 follow-up. Resolve the state a type's `startsOnSelfAssign`
+ * transition LANDS on (re-accreditation: `assessment-started`, a started case
+ * that still reads "Duly made").
+ *
+ * The backend declares a second copy of some transitions from that state
+ * (management-be v18: `submit-for-decision`, `sla-extend`,
+ * `query-during-assessment`), which a module cannot mirror because
+ * `assertValidWorkItemModule` requires unique action ids. Callers that need
+ * to treat a started case like the backend does key off this state instead,
+ * read off the declaration so the literal stays in the module.
+ *
+ * Unlike `resolveSelfAssignTransition` this does not depend on the item's
+ * current state: it answers "where does the start go", not "does self-assign
+ * start this item".
+ *
+ * @param {object} type Work item type declaration (`module.type`).
+ * @returns {string|null} The landing `toStateId`, or `null` for an
+ *   unregistered type or one that marks no such transition.
+ */
+export function resolveSelfAssignLandingState(type) {
+  const start = (type?.transitions ?? []).find(
+    (t) => t.startsOnSelfAssign === true
+  )
+  return start?.toStateId ?? null
+}
+
+/**
  * Decide whether an action would be allowed for a work item right now.
  * Returns `{ allowed: true }` or `{ allowed: false, reason }` so callers can
  * surface the failure in a form.
