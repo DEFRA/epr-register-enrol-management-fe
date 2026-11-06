@@ -301,7 +301,7 @@ Before your first scan:
 4. **Open a PR** for your branch (a draft is fine). SonarCloud judges new code against the PR's
    base branch, so the scan needs one.
 
-It needs `git`, `gh` (signed in), `curl`, `jq` and npm, and nvm with the `.nvmrc` Node version installed. The scanner downloads its own Java
+It needs `git`, `gh` (signed in), `curl`, `jq` and npm with dependencies installed (`npm ci`), and nvm with the `.nvmrc` Node version. The scanner downloads its own Java
 runtime. A local scan replaces the PR's SonarCloud result, and its `SonarCloud Code Analysis`
 check on GitHub, until CI scans again. Tokens expire on the date set when you created them;
 `--check-token` then says the token is not valid — generate a new one and save it the same way.
