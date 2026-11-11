@@ -2,6 +2,7 @@ import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
 import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
+import { isInYearChangeType } from '#/server/work-items/core/categories.js'
 // Single definition of the "no value" glyph, shared with the application
 // summary rather than redeclared here.
 import { EM_DASH } from './application-summary.js'
@@ -119,8 +120,27 @@ export function resolveOrganisationId(payload) {
 export function buildCaseHeader({ workItem, assignment = null }) {
   const payload = workItem?.payload ?? {}
   const payment = formatPayment(payload)
-
-  return {
+  const status = {
+    key: 'status',
+    label: 'Status',
+    value: workItem?.stateDisplayName || workItem?.stateId || EM_DASH,
+    // RA-324 (AC08). Status keeps the shared state-badge colour so the
+    // case header and the Applications list colour a given status
+    // identically. `stateTagClass` is set by the detail controller's
+    // decorator; when it is absent (a caller that has not decorated the
+    // work item) the value simply renders as text.
+    tagClass: workItem?.stateTagClass ?? null
+  }
+  const assignedTo = {
+    key: 'assigned-to',
+    label: 'Assigned to',
+    value:
+      assignment?.assignedToName ??
+      workItem?.assignedToName ??
+      workItem?.assignedToId ??
+      UNASSIGNED
+  }
+  const header = {
     backHref: BACK_HREF,
     backText: BACK_TEXT,
     // RA-249. The header's reference line is navigational, so it may fall
@@ -136,26 +156,8 @@ export function buildCaseHeader({ workItem, assignment = null }) {
           ? materialLabel(payload.material, payload.glassRecyclingProcess)
           : EM_DASH
       },
-      {
-        key: 'status',
-        label: 'Status',
-        value: workItem?.stateDisplayName || workItem?.stateId || EM_DASH,
-        // RA-324 (AC08). Status keeps the shared state-badge colour so the
-        // case header and the Applications list colour a given status
-        // identically. `stateTagClass` is set by the detail controller's
-        // decorator; when it is absent (a caller that has not decorated the
-        // work item) the value simply renders as text.
-        tagClass: workItem?.stateTagClass ?? null
-      },
-      {
-        key: 'assigned-to',
-        label: 'Assigned to',
-        value:
-          assignment?.assignedToName ??
-          workItem?.assignedToName ??
-          workItem?.assignedToId ??
-          UNASSIGNED
-      },
+      status,
+      assignedTo,
       {
         key: 'due-on',
         label: 'Due date',
@@ -190,6 +192,23 @@ export function buildCaseHeader({ workItem, assignment = null }) {
       }
     ]
   }
+
+  // RA-739. An in-year change header carries only the request type, status
+  // and assigned to (the Figma application header leads with the request
+  // type). RA-495 adds the rest of its header with the full detail page.
+  if (isInYearChangeType({ category: workItem?.typeCategory })) {
+    header.meta = [
+      {
+        key: 'request-type',
+        label: 'Request type',
+        value: workItem.typeDisplayName || EM_DASH
+      },
+      status,
+      assignedTo
+    ]
+  }
+
+  return header
 }
 
 // Single source of truth for the tab's key (SonarCloud S1192 — the string

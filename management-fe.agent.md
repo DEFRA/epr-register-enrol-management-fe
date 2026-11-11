@@ -159,7 +159,9 @@ yourself fighting them, stop and ask the user.
 - **`type` is declarative, not behavioural.** No I/O, no DI deps inside
   `getTasksForState` — only cheap pure logic. Co-locate the
   state / transition / task declarations in `module.js` so the rules read
-  at a glance.
+  at a glance. Exception (RA-739): a type that follows a shared workflow
+  takes its states and transitions from it, e.g.
+  `core/standard-workflow.js` (re-accreditation and add-ORS).
 - **`templateVersion` is mandatory** on every module's `type`. The
   backend stamps the value onto each work item at submission; the
   frontend resolves the matching detail template via

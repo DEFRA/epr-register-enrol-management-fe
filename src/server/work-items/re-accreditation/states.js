@@ -6,17 +6,14 @@
  * `module.js` declares its STATES from these same constants.
  */
 
-/**
- * Step 1 of the two-step determination: approved and the accreditation
- * number minted, but the applicant not yet contacted. Not terminal.
- */
-export const STATE_APPROVED_PENDING_CONTACT = 'approved-pending-contact'
+import {
+  STATE_APPROVED_PENDING_CONTACT,
+  STATE_REJECTED_PENDING_CONTACT
+} from '../core/standard-workflow.js'
 
-/**
- * Step 1 of the two-step determination for a refusal: refused (no number is
- * minted), but the applicant not yet contacted. Not terminal.
- */
-export const STATE_REJECTED_PENDING_CONTACT = 'rejected-pending-contact'
+// RA-739. Declared by the shared Standard workflow; re-exported so
+// re-accreditation code keeps naming them from here.
+export { STATE_APPROVED_PENDING_CONTACT, STATE_REJECTED_PENDING_CONTACT }
 
 /**
  * The states in which a determination has been made (step 1) but not yet

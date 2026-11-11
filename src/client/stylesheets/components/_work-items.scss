@@ -89,6 +89,37 @@
   font-weight: bold;
 }
 
+// RA-739. In-year change card: a "Date submitted | SUB-… (N requests)" line
+// above the reference link, then the organisation, site, request type and
+// Assigned to lines, per the Figma Applications list.
+.app-application-card__submission {
+  display: flex;
+  flex-wrap: wrap;
+  gap: govuk-spacing(1) 0;
+  margin-bottom: govuk-spacing(1);
+  color: $govuk-secondary-text-colour;
+  font-size: 0.875rem;
+}
+
+.app-application-card__meta--divided {
+  margin-left: govuk-spacing(2);
+  padding-left: govuk-spacing(2);
+  border-left: 1px solid $govuk-border-colour;
+}
+
+.app-application-card--in-year-change .app-application-card__org {
+  margin-bottom: govuk-spacing(1);
+  color: $govuk-text-colour;
+}
+
+.app-application-card__site {
+  margin-bottom: govuk-spacing(3);
+}
+
+.app-application-card__line {
+  margin-bottom: govuk-spacing(1);
+}
+
 .app-application-card__archived {
   margin-top: govuk-spacing(2);
   margin-bottom: 0;

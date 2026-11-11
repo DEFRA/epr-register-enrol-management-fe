@@ -890,6 +890,9 @@ function decorate(workItem) {
   return {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
+    // RA-739. The type's category; the case header adds "Request type" for
+    // an in-year change.
+    typeCategory: type?.category ?? null,
     stateDisplayName,
     // RA-317. Drop withdraw here too, at the SAME source the RA-364
     // non-invocable / sla-extend filtering runs, so it is gone BEFORE the

@@ -1,0 +1,14 @@
+{# ------------------------------------------------------------------- #}
+{# Add-ORS detail template (v1) — RA-739.                               #}
+{#                                                                      #}
+{# Header-only: the layout renders the case header (reference,          #}
+{# organisation, request type, status, assigned to) from `caseHeader`.  #}
+{# No tabs, panels or actions yet. RA-495 adds the request summary.     #}
+{# `data-state-id` carries the raw state id for the journey tests.      #}
+{# ------------------------------------------------------------------- #}
+{% extends 'layouts/page.njk' %}
+
+{% block content %}
+  <div data-testid="add-overseas-site-detail"
+       data-state-id="{{ workItem.stateId }}"></div>
+{% endblock %}
