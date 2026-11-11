@@ -1,6 +1,9 @@
 import { getWorkItems } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
-import { isInYearChangeType } from '#/server/work-items/core/categories.js'
+import {
+  IN_YEAR_CHANGE_CATEGORY,
+  isInYearChangeType
+} from '#/server/work-items/core/categories.js'
 import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
 import { stateTagClass as resolveStateTagClass } from '#/server/work-items/core/state-badge.js'
@@ -163,8 +166,14 @@ const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
 // backend type yet, so they are given not-yet-existing typeId tokens and
 // correctly return zero results via the backend's `builder.In(w => w.TypeId,
 // typeIds)` until those work item types exist.
+//
+// RA-739. "In-year change" is a CATEGORY, not a typeId: it is sent as
+// `category=in-year-change` and management-be expands it to every type
+// registered with that category (add-ORS now, update ORS / tonnage band
+// upgrade later), unioned with the typeIds.
 const APPLICATION_TYPE_FILTER_OPTIONS = [
   { value: RE_ACCREDITATION_TYPE_ID, text: 'Re-accreditation' },
+  { value: IN_YEAR_CHANGE_CATEGORY, text: 'In-year change', isCategory: true },
   { value: 'accreditation', text: 'Accreditation' },
   { value: 'registration-application', text: 'Registration application' },
   {
@@ -177,6 +186,11 @@ const ALLOWED_APPLICATION_TYPE_IDS = new Set(
 )
 const APPLICATION_TYPE_LABEL = new Map(
   APPLICATION_TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text])
+)
+const APPLICATION_TYPE_CATEGORIES = new Set(
+  APPLICATION_TYPE_FILTER_OPTIONS.filter((o) => o.isCategory).map(
+    (o) => o.value
+  )
 )
 
 // RA-324 phase-2. The "Status" filter groups the backend state ids under the
@@ -362,9 +376,16 @@ export const workItemListController = {
       typeIds: [
         ...new Set([
           ...toBackendTypeIds(filters.typeIds),
-          ...filters.applicationTypeIds
+          ...filters.applicationTypeIds.filter(
+            (id) => !APPLICATION_TYPE_CATEGORIES.has(id)
+          )
         ])
       ],
+      // RA-739. Category options ("In-year change") are expanded to typeIds
+      // by the backend and unioned with `typeIds` above.
+      categories: filters.applicationTypeIds.filter((id) =>
+        APPLICATION_TYPE_CATEGORIES.has(id)
+      ),
       stateIds: filters.stateIds,
       // RA-299 AC05. `filters.materials` holds the UI-facing filter values
       // (e.g. the split 'glass-remelt' / 'glass-other'); translate to the

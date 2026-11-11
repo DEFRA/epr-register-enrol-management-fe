@@ -167,6 +167,7 @@ export async function getBackendHealth({
  * Accepts the filter / search / pagination shape that the backend's
  * `GET /work-items` endpoint expects:
  *  - `typeIds` / `stateIds` — string arrays, repeated as `typeId=` / `stateId=`
+ *  - `categories`           — string array, repeated as `category=` (RA-739)
  *  - `wasteProcessingTypes` — string array, repeated as `wasteProcessingType=`
  *    (RA-412 — matches `payload.wasteProcessingType`, e.g. Exporter)
  *  - `search`               — free-text needle
@@ -181,6 +182,7 @@ export async function getBackendHealth({
  */
 export async function getWorkItems({
   typeIds,
+  categories,
   stateIds,
   nations,
   wasteProcessingTypes,
@@ -203,6 +205,7 @@ export async function getWorkItems({
 } = {}) {
   const url = buildWorkItemsUrl(baseUrl, {
     typeIds,
+    categories,
     stateIds,
     nations,
     wasteProcessingTypes,
@@ -287,6 +290,7 @@ function buildWorkItemsUrl(
   baseUrl,
   {
     typeIds,
+    categories,
     stateIds,
     nations,
     wasteProcessingTypes,
@@ -308,6 +312,9 @@ function buildWorkItemsUrl(
   const params = new URLSearchParams()
 
   appendEach(params, 'typeId', typeIds)
+  // RA-739. Expanded by management-be to every typeId in the category and
+  // unioned with typeId.
+  appendEach(params, 'category', categories)
   appendEach(params, 'stateId', stateIds)
   appendEach(params, 'nation', nations)
   // RA-412. Repeated values, matched against `payload.wasteProcessingType`

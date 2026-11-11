@@ -2770,6 +2770,140 @@ describe('#workItemListController', () => {
   })
 
   // ---------------------------------------------------------------- //
+  // RA-739 — "In-year change" application type, sent as a category   //
+  // ---------------------------------------------------------------- //
+  describe('RA-739 in-year change application type', () => {
+    test('Offers "In-year change" straight after "Re-accreditation"', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      const section = result.slice(
+        result.indexOf('data-testid="filter-section-application-type"'),
+        result.indexOf('data-testid="filter-section-status"')
+      )
+      const values = [
+        ...section.matchAll(/name="applicationType"[^>]*value="([^"]+)"/g)
+      ].map((m) => m[1])
+      expect(values.slice(0, 2)).toEqual(['re-accreditation', 'in-year-change'])
+      expect(section).toContain('In-year change')
+    })
+
+    test('Sends "In-year change" to the backend as a category, not a typeId', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          typeIds: [],
+          categories: ['in-year-change']
+        })
+      )
+    })
+
+    test('Combines with "Re-accreditation" as a union of typeId and category', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=re-accreditation&applicationType=in-year-change&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          typeIds: ['re-accreditation'],
+          categories: ['in-year-change']
+        })
+      )
+    })
+
+    test('Sends no categories when "In-year change" is not selected', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=re-accreditation&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ categories: [] })
+      )
+    })
+
+    test('Keeps the other filters alongside it', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&material=plastic&nation=England&organisation=Acme&sort=organisation&page=2&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          categories: ['in-year-change'],
+          materials: ['plastic'],
+          nations: ['England'],
+          organisation: 'Acme',
+          sort: 'organisation',
+          page: 2
+        })
+      )
+    })
+
+    test('Shows a removable chip, ticks the option and counts the section', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&material=plastic&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">In-year change</span>'
+      )
+      expect(result).toContain(
+        'href="/work-items?material=plastic&amp;filtersApplied=1"'
+      )
+      expect(result).toMatch(
+        /name="applicationType"[^>]*value="in-year-change"[^>]*checked/
+      )
+      const section = result.slice(
+        result.indexOf('data-testid="filter-section-application-type"'),
+        result.indexOf('data-testid="filter-section-status"')
+      )
+      expect(section).toContain('Application type (1 selected)')
+    })
+
+    test('Is restored from the session on a bare landing', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&filtersApplied=1'
+      })
+      const cookie = [].concat(applied.headers['set-cookie'] ?? []).join('; ')
+
+      getWorkItems.mockClear()
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ categories: ['in-year-change'] })
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
   // RA-299 — Material: split "Glass" filter (AC05)                    //
   // ---------------------------------------------------------------- //
   describe('RA-299 material glass split', () => {
