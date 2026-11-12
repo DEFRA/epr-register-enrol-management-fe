@@ -1,6 +1,7 @@
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { resolveSelfAssignLandingState } from '#/server/work-items/core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { isQueryActionId } from './generic-route-action-ids.js'
 import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { DULY_MAKE_ACTION_ID } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
 
@@ -31,17 +32,6 @@ export function isContinueReviewState(stateId) {
       t.actionId?.startsWith(CONTINUE_REVIEW_ACTION_PREFIX) &&
       t.fromStateId === stateId
   )
-}
-
-/**
- * Is this the id of a query transition — `query` or `query-<something>`?
- * (RA-291.) Re-accreditation declares four, `query-during-*`.
- */
-export function isQueryActionId(actionId) {
-  if (typeof actionId !== 'string') {
-    return false
-  }
-  return actionId === 'query' || actionId.startsWith('query-')
 }
 
 /**
@@ -101,31 +91,34 @@ export function isQueryState(stateId) {
 const logger = createLogger()
 
 /**
- * Should the detail page offer the Query link for this raw backend work
- * item? (RA-000.)
+ * Can this raw backend work item be queried? (RA-000.)
  *
+ * The one gate behind both the detail page's Query link and
+ * `GET /work-items/{id}/query`, so the link and the page cannot disagree.
  * Read off the module's `query-during-*` declarations via `isQueryState`,
  * because the backend no longer projects those non-caller-invocable
- * transitions into `availableActions`. `isQueryState` answers for the
- * re-accreditation type only, so this repeats the type check GET /query
- * makes. A missing `stateId` is a broken backend response: logged at Error,
- * and no link.
+ * transitions into `availableActions`.
  *
  * @param {object} workItem The untouched `getWorkItem` DTO.
  * @param {{ route: string }} context The route that read it, for the log.
+ * @returns {'ok' | 'not-queryable' | 'no-state'}
+ *   - `not-queryable` for another type (`isQueryState` answers for
+ *     re-accreditation only) or a state with no query transition.
+ *   - `no-state` when the backend returned a re-accreditation item with no
+ *     `stateId`: a broken upstream response, logged here at Error.
  */
-export function canQueryWorkItem(workItem, { route }) {
+export function evaluateQueryEligibility(workItem, { route }) {
   if (workItem?.typeId !== RE_ACCREDITATION_TYPE_ID) {
-    return false
+    return 'not-queryable'
   }
   if (workItem.stateId == null) {
     logger.error(
       { workItemId: workItem.id, route },
-      'Work item from management-be has no stateId; Query link not offered'
+      'Work item from management-be has no stateId; cannot decide whether it can be queried'
     )
-    return false
+    return 'no-state'
   }
-  return isQueryState(workItem.stateId)
+  return isQueryState(workItem.stateId) ? 'ok' : 'not-queryable'
 }
 
 /**

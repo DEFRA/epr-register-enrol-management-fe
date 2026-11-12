@@ -27,6 +27,7 @@ import {
   makeSubmitRecyclingOperationsEditController
 } from './recycling-operations-edit.controller.js'
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
+import { applyActionParamsValidation } from './generic-route-action-ids.js'
 
 // The single content type every form on these pages posts as (all forms are
 // plain HTML forms with no JavaScript enhancement).
@@ -156,7 +157,13 @@ export const workItems = {
         {
           method: 'POST',
           path: '/work-items/{id}/actions/{actionId}',
-          options: requireStandard,
+          // RA-000. `actionId` must be lower-case kebab, so the withdraw /
+          // query / resume prefix checks cannot be dodged by case (the
+          // backend matches action ids case-insensitively).
+          options: {
+            ...requireStandard,
+            validate: applyActionParamsValidation
+          },
           ...makeApplyActionController()
         },
         // RA-317. The withdraw confirmation interstitial (RA-188) GET/POST

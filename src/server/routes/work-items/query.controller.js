@@ -25,8 +25,7 @@ import {
 } from './query.schema.js'
 import { createQueryService } from './query.service.js'
 import { isExporterApplication } from './application-summary.js'
-import { isQueryState } from './re-accreditation-cta.js'
-import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/decision/eligibility.js'
+import { evaluateQueryEligibility } from './re-accreditation-cta.js'
 
 const VIEW_PATH = 'work-items/query'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -168,24 +167,16 @@ export function makeShowQueryController() {
       }
 
       const workItem = loaded.workItem
-      // RA-000. A work item without a state is a broken backend response,
-      // not an ineligible item: log it and show the unavailable page rather
-      // than the ordinary "cannot be queried" redirect.
-      if (workItem.stateId == null) {
-        logger.error(
-          { workItemId: id, route: request.route.path },
-          'Work item from management-be has no stateId; cannot decide whether it can be queried'
-        )
+      // RA-000. The same gate as the detail page's Query link. A work item
+      // with no state is a broken backend response (already logged at
+      // Error): the unavailable page, not the "cannot be queried" redirect.
+      const eligibility = evaluateQueryEligibility(workItem, {
+        route: request.route.path
+      })
+      if (eligibility === 'no-state') {
         return unavailable(h, id, 'The work item has no state.')
       }
-      // RA-000. Read off the module declaration, not `availableActions`: the
-      // backend no longer projects the non-caller-invocable `query-during-*`
-      // transitions. Only re-accreditation can be queried (the query service
-      // posts to its type-specific endpoint).
-      if (
-        workItem.typeId !== RE_ACCREDITATION_TYPE_ID ||
-        !isQueryState(workItem.stateId)
-      ) {
+      if (eligibility !== 'ok') {
         flashBanner(request, {
           type: 'error',
           text: 'This application cannot be queried in its current state.'

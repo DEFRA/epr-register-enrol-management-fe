@@ -23,7 +23,7 @@ import {
 } from '#/server/work-items/re-accreditation/states.js'
 import {
   isContinueReviewState,
-  canQueryWorkItem,
+  evaluateQueryEligibility,
   isPreDulyMadeWaypoint
 } from './re-accreditation-cta.js'
 import {
@@ -79,7 +79,13 @@ export const workItemDetailController = {
 }
 
 /**
- * Apply a named action. Forwards straight to the backend.
+ * Apply a named action. Forwards straight to the backend, except for three
+ * whole action categories refused here by id prefix — withdraw (RA-317),
+ * query and resume (RA-000); see `generic-route-action-ids.js`. Those are
+ * refused because Case Management never applies them through this route,
+ * not because of the `callerInvocable` flag, and the route's params
+ * validation requires a lower-case kebab `actionId` so the prefix checks
+ * cannot be dodged by case. The rest of this note is about every OTHER id.
  *
  * ⚠ THIS HANDLER DELIBERATELY DOES NOT CHECK WHETHER THE ACTION IS ALLOWED,
  * and adding such a check here would be a real regression. Reading this in
@@ -606,7 +612,7 @@ async function loadPriorYear({ workItem, id, user }) {
 //    This is not a task feature and must keep working — it is the only path
 //    out of `updated`.
 //  - `canQuery` (RA-000) — whether the Query link renders. Read off the
-//    module's `query-during-*` declarations (`canQueryWorkItem`), because the
+//    module's `query-during-*` declarations (`evaluateQueryEligibility`), because the
 //    backend does not project those non-caller-invocable transitions. The
 //    query endpoint remains authoritative.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
@@ -715,8 +721,8 @@ function applyReAccreditationViewModel({ workItem, source = workItem, route }) {
     canChangePaymentDate,
     changePaymentDateHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/change-payment-date`,
     canContinueReview,
-    // RA-000. The Query link — see `canQueryWorkItem`.
-    canQuery: canQueryWorkItem(source, { route }),
+    // RA-000. The Query link — see `evaluateQueryEligibility`.
+    canQuery: evaluateQueryEligibility(source, { route }) === 'ok',
     continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
     isReadOnlyState,
     stateTagClasses,

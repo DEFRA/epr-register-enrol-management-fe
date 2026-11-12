@@ -767,6 +767,46 @@ describe('#workItemDetailController', () => {
     }
   )
 
+  // RA-000. management-be matches action ids case-insensitively, so a
+  // mixed-case id must not slip past the prefix checks. The params
+  // validation refuses anything that is not lower-case kebab with the 400
+  // error page and an Error log, before the handler or the backend runs.
+  test.each([
+    'Withdraw',
+    'WITHDRAW-during-assessment',
+    'Query-During-Assessment',
+    'Resume-during-duly-made',
+    'sla_extend',
+    'sla-extend-'
+  ])(
+    'POST action refuses the malformed %s id without calling the backend',
+    async (actionId) => {
+      const errorSpy = vi.spyOn(createLogger(), 'error')
+
+      try {
+        const { statusCode, result } = await injectWithCrumb(server, {
+          method: 'POST',
+          url: `/work-items/${ID}/actions/${actionId}`
+        })
+
+        expect(statusCode).toBe(statusCodes.badRequest)
+        expect(result).toEqual(expect.stringContaining('Bad Request'))
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+        expect(getWorkItem).not.toHaveBeenCalled()
+        expect(errorSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            workItemId: ID,
+            actionId,
+            route: '/work-items/{id}/actions/{actionId}'
+          }),
+          'Rejected a malformed action id on the generic apply-action route'
+        )
+      } finally {
+        errorSpy.mockRestore()
+      }
+    }
+  )
+
   // RA-000. Every other id is still forwarded: the backend's guard stays
   // authoritative for it. Ids that only resemble a rejected category are
   // not caught by the prefix rule.

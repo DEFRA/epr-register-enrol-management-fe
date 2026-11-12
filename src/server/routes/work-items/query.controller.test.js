@@ -15,7 +15,8 @@ import {
   REASON_TOO_LONG_MESSAGE,
   SELECT_SECTIONS_MESSAGE
 } from './query.schema.js'
-import { isQueryActionId, isQueryState } from './re-accreditation-cta.js'
+import { isQueryState } from './re-accreditation-cta.js'
+import { isQueryActionId } from './generic-route-action-ids.js'
 import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
@@ -284,7 +285,7 @@ describe('RA-291 Query link on the work item detail page', () => {
       )
       expect(errorSpy).toHaveBeenCalledWith(
         { workItemId: ID, route: '/work-items/{id}' },
-        'Work item from management-be has no stateId; Query link not offered'
+        'Work item from management-be has no stateId; cannot decide whether it can be queried'
       )
     } finally {
       errorSpy.mockRestore()

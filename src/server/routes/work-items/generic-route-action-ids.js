@@ -1,68 +1,87 @@
 /**
- * The action-id categories the generic
- * `POST /work-items/{id}/actions/{actionId}` route never forwards to the
- * backend (RA-317, RA-000). Used by `makeApplyActionController` to reject
- * them and by `decorate` to strip withdraw from `availableActions`.
+ * The action ids the generic `POST /work-items/{id}/actions/{actionId}`
+ * route never forwards to the backend (RA-317, RA-000), and the params
+ * validation that keeps those checks sound.
+ *
+ * Each refused id is a whole action CATEGORY with no generic-route use in
+ * Case Management. Every other id is forwarded and the backend's own guard
+ * stays authoritative for it (see the docstring above
+ * `makeApplyActionController` in `detail.controller.js`). Refusing these is
+ * not moving an authorisation decision into this tier, because nothing in
+ * Case Management legitimately applies them here:
+ *   - withdraw (RA-317): an OPERATOR action. `decorate` also strips
+ *     `withdraw`/`withdraw-*` from `availableActions`, so no withdraw
+ *     affordance renders and a withdraw-only state falls through to the
+ *     "No actions available" empty state.
+ *   - resume (RA-000): the four `resume-during-*` transitions are applied by
+ *     management-be when the operator resubmits a queried application.
+ *   - query (RA-000): Case Management queries ONLY through
+ *     `POST /work-items/{id}/query`, whose backend query service
+ *     self-assigns, stamps `currentQuery` and writes the
+ *     `application-queried` audit entry. A `query-*` id applied generically
+ *     skips all three, and the operator push then sends an empty or a
+ *     previous query.
  */
-import { isQueryActionId } from './re-accreditation-cta.js'
+import Boom from '@hapi/boom'
+import Joi from 'joi'
 
-// RA-317. Withdraw is an OPERATOR action; Case Management must never show it
-// or apply it, in any state. This helper backs both halves of that:
-//   1. `decorate` strips `withdraw`/`withdraw-*` from `availableActions`, so
-//      no withdraw affordance ever renders (and a withdraw-only state falls
-//      through to the honest "No actions available" empty state).
-//   2. `makeApplyActionController` rejects the same ids before the backend is
-//      called, so a crafted POST that bypasses the UI cannot withdraw.
-// Unlike every OTHER action id (which the apply-action route deliberately
-// forwards to the backend as authoritative — see its docstring in
-// `detail.controller.js`), this is not moving an authorisation decision into
-// the wrong tier: the whole
-// ACTION CATEGORY is absent from the Case Management service, so refusing it
-// here is the correct place.
-// Kept as a local helper rather than importing the now-deleted
-// withdraw.service.js, so the removed Case Management service withdraw
-// journey leaves no dead code.
-const WITHDRAW_ACTION_PREFIX = 'withdraw'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
+
+const logger = createLogger()
+
+// Every action id is lower-case kebab. management-be resolves action ids
+// case-insensitively, so without this a `Withdraw` or `Query-During-Decision`
+// would slip past the case-sensitive prefix checks below and be applied.
+const ACTION_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
+
+/** `prefix` itself, or `prefix-<anything>`. */
+function hasActionIdPrefix(actionId, prefix) {
+  return (
+    typeof actionId === 'string' &&
+    (actionId === prefix || actionId.startsWith(`${prefix}-`))
+  )
+}
 
 export function isWithdrawActionId(actionId) {
-  return (
-    typeof actionId === 'string' &&
-    (actionId === WITHDRAW_ACTION_PREFIX ||
-      actionId.startsWith(`${WITHDRAW_ACTION_PREFIX}-`))
-  )
+  return hasActionIdPrefix(actionId, 'withdraw')
 }
 
-// RA-000. Resume is, like withdraw, an OPERATOR action: the four
-// `resume-during-*` transitions are applied by management-be when the
-// operator resubmits a queried application, and no Case Management journey
-// applies them. Rejected on the generic route for the same reason withdraw is.
-const RESUME_ACTION_PREFIX = 'resume'
-
-function isResumeActionId(actionId) {
-  return (
-    typeof actionId === 'string' &&
-    (actionId === RESUME_ACTION_PREFIX ||
-      actionId.startsWith(`${RESUME_ACTION_PREFIX}-`))
-  )
+export function isQueryActionId(actionId) {
+  return hasActionIdPrefix(actionId, 'query')
 }
 
-// RA-000. The action ids the generic apply-action route never forwards.
-// Each is a whole action CATEGORY with no generic-route use in Case
-// Management, so — per the RA-317 note above — refusing it here does not
-// move an authorisation decision into this tier:
-//   - withdraw / resume: operator actions, absent from Case Management.
-//   - query: Case Management queries ONLY through `POST /work-items/{id}/query`
-//     (query.controller.js), whose backend query service self-assigns,
-//     stamps `currentQuery` and writes the `application-queried` audit
-//     entry. A `query-*` id applied generically skips all three, and the
-//     operator push then sends an empty or a previous query.
-// Every other id is still forwarded; the backend's own guard stays
-// authoritative for it (see the docstring above `makeApplyActionController` in
-// `detail.controller.js`).
+export function isResumeActionId(actionId) {
+  return hasActionIdPrefix(actionId, 'resume')
+}
+
 export function isGenericRouteRejectedActionId(actionId) {
   return (
     isWithdrawActionId(actionId) ||
     isQueryActionId(actionId) ||
     isResumeActionId(actionId)
   )
+}
+
+/**
+ * Route `options.validate` for the generic apply-action route. An action id
+ * that is not lower-case kebab is refused before the handler runs: logged at
+ * Error and answered with the generic 400 error page.
+ */
+export const applyActionParamsValidation = {
+  params: Joi.object({
+    id: Joi.string().required(),
+    actionId: Joi.string().pattern(ACTION_ID_PATTERN).required()
+  }),
+  failAction(request, _h, err) {
+    logger.error(
+      {
+        workItemId: request.params.id,
+        actionId: request.params.actionId,
+        route: request.route.path,
+        reason: err.message
+      },
+      'Rejected a malformed action id on the generic apply-action route'
+    )
+    throw Boom.badRequest('Invalid action id')
+  }
 }
