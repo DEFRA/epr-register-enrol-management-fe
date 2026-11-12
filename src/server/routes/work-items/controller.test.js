@@ -1,4 +1,5 @@
 import { vi, beforeEach, afterEach } from 'vitest'
+import * as cheerio from 'cheerio'
 
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
@@ -281,10 +282,10 @@ describe('#workItemListController', () => {
     expect(result).not.toContain('app-work-items__table-wrapper')
   })
 
-  // RA-324 phase-2, re-ordered by RA-370: the "{Org} ({Org ID})" line now
-  // precedes the "{Material} reaccreditation ({Applicant type})" title line,
-  // so material leads the title and applicant type follows it.
-  test('Renders the card title, applicant type, material and org line', async () => {
+  // RA-324 phase-2, re-ordered by RA-370. RA-739 merges the org line and the
+  // material/applicant-type title into one small-text line,
+  // "{Org} ({Org ID}): {Material} ({Applicant type})".
+  test('Renders the org, material and applicant type on one line', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
@@ -316,7 +317,7 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    expect(result).toContain('data-testid="application-card-title"')
+    expect(result).not.toContain('data-testid="application-card-title"')
     expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
     // Card shows the material DISPLAY LABEL, not the raw token.
     expect(result).toContain('data-testid="material">Plastic</span>')
@@ -324,18 +325,13 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="application-org"')
     expect(result).toContain('data-testid="org-name">Acme Recycling</span>')
     expect(result).toContain('data-testid="org-id">424242</span>')
-    // RA-370. The org line comes BEFORE the material/applicant-type title,
-    // and within the title material comes before applicant type.
-    expect(result.indexOf('data-testid="application-org"')).toBeLessThan(
-      result.indexOf('data-testid="application-card-title"')
+    const $ = cheerio.load(result)
+    const line = $('[data-testid="application-org"]')
+    expect(line.text().replace(/\s+/g, ' ').trim()).toBe(
+      'Acme Recycling (424242): Plastic (Reprocessor)'
     )
-    expect(result.indexOf('data-testid="material"')).toBeLessThan(
-      result.indexOf('data-testid="applicant-type"')
-    )
-    // RA-324 prototype fix: the title is normal weight, not bold.
-    expect(result).not.toContain(
-      'govuk-!-font-weight-bold app-application-card__title'
-    )
+    // The design's slightly smaller text.
+    expect(line.hasClass('govuk-body-s')).toBe(true)
   })
 
   // RA-412. The applicant-type label is read from the real
@@ -782,13 +778,13 @@ describe('#workItemListController', () => {
     // The clock is running, so Due on renders too — the two dates are gated
     // independently and are NOT mutually exclusive.
     expect(result).toContain('data-testid="due-on">10 February 2026</span>')
-    // Footer order stays Submitted on -> Assigned to -> Due on even when all
+    // RA-739. Footer order is Submitted on -> Due on -> Assigned to when all
     // three render.
     expect(result.indexOf('data-testid="submitted-on"')).toBeLessThan(
-      result.indexOf('data-testid="assigned-to"')
-    )
-    expect(result.indexOf('data-testid="assigned-to"')).toBeLessThan(
       result.indexOf('data-testid="due-on"')
+    )
+    expect(result.indexOf('data-testid="due-on"')).toBeLessThan(
+      result.indexOf('data-testid="assigned-to"')
     )
   })
 
@@ -1032,9 +1028,10 @@ describe('#workItemListController', () => {
 
     const order = [
       'data-testid="work-item-link-aaaaaaaa-0000-0000-0000-000000000006"',
+      // RA-739: the registration number moved above the organisation line.
+      'data-testid="registration-number"',
       'data-testid="org-name"',
       'data-testid="org-id"',
-      'data-testid="registration-number"',
       'data-testid="material"',
       'data-testid="applicant-type"',
       'data-testid="submitted-on"',

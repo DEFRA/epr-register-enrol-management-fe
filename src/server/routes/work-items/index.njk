@@ -259,71 +259,67 @@
           {# RA-370 fixes the field ORDER, which must be identical on every    #}
           {# card. In render order:                                            #}
           {#   1. Application ref no   (header link)                           #}
+          {#      Request type         (RA-739, the shared first line)         #}
+          {#      Registration number  (RA-295 AC06 — not an RA-370 field;     #}
+          {#                            RA-739 puts it above the org line)     #}
           {#   2. Org name            \                                        #}
           {#   3. Org ID              / one "{Org} ({Org ID})" line            #}
-          {#      Registration number  (RA-295 AC06 — not an RA-370 field;     #}
-          {#                            kept here, grouped with the other      #}
-          {#                            organisation-identity values)          #}
-          {#   4. Material type      \                                         #}
-          {#   5. Applicant type     / one title line, material first          #}
+          {#   4. Material type      \ on the org line (RA-739), material      #}
+          {#   5. Applicant type     / first                                   #}
           {#   6. Submitted on       \ footer — see the footer comment below   #}
-          {#   7. Assigned to        | for the visibility rules                #}
-          {#   8. Due date           /                                         #}
+          {#   8. Due date           | for the visibility rules (RA-739: due  #}
+          {#   7. Assigned to        / date before assigned to)               #}
           <ul class="govuk-list app-application-cards" data-testid="applications-list">
             {% for item in items %}
               <li>
                 {% if item.inYearChange %}
                 {# RA-739. In-year change card variant (Figma: Applications  #}
                 {# list, in-year change), laid out like the re-accreditation #}
-                {# card: the reference link, the organisation and site       #}
-                {# lines, a "Submitted on / Assigned to" footer, then the    #}
-                {# request type with the shared submission reference and    #}
-                {# its request count. No due date or registration number. The tile, header, link, #}
-                {# state tag and archived line are the shared card's (see    #}
+                {# card: under the shared request type line, the site and   #}
+                {# organisation lines, then a "Submitted on / Due           #}
+                {# on / Assigned to" footer (Due on once the SLA clock      #}
+                {# runs). No registration number.                           #}
+                {# The tile, header, link, request type line, state tag and #}
+                {# archived line are the shared card's (see                  #}
                 {# application-card-macros.njk).                             #}
                 {% set card = item.inYearChange %}
                 {% call applicationCard(item, { modifier: "in-year-change" }) %}
-                  <p class="govuk-body app-application-card__org" data-testid="application-org">
-                    <span data-testid="org-name">{{ card.orgName or "—" }}</span>{% if card.orgId %} (<span data-testid="org-id">{{ card.orgId }}</span>){% endif %}{% if card.material %}: <span data-testid="material">{{ card.material }}</span>{% endif %}
-                  </p>
                   <p class="govuk-body app-application-card__site" data-testid="application-site">
                     <span data-testid="site-name">{{ card.site.name or "—" }}</span>{% if card.site.reference %} (<span data-testid="ors-id">{{ card.site.reference }}</span>){% endif %}
                   </p>
-                  {# The same footer line as the re-accreditation card's      #}
-                  {# "Submitted on / Assigned to", then the request type with #}
-                  {# the shared submission reference to its right.            #}
+                  <p class="govuk-body-s app-application-card__org" data-testid="application-org">
+                    <span data-testid="org-name">{{ card.orgName or "—" }}</span>{% if card.orgId %} (<span data-testid="org-id">{{ card.orgId }}</span>){% endif %}: <span data-testid="material">{{ card.material or "—" }}</span> (<span data-testid="applicant-type">{{ item.applicantType }}</span>)
+                  </p>
+                  {# The re-accreditation card's footer order: Submitted on, #}
+                  {# Due on (once the SLA clock runs), Assigned to.          #}
                   <div class="app-application-card__footer" data-testid="application-card-footer">
                     <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ card.submittedDate or "—" }}</span></span>
+                    {% if item.showDueDate %}
+                      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Due on:</span> <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
+                    {% endif %}
                     <span class="app-application-card__meta" data-testid="application-assigned-to"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
                   </div>
-                  <p class="govuk-body app-application-card__request" data-testid="application-request">
-                    <span class="app-application-card__meta" data-testid="request-type"><span class="app-application-card__meta-label">Request type:</span> {{ card.requestType }}</span>
-                    {%- if card.submissionReference %}
-                      <span class="app-application-card__meta app-application-card__meta--divided" data-testid="submission-reference">{{ card.submissionReference }}{% if card.submissionCount %} {{ card.submissionCount }}{% endif %}</span>
-                    {%- endif %}
-                  </p>
                 {% endcall %}
                 {% else %}
                 {% call applicationCard(item) %}
-                  <p class="govuk-body app-application-card__org" data-testid="application-org">
-                    <span data-testid="org-name">{{ item.orgName or "—" }}</span>{% if item.orgId %} (<span data-testid="org-id">{{ item.orgId }}</span>){% endif %}
-                  </p>
-
                   {# RA-295 AC06. Registration number on every card. This is  #}
                   {# `registrationNumber` (EPR-xxxxxx), NOT the similarly     #}
                   {# named `operatorRegistrationId` (reg-xxx) from RA-223.    #}
+                  {# RA-739: above the organisation line.                     #}
                   <p class="govuk-body app-application-card__org" data-testid="application-registration">
                     <span class="app-application-card__meta-label">Registration number:</span>
                     <span data-testid="registration-number">{{ item.registrationNumber or "—" }}</span>
                   </p>
 
+                  {# RA-739. One small-text line:                              #}
+                  {# "{Org} ({Org ID}): {Material} ({Applicant type})".        #}
                   {# RA-370. Material type then applicant type, in that order.   #}
                   {# RA-412. Applicant type is set by decorate() from the real   #}
                   {# `payload.wasteProcessingType` field, falling back to        #}
                   {# "Reprocessor" for work items submitted before that field    #}
                   {# existed (RA-314).                                          #}
-                  <p class="govuk-body app-application-card__title" data-testid="application-card-title">
-                    <span data-testid="material">{{ item.material or "—" }}</span> reaccreditation (<span data-testid="applicant-type">{{ item.applicantType }}</span>)
+                  <p class="govuk-body-s app-application-card__org" data-testid="application-org">
+                    <span data-testid="org-name">{{ item.orgName or "—" }}</span>{% if item.orgId %} (<span data-testid="org-id">{{ item.orgId }}</span>){% endif %}: <span data-testid="material">{{ item.material or "—" }}</span> (<span data-testid="applicant-type">{{ item.applicantType }}</span>)
                   </p>
 
                   {# RA-370. The footer always renders, because "Assigned to" is #}
@@ -340,10 +336,10 @@
                     {% if item.showSubmittedOn %}
                       <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ item.submittedOn | formatDateGds or "—" }}</span></span>
                     {% endif %}
-                    <span class="app-application-card__meta"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
                     {% if item.showDueDate %}
                       <span class="app-application-card__meta"><span class="app-application-card__meta-label">Due on:</span> <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
                     {% endif %}
+                    <span class="app-application-card__meta"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
                   </div>
                 {% endcall %}
                 {% endif %}

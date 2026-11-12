@@ -240,7 +240,7 @@ describe('RA-739: in-year change applications', () => {
       expect(link.attr('href')).toBe(`/work-items/${ADD_ORS_ID}`)
       expect(squash(link.text())).toBe('IYC-ORS-2026-00001')
       expect(squash(card.find('[data-testid="application-org"]').text())).toBe(
-        'GreenLoop Recovery (123001): Plastic'
+        'GreenLoop Recovery (123001): Plastic (Reprocessor)'
       )
       expect(squash(card.find('[data-testid="application-site"]').text())).toBe(
         'Denmark PR (007)'
@@ -264,19 +264,21 @@ describe('RA-739: in-year change applications', () => {
       const $ = await listPage(anAddOrsItem())
       const card = $(`[data-work-item-id="${ADD_ORS_ID}"]`)
 
-      // Below the site: a footer line holding Submitted on and Assigned to, as
-      // on a re-accreditation card, then one line with the request type and
-      // the submission reference to its right.
+      // First the request type with the submission reference to its right, as
+      // on a re-accreditation card; then the site line, then the organisation
+      // line (as the registration number sits above the organisation on a
+      // re-accreditation card); then the footer.
       const order = card
         .find(
-          '[data-testid="application-site"], [data-testid="application-card-footer"], [data-testid="application-request"]'
+          '[data-testid="application-request"], [data-testid="application-org"], [data-testid="application-site"], [data-testid="application-card-footer"]'
         )
         .map((_, el) => $(el).attr('data-testid'))
         .get()
       expect(order).toEqual([
+        'application-request',
         'application-site',
-        'application-card-footer',
-        'application-request'
+        'application-org',
+        'application-card-footer'
       ])
       const footer = card.find('[data-testid="application-card-footer"]')
       expect(squash(footer.text())).toBe(
@@ -297,9 +299,10 @@ describe('RA-739: in-year change applications', () => {
       expect(
         card.find('.app-application-card__header [data-testid="submitted-on"]')
       ).toHaveLength(0)
-      // The organisation and site lines are the same size.
+      // The organisation line is small text, as on a re-accreditation card;
+      // the site line is body size.
       expect(
-        card.find('[data-testid="application-org"]').hasClass('govuk-body')
+        card.find('[data-testid="application-org"]').hasClass('govuk-body-s')
       ).toBe(true)
       expect(
         card.find('[data-testid="application-site"]').hasClass('govuk-body')
@@ -317,12 +320,50 @@ describe('RA-739: in-year change applications', () => {
       expect($('[data-testid="ors-id"]')).toHaveLength(0)
     })
 
-    test('says "(1 request)" for a single-site submission', async () => {
+    test('shows no request count for a single-site submission', async () => {
       const $ = await listPage(anAddOrsItem({ submissionSize: 1 }))
 
       expect(squash($('[data-testid="submission-reference"]').text())).toBe(
-        'SUB-2026-0001 (1 request)'
+        'SUB-2026-0001'
       )
+    })
+
+    test('shows the request count alone when there is no submission reference', async () => {
+      const item = anAddOrsItem()
+      delete item.payload.submissionReference
+      const $ = await listPage(item)
+
+      expect(squash($('[data-testid="submission-reference"]').text())).toBe(
+        '(3 requests)'
+      )
+    })
+
+    test('shows nothing after the request type, divider included, with no submission reference and one request', async () => {
+      const item = anAddOrsItem({ submissionSize: 1 })
+      delete item.payload.submissionReference
+      const $ = await listPage(item)
+
+      expect($('[data-testid="submission-reference"]')).toHaveLength(0)
+      expect(squash($('[data-testid="application-request"]').text())).toBe(
+        'Request type: New ORS accreditation'
+      )
+    })
+
+    test('shows a re-accreditation card its submission reference when its payload has one', async () => {
+      const item = aReAccreditationItem()
+      item.payload.submissionReference = 'SUB-2026-0009'
+      item.payload.submissionSize = 2
+      const $ = await listPage(item)
+      const card = $(`[data-work-item-id="${RE_ACCREDITATION_ID}"]`)
+
+      expect(
+        squash(card.find('[data-testid="application-request"]').text())
+      ).toBe('Request type: Re-accreditation SUB-2026-0009 (2 requests)')
+      expect(
+        card
+          .find('[data-testid="submission-reference"]')
+          .hasClass('app-application-card__meta--divided')
+      ).toBe(true)
     })
 
     test('names the assigned officer', async () => {
@@ -333,16 +374,59 @@ describe('RA-739: in-year change applications', () => {
       )
     })
 
-    test('has no registration number, applicant type or due date line', async () => {
+    test('has no registration number or due date line', async () => {
       const $ = await listPage(anAddOrsItem())
       const card = $(`[data-work-item-id="${ADD_ORS_ID}"]`)
 
       expect(card.find('[data-testid="registration-number"]')).toHaveLength(0)
-      expect(card.find('[data-testid="applicant-type"]')).toHaveLength(0)
       expect(card.find('[data-testid="due-on"]')).toHaveLength(0)
     })
 
-    test('keeps the re-accreditation card beside it unchanged', async () => {
+    test('names an exporter as the applicant type on the organisation line', async () => {
+      const item = anAddOrsItem()
+      item.payload.wasteProcessingType = 'exporter'
+      const $ = await listPage(item)
+
+      expect(squash($('[data-testid="application-org"]').text())).toBe(
+        'GreenLoop Recovery (123001): Plastic (Exporter)'
+      )
+    })
+
+    test('puts Due on between Submitted on and Assigned to once the SLA clock runs', async () => {
+      const $ = await listPage(
+        anAddOrsItem({
+          slaState: 'OnTrack',
+          slaDueDate: '2027-03-11T00:00:00Z'
+        })
+      )
+      const card = $(`[data-work-item-id="${ADD_ORS_ID}"]`)
+
+      expect(
+        squash(card.find('[data-testid="application-card-footer"]').text())
+      ).toBe(
+        'Submitted on: 11 Feb 2027 Due on: 11 March 2027 Assigned to: Unassigned'
+      )
+    })
+
+    test('shows the request type at body size with a bold label, like the registration number', async () => {
+      const $ = await listPage(anAddOrsItem(), aReAccreditationItem())
+
+      for (const id of [ADD_ORS_ID, RE_ACCREDITATION_ID]) {
+        const request = $(
+          `[data-work-item-id="${id}"] [data-testid="application-request"]`
+        )
+        expect(request.hasClass('govuk-body')).toBe(true)
+        expect(
+          request
+            .find(
+              '[data-testid="request-type"] > .app-application-card__meta-label'
+            )
+            .text()
+        ).toBe('Request type:')
+      }
+    })
+
+    test('keeps the re-accreditation card beside it as before, under a request type line', async () => {
       const $ = await listPage(anAddOrsItem(), aReAccreditationItem())
       const card = $(`[data-work-item-id="${RE_ACCREDITATION_ID}"]`)
 
@@ -353,7 +437,37 @@ describe('RA-739: in-year change applications', () => {
         'Reprocessor'
       )
       expect(card.find('[data-testid="submission-reference"]')).toHaveLength(0)
-      expect(card.find('[data-testid="request-type"]')).toHaveLength(0)
+      expect(squash(card.find('[data-testid="request-type"]').text())).toBe(
+        'Request type: Re-accreditation'
+      )
+      // The request type is the first line under the header, as on the
+      // in-year change card.
+      expect(
+        card
+          .children()
+          .not('.app-application-card__header')
+          .first()
+          .attr('data-testid')
+      ).toBe('application-request')
+    })
+
+    test('puts the registration number above the organisation on a re-accreditation card', async () => {
+      const $ = await listPage(aReAccreditationItem())
+      const card = $(`[data-work-item-id="${RE_ACCREDITATION_ID}"]`)
+
+      expect(
+        card
+          .find(
+            '[data-testid="application-request"], [data-testid="application-registration"], [data-testid="application-org"], [data-testid="application-card-footer"]'
+          )
+          .map((_, el) => $(el).attr('data-testid'))
+          .get()
+      ).toEqual([
+        'application-request',
+        'application-registration',
+        'application-org',
+        'application-card-footer'
+      ])
     })
   })
 

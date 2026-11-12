@@ -24,6 +24,16 @@
       {{ govukTag({ text: item.stateDisplayName, classes: item.stateTagClass, attributes: { "data-testid": "work-item-state-tag-" + item.id } }) }}
     </div>
 
+    {# RA-739. The first line of every card: the request type, then after a  #}
+    {# divider the submission reference and "(N requests)" — each only when #}
+    {# present, and no divider when both are absent.                        #}
+    <p class="govuk-body app-application-card__request" data-testid="application-request">
+      <span class="app-application-card__meta" data-testid="request-type"><span class="app-application-card__meta-label">Request type:</span> {{ item.requestType }}</span>
+      {%- if item.submissionReference or item.submissionCount %}
+        <span class="app-application-card__meta app-application-card__meta--divided" data-testid="submission-reference">{{ [item.submissionReference, item.submissionCount] | select | join(" ") }}</span>
+      {%- endif %}
+    </p>
+
     {{ caller() }}
 
     {% if item.archivedAt %}

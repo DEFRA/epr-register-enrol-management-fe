@@ -773,6 +773,11 @@ function decorate(item) {
     inYearChange: isInYearChangeType(type)
       ? buildInYearChangeCard(item, type)
       : null,
+    // RA-739. The card's first line: the work item type's display name, then
+    // the submission reference and request count, each when present.
+    requestType: type?.displayName ?? null,
+    submissionReference: item.payload?.submissionReference ?? null,
+    submissionCount: formatSubmissionCount(item.payload?.submissionSize),
     stateDisplayName,
     stateTagClass: resolveStateTagClass(stateId),
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
@@ -814,29 +819,31 @@ function decorate(item) {
 }
 
 /**
+ * RA-739. "(N requests)" for a submission split into more than one work item;
+ * null for a single request or an absent/invalid size, so the card shows no
+ * count.
+ */
+function formatSubmissionCount(size) {
+  return Number.isInteger(size) && size > 1 ? `(${size} requests)` : null
+}
+
+/**
  * RA-739. The fields the in-year change card shows beyond the shared ones
- * (reference link, status tag, assigned to): date submitted, the submission
- * reference with its request count, the organisation line, the site line and
- * the request type. Each comes from the work item's own payload, which
- * management-be stamps when it splits a submission into one work item per
- * site. The site line is type-specific, so the type describes it through its
- * `describeCardSite(payload)` hook; without one the line shows a dash.
+ * (reference link, status tag, request type line, assigned to): date
+ * submitted, the organisation line and the site line. Each comes from the
+ * work item's own payload, which management-be stamps when it splits a
+ * submission into one work item per site. The site line is type-specific, so
+ * the type describes it through its `describeCardSite(payload)` hook; without
+ * one the line shows a dash.
  */
 function buildInYearChangeCard(item, type) {
   const payload = item.payload ?? {}
-  const size = Number.isInteger(payload.submissionSize)
-    ? payload.submissionSize
-    : null
   return {
     submittedDate: formatDateShortGds(unwrapMongoDate(item.submittedAt)),
-    submissionReference: payload.submissionReference ?? null,
-    submissionCount:
-      size === null ? null : `(${size} ${size === 1 ? 'request' : 'requests'})`,
     orgName: payload.organisationName ?? null,
     orgId: resolveOrganisationId(payload),
     material: materialLabel(payload.material),
-    site: type.describeCardSite?.(payload) ?? { name: null, reference: null },
-    requestType: type.displayName
+    site: type.describeCardSite?.(payload) ?? { name: null, reference: null }
   }
 }
 
