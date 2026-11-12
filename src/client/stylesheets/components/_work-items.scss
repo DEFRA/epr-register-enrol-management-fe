@@ -89,23 +89,14 @@
   font-weight: bold;
 }
 
-// RA-739. In-year change card: a "Date submitted | SUB-… (N requests)" line
-// above the reference link, then the organisation and site lines (the same
-// size), then a footer line with Request type and Assigned to, laid out as
-// the re-accreditation card's "Submitted on / Assigned to" footer.
-.app-application-card__submission {
-  display: flex;
-  flex-wrap: wrap;
-  gap: govuk-spacing(1) 0;
+// RA-739. In-year change card: the organisation and site lines (the same
+// size), then the request type and the "SUB-… (N requests)" submission
+// reference in the footer's small grey text, then the same "Submitted on /
+// Assigned to" footer as the re-accreditation card.
+.app-application-card__detail {
   margin-bottom: govuk-spacing(1);
   color: $govuk-secondary-text-colour;
   font-size: 0.875rem;
-}
-
-.app-application-card__meta--divided {
-  margin-left: govuk-spacing(2);
-  padding-left: govuk-spacing(2);
-  border-left: 1px solid $govuk-border-colour;
 }
 
 .app-application-card--in-year-change .app-application-card__org {

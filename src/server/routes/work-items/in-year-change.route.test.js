@@ -256,23 +256,36 @@ describe('RA-739: in-year change applications', () => {
           card.find(`[data-testid="work-item-state-tag-${ADD_ORS_ID}"]`).text()
         )
       ).toBe('Not started')
-      expect(card.text()).toContain('Date submitted:')
+      expect(card.text()).toContain('Submitted on:')
+      expect(card.text()).not.toContain('Date submitted:')
     })
 
     test('lays out its lines as the re-accreditation card does', async () => {
       const $ = await listPage(anAddOrsItem())
       const card = $(`[data-work-item-id="${ADD_ORS_ID}"]`)
 
-      // Request type and Assigned to share one footer line, as Submitted on
-      // and Assigned to do on a re-accreditation card.
+      // Below the site: Request type, then the submission reference, then a
+      // footer line holding Submitted on and Assigned to, as on a
+      // re-accreditation card.
+      const order = card
+        .find(
+          '[data-testid="application-site"], [data-testid="request-type"], [data-testid="submission-reference"], [data-testid="application-card-footer"]'
+        )
+        .map((_, el) => $(el).attr('data-testid'))
+        .get()
+      expect(order).toEqual([
+        'application-site',
+        'request-type',
+        'submission-reference',
+        'application-card-footer'
+      ])
       const footer = card.find('[data-testid="application-card-footer"]')
-      expect(footer).toHaveLength(1)
+      expect(squash(footer.text())).toBe(
+        'Submitted on: 11 Feb 2027 Assigned to: Unassigned'
+      )
       expect(
-        footer
-          .children('.app-application-card__meta')
-          .map((_, el) => $(el).attr('data-testid'))
-          .get()
-      ).toEqual(['request-type', 'application-assigned-to'])
+        card.find('.app-application-card__header [data-testid="submitted-on"]')
+      ).toHaveLength(0)
       // The organisation and site lines are the same size.
       expect(
         card.find('[data-testid="application-org"]').hasClass('govuk-body')

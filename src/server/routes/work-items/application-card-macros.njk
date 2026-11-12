@@ -15,21 +15,12 @@
   </h2>
 {% endmacro %}
 
-{# One application card. `header.lead` is optional markup shown above the #}
-{# reference link, in the same column (the in-year change card's         #}
-{# submission line); `header.modifier` an optional card class modifier.   #}
-{# The card's body comes from the caller.                                 #}
+{# One application card. `header.modifier` is an optional card class      #}
+{# modifier. The card's body comes from the caller.                       #}
 {% macro applicationCard(item, header = {}) %}
   <article class="app-application-card{% if header.modifier %} app-application-card--{{ header.modifier }}{% endif %}" data-testid="application-tile" data-work-item-id="{{ item.id }}">
     <div class="app-application-card__header">
-      {% if header.lead %}
-        <div>
-          {{ header.lead | safe }}
-          {{ applicationCardRef(item) }}
-        </div>
-      {% else %}
-        {{ applicationCardRef(item) }}
-      {% endif %}
+      {{ applicationCardRef(item) }}
       {{ govukTag({ text: item.stateDisplayName, classes: item.stateTagClass, attributes: { "data-testid": "work-item-state-tag-" + item.id } }) }}
     </div>
 
