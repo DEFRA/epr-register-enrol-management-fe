@@ -2315,9 +2315,13 @@ describe('#workItemListController', () => {
       expect(result).toContain('data-testid="filter-sort-due-date"')
       expect(result).toContain('data-testid="filter-sort-organisation"')
       expect(result).toContain('data-testid="filter-sort-status"')
-      // Type labels (both real filters as of RA-412).
-      expect(result).toContain('Reprocessor reaccreditation')
-      expect(result).toContain('Exporter reaccreditation')
+      // Applicant type labels (both real filters as of RA-412). Plain
+      // "Reprocessor" / "Exporter": Application type already says
+      // reaccreditation or in-year change.
+      expect(result).toMatch(/for="filter-type">\s*Reprocessor\s*<\/label>/)
+      expect(result).toMatch(/for="filter-type-2">\s*Exporter\s*<\/label>/)
+      expect(result).not.toContain('Reprocessor reaccreditation')
+      expect(result).not.toContain('Exporter reaccreditation')
       // Material labels.
       expect(result).toContain('Fibre-based composite material')
       expect(result).toContain('Paper or board')
@@ -2355,7 +2359,7 @@ describe('#workItemListController', () => {
       // RA-324 prototype fix: chips show ONLY the value — no category prefix
       // — except Sort, which keeps its "Sorted by: " prefix.
       expect(result).toContain(
-        'data-testid="active-filter-label">Reprocessor reaccreditation</span>'
+        'data-testid="active-filter-label">Reprocessor</span>'
       )
       expect(result).toContain(
         'data-testid="active-filter-label">England</span>'
@@ -2372,7 +2376,7 @@ describe('#workItemListController', () => {
       )
       expect(result).toContain('Sorted by: Due date')
       // None of the non-sort chips carry a category prefix.
-      expect(result).not.toContain('Type: Reprocessor reaccreditation')
+      expect(result).not.toContain('Type: Reprocessor')
       expect(result).not.toContain('Nation: England')
       expect(result).not.toContain('Material: Plastic')
       expect(result).not.toContain('Status: Updated')

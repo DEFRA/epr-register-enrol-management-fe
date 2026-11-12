@@ -147,8 +147,8 @@ const REPROCESSOR_WASTE_PROCESSING_TYPE = 'Reprocessor'
 // APPLICATION_TYPE_FILTER_OPTIONS comment below).
 const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
 const TYPE_FILTER_OPTIONS = [
-  { value: RE_ACCREDITATION_TYPE_ID, text: 'Reprocessor reaccreditation' },
-  { value: EXPORTER_TYPE_FILTER.typeIdToken, text: 'Exporter reaccreditation' }
+  { value: RE_ACCREDITATION_TYPE_ID, text: 'Reprocessor' },
+  { value: EXPORTER_TYPE_FILTER.typeIdToken, text: 'Exporter' }
 ]
 const ALLOWED_TYPE_IDS = new Set(TYPE_FILTER_OPTIONS.map((o) => o.value))
 const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
@@ -1138,7 +1138,7 @@ function withoutFilter(filters, key, value) {
 /**
  * Build the "Active filters" block: one removable tag per active filter value,
  * each with an href that rebuilds the query minus that one filter. Chip
- * labels are just the value ("England", "Reprocessor reaccreditation") — no
+ * labels are just the value ("England", "Reprocessor") — no
  * category prefix — except Sort, which keeps "Sorted by: {value}" since a
  * bare sort value reads ambiguously as a chip. Sort is included so the user
  * can revert to the default order without JavaScript (there is no explicit
@@ -1173,7 +1173,7 @@ function buildActiveFilters(filters, assignableUsers) {
     })
 
   // RA-324 prototype fix: chips show ONLY the value (e.g. "England",
-  // "Reprocessor reaccreditation") — no "Nation:" / "Type:" category prefix,
+  // "Reprocessor") — no "Nation:" / "Type:" category prefix,
   // since the category is inferable from the value itself. Sort is the sole
   // exception (kept below): a bare sort value ("Due date") reads ambiguously
   // as a chip, so it keeps its "Sorted by: " prefix.
