@@ -365,6 +365,13 @@ describe('RA-739: in-year change applications', () => {
         'Charge: £328',
         'Payment date: Not received'
       ])
+      // Its own column widths (Figma: the second column holds the
+      // accreditation number, too long for re-accreditation's narrow one).
+      expect(
+        $('[data-testid="case-header-meta"]').hasClass(
+          'app-case-header__meta--in-year-change'
+        )
+      ).toBe(true)
       expect(
         $(
           '[data-testid="case-header-status"] [data-testid="work-item-state-tag"]'
@@ -462,6 +469,9 @@ describe('RA-739: in-year change applications', () => {
 
       expect($('[data-testid="case-header-caption"]')).toHaveLength(0)
       expect($('[data-testid="case-header-title"]')).toHaveLength(0)
+      expect($('[data-testid="case-header-meta"]').attr('class')).toBe(
+        'app-case-header__meta'
+      )
       expect($('[data-testid="case-header-org-name"]').text()).toBe(
         'Acme Recycling'
       )

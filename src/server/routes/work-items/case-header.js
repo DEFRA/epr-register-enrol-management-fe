@@ -141,6 +141,7 @@ export function buildCaseHeader({ workItem, assignment = null }) {
       ...header,
       caption: header.applicationRef,
       title: siteTitle(payload.site),
+      metaLayout: 'in-year-change',
       meta: inYearChangeMeta({ workItem, assignment, payload })
     }
   }

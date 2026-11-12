@@ -45,7 +45,7 @@
       {%- endif -%}
     </h1>
 
-    <dl class="app-case-header__meta" data-testid="case-header-meta">
+    <dl class="app-case-header__meta{% if params.metaLayout %} app-case-header__meta--{{ params.metaLayout }}{% endif %}" data-testid="case-header-meta">
       {% for entry in params.meta %}
         <div class="app-case-header__meta-item">
           <dt class="app-case-header__meta-label">{{ entry.label }}:</dt>
