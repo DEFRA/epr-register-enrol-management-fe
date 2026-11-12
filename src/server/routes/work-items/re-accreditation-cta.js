@@ -1,5 +1,6 @@
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { resolveSelfAssignLandingState } from '#/server/work-items/core/engine.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { DULY_MAKE_ACTION_ID } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
 
@@ -95,6 +96,36 @@ export function isQueryState(stateId) {
     fromStateIds.includes(stateId) ||
     stateId === resolveSelfAssignLandingState(type)
   )
+}
+
+const logger = createLogger()
+
+/**
+ * Should the detail page offer the Query link for this raw backend work
+ * item? (RA-000.)
+ *
+ * Read off the module's `query-during-*` declarations via `isQueryState`,
+ * because the backend no longer projects those non-caller-invocable
+ * transitions into `availableActions`. `isQueryState` answers for the
+ * re-accreditation type only, so this repeats the type check GET /query
+ * makes. A missing `stateId` is a broken backend response: logged at Error,
+ * and no link.
+ *
+ * @param {object} workItem The untouched `getWorkItem` DTO.
+ * @param {{ route: string }} context The route that read it, for the log.
+ */
+export function canQueryWorkItem(workItem, { route }) {
+  if (workItem?.typeId !== RE_ACCREDITATION_TYPE_ID) {
+    return false
+  }
+  if (workItem.stateId == null) {
+    logger.error(
+      { workItemId: workItem.id, route },
+      'Work item from management-be has no stateId; Query link not offered'
+    )
+    return false
+  }
+  return isQueryState(workItem.stateId)
 }
 
 /**

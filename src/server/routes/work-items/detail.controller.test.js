@@ -1884,6 +1884,8 @@ describe('#workItemDetailController', () => {
       const request = {
         params: { id: ID },
         payload: {},
+        // Hapi always sets `request.route`; the detail render logs it.
+        route: { path: '/work-items/{id}/self-assign' },
         auth: { credentials: { name: 'No Id User' } },
         yar: { flash: () => [] }
       }

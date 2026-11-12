@@ -245,6 +245,52 @@ describe('RA-291 Query link on the work item detail page', () => {
     }
   )
 
+  // RA-000. `isQueryState` answers for re-accreditation only, so another
+  // type's item gets no Query link, and rendering it does not throw.
+  test('renders no Query link for a work item of another type', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ typeId: 'some-other-type' })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: DETAIL_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="action-query"')
+    )
+  })
+
+  // RA-000. A missing state on the detail page is a broken backend
+  // response: logged at Error, and no Query link.
+  test('logs at Error and offers no Query link when the item has no stateId', async () => {
+    const errorSpy = vi.spyOn(createLogger(), 'error')
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ stateId: undefined })
+    })
+
+    try {
+      const { result } = await server.inject({
+        method: 'GET',
+        url: DETAIL_HREF
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-query"')
+      )
+      expect(errorSpy).toHaveBeenCalledWith(
+        { workItemId: ID, route: '/work-items/{id}' },
+        'Work item from management-be has no stateId; Query link not offered'
+      )
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
   // RA-000. A backend still on v18 (or an item whose snapshot predates the
   // v19 migration) projects `query-during-*` as caller-invocable. The module
   // declares it non-invocable, so it never renders as a generic button

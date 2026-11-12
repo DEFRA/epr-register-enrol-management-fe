@@ -23,8 +23,8 @@ import {
 } from '#/server/work-items/re-accreditation/states.js'
 import {
   isContinueReviewState,
-  isPreDulyMadeWaypoint,
-  isQueryState
+  canQueryWorkItem,
+  isPreDulyMadeWaypoint
 } from './re-accreditation-cta.js'
 import {
   isGenericRouteRejectedActionId,
@@ -458,7 +458,8 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   // the raw DTO.
   const enriched = applyReAccreditationViewModel({
     workItem: decorated,
-    source: result.workItem
+    source: result.workItem,
+    route: request.route.path
   })
   const templatePath = resolveDetailTemplate(
     enriched.typeId,
@@ -605,7 +606,7 @@ async function loadPriorYear({ workItem, id, user }) {
 //    This is not a task feature and must keep working — it is the only path
 //    out of `updated`.
 //  - `canQuery` (RA-000) — whether the Query link renders. Read off the
-//    module's `query-during-*` declarations (`isQueryState`), because the
+//    module's `query-during-*` declarations (`canQueryWorkItem`), because the
 //    backend does not project those non-caller-invocable transitions. The
 //    query endpoint remains authoritative.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
@@ -628,7 +629,7 @@ const PENDING_CONTACT_BANNERS = Object.freeze({
   })
 })
 
-function applyReAccreditationViewModel({ workItem, source = workItem }) {
+function applyReAccreditationViewModel({ workItem, source = workItem, route }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
   }
@@ -678,11 +679,6 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     isContinueReviewState(source?.stateId) &&
     !isPreDulyMadeWaypoint(source?.originStateId)
 
-  // RA-000. The Query link. Same discipline as Continue review: read off the
-  // module's `query-during-*` declarations, because the backend no longer
-  // projects those non-caller-invocable transitions into `availableActions`.
-  const canQuery = isQueryState(source?.stateId)
-
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
   // state-badge map so it matches the list and the envelope State badge.
@@ -719,7 +715,8 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     canChangePaymentDate,
     changePaymentDateHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/change-payment-date`,
     canContinueReview,
-    canQuery,
+    // RA-000. The Query link — see `canQueryWorkItem`.
+    canQuery: canQueryWorkItem(source, { route }),
     continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
     isReadOnlyState,
     stateTagClasses,
