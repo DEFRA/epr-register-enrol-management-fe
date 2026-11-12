@@ -17,6 +17,7 @@ import {
 } from './query.schema.js'
 import { isQueryActionId, isQueryState } from './re-accreditation-cta.js'
 import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', async () => {
   const actual = await vi.importActual(
@@ -151,12 +152,16 @@ describe('isQueryState', () => {
     expect(isQueryState(null)).toBe(false)
   })
 
-  test('fails closed when the type is not registered', () => {
+  // A missing or query-less declaration is a boot defect, not "not
+  // queryable": it throws rather than silently hiding the Query link.
+  test('throws when the type is not registered', () => {
     clearWorkItemRegistry()
-    expect(isQueryState('submitted')).toBe(false)
+    expect(() => isQueryState('submitted')).toThrow(
+      'work item type "re-accreditation" is not registered'
+    )
   })
 
-  test('fails closed when the type declares no query transition', () => {
+  test('throws when the type declares no query transition', () => {
     clearWorkItemRegistry()
     registerWorkItemType({
       ...reAccreditationType,
@@ -164,10 +169,17 @@ describe('isQueryState', () => {
         (t) => !isQueryActionId(t.actionId)
       )
     })
-    // `assessment-started` would otherwise come in via the self-assign
-    // landing state.
-    expect(isQueryState('assessment-started')).toBe(false)
-    expect(isQueryState('submitted')).toBe(false)
+    expect(() => isQueryState('assessment-started')).toThrow(
+      'work item type "re-accreditation" declares no query transition'
+    )
+  })
+
+  test('throws when the type declares no transitions array', () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({ ...reAccreditationType, transitions: undefined })
+    expect(() => isQueryState('submitted')).toThrow(
+      'declares no query transition'
+    )
   })
 })
 
@@ -670,19 +682,56 @@ describe('GET /work-items/{id}/query', () => {
     }
   )
 
-  test('redirects when the work item carries no state', async () => {
+  // RA-000. A missing state is a broken backend response, not an
+  // ineligible item: the unavailable page and an Error log, not the
+  // ordinary redirect.
+  test.each([undefined, null])(
+    'renders the unavailable page and logs at Error when stateId is %s',
+    async (stateId) => {
+      const errorSpy = vi.spyOn(createLogger(), 'error')
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId })
+      })
+
+      try {
+        const { statusCode, result } = await server.inject({
+          method: 'GET',
+          url: QUERY_HREF
+        })
+
+        expect(statusCode).toBe(statusCodes.badGateway)
+        expect(result).toEqual(
+          expect.stringContaining('The work item has no state.')
+        )
+        expect(errorSpy).toHaveBeenCalledWith(
+          { workItemId: ID, route: '/work-items/{id}/query' },
+          'Work item from management-be has no stateId; cannot decide whether it can be queried'
+        )
+      } finally {
+        errorSpy.mockRestore()
+      }
+    }
+  )
+
+  test('does not log at Error for a legitimately non-queryable state', async () => {
+    const errorSpy = vi.spyOn(createLogger(), 'error')
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: aWorkItem({ stateId: undefined })
+      workItem: aWorkItem({ stateId: 'queried' })
     })
 
-    const { statusCode, headers } = await server.inject({
-      method: 'GET',
-      url: QUERY_HREF
-    })
+    try {
+      const { statusCode } = await server.inject({
+        method: 'GET',
+        url: QUERY_HREF
+      })
 
-    expect(statusCode).toBe(statusCodes.redirect)
-    expect(headers.location).toBe(DETAIL_HREF)
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(errorSpy).not.toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 
   test('redirects for a work item of a type other than re-accreditation', async () => {

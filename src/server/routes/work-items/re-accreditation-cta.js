@@ -60,22 +60,36 @@ export function isQueryActionId(actionId) {
  * way `decision/eligibility.js` covers the backend's second
  * `submit-for-decision`.
  *
- * Only decides what to draw. `POST /work-items/re-accreditation/{id}/query`
- * stays authoritative and answers 409 for a state it will not query.
+ * The landing-state coupling exists only because of that duplicate-id
+ * rule. This predicate only decides what to draw:
+ * `POST /work-items/re-accreditation/{id}/query` is the authority, and
+ * answers 409 for a state it will not query.
  *
- * Fails CLOSED (returns `false`) for a missing state, an unregistered type,
- * or a type that declares no query transition.
+ * Returns `false` for a missing `stateId`; callers that read a backend
+ * response log that themselves. THROWS when the re-accreditation type is
+ * not registered or declares no query transition: that is a boot or
+ * declaration defect, and answering "not queryable" would silently hide
+ * the Query link on every case.
  */
 export function isQueryState(stateId) {
   if (stateId == null) {
     return false
   }
   const type = getWorkItemType(RE_ACCREDITATION_TYPE_ID)
-  const fromStateIds = (type?.transitions ?? [])
-    .filter((t) => isQueryActionId(t.actionId))
-    .map((t) => t.fromStateId)
-  if (fromStateIds.length === 0) {
-    return false
+  if (!type) {
+    throw new Error(
+      `isQueryState: work item type "${RE_ACCREDITATION_TYPE_ID}" is not registered`
+    )
+  }
+  const fromStateIds = Array.isArray(type.transitions)
+    ? type.transitions
+        .filter((t) => isQueryActionId(t.actionId))
+        .map((t) => t.fromStateId)
+    : null
+  if (!fromStateIds?.length) {
+    throw new Error(
+      `isQueryState: work item type "${RE_ACCREDITATION_TYPE_ID}" declares no query transition`
+    )
   }
   return (
     fromStateIds.includes(stateId) ||

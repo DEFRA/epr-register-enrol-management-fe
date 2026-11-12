@@ -133,7 +133,7 @@ const QUERY_TRANSITIONS = [
   callerInvocable: false
 }))
 
-function registerReaccreditation({ withQueryTransitions = false } = {}) {
+function registerReaccreditation() {
   registerWorkItemType({
     id: 're-accreditation',
     displayName: 'Re-accreditation',
@@ -233,10 +233,8 @@ function registerReaccreditation({ withQueryTransitions = false } = {}) {
         callerInvocable: false
       },
       // RA-000. `isQueryState` reads these to decide the Query link, as
-      // the real module declares them. Opt-in, so the tests asserting on
-      // the exact action list of a `submitted` item are not handed a Query
-      // link they never asked about.
-      ...(withQueryTransitions ? QUERY_TRANSITIONS : [])
+      // the real module declares them (it throws on a type without them).
+      ...QUERY_TRANSITIONS
     ]
   })
 }
@@ -706,6 +704,7 @@ describe('#workItemDetailController', () => {
   test.each(['withdraw', 'withdraw-during-decision', 'withdraw-during-query'])(
     'POST action rejects the %s id without calling the backend',
     async (actionId) => {
+      registerReaccreditation()
       getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
       const { statusCode, result } = await injectWithCrumb(server, {
@@ -1014,6 +1013,7 @@ describe('#workItemDetailController', () => {
   // action-link/macro.njk. Route-level enforcement (403 on the underlying
   // POST) is covered separately in auth.test.js.
   test('shows reassign/unassign as disabled, hrefless spans for a support user', async () => {
+    registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({ assignedToId: null, assignedToName: null })
@@ -1180,6 +1180,8 @@ describe('#workItemDetailController', () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
+        // RA-000. Not queryable, so no Query link joins the count.
+        stateId: 'queried',
         availableActions: [
           { actionId: 'sla-extend', displayName: 'Extend SLA' }
         ]
@@ -1407,6 +1409,8 @@ describe('#workItemDetailController', () => {
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
+          // RA-000. Not queryable, so no Query link joins the count.
+          stateId: 'queried',
           availableActions: [
             {
               actionId: 'hidden-one',
@@ -1456,6 +1460,8 @@ describe('#workItemDetailController', () => {
         getWorkItem.mockResolvedValue({
           ok: true,
           workItem: aWorkItem({
+            // RA-000. Not queryable, so no Query link joins the count.
+            stateId: 'queried',
             availableActions: [
               { actionId: 'visible-one', displayName: 'Visible one', ...flag },
               { actionId: 'visible-two', displayName: 'Visible two', ...flag }
@@ -1553,6 +1559,8 @@ describe('#workItemDetailController', () => {
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
+          // RA-000. Not queryable, so no Query link joins the count.
+          stateId: 'queried',
           availableActions: [
             ...RESUME_ACTIONS,
             { actionId: 'visible-one', displayName: 'Visible one' }
@@ -1577,6 +1585,8 @@ describe('#workItemDetailController', () => {
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
+          // RA-000. Not queryable, so no Query link joins the count.
+          stateId: 'queried',
           availableActions: [
             { actionId: 'sla-extend', displayName: 'Extend SLA' },
             {
@@ -1607,7 +1617,7 @@ describe('#workItemDetailController', () => {
         registerReaccreditation()
         getWorkItem.mockResolvedValue({
           ok: true,
-          workItem: aWorkItem({ availableActions })
+          workItem: aWorkItem({ stateId: 'queried', availableActions })
         })
 
         const { result, statusCode } = await get()
@@ -2017,7 +2027,7 @@ describe('#workItemDetailController', () => {
     }
 
     async function render(workItem) {
-      registerReaccreditation({ withQueryTransitions: true })
+      registerReaccreditation()
       // The decision CTA lives in the type-specific template, so the RA-595
       // positive checks below need it registered.
       registerDetailTemplate(
@@ -2420,7 +2430,9 @@ describe('#workItemDetailController', () => {
           { id: 'submitted', displayName: 'Submitted' },
           { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
         ],
-        getTasksForState: () => []
+        getTasksForState: () => [],
+        // RA-000. `isQueryState` throws on a type without query transitions.
+        transitions: QUERY_TRANSITIONS
       })
     }
 
@@ -2610,7 +2622,9 @@ describe('#workItemDetailController', () => {
           { id: 'rejected', displayName: 'Rejected', isTerminal: true },
           { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
         ],
-        getTasksForState: () => []
+        getTasksForState: () => [],
+        // RA-000. `isQueryState` throws on a type without query transitions.
+        transitions: QUERY_TRANSITIONS
       })
     }
 
@@ -3570,7 +3584,7 @@ describe('#workItemDetailController', () => {
       // so an undeclared action is the survivor that proves the filter does
       // not over-reach, and the stale projected `query-during-decision` must
       // not become a generic button.
-      registerReaccreditation({ withQueryTransitions: true })
+      registerReaccreditation()
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({

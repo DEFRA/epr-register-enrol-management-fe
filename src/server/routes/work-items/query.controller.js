@@ -51,6 +51,21 @@ function breadcrumbs(id, ref) {
   ]
 }
 
+function unavailable(h, id, error) {
+  return h
+    .view(UNAVAILABLE_VIEW, {
+      pageTitle: 'Work item unavailable',
+      heading: 'Work item unavailable',
+      workItemId: id,
+      error,
+      breadcrumbs: [
+        { text: 'Work items', href: '/work-items' },
+        { text: 'Work item' }
+      ]
+    })
+    .code(502)
+}
+
 function flashBanner(request, banner) {
   request.yar?.flash?.('flashBanner', banner)
 }
@@ -132,18 +147,11 @@ async function loadWorkItem(request, h, id) {
 
   if (!result.ok) {
     return {
-      response: h
-        .view(UNAVAILABLE_VIEW, {
-          pageTitle: 'Work item unavailable',
-          heading: 'Work item unavailable',
-          workItemId: id,
-          error: result.error ?? `Backend returned ${result.status}`,
-          breadcrumbs: [
-            { text: 'Work items', href: '/work-items' },
-            { text: 'Work item' }
-          ]
-        })
-        .code(502)
+      response: unavailable(
+        h,
+        id,
+        result.error ?? `Backend returned ${result.status}`
+      )
     }
   }
 
@@ -160,6 +168,16 @@ export function makeShowQueryController() {
       }
 
       const workItem = loaded.workItem
+      // RA-000. A work item without a state is a broken backend response,
+      // not an ineligible item: log it and show the unavailable page rather
+      // than the ordinary "cannot be queried" redirect.
+      if (workItem.stateId == null) {
+        logger.error(
+          { workItemId: id, route: request.route.path },
+          'Work item from management-be has no stateId; cannot decide whether it can be queried'
+        )
+        return unavailable(h, id, 'The work item has no state.')
+      }
       // RA-000. Read off the module declaration, not `availableActions`: the
       // backend no longer projects the non-caller-invocable `query-during-*`
       // transitions. Only re-accreditation can be queried (the query service
