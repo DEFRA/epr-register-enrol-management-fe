@@ -264,25 +264,36 @@ describe('RA-739: in-year change applications', () => {
       const $ = await listPage(anAddOrsItem())
       const card = $(`[data-work-item-id="${ADD_ORS_ID}"]`)
 
-      // Below the site: Request type, then the submission reference, then a
-      // footer line holding Submitted on and Assigned to, as on a
-      // re-accreditation card.
+      // Below the site: a footer line holding Submitted on and Assigned to, as
+      // on a re-accreditation card, then one line with the request type and
+      // the submission reference to its right.
       const order = card
         .find(
-          '[data-testid="application-site"], [data-testid="request-type"], [data-testid="submission-reference"], [data-testid="application-card-footer"]'
+          '[data-testid="application-site"], [data-testid="application-card-footer"], [data-testid="application-request"]'
         )
         .map((_, el) => $(el).attr('data-testid'))
         .get()
       expect(order).toEqual([
         'application-site',
-        'request-type',
-        'submission-reference',
-        'application-card-footer'
+        'application-card-footer',
+        'application-request'
       ])
       const footer = card.find('[data-testid="application-card-footer"]')
       expect(squash(footer.text())).toBe(
         'Submitted on: 11 Feb 2027 Assigned to: Unassigned'
       )
+      const request = card.find('[data-testid="application-request"]')
+      expect(
+        request
+          .children()
+          .map((_, el) => $(el).attr('data-testid'))
+          .get()
+      ).toEqual(['request-type', 'submission-reference'])
+      expect(
+        request
+          .find('[data-testid="submission-reference"]')
+          .hasClass('app-application-card__meta--divided')
+      ).toBe(true)
       expect(
         card.find('.app-application-card__header [data-testid="submitted-on"]')
       ).toHaveLength(0)

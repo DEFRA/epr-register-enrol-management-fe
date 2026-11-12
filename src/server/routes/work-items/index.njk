@@ -276,9 +276,9 @@
                 {# RA-739. In-year change card variant (Figma: Applications  #}
                 {# list, in-year change), laid out like the re-accreditation #}
                 {# card: the reference link, the organisation and site       #}
-                {# lines, the request type, the shared submission reference  #}
-                {# with its request count, then a "Submitted on / Assigned   #}
-                {# to" footer. No due date or registration number. The tile, header, link, #}
+                {# lines, a "Submitted on / Assigned to" footer, then the    #}
+                {# request type with the shared submission reference and    #}
+                {# its request count. No due date or registration number. The tile, header, link, #}
                 {# state tag and archived line are the shared card's (see    #}
                 {# application-card-macros.njk).                             #}
                 {% set card = item.inYearChange %}
@@ -289,16 +289,19 @@
                   <p class="govuk-body app-application-card__site" data-testid="application-site">
                     <span data-testid="site-name">{{ card.site.name or "—" }}</span>{% if card.site.reference %} (<span data-testid="ors-id">{{ card.site.reference }}</span>){% endif %}
                   </p>
-                  <p class="govuk-body app-application-card__detail" data-testid="request-type"><span class="app-application-card__meta-label">Request type:</span> {{ card.requestType }}</p>
-                  {% if card.submissionReference %}
-                    <p class="govuk-body app-application-card__detail" data-testid="submission-reference">{{ card.submissionReference }}{% if card.submissionCount %} {{ card.submissionCount }}{% endif %}</p>
-                  {% endif %}
                   {# The same footer line as the re-accreditation card's      #}
-                  {# "Submitted on / Assigned to".                             #}
+                  {# "Submitted on / Assigned to", then the request type with #}
+                  {# the shared submission reference to its right.            #}
                   <div class="app-application-card__footer" data-testid="application-card-footer">
                     <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ card.submittedDate or "—" }}</span></span>
                     <span class="app-application-card__meta" data-testid="application-assigned-to"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
                   </div>
+                  <p class="govuk-body app-application-card__request" data-testid="application-request">
+                    <span class="app-application-card__meta" data-testid="request-type"><span class="app-application-card__meta-label">Request type:</span> {{ card.requestType }}</span>
+                    {%- if card.submissionReference %}
+                      <span class="app-application-card__meta app-application-card__meta--divided" data-testid="submission-reference">{{ card.submissionReference }}{% if card.submissionCount %} {{ card.submissionCount }}{% endif %}</span>
+                    {%- endif %}
+                  </p>
                 {% endcall %}
                 {% else %}
                 {% call applicationCard(item) %}
