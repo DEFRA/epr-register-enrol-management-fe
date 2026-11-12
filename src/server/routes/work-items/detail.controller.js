@@ -521,7 +521,12 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   const multipleInterimSitesEnabled = config.get(
     'featureFlags.multipleInterimSitesEnabled'
   )
-  const { rows: applicationDetails } = buildApplicationSummary({
+  // RA-739. A type with its own summary (add-ORS) builds it; every other
+  // type gets re-accreditation's.
+  const buildSummary =
+    getWorkItemType(enriched.typeId)?.buildApplicationSummary ??
+    buildApplicationSummary
+  const applicationSummary = buildSummary({
     multipleInterimSitesEnabled,
     workItem: enriched
   })
@@ -539,7 +544,8 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
         active: 'summary',
         category: enriched.typeCategory
       }),
-      applicationDetails,
+      applicationDetails: applicationSummary.rows,
+      applicationSummary,
       // RA-603: the nested interim-site layout is behind the same flag as the
       // data, so with it off a regulator sees exactly the page they see today.
       multipleInterimSitesEnabled,

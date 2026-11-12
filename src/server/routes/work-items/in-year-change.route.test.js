@@ -11,6 +11,7 @@ import * as cheerio from 'cheerio'
 
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
+import { injectWithCrumb } from '#/test-helpers/csrf.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getReAccreditationPriorYear: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   updateRecyclingOperations: vi.fn()
 }))
 
-const { getWorkItem, getWorkItems } =
+const { getWorkItem, getWorkItems, assignWorkItem, applyWorkItemAction } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ADD_ORS_ID = '73900003-0000-4000-8000-000000000001'
@@ -62,14 +63,85 @@ function anAddOrsItem({
       accreditationReference: 'ACC-REP-PL-0007',
       paymentReference: 'PR/PK/REP/123001',
       chargePence: 98400,
-      site: {
-        siteId: 'site-1',
-        orsId: '007',
-        siteName: 'Denmark PR',
-        chargePence: 32800
-      }
+      site: aSite()
     },
     availableActions: []
+  }
+}
+
+/** A site as the operator backend sends it (re-accreditation's site shape). */
+function aSite() {
+  return {
+    siteId: 'site-1',
+    orsId: '007',
+    siteName: 'Denmark PR',
+    siteAddress: 'Ejbyvvej 12, Copenhagen, Denmark',
+    addressLine1: 'Ejbyvvej 12',
+    addressLine2: 'Industrial Park',
+    townOrCity: 'Copenhagen',
+    country: 'Denmark',
+    coordinates: '55.6761, 12.5683',
+    contactName: 'John Smith',
+    contactEmail: 'john.smith@denmarkpr.com',
+    contactPhone: '+23 2489 2862',
+    operationCodes: ['R5'],
+    code1: 'B1030',
+    code2: '',
+    code3: 'B3011',
+    repatriatedLoads: 'Returned to the UK exporter.',
+    conditionsOfExport: true,
+    isEu: true,
+    isOecd: true,
+    interimSites: [
+      {
+        siteId: 101,
+        siteNumber: 'SN-0101',
+        siteName: 'Bharat Recycling',
+        addressLine1: 'Havnegade 1',
+        townOrCity: 'Aarhus',
+        country: 'Denmark',
+        contactName: 'Asha Patel',
+        contactEmail: 'asha@bharat.example',
+        contactPhone: '0123456789',
+        operationCodes: ['R13']
+      },
+      {
+        siteId: 102,
+        siteNumber: 'SN-0102',
+        siteName: 'Withdrawn Hub',
+        addressLine1: '2 Quay Street',
+        country: 'Belgium',
+        removedAt: '2027-01-05T10:00:00Z'
+      }
+    ],
+    besEvidence: {
+      files: [
+        {
+          fileId: 'bes-clean',
+          filename: 'bes-evidence.pdf',
+          contentType: 'application/pdf',
+          uploadedAt: '2027-01-15T10:00:00Z',
+          scanStatus: 'Clean',
+          besEvidenceValidFromDate: '2027-01-01',
+          besEvidenceExpiryDate: '2028-12-31',
+          s3Key: 'bes-evidence/bes-clean',
+          s3Bucket: 'bes-evidence'
+        },
+        {
+          fileId: 'bes-pending',
+          filename: 'bes-pending.pdf',
+          contentType: 'application/pdf',
+          uploadedAt: '2027-01-16T10:00:00Z',
+          scanStatus: 'Pending',
+          besEvidenceValidFromDate: '2027-02-01',
+          besEvidenceExpiryDate: '2029-01-31',
+          s3Key: 'bes-evidence/bes-pending',
+          s3Bucket: 'bes-evidence'
+        }
+      ]
+    },
+    suppliedFields: ['country'],
+    chargePence: 32800
   }
 }
 
@@ -132,6 +204,8 @@ describe('RA-739: in-year change applications', () => {
   beforeEach(() => {
     getWorkItem.mockReset()
     getWorkItems.mockReset()
+    assignWorkItem.mockReset()
+    applyWorkItemAction.mockReset()
   })
 
   async function listPage(...items) {
@@ -380,6 +454,250 @@ describe('RA-739: in-year change applications', () => {
         'application-history',
         'additional-information'
       ])
+    })
+  })
+
+  describe('Application summary', () => {
+    async function summaryPage(workItem) {
+      getWorkItem.mockResolvedValue({ ok: true, workItem })
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ADD_ORS_ID}`
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      return cheerio.load(result)
+    }
+
+    /** The site summary list's rows, in page order. */
+    function summaryRows($) {
+      return $('[data-testid="application-details"] > .govuk-summary-list__row')
+        .map((_, el) => ({
+          label: squash($(el).find('.govuk-summary-list__key').text()),
+          value: squash($(el).find('.govuk-summary-list__value').text())
+        }))
+        .get()
+    }
+
+    function rowValue($, key) {
+      return $(`[data-testid="app-detail-value-${key}"]`)
+    }
+
+    test('shows every site row with its Figma label, in order', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+
+      const rows = summaryRows($)
+      expect(rows.map((row) => row.label)).toEqual([
+        'Site name',
+        'Location',
+        'Coordinates',
+        'Contact name',
+        'Contact email',
+        'Contact phone number',
+        'Recycling operation',
+        'Basel convention codes',
+        'Arrangements for rejected or returned loads',
+        'Conditions of export',
+        'Evidence of broadly equivalent standards'
+      ])
+      expect(rows.slice(0, 10).map((row) => row.value)).toEqual([
+        'Denmark PR',
+        'Ejbyvvej 12, Industrial Park, Copenhagen, Denmark',
+        '55.6761, 12.5683',
+        'John Smith',
+        'john.smith@denmarkpr.com',
+        '+23 2489 2862',
+        'R5',
+        // code2 is empty, so it is left out.
+        'B1030, B3011',
+        'Returned to the UK exporter.',
+        'Yes'
+      ])
+    })
+
+    test('answers No when the conditions of export are not met', async () => {
+      const item = anAddOrsItem()
+      item.payload.site.conditionsOfExport = false
+      const $ = await summaryPage(item)
+
+      expect(squash(rowValue($, 'conditions-of-export').text())).toBe('No')
+    })
+
+    test('shows a dash for each missing value', async () => {
+      const item = anAddOrsItem()
+      item.payload.site = { orsId: '007', siteName: 'Denmark PR' }
+      const $ = await summaryPage(item)
+
+      const rows = summaryRows($)
+      expect(rows).toHaveLength(11)
+      expect(rows[0].value).toBe('Denmark PR')
+      for (const row of rows.slice(1)) {
+        expect(row.value, row.label).toBe(EM_DASH)
+      }
+      expect($('[data-testid="interim-sites"]')).toHaveLength(0)
+    })
+
+    test('links a Clean BES file to the download route, with its dates', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+      const [clean] = rowValue($, 'bes-evidence').find('li').toArray()
+
+      const link = $(clean).find('a[data-testid="app-detail-document"]')
+      expect(squash(link.text())).toBe('bes-evidence.pdf')
+      expect(link.attr('href')).toBe(
+        `/work-items/${ADD_ORS_ID}/files/bes-clean/download`
+      )
+      expect($(clean).find('.govuk-tag')).toHaveLength(0)
+      expect(
+        squash(
+          $(clean).find('[data-testid="app-detail-document-valid-from"]').text()
+        )
+      ).toBe('Valid from: 01 Jan 2027')
+      expect(
+        squash(
+          $(clean)
+            .find('[data-testid="app-detail-document-expiry-date"]')
+            .text()
+        )
+      ).toBe('Expiry date: 31 Dec 2028')
+    })
+
+    test('shows a BES file that is not Clean by name and scan tag, with no link', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+      const [, pending] = rowValue($, 'bes-evidence').find('li').toArray()
+
+      expect($(pending).find('a')).toHaveLength(0)
+      expect(
+        squash($(pending).find('[data-testid="app-detail-document"]').text())
+      ).toBe('bes-pending.pdf')
+      expect(squash($(pending).find('.govuk-tag').text())).toBe('Pending')
+      expect(
+        squash(
+          $(pending)
+            .find('[data-testid="app-detail-document-valid-from"]')
+            .text()
+        )
+      ).toBe('Valid from: 01 Feb 2027')
+      expect(
+        squash(
+          $(pending)
+            .find('[data-testid="app-detail-document-expiry-date"]')
+            .text()
+        )
+      ).toBe('Expiry date: 31 Jan 2029')
+    })
+
+    test('lists the active interim sites with their fields', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+      const section = $('[data-testid="interim-sites"]')
+
+      // The withdrawn site is left out of the count and the list.
+      expect(
+        squash(section.find('[data-testid="interim-sites-heading"]').text())
+      ).toBe('Interim sites (1)')
+      const sites = section.find('[data-testid="interim-site"]')
+      expect(sites).toHaveLength(1)
+      expect(section.text()).not.toContain('Withdrawn Hub')
+
+      const site = sites.first()
+      expect(
+        squash(site.find('[data-testid="interim-site-name"]').text())
+      ).toBe('Bharat Recycling')
+      expect(
+        squash(site.find('[data-testid="interim-site-summary-address"]').text())
+      ).toBe('Havnegade 1, Denmark')
+      const fields = site
+        .find('.govuk-summary-list__row')
+        .map((_, el) => [
+          [
+            squash($(el).find('.govuk-summary-list__key').text()),
+            squash($(el).find('.govuk-summary-list__value').text())
+          ]
+        ])
+        .get()
+      expect(fields).toEqual([
+        ['Site number', 'SN-0101'],
+        ['Location', 'Havnegade 1, Aarhus, Denmark'],
+        ['Contact name', 'Asha Patel'],
+        ['Contact email', 'asha@bharat.example'],
+        ['Operation code', 'R13']
+      ])
+    })
+
+    test('has no Interim sites section when every interim site is withdrawn', async () => {
+      const item = anAddOrsItem()
+      item.payload.site.interimSites = item.payload.site.interimSites.filter(
+        (site) => site.removedAt != null
+      )
+      const $ = await summaryPage(item)
+
+      expect($('[data-testid="interim-sites"]')).toHaveLength(0)
+      expect($('body').text()).not.toContain('Interim sites')
+    })
+
+    test('has the assignment panel and no Duly make, Query or decision actions', async () => {
+      const item = anAddOrsItem()
+      // Even if the backend projects actions, none render until RA-495.
+      item.availableActions = [
+        { actionId: 'duly-make', displayName: 'Duly make' },
+        { actionId: 'query', displayName: 'Query' },
+        { actionId: 'sla-extend', displayName: 'Change the due date' }
+      ]
+      const $ = await summaryPage(item)
+
+      const panel = $('[data-testid="case-assignment-panel"]')
+      expect(panel).toHaveLength(1)
+      expect(
+        squash(panel.find('[data-testid="self-assign-submit"]').text())
+      ).toBe('Assign to yourself and start')
+      expect(squash(panel.find('[data-testid="reassign-link"]').text())).toBe(
+        'Reassign the application'
+      )
+      expect(squash(panel.find('[data-testid="unassign-link"]').text())).toBe(
+        'Unassign the application'
+      )
+      expect(
+        squash(panel.find('[data-testid="action-sla-extend"]').text())
+      ).toBe('Change determination deadline')
+
+      expect($('[data-testid="actions-panel"]')).toHaveLength(0)
+      expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
+      expect($('[data-testid="work-item-no-actions"]')).toHaveLength(0)
+      expect($('[data-testid="action-duly-make"]')).toHaveLength(0)
+      expect($('[data-testid="action-query"]')).toHaveLength(0)
+    })
+
+    test('self-assigning a Not started application assigns it without changing its status', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      assignWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anAddOrsItem({ assignedToName: 'Test Standard User' })
+      })
+
+      const { statusCode, headers } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `/work-items/${ADD_ORS_ID}/self-assign`,
+        payload: '',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(`/work-items/${ADD_ORS_ID}`)
+      expect(assignWorkItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ADD_ORS_ID,
+          assigneeId: 'test-standard-id'
+        })
+      )
+      expect(applyWorkItemAction).not.toHaveBeenCalled()
+    })
+
+    test('does not show ORS ID, EU or OECD rows, or a supplied-value marker', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+      const summary = $('[data-testid="application-details"]').text()
+
+      expect(summary).not.toContain('ORS ID')
+      expect(summary).not.toContain('EU country')
+      expect(summary).not.toContain('OECD country')
+      expect($('.app-new-flag')).toHaveLength(0)
     })
   })
 

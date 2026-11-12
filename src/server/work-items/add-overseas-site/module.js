@@ -1,6 +1,7 @@
 import { registerModuleDetailTemplates } from '../core/templates.js'
 import { IN_YEAR_CHANGE_CATEGORY } from '../core/categories.js'
 import { standardWorkflow } from '../core/standard-workflow.js'
+import { buildAddOverseasSiteSummary } from '#/server/routes/add-overseas-site/application-summary.js'
 
 /**
  * RA-739. Add-ORS work item module: an operator's request to add an overseas
@@ -9,8 +10,9 @@ import { standardWorkflow } from '../core/standard-workflow.js'
  * management-be splits each submission into one work item per site.
  *
  * The detail page has the add-ORS case header and its Application summary
- * and Application history tabs. The summary body comes in a later task;
- * RA-495 adds the actions.
+ * and Application history tabs. The Application summary shows the site from
+ * `payload.site`, built by the type's own `buildApplicationSummary`, and the
+ * assignment panel; RA-495 adds the actions.
  */
 export const addOverseasSiteType = {
   id: 'add-overseas-site',
@@ -20,7 +22,9 @@ export const addOverseasSiteType = {
   templateVersion: 'v1',
   initialState: standardWorkflow.initialState,
   states: standardWorkflow.states,
-  transitions: standardWorkflow.transitions
+  transitions: standardWorkflow.transitions,
+  // The detail controller uses a type's own summary builder when it has one.
+  buildApplicationSummary: buildAddOverseasSiteSummary
 }
 
 export const addOverseasSiteModule = {

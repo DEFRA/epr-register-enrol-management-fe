@@ -153,6 +153,18 @@ only the Application summary and Application history tabs. Every work item
 page builds its header from a work item passed through
 `decorateForCaseHeader` (`routes/work-items/case-header.js`), so the
 type's header shows on every tab.
+
+A type may also supply `buildApplicationSummary({ workItem })`, the view
+model for its Application summary; the detail controller uses it in place of
+re-accreditation's `buildApplicationSummary` and passes it to the template as
+`applicationSummary`. Add-ORS builds its summary from `payload.site`
+(`routes/add-overseas-site/application-summary.js`). Its detail template
+extends `work-items/detail.njk`, overrides the `applicationSummary` block
+with the site summary and interim sites, and empties the `actionsCard`
+block, so it keeps the tabs, banners and assignment panel but has no actions
+panel. Both templates import the document and site-detail macros from
+`work-items/summary-macros.njk`. The file download route also finds BES
+files under `payload.site.besEvidence.files`.
 `add-overseas-site/module.js` is the example.
 
 ## Cross-type list
