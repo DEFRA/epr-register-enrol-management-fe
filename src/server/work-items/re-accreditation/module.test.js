@@ -21,7 +21,7 @@ describe('reAccreditationModule', () => {
   test('declares the expected stable identity and template version', () => {
     expect(reAccreditationType.id).toBe('re-accreditation')
     expect(reAccreditationType.displayName).toBe('Re-accreditation')
-    expect(reAccreditationType.templateVersion).toBe('v18')
+    expect(reAccreditationType.templateVersion).toBe('v19')
     expect(reAccreditationType.initialState.id).toBe('submitted')
   })
 
@@ -125,7 +125,8 @@ describe('reAccreditationModule', () => {
     ['withdraw-during-decision', 'awaiting-decision', 'withdrawn'],
     ['withdraw-during-query', 'queried', 'withdrawn'],
     ['withdraw-during-updated', 'updated', 'withdrawn'],
-    // RA-291. Caller-invocable: each has a distinct from-state.
+    // RA-291. Each has a distinct from-state; RA-000 made them
+    // non-caller-invocable (see the server-resolved set test).
     ['query-during-duly-making', 'submitted', 'queried'],
     ['query-during-duly-made', 'duly-made', 'queried'],
     ['query-during-assessment', 'assessment-in-progress', 'queried'],
@@ -232,6 +233,12 @@ describe('reAccreditationModule', () => {
       'make-determination-approved',
       // RA-527. Step 1 of a refusal, also applied by the decision endpoint.
       'make-determination-rejected',
+      // RA-000 (v19). Applied only by the query endpoint's service, which
+      // stamps `currentQuery` before the operator push reads it.
+      'query-during-assessment',
+      'query-during-decision',
+      'query-during-duly-made',
+      'query-during-duly-making',
       'resume-during-assessment',
       'resume-during-decision',
       'resume-during-duly-made',

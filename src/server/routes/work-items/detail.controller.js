@@ -23,7 +23,9 @@ import {
 } from '#/server/work-items/re-accreditation/states.js'
 import {
   isContinueReviewState,
-  isPreDulyMadeWaypoint
+  isPreDulyMadeWaypoint,
+  isQueryActionId,
+  isQueryState
 } from './re-accreditation-cta.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import {
@@ -124,6 +126,40 @@ function isWithdrawActionId(actionId) {
   )
 }
 
+// RA-000. Resume is, like withdraw, an OPERATOR action: the four
+// `resume-during-*` transitions are applied by management-be when the
+// operator resubmits a queried application, and no Case Management journey
+// applies them. Rejected on the generic route for the same reason withdraw is.
+const RESUME_ACTION_PREFIX = 'resume'
+
+function isResumeActionId(actionId) {
+  return (
+    typeof actionId === 'string' &&
+    (actionId === RESUME_ACTION_PREFIX ||
+      actionId.startsWith(`${RESUME_ACTION_PREFIX}-`))
+  )
+}
+
+// RA-000. The action ids the generic apply-action route never forwards.
+// Each is a whole action CATEGORY with no generic-route use in Case
+// Management, so — per the RA-317 note above — refusing it here does not
+// move an authorisation decision into this tier:
+//   - withdraw / resume: operator actions, absent from Case Management.
+//   - query: Case Management queries ONLY through `POST /work-items/{id}/query`
+//     (query.controller.js), whose backend query service self-assigns,
+//     stamps `currentQuery` and writes the `application-queried` audit
+//     entry. A `query-*` id applied generically skips all three, and the
+//     operator push then sends an empty or a previous query.
+// Every other id is still forwarded; the backend's own guard stays
+// authoritative for it (see the docstring above `makeApplyActionController`).
+function isGenericRouteRejectedActionId(actionId) {
+  return (
+    isWithdrawActionId(actionId) ||
+    isQueryActionId(actionId) ||
+    isResumeActionId(actionId)
+  )
+}
+
 export function makeApplyActionController({
   service = createWorkItemActionsService()
 } = {}) {
@@ -131,11 +167,16 @@ export function makeApplyActionController({
     async handler(request, h) {
       const { id, actionId } = request.params
 
-      // RA-317. Reject withdraw ids up front — the action is not available in
-      // Case Management, so a crafted POST that bypasses the (now removed) UI
-      // control gets the same "action not available" rendering the app gives
-      // any unavailable action, and the backend is never asked to withdraw.
-      if (isWithdrawActionId(actionId)) {
+      // RA-317 / RA-000. Reject withdraw, query and resume ids up front (see
+      // `isGenericRouteRejectedActionId`). Such a POST only arrives crafted —
+      // no page renders a generic-route control for them — so it gets the
+      // same "action not available" rendering the app gives any unavailable
+      // action, is logged at Error, and the backend is never called.
+      if (isGenericRouteRejectedActionId(actionId)) {
+        logger.error(
+          { workItemId: id, actionId, route: request.route.path },
+          'Rejected an action id the generic apply-action route never applies'
+        )
         return renderDetailFromResult({
           request,
           h,
@@ -619,6 +660,10 @@ async function loadPriorYear({ workItem, id, user }) {
 //    `re-accreditation/module.js` and a change there moves the CTA with it.
 //    This is not a task feature and must keep working — it is the only path
 //    out of `updated`.
+//  - `canQuery` (RA-000) — whether the Query link renders. Read off the
+//    module's `query-during-*` declarations (`isQueryState`), because the
+//    backend does not project those non-caller-invocable transitions. The
+//    query endpoint remains authoritative.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
 //    a terminal state (approved / rejected / withdrawn), the template
 //    suppresses the generic action panel and shows a status tag.
@@ -689,6 +734,11 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     isContinueReviewState(source?.stateId) &&
     !isPreDulyMadeWaypoint(source?.originStateId)
 
+  // RA-000. The Query link. Same discipline as Continue review: read off the
+  // module's `query-during-*` declarations, because the backend no longer
+  // projects those non-caller-invocable transitions into `availableActions`.
+  const canQuery = isQueryState(source?.stateId)
+
   const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
   // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
   // state-badge map so it matches the list and the envelope State badge.
@@ -725,6 +775,7 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     canChangePaymentDate,
     changePaymentDateHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/change-payment-date`,
     canContinueReview,
+    canQuery,
     continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
     isReadOnlyState,
     stateTagClasses,

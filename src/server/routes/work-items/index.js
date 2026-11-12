@@ -166,6 +166,8 @@ export const workItems = {
         // Management service withdraw journey. The generic apply-action route above additionally rejects
         // any `withdraw`/`withdraw-*` action id server-side (see
         // makeApplyActionController), so a crafted POST cannot withdraw.
+        // RA-000: it rejects `query`/`query-*` and `resume`/`resume-*` ids the
+        // same way, so a query can only be raised through the route below.
         {
           // RA-291. Query an application: the caseworker picks the areas
           // to unlock and gives a reason. The backend resolves the state

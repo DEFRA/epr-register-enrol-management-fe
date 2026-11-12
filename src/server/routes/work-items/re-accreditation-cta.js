@@ -1,4 +1,5 @@
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
+import { resolveSelfAssignLandingState } from '#/server/work-items/core/engine.js'
 import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { DULY_MAKE_ACTION_ID } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
 
@@ -28,6 +29,57 @@ export function isContinueReviewState(stateId) {
     (t) =>
       t.actionId?.startsWith(CONTINUE_REVIEW_ACTION_PREFIX) &&
       t.fromStateId === stateId
+  )
+}
+
+/**
+ * Is this the id of a query transition — `query` or `query-<something>`?
+ * (RA-291.) Re-accreditation declares four, `query-during-*`.
+ */
+export function isQueryActionId(actionId) {
+  if (typeof actionId !== 'string') {
+    return false
+  }
+  return actionId === 'query' || actionId.startsWith('query-')
+}
+
+/**
+ * Can an application in `stateId` be queried? (RA-000.)
+ *
+ * Gates the Query link on the detail page and the query page itself. The
+ * `query-during-*` transitions are non-caller-invocable from management-be
+ * v19, so the backend no longer projects them into `availableActions` and
+ * this cannot read the projection. It reads the module declaration instead,
+ * the same discipline as `isContinueReviewState`: the state literals stay in
+ * `re-accreditation/module.js`.
+ *
+ * management-be also declares `query-during-assessment` from
+ * `assessment-started`, which the module cannot redeclare (action ids are
+ * unique there). That state is the one the `startsOnSelfAssign` transition
+ * lands on, so it is added from `resolveSelfAssignLandingState` — the same
+ * way `decision/eligibility.js` covers the backend's second
+ * `submit-for-decision`.
+ *
+ * Only decides what to draw. `POST /work-items/re-accreditation/{id}/query`
+ * stays authoritative and answers 409 for a state it will not query.
+ *
+ * Fails CLOSED (returns `false`) for a missing state, an unregistered type,
+ * or a type that declares no query transition.
+ */
+export function isQueryState(stateId) {
+  if (stateId == null) {
+    return false
+  }
+  const type = getWorkItemType(RE_ACCREDITATION_TYPE_ID)
+  const fromStateIds = (type?.transitions ?? [])
+    .filter((t) => isQueryActionId(t.actionId))
+    .map((t) => t.fromStateId)
+  if (fromStateIds.length === 0) {
+    return false
+  }
+  return (
+    fromStateIds.includes(stateId) ||
+    stateId === resolveSelfAssignLandingState(type)
   )
 }
 

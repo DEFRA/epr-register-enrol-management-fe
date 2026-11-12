@@ -25,6 +25,8 @@ import {
 } from './query.schema.js'
 import { createQueryService } from './query.service.js'
 import { isExporterApplication } from './application-summary.js'
+import { isQueryState } from './re-accreditation-cta.js'
+import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 
 const VIEW_PATH = 'work-items/query'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -51,26 +53,6 @@ function breadcrumbs(id, ref) {
 
 function flashBanner(request, banner) {
   request.yar?.flash?.('flashBanner', banner)
-}
-
-/**
- * A query transition is any action the backend projects whose id is
- * `query` or `query-<something>`. Deriving the affordance from the
- * projection rather than from state names means the link disappears by
- * itself once the item has already been queried.
- */
-export function isQueryActionId(actionId) {
-  if (typeof actionId !== 'string') {
-    return false
-  }
-  return actionId === 'query' || actionId.startsWith('query-')
-}
-
-export function hasQueryAction(workItem) {
-  const actions = Array.isArray(workItem?.availableActions)
-    ? workItem.availableActions
-    : []
-  return actions.some((a) => isQueryActionId(a?.actionId))
 }
 
 /**
@@ -178,7 +160,14 @@ export function makeShowQueryController() {
       }
 
       const workItem = loaded.workItem
-      if (!hasQueryAction(workItem)) {
+      // RA-000. Read off the module declaration, not `availableActions`: the
+      // backend no longer projects the non-caller-invocable `query-during-*`
+      // transitions. Only re-accreditation can be queried (the query service
+      // posts to its type-specific endpoint).
+      if (
+        workItem.typeId !== RE_ACCREDITATION_TYPE_ID ||
+        !isQueryState(workItem.stateId)
+      ) {
         flashBanner(request, {
           type: 'error',
           text: 'This application cannot be queried in its current state.'
