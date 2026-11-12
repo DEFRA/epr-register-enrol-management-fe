@@ -259,6 +259,29 @@ describe('RA-739: in-year change applications', () => {
       expect(card.text()).toContain('Date submitted:')
     })
 
+    test('lays out its lines as the re-accreditation card does', async () => {
+      const $ = await listPage(anAddOrsItem())
+      const card = $(`[data-work-item-id="${ADD_ORS_ID}"]`)
+
+      // Request type and Assigned to share one footer line, as Submitted on
+      // and Assigned to do on a re-accreditation card.
+      const footer = card.find('[data-testid="application-card-footer"]')
+      expect(footer).toHaveLength(1)
+      expect(
+        footer
+          .children('.app-application-card__meta')
+          .map((_, el) => $(el).attr('data-testid'))
+          .get()
+      ).toEqual(['request-type', 'application-assigned-to'])
+      // The organisation and site lines are the same size.
+      expect(
+        card.find('[data-testid="application-org"]').hasClass('govuk-body')
+      ).toBe(true)
+      expect(
+        card.find('[data-testid="application-site"]').hasClass('govuk-body')
+      ).toBe(true)
+    })
+
     test('shows the site name alone when the site has no ORS id', async () => {
       const item = anAddOrsItem()
       item.payload.site = { siteName: 'Denmark PR' }

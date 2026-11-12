@@ -90,8 +90,9 @@
 }
 
 // RA-739. In-year change card: a "Date submitted | SUB-… (N requests)" line
-// above the reference link, then the organisation, site, request type and
-// Assigned to lines, per the Figma Applications list.
+// above the reference link, then the organisation and site lines (the same
+// size), then a footer line with Request type and Assigned to, laid out as
+// the re-accreditation card's "Submitted on / Assigned to" footer.
 .app-application-card__submission {
   display: flex;
   flex-wrap: wrap;
@@ -113,10 +114,6 @@
 }
 
 .app-application-card__site {
-  margin-bottom: govuk-spacing(3);
-}
-
-.app-application-card__line {
   margin-bottom: govuk-spacing(1);
 }
 

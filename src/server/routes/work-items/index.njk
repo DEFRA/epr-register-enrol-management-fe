@@ -291,18 +291,18 @@
                   </p>
                 {% endset %}
                 {% call applicationCard(item, { lead: submission, modifier: "in-year-change" }) %}
-                  <p class="govuk-body-s app-application-card__org" data-testid="application-org">
+                  <p class="govuk-body app-application-card__org" data-testid="application-org">
                     <span data-testid="org-name">{{ card.orgName or "—" }}</span>{% if card.orgId %} (<span data-testid="org-id">{{ card.orgId }}</span>){% endif %}{% if card.material %}: <span data-testid="material">{{ card.material }}</span>{% endif %}
                   </p>
                   <p class="govuk-body app-application-card__site" data-testid="application-site">
                     <span data-testid="site-name">{{ card.site.name or "—" }}</span>{% if card.site.reference %} (<span data-testid="ors-id">{{ card.site.reference }}</span>){% endif %}
                   </p>
-                  <p class="govuk-body-s app-application-card__line" data-testid="request-type">
-                    <span class="app-application-card__meta-label">Request type:</span> {{ card.requestType }}
-                  </p>
-                  <p class="govuk-body-s app-application-card__line" data-testid="application-assigned-to">
-                    <span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span>
-                  </p>
+                  {# The same footer line as the re-accreditation card's      #}
+                  {# "Submitted on / Assigned to".                             #}
+                  <div class="app-application-card__footer" data-testid="application-card-footer">
+                    <span class="app-application-card__meta" data-testid="request-type"><span class="app-application-card__meta-label">Request type:</span> {{ card.requestType }}</span>
+                    <span class="app-application-card__meta" data-testid="application-assigned-to"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
+                  </div>
                 {% endcall %}
                 {% else %}
                 {% call applicationCard(item) %}
