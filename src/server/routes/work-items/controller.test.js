@@ -2777,7 +2777,7 @@ describe('#workItemListController', () => {
   // RA-739 — "In-year change" application type, sent as a category   //
   // ---------------------------------------------------------------- //
   describe('RA-739 in-year change application type', () => {
-    test('Offers "In-year change" straight after "Re-accreditation"', async () => {
+    test('Offers "In-year change" as the last application type', async () => {
       getWorkItems.mockResolvedValue(emptyPage())
 
       const { result } = await server.inject({
@@ -2792,7 +2792,13 @@ describe('#workItemListController', () => {
       const values = [
         ...section.matchAll(/name="applicationType"[^>]*value="([^"]+)"/g)
       ].map((m) => m[1])
-      expect(values.slice(0, 2)).toEqual(['re-accreditation', 'in-year-change'])
+      expect(values).toEqual([
+        're-accreditation',
+        'accreditation',
+        'registration-application',
+        'annual-fee-payment',
+        'in-year-change'
+      ])
       expect(section).toContain('In-year change')
     })
 

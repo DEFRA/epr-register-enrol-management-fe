@@ -173,13 +173,13 @@ const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
 // upgrade later), unioned with the typeIds.
 const APPLICATION_TYPE_FILTER_OPTIONS = [
   { value: RE_ACCREDITATION_TYPE_ID, text: 'Re-accreditation' },
-  { value: IN_YEAR_CHANGE_CATEGORY, text: 'In-year change', isCategory: true },
   { value: 'accreditation', text: 'Accreditation' },
   { value: 'registration-application', text: 'Registration application' },
   {
     value: 'annual-fee-payment',
     text: 'Payment of annual registration fee'
-  }
+  },
+  { value: IN_YEAR_CHANGE_CATEGORY, text: 'In-year change', isCategory: true }
 ]
 const ALLOWED_APPLICATION_TYPE_IDS = new Set(
   APPLICATION_TYPE_FILTER_OPTIONS.map((o) => o.value)
