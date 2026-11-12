@@ -61,7 +61,7 @@
  */
 
 import { getWorkItemType } from '../../core/registry.js'
-import { resolveSelfAssignLandingState } from '../../core/engine.js'
+import { resolveActionEntryStates } from '../../core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
 export const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
@@ -114,46 +114,37 @@ export function isValidDecisionOutcome(outcome) {
  * @returns {Set<string>}
  */
 function decisionEntryStates(type) {
-  const transitions = type?.transitions ?? []
-  const states = new Set()
-
   // `awaiting-decision` — the state both outcome transitions fire from.
-  for (const actionId of Object.values(DECISION_OUTCOMES)) {
-    const transition = transitions.find((t) => t.actionId === actionId)
-    if (transition?.fromStateId != null) {
-      states.add(transition.fromStateId)
-    }
-  }
-
   // `assessment-in-progress` — the state the backend's combined call enters
   // from, applying `submit-for-decision` itself before the decision.
-  const submit = transitions.find(
-    (t) => t.actionId === SUBMIT_FOR_DECISION_ACTION_ID
-  )
-  if (submit?.fromStateId != null) {
-    states.add(submit.fromStateId)
-  }
+  // RA-527 follow-up. `assessment-started` — the state the start lands on, a
+  // started case that still reads "Duly made". management-be v18 declares a
+  // second `submit-for-decision` from it, which `module.js` cannot mirror
+  // (action ids are unique there), so `core/engine.js#
+  // resolveActionEntryStates` adds it off the start's `toStateId`, the same
+  // helper behind the Query link (`isQueryState`).
+  const states = resolveActionEntryStates(type, isDecisionEntryActionId)
 
   // RA-595. `duly-made` — a frontend-only rule. The submit route starts
   // assessment before posting the decision, so the backend never sees a
   // decision from this state.
-  const start = transitions.find((t) => t.startsOnSelfAssign === true)
+  const start = (type?.transitions ?? []).find(
+    (t) => t.startsOnSelfAssign === true
+  )
   if (start?.fromStateId != null) {
     states.add(start.fromStateId)
   }
 
-  // RA-527 follow-up. `assessment-started` — the state the start lands on, a
-  // started case that still reads "Duly made". management-be v18 declares a
-  // second `submit-for-decision` from it, which `module.js` cannot mirror
-  // (action ids are unique there), so it is read off the start's `toStateId`
-  // by `core/engine.js#resolveSelfAssignLandingState`, the same helper behind
-  // the change-deadline link.
-  const landingStateId = resolveSelfAssignLandingState(type)
-  if (landingStateId != null) {
-    states.add(landingStateId)
-  }
-
   return states
+}
+
+const DECISION_ENTRY_ACTION_IDS = new Set([
+  ...Object.values(DECISION_OUTCOMES),
+  SUBMIT_FOR_DECISION_ACTION_ID
+])
+
+function isDecisionEntryActionId(actionId) {
+  return DECISION_ENTRY_ACTION_IDS.has(actionId)
 }
 
 /**

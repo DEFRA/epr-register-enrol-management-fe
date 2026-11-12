@@ -25,7 +25,10 @@ import {
 } from './query.schema.js'
 import { createQueryService } from './query.service.js'
 import { isExporterApplication } from './application-summary.js'
-import { evaluateQueryEligibility } from './re-accreditation-cta.js'
+import {
+  evaluateQueryEligibility,
+  QUERY_ELIGIBILITY
+} from './re-accreditation-cta.js'
 
 const VIEW_PATH = 'work-items/query'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -173,10 +176,10 @@ export function makeShowQueryController() {
       const eligibility = evaluateQueryEligibility(workItem, {
         route: request.route.path
       })
-      if (eligibility === 'no-state') {
+      if (eligibility === QUERY_ELIGIBILITY.NO_STATE) {
         return unavailable(h, id, 'The work item has no state.')
       }
-      if (eligibility !== 'ok') {
+      if (eligibility !== QUERY_ELIGIBILITY.OK) {
         flashBanner(request, {
           type: 'error',
           text: 'This application cannot be queried in its current state.'

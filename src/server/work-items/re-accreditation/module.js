@@ -361,8 +361,8 @@ const TRANSITIONS = [
   // `submit-for-decision` above, that second entry cannot be expressed here
   // (`assertValidWorkItemModule` requires globally-unique action ids), so
   // `isQueryState` adds the state the `startsOnSelfAssign` transition lands
-  // on (`core/engine.js#resolveSelfAssignLandingState`), the same way
-  // `decision/eligibility.js` covers the second `submit-for-decision`.
+  // on (`core/engine.js#resolveActionEntryStates`), the same helper
+  // `decision/eligibility.js` uses for the second `submit-for-decision`.
   {
     actionId: 'query-during-assessment',
     displayName: 'Query',

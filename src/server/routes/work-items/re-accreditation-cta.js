@@ -1,11 +1,23 @@
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
-import { resolveSelfAssignLandingState } from '#/server/work-items/core/engine.js'
+import { resolveActionEntryStates } from '#/server/work-items/core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { isQueryActionId } from './generic-route-action-ids.js'
 import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { DULY_MAKE_ACTION_ID } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
 
+const logger = createLogger()
+
 const CONTINUE_REVIEW_ACTION_PREFIX = 'continue-review-during-'
+
+/**
+ * The results of `evaluateQueryEligibility`. Compare against these, never
+ * against the string values.
+ */
+export const QUERY_ELIGIBILITY = Object.freeze({
+  OK: 'ok',
+  NOT_QUERYABLE: 'not-queryable',
+  NO_STATE: 'no-state'
+})
 
 /**
  * Is `stateId` the state the `continue-review-during-*` transitions leave
@@ -47,8 +59,8 @@ export function isContinueReviewState(stateId) {
  * management-be also declares `query-during-assessment` from
  * `assessment-started`, which the module cannot redeclare (action ids are
  * unique there). That state is the one the `startsOnSelfAssign` transition
- * lands on, so it is added from `resolveSelfAssignLandingState` — the same
- * way `decision/eligibility.js` covers the backend's second
+ * lands on, so `core/engine.js#resolveActionEntryStates` adds it — the same
+ * helper `decision/eligibility.js` uses to cover the backend's second
  * `submit-for-decision`.
  *
  * The landing-state coupling exists only because of that duplicate-id
@@ -72,23 +84,16 @@ export function isQueryState(stateId) {
       `isQueryState: work item type "${RE_ACCREDITATION_TYPE_ID}" is not registered`
     )
   }
-  const fromStateIds = Array.isArray(type.transitions)
-    ? type.transitions
-        .filter((t) => isQueryActionId(t.actionId))
-        .map((t) => t.fromStateId)
-    : null
-  if (!fromStateIds?.length) {
+  const declaresQuery =
+    Array.isArray(type.transitions) &&
+    type.transitions.some((t) => isQueryActionId(t.actionId))
+  if (!declaresQuery) {
     throw new Error(
       `isQueryState: work item type "${RE_ACCREDITATION_TYPE_ID}" declares no query transition`
     )
   }
-  return (
-    fromStateIds.includes(stateId) ||
-    stateId === resolveSelfAssignLandingState(type)
-  )
+  return resolveActionEntryStates(type, isQueryActionId).has(stateId)
 }
-
-const logger = createLogger()
 
 /**
  * Can this raw backend work item be queried? (RA-000.)
@@ -101,24 +106,40 @@ const logger = createLogger()
  *
  * @param {object} workItem The untouched `getWorkItem` DTO.
  * @param {{ route: string }} context The route that read it, for the log.
- * @returns {'ok' | 'not-queryable' | 'no-state'}
- *   - `not-queryable` for another type (`isQueryState` answers for
+ * @returns {string} One of {@link QUERY_ELIGIBILITY}:
+ *   - `OK` when the item can be queried.
+ *   - `NOT_QUERYABLE` for another type (`isQueryState` answers for
  *     re-accreditation only) or a state with no query transition.
- *   - `no-state` when the backend returned a re-accreditation item with no
+ *   - `NO_STATE` when the backend returned a re-accreditation item with no
  *     `stateId`: a broken upstream response, logged here at Error.
  */
 export function evaluateQueryEligibility(workItem, { route }) {
   if (workItem?.typeId !== RE_ACCREDITATION_TYPE_ID) {
-    return 'not-queryable'
+    return QUERY_ELIGIBILITY.NOT_QUERYABLE
   }
   if (workItem.stateId == null) {
     logger.error(
       { workItemId: workItem.id, route },
       'Work item from management-be has no stateId; cannot decide whether it can be queried'
     )
-    return 'no-state'
+    return QUERY_ELIGIBILITY.NO_STATE
   }
-  return isQueryState(workItem.stateId) ? 'ok' : 'not-queryable'
+  return isQueryState(workItem.stateId)
+    ? QUERY_ELIGIBILITY.OK
+    : QUERY_ELIGIBILITY.NOT_QUERYABLE
+}
+
+/**
+ * `evaluateQueryEligibility` as a yes/no, for the detail page's Query link,
+ * which draws nothing different for `NOT_QUERYABLE` and `NO_STATE` (the
+ * latter is already logged at Error by `evaluateQueryEligibility`).
+ *
+ * @param {object} workItem The untouched `getWorkItem` DTO.
+ * @param {{ route: string }} context The route that read it, for the log.
+ * @returns {boolean}
+ */
+export function canQueryWorkItem(workItem, context) {
+  return evaluateQueryEligibility(workItem, context) === QUERY_ELIGIBILITY.OK
 }
 
 /**

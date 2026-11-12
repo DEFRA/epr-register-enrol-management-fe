@@ -1,7 +1,8 @@
 /**
  * The action ids the generic `POST /work-items/{id}/actions/{actionId}`
- * route never forwards to the backend (RA-317, RA-000), and the params
- * validation that keeps those checks sound.
+ * route never forwards to the backend (RA-317, RA-000), and the lower-case
+ * kebab shape every action id has. The route's params validation, which
+ * enforces that shape, lives with the route in `index.js`.
  *
  * Each refused id is a whole action CATEGORY with no generic-route use in
  * Case Management. Every other id is forwarded and the backend's own guard
@@ -22,17 +23,10 @@
  *     skips all three, and the operator push then sends an empty or a
  *     previous query.
  */
-import Boom from '@hapi/boom'
-import Joi from 'joi'
-
-import { createLogger } from '#/server/common/helpers/logging/logger.js'
-
-const logger = createLogger()
-
 // Every action id is lower-case kebab. management-be resolves action ids
 // case-insensitively, so without this a `Withdraw` or `Query-During-Decision`
 // would slip past the case-sensitive prefix checks below and be applied.
-const ACTION_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
+export const ACTION_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
 /** `prefix` itself, or `prefix-<anything>`. */
 function hasActionIdPrefix(actionId, prefix) {
@@ -60,28 +54,4 @@ export function isGenericRouteRejectedActionId(actionId) {
     isQueryActionId(actionId) ||
     isResumeActionId(actionId)
   )
-}
-
-/**
- * Route `options.validate` for the generic apply-action route. An action id
- * that is not lower-case kebab is refused before the handler runs: logged at
- * Error and answered with the generic 400 error page.
- */
-export const applyActionParamsValidation = {
-  params: Joi.object({
-    id: Joi.string().required(),
-    actionId: Joi.string().pattern(ACTION_ID_PATTERN).required()
-  }),
-  failAction(request, _h, err) {
-    logger.error(
-      {
-        workItemId: request.params.id,
-        actionId: request.params.actionId,
-        route: request.route.path,
-        reason: err.message
-      },
-      'Rejected a malformed action id on the generic apply-action route'
-    )
-    throw Boom.badRequest('Invalid action id')
-  }
 }

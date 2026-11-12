@@ -2,14 +2,18 @@ import {
   clearWorkItemRegistry,
   registerWorkItemType
 } from '#/server/work-items/core/registry.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import {
+  canQueryWorkItem,
+  evaluateQueryEligibility,
   isContinueReviewState,
-  isPreDulyMadeWaypoint
+  isPreDulyMadeWaypoint,
+  QUERY_ELIGIBILITY
 } from './re-accreditation-cta.js'
 
-// Minimal re-accreditation type carrying only the transitions these two
-// predicates read: one `continue-review-during-*` (leaves from `updated`)
-// and `duly-make` (leaves from `submitted`). The literals live here in the
+// Minimal re-accreditation type carrying only the transitions these
+// predicates read: one `continue-review-during-*` (leaves from `updated`),
+// `duly-make` and one `query-during-*` (both leave from `submitted`). The literals live here in the
 // fixture exactly as they live in the real `module.js`, so the positive
 // cases assert the helpers resolve them off the declaration.
 function registerReaccreditation() {
@@ -28,6 +32,13 @@ function registerReaccreditation() {
         displayName: 'Duly make',
         fromStateId: 'submitted',
         toStateId: 'duly-made',
+        callerInvocable: false
+      },
+      {
+        actionId: 'query-during-duly-making',
+        displayName: 'Query',
+        fromStateId: 'submitted',
+        toStateId: 'queried',
         callerInvocable: false
       },
       {
@@ -93,6 +104,74 @@ describe('re-accreditation-cta helpers', () => {
     // not registered.
     it('returns false when the re-accreditation type is not registered', () => {
       expect(isPreDulyMadeWaypoint('submitted')).toBe(false)
+    })
+  })
+
+  describe('evaluateQueryEligibility', () => {
+    const route = '/work-items/{id}'
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('is OK for a re-accreditation item in a state a query leaves from', () => {
+      registerReaccreditation()
+      expect(
+        evaluateQueryEligibility(
+          { id: 'wi-1', typeId: 're-accreditation', stateId: 'submitted' },
+          { route }
+        )
+      ).toBe(QUERY_ELIGIBILITY.OK)
+    })
+
+    it('is NOT_QUERYABLE for a state no query leaves from', () => {
+      registerReaccreditation()
+      expect(
+        evaluateQueryEligibility(
+          { id: 'wi-1', typeId: 're-accreditation', stateId: 'updated' },
+          { route }
+        )
+      ).toBe(QUERY_ELIGIBILITY.NOT_QUERYABLE)
+    })
+
+    it('is NOT_QUERYABLE for another work item type, without reading the registry', () => {
+      expect(
+        evaluateQueryEligibility(
+          { id: 'wi-1', typeId: 'other-type', stateId: 'submitted' },
+          { route }
+        )
+      ).toBe(QUERY_ELIGIBILITY.NOT_QUERYABLE)
+    })
+
+    it('is NO_STATE, logged at Error, for a re-accreditation item with no stateId', () => {
+      const errorSpy = vi.spyOn(createLogger(), 'error')
+      expect(
+        evaluateQueryEligibility(
+          { id: 'wi-1', typeId: 're-accreditation' },
+          { route }
+        )
+      ).toBe(QUERY_ELIGIBILITY.NO_STATE)
+      expect(errorSpy).toHaveBeenCalledWith(
+        { workItemId: 'wi-1', route },
+        expect.stringContaining('has no stateId')
+      )
+    })
+
+    it('canQueryWorkItem is true only for OK', () => {
+      registerReaccreditation()
+      const item = (stateId) => ({
+        id: 'wi-1',
+        typeId: 're-accreditation',
+        stateId
+      })
+      expect(canQueryWorkItem(item('submitted'), { route })).toBe(true)
+      expect(canQueryWorkItem(item('updated'), { route })).toBe(false)
+      vi.spyOn(createLogger(), 'error').mockImplementation(() => {})
+      expect(canQueryWorkItem(item(undefined), { route })).toBe(false)
+    })
+
+    it('exposes frozen results', () => {
+      expect(Object.isFrozen(QUERY_ELIGIBILITY)).toBe(true)
     })
   })
 })

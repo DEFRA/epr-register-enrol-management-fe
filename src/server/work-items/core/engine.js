@@ -173,6 +173,36 @@ export function resolveSelfAssignLandingState(type) {
 }
 
 /**
+ * The states a set of actions can be taken from, as the backend sees them:
+ * the `fromStateId` of every declared transition whose `actionId` matches
+ * `isActionId`, plus the state the type's `startsOnSelfAssign` transition
+ * lands on (`resolveSelfAssignLandingState`).
+ *
+ * The landing state is added because management-be declares a second copy
+ * of some transitions from it (see `resolveSelfAssignLandingState`) that a
+ * module cannot mirror. It is added whether or not any declared transition
+ * matched, so a caller that must tell "declares none of these actions"
+ * apart checks the declaration itself (`isQueryState` does).
+ *
+ * @param {object} type Work item type declaration (`module.type`).
+ * @param {(actionId: unknown) => boolean} isActionId Which actions to read.
+ * @returns {Set<string>} Empty for a missing type or transitions list.
+ */
+export function resolveActionEntryStates(type, isActionId) {
+  const states = new Set()
+  for (const t of type?.transitions ?? []) {
+    if (isActionId(t.actionId) && t.fromStateId != null) {
+      states.add(t.fromStateId)
+    }
+  }
+  const landingStateId = resolveSelfAssignLandingState(type)
+  if (landingStateId != null) {
+    states.add(landingStateId)
+  }
+  return states
+}
+
+/**
  * Decide whether an action would be allowed for a work item right now.
  * Returns `{ allowed: true }` or `{ allowed: false, reason }` so callers can
  * surface the failure in a form.

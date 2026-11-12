@@ -23,7 +23,7 @@ import {
 } from '#/server/work-items/re-accreditation/states.js'
 import {
   isContinueReviewState,
-  evaluateQueryEligibility,
+  canQueryWorkItem,
   isPreDulyMadeWaypoint
 } from './re-accreditation-cta.js'
 import {
@@ -722,7 +722,7 @@ function applyReAccreditationViewModel({ workItem, source = workItem, route }) {
     changePaymentDateHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/change-payment-date`,
     canContinueReview,
     // RA-000. The Query link — see `evaluateQueryEligibility`.
-    canQuery: evaluateQueryEligibility(source, { route }) === 'ok',
+    canQuery: canQueryWorkItem(source, { route }),
     continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
     isReadOnlyState,
     stateTagClasses,
