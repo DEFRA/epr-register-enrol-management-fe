@@ -23,8 +23,13 @@ import {
 } from '#/server/work-items/re-accreditation/states.js'
 import {
   isContinueReviewState,
+  canQueryWorkItem,
   isPreDulyMadeWaypoint
 } from './re-accreditation-cta.js'
+import {
+  isGenericRouteRejectedActionId,
+  isWithdrawActionId
+} from './generic-route-action-ids.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import {
   isCallerInvocable,
@@ -74,7 +79,13 @@ export const workItemDetailController = {
 }
 
 /**
- * Apply a named action. Forwards straight to the backend.
+ * Apply a named action. Forwards straight to the backend, except for three
+ * whole action categories refused here by id prefix — withdraw (RA-317),
+ * query and resume (RA-000); see `generic-route-action-ids.js`. Those are
+ * refused because Case Management never applies them through this route,
+ * not because of the `callerInvocable` flag, and the route's params
+ * validation requires a lower-case kebab `actionId` so the prefix checks
+ * cannot be dodged by case. The rest of this note is about every OTHER id.
  *
  * ⚠ THIS HANDLER DELIBERATELY DOES NOT CHECK WHETHER THE ACTION IS ALLOWED,
  * and adding such a check here would be a real regression. Reading this in
@@ -99,31 +110,6 @@ export const workItemDetailController = {
  * `core/engine.js#canApplyAction` says the same from the other side — it is
  * a mirror for inspecting a work item, never a control on this path.
  */
-// RA-317. Withdraw is an OPERATOR action; Case Management must never show it
-// or apply it, in any state. This helper backs both halves of that:
-//   1. `decorate` strips `withdraw`/`withdraw-*` from `availableActions`, so
-//      no withdraw affordance ever renders (and a withdraw-only state falls
-//      through to the honest "No actions available" empty state).
-//   2. `makeApplyActionController` rejects the same ids before the backend is
-//      called, so a crafted POST that bypasses the UI cannot withdraw.
-// Unlike every OTHER action id (which the apply-action route deliberately
-// forwards to the backend as authoritative — see its docstring below), this
-// is not moving an authorisation decision into the wrong tier: the whole
-// ACTION CATEGORY is absent from the Case Management service, so refusing it
-// here is the correct place.
-// Kept as a local helper rather than importing the now-deleted
-// withdraw.service.js, so the removed Case Management service withdraw
-// journey leaves no dead code.
-const WITHDRAW_ACTION_PREFIX = 'withdraw'
-
-function isWithdrawActionId(actionId) {
-  return (
-    typeof actionId === 'string' &&
-    (actionId === WITHDRAW_ACTION_PREFIX ||
-      actionId.startsWith(`${WITHDRAW_ACTION_PREFIX}-`))
-  )
-}
-
 export function makeApplyActionController({
   service = createWorkItemActionsService()
 } = {}) {
@@ -131,11 +117,16 @@ export function makeApplyActionController({
     async handler(request, h) {
       const { id, actionId } = request.params
 
-      // RA-317. Reject withdraw ids up front — the action is not available in
-      // Case Management, so a crafted POST that bypasses the (now removed) UI
-      // control gets the same "action not available" rendering the app gives
-      // any unavailable action, and the backend is never asked to withdraw.
-      if (isWithdrawActionId(actionId)) {
+      // RA-317 / RA-000. Reject withdraw, query and resume ids up front (see
+      // `isGenericRouteRejectedActionId`). Such a POST only arrives crafted —
+      // no page renders a generic-route control for them — so it gets the
+      // same "action not available" rendering the app gives any unavailable
+      // action, is logged at Error, and the backend is never called.
+      if (isGenericRouteRejectedActionId(actionId)) {
+        logger.error(
+          { workItemId: id, actionId, route: request.route.path },
+          'Rejected an action id the generic apply-action route never applies'
+        )
         return renderDetailFromResult({
           request,
           h,
@@ -473,7 +464,8 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   // the raw DTO.
   const enriched = applyReAccreditationViewModel({
     workItem: decorated,
-    source: result.workItem
+    source: result.workItem,
+    route: request.route.path
   })
   const templatePath = resolveDetailTemplate(
     enriched.typeId,
@@ -619,6 +611,10 @@ async function loadPriorYear({ workItem, id, user }) {
 //    `re-accreditation/module.js` and a change there moves the CTA with it.
 //    This is not a task feature and must keep working — it is the only path
 //    out of `updated`.
+//  - `canQuery` (RA-000) — whether the Query link renders. Read off the
+//    module's `query-during-*` declarations (`evaluateQueryEligibility`), because the
+//    backend does not project those non-caller-invocable transitions. The
+//    query endpoint remains authoritative.
 //  - `isReadOnlyState` + `stateTagClasses` — once the work item reaches
 //    a terminal state (approved / rejected / withdrawn), the template
 //    suppresses the generic action panel and shows a status tag.
@@ -639,7 +635,7 @@ const PENDING_CONTACT_BANNERS = Object.freeze({
   })
 })
 
-function applyReAccreditationViewModel({ workItem, source = workItem }) {
+function applyReAccreditationViewModel({ workItem, source = workItem, route }) {
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
   }
@@ -725,6 +721,8 @@ function applyReAccreditationViewModel({ workItem, source = workItem }) {
     canChangePaymentDate,
     changePaymentDateHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/change-payment-date`,
     canContinueReview,
+    // RA-000. The Query link — see `evaluateQueryEligibility`.
+    canQuery: canQueryWorkItem(source, { route }),
     continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
     isReadOnlyState,
     stateTagClasses,

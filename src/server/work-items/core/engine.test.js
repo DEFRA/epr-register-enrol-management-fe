@@ -4,6 +4,7 @@ import {
   canApplyAction,
   isCallerInvocable,
   projectWorkItem,
+  resolveActionEntryStates,
   resolveSelfAssignLandingState
 } from './engine.js'
 
@@ -394,5 +395,64 @@ describe('resolveSelfAssignLandingState', () => {
     expect(resolveSelfAssignLandingState(undefined)).toBeNull()
     expect(resolveSelfAssignLandingState(null)).toBeNull()
     expect(resolveSelfAssignLandingState({ id: 'bare' })).toBeNull()
+  })
+})
+
+describe('resolveActionEntryStates', () => {
+  const entryType = (transitions) =>
+    sampleType({
+      transitions: [
+        {
+          actionId: 'start',
+          displayName: 'Start',
+          fromStateId: 'submitted',
+          toStateId: 'started',
+          startsOnSelfAssign: true
+        },
+        ...transitions
+      ]
+    })
+  const isApprove = (actionId) => actionId === 'approve'
+
+  test('returns the matching from-states plus the self-assign landing state', () => {
+    const type = entryType([
+      {
+        actionId: 'approve',
+        displayName: 'Approve',
+        fromStateId: 'reviewing',
+        toStateId: 'approved'
+      },
+      {
+        actionId: 'reject',
+        displayName: 'Reject',
+        fromStateId: 'rejecting',
+        toStateId: 'rejected'
+      }
+    ])
+    expect([...resolveActionEntryStates(type, isApprove)].sort()).toEqual([
+      'reviewing',
+      'started'
+    ])
+  })
+
+  test('skips a matching transition with no fromStateId', () => {
+    const type = entryType([
+      { actionId: 'approve', displayName: 'Approve', toStateId: 'approved' }
+    ])
+    expect([...resolveActionEntryStates(type, isApprove)]).toEqual(['started'])
+  })
+
+  test('returns only the matching from-states when nothing starts on self-assign', () => {
+    expect([
+      ...resolveActionEntryStates(
+        sampleType(),
+        (actionId) => actionId === 'reject'
+      )
+    ]).toEqual(['submitted'])
+  })
+
+  test('returns an empty set for a missing type or transitions list', () => {
+    expect(resolveActionEntryStates(undefined, isApprove).size).toBe(0)
+    expect(resolveActionEntryStates({ id: 'bare' }, isApprove).size).toBe(0)
   })
 })

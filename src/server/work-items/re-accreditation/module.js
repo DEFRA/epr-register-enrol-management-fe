@@ -325,45 +325,57 @@ const TRANSITIONS = [
     toStateId: 'withdrawn'
   },
   // RA-291 / RA-211. A case worker can query an application from any
-  // pre-decision state. Caller-invocable: each has a distinct
-  // `fromStateId`, so the engine's from-state guard resolves them
-  // unambiguously and the caller picking one is safe. There is
-  // deliberately no transition out of `queried` back to `queried` — an
-  // application awaiting a response cannot be queried again.
+  // pre-decision state. There is deliberately no transition out of
+  // `queried` back to `queried` — an application awaiting a response cannot
+  // be queried again.
+  //
+  // RA-000 (management-be v19). `callerInvocable: false`, mirroring the
+  // backend. A query is applied ONLY by the backend's query service (behind
+  // `POST /work-items/{id}/query` here), which self-assigns, stamps
+  // `currentQuery` and writes the `application-queried` audit entry; the
+  // operator push and the Queried email read that stamp. Applied through the
+  // generic `/actions/{actionId}` route, all three were skipped and the push
+  // sent an empty or a previous query. The backend therefore no longer
+  // projects these into `availableActions`, so the Query link and the query
+  // page are gated by `isQueryState` (`routes/work-items/re-accreditation-cta.js`),
+  // which reads the `fromStateId`s below.
   {
     actionId: 'query-during-duly-making',
     displayName: 'Query',
     fromStateId: 'submitted',
-    toStateId: 'queried'
+    toStateId: 'queried',
+    callerInvocable: false
   },
   {
     actionId: 'query-during-duly-made',
     displayName: 'Query',
     fromStateId: 'duly-made',
-    toStateId: 'queried'
+    toStateId: 'queried',
+    callerInvocable: false
   },
   // RA-527 follow-up (management-be v18). The backend ALSO declares
-  // `query-during-assessment` from `assessment-started` (same action id,
-  // caller-invocable), so a started case can be queried. Its response and
-  // Continue review then follow the assessment route: `updated`, then
-  // `assessment-in-progress`, never back to `assessment-started`. As with
-  // the extra `sla-extend` and `submit-for-decision` above, that second entry
-  // cannot be expressed here (`assertValidWorkItemModule` requires
-  // globally-unique action ids). It does not need to be: the Query link
-  // follows the backend projection (`hasQueryAction` in
-  // `routes/work-items/query.controller.js`), which carries it on a started
-  // case.
+  // `query-during-assessment` from `assessment-started` (same action id), so
+  // a started case can be queried. Its response and Continue review then
+  // follow the assessment route: `updated`, then `assessment-in-progress`,
+  // never back to `assessment-started`. As with the extra `sla-extend` and
+  // `submit-for-decision` above, that second entry cannot be expressed here
+  // (`assertValidWorkItemModule` requires globally-unique action ids), so
+  // `isQueryState` adds the state the `startsOnSelfAssign` transition lands
+  // on (`core/engine.js#resolveActionEntryStates`), the same helper
+  // `decision/eligibility.js` uses for the second `submit-for-decision`.
   {
     actionId: 'query-during-assessment',
     displayName: 'Query',
     fromStateId: STATE_ASSESSMENT_IN_PROGRESS,
-    toStateId: 'queried'
+    toStateId: 'queried',
+    callerInvocable: false
   },
   {
     actionId: 'query-during-decision',
     displayName: 'Query',
     fromStateId: STATE_AWAITING_DECISION,
-    toStateId: 'queried'
+    toStateId: 'queried',
+    callerInvocable: false
   },
   // RA-311/MBE-1. The inverse of the four `query-during-*` above: an
   // operator's resubmission moves the application out of `queried` and
@@ -459,7 +471,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v18',
+  templateVersion: 'v19',
   initialState: STATES[0],
   states: STATES,
   transitions: TRANSITIONS
@@ -567,7 +579,8 @@ export const reAccreditationModule = {
       v15: DETAIL_TEMPLATE_V1,
       v16: DETAIL_TEMPLATE_V1,
       v17: DETAIL_TEMPLATE_V1,
-      v18: DETAIL_TEMPLATE_V1
+      v18: DETAIL_TEMPLATE_V1,
+      v19: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

@@ -1,8 +1,23 @@
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
+import { resolveActionEntryStates } from '#/server/work-items/core/engine.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { isQueryActionId } from './generic-route-action-ids.js'
 import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/decision/eligibility.js'
 import { DULY_MAKE_ACTION_ID } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
 
+const logger = createLogger()
+
 const CONTINUE_REVIEW_ACTION_PREFIX = 'continue-review-during-'
+
+/**
+ * The results of `evaluateQueryEligibility`. Compare against these, never
+ * against the string values.
+ */
+export const QUERY_ELIGIBILITY = Object.freeze({
+  OK: 'ok',
+  NOT_QUERYABLE: 'not-queryable',
+  NO_STATE: 'no-state'
+})
 
 /**
  * Is `stateId` the state the `continue-review-during-*` transitions leave
@@ -29,6 +44,102 @@ export function isContinueReviewState(stateId) {
       t.actionId?.startsWith(CONTINUE_REVIEW_ACTION_PREFIX) &&
       t.fromStateId === stateId
   )
+}
+
+/**
+ * Can an application in `stateId` be queried? (RA-000.)
+ *
+ * Gates the Query link on the detail page and the query page itself. The
+ * `query-during-*` transitions are non-caller-invocable from management-be
+ * v19, so the backend no longer projects them into `availableActions` and
+ * this cannot read the projection. It reads the module declaration instead,
+ * the same discipline as `isContinueReviewState`: the state literals stay in
+ * `re-accreditation/module.js`.
+ *
+ * management-be also declares `query-during-assessment` from
+ * `assessment-started`, which the module cannot redeclare (action ids are
+ * unique there). That state is the one the `startsOnSelfAssign` transition
+ * lands on, so `core/engine.js#resolveActionEntryStates` adds it — the same
+ * helper `decision/eligibility.js` uses to cover the backend's second
+ * `submit-for-decision`.
+ *
+ * The landing-state coupling exists only because of that duplicate-id
+ * rule. This predicate only decides what to draw:
+ * `POST /work-items/re-accreditation/{id}/query` is the authority, and
+ * answers 409 for a state it will not query.
+ *
+ * Returns `false` for a missing `stateId`; callers that read a backend
+ * response log that themselves. THROWS when the re-accreditation type is
+ * not registered or declares no query transition: that is a boot or
+ * declaration defect, and answering "not queryable" would silently hide
+ * the Query link on every case.
+ */
+export function isQueryState(stateId) {
+  if (stateId == null) {
+    return false
+  }
+  const type = getWorkItemType(RE_ACCREDITATION_TYPE_ID)
+  if (!type) {
+    throw new Error(
+      `isQueryState: work item type "${RE_ACCREDITATION_TYPE_ID}" is not registered`
+    )
+  }
+  const declaresQuery =
+    Array.isArray(type.transitions) &&
+    type.transitions.some((t) => isQueryActionId(t.actionId))
+  if (!declaresQuery) {
+    throw new Error(
+      `isQueryState: work item type "${RE_ACCREDITATION_TYPE_ID}" declares no query transition`
+    )
+  }
+  return resolveActionEntryStates(type, isQueryActionId).has(stateId)
+}
+
+/**
+ * Can this raw backend work item be queried? (RA-000.)
+ *
+ * The one gate behind both the detail page's Query link and
+ * `GET /work-items/{id}/query`, so the link and the page cannot disagree.
+ * Read off the module's `query-during-*` declarations via `isQueryState`,
+ * because the backend no longer projects those non-caller-invocable
+ * transitions into `availableActions`.
+ *
+ * @param {object} workItem The untouched `getWorkItem` DTO.
+ * @param {{ route: string }} context The route that read it, for the log.
+ * @returns {string} One of {@link QUERY_ELIGIBILITY}:
+ *   - `OK` when the item can be queried.
+ *   - `NOT_QUERYABLE` for another type (`isQueryState` answers for
+ *     re-accreditation only) or a state with no query transition.
+ *   - `NO_STATE` when the backend returned a re-accreditation item with no
+ *     `stateId`: a broken upstream response, logged here at Error.
+ */
+export function evaluateQueryEligibility(workItem, { route }) {
+  if (workItem?.typeId !== RE_ACCREDITATION_TYPE_ID) {
+    return QUERY_ELIGIBILITY.NOT_QUERYABLE
+  }
+  if (workItem.stateId == null) {
+    logger.error(
+      { workItemId: workItem.id, route },
+      'Work item from management-be has no stateId; cannot decide whether it can be queried'
+    )
+    return QUERY_ELIGIBILITY.NO_STATE
+  }
+  return isQueryState(workItem.stateId)
+    ? QUERY_ELIGIBILITY.OK
+    : QUERY_ELIGIBILITY.NOT_QUERYABLE
+}
+
+/**
+ * `evaluateQueryEligibility` as a yes/no, for the detail page's Query link,
+ * which draws nothing different for `NOT_QUERYABLE` and `NO_STATE` (the
+ * latter is already logged at Error by `evaluateQueryEligibility`).
+ *
+ * @param {object} workItem The untouched `getWorkItem` DTO.
+ * @param {{ route: string }} context The route that read it, for the log.
+ * @returns {boolean}
+ */
+export function canQueryWorkItem(workItem, context) {
+  return evaluateQueryEligibility(workItem, context) === QUERY_ELIGIBILITY.OK
 }
 
 /**
