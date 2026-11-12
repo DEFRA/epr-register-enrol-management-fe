@@ -18,10 +18,12 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
-import { getWorkItemType } from '#/server/work-items/core/registry.js'
-import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
-import { buildCaseHeader, buildCaseTabs } from './case-header.js'
+import {
+  buildCaseHeader,
+  buildCaseTabs,
+  decorateForCaseHeader
+} from './case-header.js'
 import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
 import {
   applicableCodesForMaterialType,
@@ -97,20 +99,6 @@ function codeItems(applicableCodes, selectedCodes) {
   }))
 }
 
-function caseHeaderFor(workItem) {
-  const type = getWorkItemType(workItem.typeId)
-  const stateDisplayName =
-    type?.states?.find((s) => s.id === workItem.stateId)?.displayName ??
-    workItem.stateId
-  return buildCaseHeader({
-    workItem: {
-      ...workItem,
-      stateDisplayName,
-      stateTagClass: stateTagClass(workItem.stateId)
-    }
-  })
-}
-
 function renderForm(
   h,
   {
@@ -124,6 +112,7 @@ function renderForm(
     statusCode = 200
   }
 ) {
+  const forHeader = decorateForCaseHeader(workItem)
   const applicableCodes = applicableCodesForMaterialType(
     workItem.payload?.material
   )
@@ -132,10 +121,11 @@ function renderForm(
     .view(VIEW_PATH, {
       pageTitle: errorSummary ? `Error: ${PAGE_TITLE}` : PAGE_TITLE,
       heading: PAGE_TITLE,
-      caseHeader: caseHeaderFor(workItem),
+      caseHeader: buildCaseHeader({ workItem: forHeader }),
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
-        active: 'recycling-operations'
+        active: 'recycling-operations',
+        category: forHeader.typeCategory
       }),
       workItem: { id, applicationRef: workItem.payload?.applicationReference },
       site: { siteId, siteName: site?.siteName ?? null },

@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest'
 
-import { formatChargeAmount } from './charge-amount.js'
+import {
+  formatChargeAmount,
+  formatChargeAmountWithPence
+} from './charge-amount.js'
 
 describe('formatChargeAmount', () => {
   test('formats pence as GBP with a thousands separator', () => {
@@ -49,5 +52,19 @@ describe('formatChargeAmount', () => {
     expect(formatChargeAmount('327600')).toBeNull()
     expect(formatChargeAmount(3276.5)).toBeNull()
     expect(formatChargeAmount(Number.NaN)).toBeNull()
+  })
+})
+
+describe('formatChargeAmountWithPence (RA-739)', () => {
+  test('keeps pence on a whole-pound charge, as the add-ORS design shows', () => {
+    expect(formatChargeAmountWithPence(32800)).toBe('£328.00')
+    expect(formatChargeAmountWithPence(327650)).toBe('£3,276.50')
+    expect(formatChargeAmountWithPence(0)).toBe('£0.00')
+  })
+
+  test('returns null for an absent or non-integer amount', () => {
+    expect(formatChargeAmountWithPence(undefined)).toBeNull()
+    expect(formatChargeAmountWithPence('32800')).toBeNull()
+    expect(formatChargeAmountWithPence(328.5)).toBeNull()
   })
 })

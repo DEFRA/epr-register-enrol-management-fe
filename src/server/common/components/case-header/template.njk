@@ -8,6 +8,9 @@
 {# their values (material, status, assigned to, due date, registration #}
 {# number, and (RA-493) payment date and payment amount).               #}
 {#                                                                     #}
+{# RA-739. A case type can supply a `caption` (shown above the title)  #}
+{# and its own `title`, which replaces the organisation name and ID.   #}
+{#                                                                     #}
 {# All values arrive pre-formatted from `buildCaseHeader()`; this       #}
 {# template does no data access and no formatting, so it stays safe to  #}
 {# reuse from any controller. GDS/Nunjucks auto-escaping applies to     #}
@@ -30,8 +33,16 @@
       </ol>
     </nav>
 
+    {% if params.caption %}
+      <span class="govuk-caption-l app-case-header__caption"
+            data-testid="case-header-caption">{{ params.caption }}</span>
+    {% endif %}
     <h1 class="govuk-heading-l app-case-header__title">
-      <span data-testid="case-header-org-name">{{ params.organisationName }}</span>{% if params.organisationId %} <span class="app-case-header__org-id">(<span data-testid="case-header-org-id">{{ params.organisationId }}</span>)</span>{% endif %}
+      {%- if params.title -%}
+        <span data-testid="case-header-title">{{ params.title }}</span>
+      {%- else -%}
+        <span data-testid="case-header-org-name">{{ params.organisationName }}</span>{% if params.organisationId %} <span class="app-case-header__org-id">(<span data-testid="case-header-org-id">{{ params.organisationId }}</span>)</span>{% endif %}
+      {%- endif -%}
     </h1>
 
     <dl class="app-case-header__meta" data-testid="case-header-meta">

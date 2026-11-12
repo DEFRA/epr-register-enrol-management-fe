@@ -17,14 +17,32 @@
  *   amount and formats as "£0"; it must never be confused with absent.
  */
 export function formatChargeAmount(pence) {
-  if (typeof pence !== 'number' || !Number.isInteger(pence)) {
+  if (!isPence(pence)) {
     return null
   }
-  const hasFraction = pence % 100 !== 0
+  return formatPounds(pence, pence % 100 === 0 ? 0 : 2)
+}
+
+/**
+ * Format an integer minor-unit amount as GBP, always with pence
+ * ("£328.00"). RA-739: the add-ORS case header's Charge follows its Figma
+ * frame, which shows pence even for whole pounds.
+ *
+ * @returns {string|null} `null` when the amount is absent or not an integer.
+ */
+export function formatChargeAmountWithPence(pence) {
+  return isPence(pence) ? formatPounds(pence, 2) : null
+}
+
+function isPence(value) {
+  return typeof value === 'number' && Number.isInteger(value)
+}
+
+function formatPounds(pence, fractionDigits) {
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',
     currency: 'GBP',
-    minimumFractionDigits: hasFraction ? 2 : 0,
-    maximumFractionDigits: hasFraction ? 2 : 0
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
   }).format(pence / 100)
 }

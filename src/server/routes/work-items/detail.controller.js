@@ -33,7 +33,11 @@ import {
 } from '#/server/work-items/core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { buildDecisionMetadata } from './re-accreditation-decision-metadata.js'
-import { buildCaseHeader, buildCaseTabs } from './case-header.js'
+import {
+  buildCaseHeader,
+  buildCaseTabs,
+  decorateForCaseHeader
+} from './case-header.js'
 import {
   buildAssignmentViewModel,
   TERMINAL_STATE_IDS
@@ -530,7 +534,11 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       // back link — so no `breadcrumbs` are passed (the layout only renders
       // them when there is more than one).
       caseHeader: buildCaseHeader({ workItem: enriched, assignment }),
-      caseTabs: buildCaseTabs({ workItemId: enriched.id, active: 'summary' }),
+      caseTabs: buildCaseTabs({
+        workItemId: enriched.id,
+        active: 'summary',
+        category: enriched.typeCategory
+      }),
       applicationDetails,
       // RA-603: the nested interim-site layout is behind the same flag as the
       // data, so with it off a regulator sees exactly the page they see today.
@@ -863,9 +871,6 @@ function nonInvocableActionIds(type) {
 
 function decorate(workItem) {
   const type = getWorkItemType(workItem.typeId)
-  const stateDisplayName =
-    type?.states?.find((state) => state.id === workItem.stateId)?.displayName ??
-    workItem.stateId
   // RA-364. Drop actions the backend flagged `callerInvocable: false` BEFORE
   // anything downstream reads the list — see `isCallerInvocable` for why the
   // backend projects actions the caller may not invoke.
@@ -888,12 +893,12 @@ function decorate(workItem) {
   const selfAssignActions = selfAssignActionIds(type)
   const declaredNonInvocable = nonInvocableActionIds(type)
   return {
-    ...workItem,
-    typeDisplayName: type?.displayName ?? workItem.typeId,
-    // RA-739. The type's category; the case header adds "Request type" for
-    // an in-year change.
-    typeCategory: type?.category ?? null,
-    stateDisplayName,
+    // RA-739. The type's display name and category (the case header and tabs
+    // depend on the category) and the state's display name. RA-324 (AC08):
+    // the state badge colour (`stateTagClass`) comes from the shared
+    // state-badge map so the detail page and the Applications list colour a
+    // given status identically.
+    ...decorateForCaseHeader(workItem),
     // RA-317. Drop withdraw here too, at the SAME source the RA-364
     // non-invocable / sla-extend filtering runs, so it is gone BEFORE the
     // template's `availableActions.length > 0` check. Filtering withdraw only
@@ -912,10 +917,6 @@ function decorate(workItem) {
     // RA-295. Gates the "Change determination deadline" link in the
     // assignment panel. See `canChangeDueDateFor`.
     canChangeDueDate: canChangeDueDateFor(type, workItem, projectedActions),
-    // RA-324 (AC08). The State badge colour is resolved from the shared
-    // state-badge map so the detail page and the Applications list colour a
-    // given status identically.
-    stateTagClass: stateTagClass(workItem.stateId),
     // RA-249. A field LABELLED "Application ref" must only ever show the
     // human RA-* reference or nothing — never the work-item Guid. Do NOT
     // fall back to the id here.

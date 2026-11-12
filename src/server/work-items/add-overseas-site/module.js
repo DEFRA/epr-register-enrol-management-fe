@@ -8,8 +8,9 @@ import { standardWorkflow } from '../core/standard-workflow.js'
  * `AddOverseasSiteType`: an in-year change following the Standard workflow.
  * management-be splits each submission into one work item per site.
  *
- * The detail page is header-only for now; RA-495 adds the request summary,
- * tabs and actions.
+ * The detail page has the add-ORS case header and its Application summary
+ * and Application history tabs. The summary body comes in a later task;
+ * RA-495 adds the actions.
  */
 export const addOverseasSiteType = {
   id: 'add-overseas-site',

@@ -1,9 +1,11 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
-import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { formatSiteAddress } from '#/server/common/helpers/format/site-address.js'
-import { buildCaseHeader, buildCaseTabs } from './case-header.js'
+import {
+  buildCaseHeader,
+  buildCaseTabs,
+  decorateForCaseHeader
+} from './case-header.js'
 import { deriveSiteAddress } from './application-summary.js'
 import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
 
@@ -107,25 +109,19 @@ export const workItemAdditionalInformationController = {
 
     const workItem = result.workItem
     const applicationRef = workItem.payload?.applicationReference
-    const type = getWorkItemType(workItem.typeId)
-    const stateDisplayName =
-      type?.states?.find((s) => s.id === workItem.stateId)?.displayName ??
-      workItem.stateId
+    // RA-739. Decorated with its type's category, so an add-ORS item gets
+    // its own header and tabs here too.
+    const forHeader = decorateForCaseHeader(workItem)
 
     return h.view(ADDITIONAL_INFORMATION_VIEW, {
       pageTitle: `Additional information — ${applicationRef}`,
       // RA-295 / RA-434. Same case header and tab strip as the other two
       // tabs.
-      caseHeader: buildCaseHeader({
-        workItem: {
-          ...workItem,
-          stateDisplayName,
-          stateTagClass: stateTagClass(workItem.stateId)
-        }
-      }),
+      caseHeader: buildCaseHeader({ workItem: forHeader }),
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
-        active: 'additional-information'
+        active: 'additional-information',
+        category: forHeader.typeCategory
       }),
       workItem: {
         id: workItem.id,

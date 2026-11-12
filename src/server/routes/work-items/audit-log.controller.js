@@ -2,10 +2,10 @@ import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { decorateAuditLog } from '#/server/work-items/core/audit-log.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import {
   buildCaseHeader,
   buildCaseTabs,
+  decorateForCaseHeader,
   resolveOrganisationId
 } from './case-header.js'
 import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
@@ -41,7 +41,7 @@ export const workItemAuditLogController = {
     // the current one.
     const resolveStateDisplayName = (stateId) =>
       type?.states?.find((s) => s.id === stateId)?.displayName ?? stateId
-    const stateDisplayName = resolveStateDisplayName(workItem.stateId)
+    const forHeader = decorateForCaseHeader(workItem)
 
     const workItemSnapshot = {
       // RA-503: operatorOrganisationId is ReEx's internal ObjectId for a real operator
@@ -62,14 +62,14 @@ export const workItemAuditLogController = {
       // individual work item page, so it carries the same case header and
       // the same tab strip as the summary tab. The header's own
       // "Applications" back link replaces the GOV.UK breadcrumbs.
-      caseHeader: buildCaseHeader({
-        workItem: {
-          ...workItem,
-          stateDisplayName,
-          stateTagClass: stateTagClass(workItem.stateId)
-        }
+      // RA-739. Decorated with its type's category, so an add-ORS item gets
+      // its own header and tabs here too.
+      caseHeader: buildCaseHeader({ workItem: forHeader }),
+      caseTabs: buildCaseTabs({
+        workItemId: workItem.id,
+        active: 'history',
+        category: forHeader.typeCategory
       }),
-      caseTabs: buildCaseTabs({ workItemId: workItem.id, active: 'history' }),
       workItem: {
         id: workItem.id,
         applicationRef,

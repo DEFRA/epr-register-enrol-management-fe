@@ -1,8 +1,13 @@
 import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
-import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
+import {
+  formatChargeAmount,
+  formatChargeAmountWithPence
+} from '#/server/common/helpers/format/charge-amount.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
 import { isInYearChangeType } from '#/server/work-items/core/categories.js'
+import { getWorkItemType } from '#/server/work-items/core/registry.js'
+import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 // Single definition of the "no value" glyph, shared with the application
 // summary rather than redeclared here.
 import { EM_DASH } from './application-summary.js'
@@ -24,6 +29,10 @@ import { EM_DASH } from './application-summary.js'
  * plus (RA-493) 10. payment date and 11. payment amount.
  *
  * (1)-(4) are the breadcrumb + title lines; the rest are the meta line.
+ *
+ * RA-739. An in-year change (add-ORS) header instead has an optional
+ * `caption` (the reference) above its own `title` (the site), no
+ * organisation, and its own meta: see `inYearChangeMeta`.
  *
  * The model is intentionally pre-formatted strings only: the macro that
  * renders it stays pure presentation and cannot reach into the payload.
@@ -119,19 +128,66 @@ export function resolveOrganisationId(payload) {
  */
 export function buildCaseHeader({ workItem, assignment = null }) {
   const payload = workItem?.payload ?? {}
-  const payment = formatPayment(payload)
-  const status = {
+  const header = {
+    backHref: BACK_HREF,
+    backText: BACK_TEXT,
+    // RA-249. The header's reference line is navigational, so it may fall
+    // back to the work item id when the human RA-* reference is absent.
+    applicationRef: payload.applicationReference ?? workItem?.id ?? EM_DASH
+  }
+
+  // RA-739. An in-year change (add-ORS) header follows its own Figma frame
+  // (node 854:136663): the reference as a caption above a site title, no
+  // organisation name or Org ID, and two rows of four meta items.
+  if (isInYearChangeType({ category: workItem?.typeCategory })) {
+    return {
+      ...header,
+      caption: header.applicationRef,
+      title: siteTitle(payload.site),
+      meta: inYearChangeMeta({ workItem, assignment, payload })
+    }
+  }
+
+  return {
+    ...header,
+    organisationName: payload.organisationName || EM_DASH,
+    organisationId: resolveOrganisationId(payload),
+    meta: reAccreditationMeta({ workItem, assignment, payload })
+  }
+}
+
+/** "Site name (ORS id)", as on the in-year change list card. */
+function siteTitle(site) {
+  const name = site?.siteName || EM_DASH
+  return site?.orsId ? `${name} (${site.orsId})` : name
+}
+
+function materialEntry(payload) {
+  return {
+    key: 'material',
+    label: 'Material',
+    value: payload.material
+      ? materialLabel(payload.material, payload.glassRecyclingProcess)
+      : EM_DASH
+  }
+}
+
+function statusEntry(workItem) {
+  return {
     key: 'status',
     label: 'Status',
     value: workItem?.stateDisplayName || workItem?.stateId || EM_DASH,
     // RA-324 (AC08). Status keeps the shared state-badge colour so the
     // case header and the Applications list colour a given status
-    // identically. `stateTagClass` is set by the detail controller's
-    // decorator; when it is absent (a caller that has not decorated the
-    // work item) the value simply renders as text.
+    // identically. `stateTagClass` is set by `decorateForCaseHeader` (or
+    // the detail controller's decorator); when it is absent (a caller that
+    // has not decorated the work item) the value simply renders as text.
     tagClass: workItem?.stateTagClass ?? null
   }
-  const assignedTo = {
+}
+
+function assignedToEntry(workItem, assignment) {
+  return {
     key: 'assigned-to',
     label: 'Assigned to',
     value:
@@ -140,81 +196,118 @@ export function buildCaseHeader({ workItem, assignment = null }) {
       workItem?.assignedToId ??
       UNASSIGNED
   }
-  const header = {
-    backHref: BACK_HREF,
-    backText: BACK_TEXT,
-    // RA-249. The header's reference line is navigational, so it may fall
-    // back to the work item id when the human RA-* reference is absent.
-    applicationRef: payload.applicationReference ?? workItem?.id ?? EM_DASH,
-    organisationName: payload.organisationName || EM_DASH,
-    organisationId: resolveOrganisationId(payload),
-    meta: [
-      {
-        key: 'material',
-        label: 'Material',
-        value: payload.material
-          ? materialLabel(payload.material, payload.glassRecyclingProcess)
-          : EM_DASH
-      },
-      status,
-      assignedTo,
-      {
-        key: 'due-on',
-        label: 'Due date',
-        // RA-359 part 2. A `Cancelled` SLA (terminal/withdrawn item) is a
-        // stopped clock: management-be keeps `slaDueDate`, but showing it here
-        // would imply a live deadline the caseworker must still meet. Suppress
-        // it to the em dash, matching a work item whose clock never started.
-        // OnTrack/AtRisk/Breached keep the date.
-        value:
-          workItem?.slaState === 'Cancelled'
-            ? EM_DASH
-            : formatDueOn(workItem?.slaDueDate)
-      },
-      {
-        key: 'registration-number',
-        label: 'Registration number',
-        value: payload.registrationNumber || EM_DASH
-      },
-      // RA-493. Figma places "Payment date" after "Registration number"
-      // (second row under "Status"); the meta line is an inline flex-wrap,
-      // so sequence alone controls placement. Figma omits the amount, but
-      // AC02/AC04 require it, so it sits immediately after the date.
-      {
-        key: 'payment-date',
-        label: 'Payment date',
-        value: payment.date
-      },
-      {
-        key: 'payment-amount',
-        label: 'Payment amount',
-        value: payment.amount
-      }
-    ]
-  }
+}
 
-  // RA-739. An in-year change header carries only the request type, status
-  // and assigned to (the Figma application header leads with the request
-  // type). RA-495 adds the rest of its header with the full detail page.
-  if (isInYearChangeType({ category: workItem?.typeCategory })) {
-    header.meta = [
-      {
-        key: 'request-type',
-        label: 'Request type',
-        value: workItem.typeDisplayName || EM_DASH
-      },
-      status,
-      assignedTo
-    ]
+function dueOnEntry(workItem) {
+  return {
+    key: 'due-on',
+    label: 'Due date',
+    // RA-359 part 2. A `Cancelled` SLA (terminal/withdrawn item) is a
+    // stopped clock: management-be keeps `slaDueDate`, but showing it here
+    // would imply a live deadline the caseworker must still meet. Suppress
+    // it to the em dash, matching a work item whose clock never started.
+    // OnTrack/AtRisk/Breached keep the date.
+    value:
+      workItem?.slaState === 'Cancelled'
+        ? EM_DASH
+        : formatDueOn(workItem?.slaDueDate)
   }
+}
 
-  return header
+function reAccreditationMeta({ workItem, assignment, payload }) {
+  const payment = formatPayment(payload)
+  return [
+    materialEntry(payload),
+    statusEntry(workItem),
+    assignedToEntry(workItem, assignment),
+    dueOnEntry(workItem),
+    {
+      key: 'registration-number',
+      label: 'Registration number',
+      value: payload.registrationNumber || EM_DASH
+    },
+    // RA-493. Figma places "Payment date" after "Registration number"
+    // (second row under "Status"); the meta line is an inline flex-wrap,
+    // so sequence alone controls placement. Figma omits the amount, but
+    // AC02/AC04 require it, so it sits immediately after the date.
+    {
+      key: 'payment-date',
+      label: 'Payment date',
+      value: payment.date
+    },
+    {
+      key: 'payment-amount',
+      label: 'Payment amount',
+      value: payment.amount
+    }
+  ]
+}
+
+/**
+ * RA-739. The add-ORS meta, two rows of four in Figma order. Status,
+ * Assigned to and Due date are built exactly as for re-accreditation. The
+ * charge is the site's own (`site.chargePence`), shown whenever it is known
+ * (unlike re-accreditation's payment amount, which waits for payment), with
+ * pence as in the design ("£328.00").
+ */
+function inYearChangeMeta({ workItem, assignment, payload }) {
+  return [
+    {
+      key: 'request-type',
+      label: 'Request type',
+      value: workItem.typeDisplayName || EM_DASH
+    },
+    statusEntry(workItem),
+    assignedToEntry(workItem, assignment),
+    dueOnEntry(workItem),
+    materialEntry(payload),
+    {
+      key: 'accreditation-number',
+      label: 'Accreditation number',
+      value: payload.accreditationReference || EM_DASH
+    },
+    {
+      key: 'charge',
+      label: 'Charge',
+      value: formatChargeAmountWithPence(payload.site?.chargePence) ?? EM_DASH
+    },
+    {
+      key: 'payment-date',
+      label: 'Payment date',
+      value: formatPayment(payload).date
+    }
+  ]
+}
+
+/**
+ * Decorate a raw work item with the fields the case header and tabs read:
+ * its type's display name and category, and its state's display name and
+ * badge colour. Every work item page builds its header from a work item
+ * decorated this way, so a case type gets its own header on every tab
+ * (RA-739). The detail page's own decorator sets the same fields.
+ *
+ * @param {object} workItem raw work item from management-be
+ * @returns {object}
+ */
+export function decorateForCaseHeader(workItem) {
+  const type = getWorkItemType(workItem.typeId)
+  return {
+    ...workItem,
+    typeDisplayName: type?.displayName ?? workItem.typeId,
+    typeCategory: type?.category ?? null,
+    stateDisplayName:
+      type?.states?.find((state) => state.id === workItem.stateId)
+        ?.displayName ?? workItem.stateId,
+    stateTagClass: stateTagClass(workItem.stateId)
+  }
 }
 
 // Single source of truth for the tab's key (SonarCloud S1192 — the string
 // was repeated three times across the tab definition, the active check, and
 // the filter below).
 const RECYCLING_OPERATIONS_TAB_KEY = 'recycling-operations'
+const APPLICATION_SUMMARY_TAB_KEY = 'application-summary'
+const APPLICATION_HISTORY_TAB_KEY = 'application-history'
 
 // RA-469 follow-up. Product asked for the "Recycling operations" tab to be
 // hidden for now — the copy may be reworded before it's shown again. This
@@ -230,6 +323,13 @@ const RECYCLING_OPERATIONS_TAB_KEY = 'recycling-operations'
 // place: the same tabs.filter() call below exercises both the "excluded"
 // and "included" outcomes across the four tabs in every existing test.
 const HIDDEN_TAB_KEYS = new Set([RECYCLING_OPERATIONS_TAB_KEY])
+
+// RA-739. The tabs an in-year change (add-ORS) shows. Later tickets add the
+// Accreditation summary and Related applications tabs here.
+const IN_YEAR_CHANGE_TAB_KEYS = new Set([
+  APPLICATION_SUMMARY_TAB_KEY,
+  APPLICATION_HISTORY_TAB_KEY
+])
 
 /**
  * The four tabs every individual work item page carries (RA-295, RA-434,
@@ -247,15 +347,19 @@ const HIDDEN_TAB_KEYS = new Set([RECYCLING_OPERATIONS_TAB_KEY])
  * "Additional information" both keep their existing order relative to each
  * other; only the new tab is inserted.
  *
+ * RA-739. An in-year change (add-ORS) has only Application summary and
+ * Application history; the tabs depend on the work item type's category.
+ *
  * @param {object} args
  * @param {string} args.workItemId
  * @param {'summary'|'recycling-operations'|'history'|'additional-information'} args.active
+ * @param {string|null} [args.category] the work item type's category
  */
-export function buildCaseTabs({ workItemId, active }) {
+export function buildCaseTabs({ workItemId, active, category = null }) {
   const base = `/work-items/${encodeURIComponent(workItemId)}`
   const tabs = [
     {
-      key: 'application-summary',
+      key: APPLICATION_SUMMARY_TAB_KEY,
       text: 'Application summary',
       href: base,
       active: active === 'summary'
@@ -267,7 +371,7 @@ export function buildCaseTabs({ workItemId, active }) {
       active: active === RECYCLING_OPERATIONS_TAB_KEY
     },
     {
-      key: 'application-history',
+      key: APPLICATION_HISTORY_TAB_KEY,
       text: 'Application history',
       href: `${base}/audit-log`,
       active: active === 'history'
@@ -279,5 +383,8 @@ export function buildCaseTabs({ workItemId, active }) {
       active: active === 'additional-information'
     }
   ]
-  return tabs.filter((tab) => !HIDDEN_TAB_KEYS.has(tab.key))
+  const isVisible = isInYearChangeType({ category })
+    ? (tab) => IN_YEAR_CHANGE_TAB_KEYS.has(tab.key)
+    : (tab) => !HIDDEN_TAB_KEYS.has(tab.key)
+  return tabs.filter(isVisible)
 }

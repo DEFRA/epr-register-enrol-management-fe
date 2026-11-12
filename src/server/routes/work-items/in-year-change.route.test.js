@@ -1,7 +1,7 @@
 /**
  * RA-739. An add-ORS (`add-overseas-site`) work item is an in-year change:
  * the Applications list renders it with the in-year change card variant, and
- * its detail link opens a header-only page.
+ * its detail link opens a page with the Figma add-ORS header and its own tabs.
  *
  * Route-level: the real server and the real module declarations and
  * templates, only the backend API mocked.
@@ -35,7 +35,9 @@ function anAddOrsItem({
   id = ADD_ORS_ID,
   submissionSize = 3,
   assignedToName = null,
-  applicationReference = 'IYC-ORS-2026-00001'
+  applicationReference = 'IYC-ORS-2026-00001',
+  slaDueDate = null,
+  slaState = null
 } = {}) {
   return {
     id,
@@ -46,6 +48,8 @@ function anAddOrsItem({
     lastModifiedAt: '2027-02-11T10:00:00Z',
     assignedToId: assignedToName ? 'officer-1' : null,
     assignedToName,
+    slaDueDate,
+    slaState,
     payload: {
       operatorRequestId: 'request-1',
       organisationName: 'GreenLoop Recovery',
@@ -55,8 +59,15 @@ function anAddOrsItem({
       applicationReference,
       submissionReference: 'SUB-2026-0001',
       submissionSize,
+      accreditationReference: 'ACC-REP-PL-0007',
       paymentReference: 'PR/PK/REP/123001',
-      site: { siteId: 'site-1', orsId: '007', siteName: 'Denmark PR' }
+      chargePence: 98400,
+      site: {
+        siteId: 'site-1',
+        orsId: '007',
+        siteName: 'Denmark PR',
+        chargePence: 32800
+      }
     },
     availableActions: []
   }
@@ -91,6 +102,19 @@ function listOf(...items) {
 
 function squash(text) {
   return text.replace(/\s+/g, ' ').trim()
+}
+
+const EM_DASH = '—'
+
+/** The case tabs as rendered; the active tab has no link. */
+function tabs($) {
+  return $('[data-testid="case-tabs"] [data-testid^="tab-"]')
+    .map((_, el) => ({
+      key: $(el).attr('data-testid').replace(/^tab-/, ''),
+      text: squash($(el).text()),
+      href: $(el).attr('href') ?? null
+    }))
+    .get()
 }
 
 let server
@@ -196,47 +220,228 @@ describe('RA-739: in-year change applications', () => {
   })
 
   describe('detail page', () => {
-    test('renders only the case header', async () => {
-      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
-
+    async function detailPage(workItem) {
+      getWorkItem.mockResolvedValue({ ok: true, workItem })
       const { result, statusCode } = await server.inject({
         method: 'GET',
         url: `/work-items/${ADD_ORS_ID}`
       })
-
       expect(statusCode).toBe(statusCodes.ok)
-      const $ = cheerio.load(result)
+      return cheerio.load(result)
+    }
+
+    test('captions the header with the reference and titles it with the site and ORS id', async () => {
+      const $ = await detailPage(anAddOrsItem())
+
       expect($('[data-testid="add-overseas-site-detail"]')).toHaveLength(1)
+      expect(squash($('[data-testid="case-header-caption"]').text())).toBe(
+        'IYC-ORS-2026-00001'
+      )
+      expect(squash($('[data-testid="case-header-title"]').text())).toBe(
+        'Denmark PR (007)'
+      )
+      // The breadcrumb is unchanged: "Applications" › reference.
+      expect(
+        squash($('[data-testid="case-header-applications-link"]').text())
+      ).toBe('Applications')
       expect($('[data-testid="case-header-accreditation-ref"]').text()).toBe(
         'IYC-ORS-2026-00001'
       )
-      expect($('[data-testid="case-header-org-name"]').text()).toBe(
+      // No organisation name or Org ID, as in the design.
+      expect($('[data-testid="case-header-org-name"]')).toHaveLength(0)
+      expect($('[data-testid="case-header-org-id"]')).toHaveLength(0)
+      expect($('[data-testid="case-header"]').text()).not.toContain(
         'GreenLoop Recovery'
       )
-      expect($('[data-testid="case-header-org-id"]').text()).toBe('123001')
+      expect($('[data-testid="case-header"]').text()).not.toContain('123001')
+    })
+
+    test('shows the eight meta items in Figma order with the site charge', async () => {
+      const $ = await detailPage(anAddOrsItem())
+
+      const meta = $(
+        '[data-testid="case-header-meta"] .app-case-header__meta-item'
+      )
+        .map((_, el) => squash($(el).text()))
+        .get()
+      expect(meta).toEqual([
+        'Request type: New ORS accreditation',
+        'Status: Not started',
+        'Assigned to: Unassigned',
+        `Due date: ${EM_DASH}`,
+        'Material: Plastic',
+        'Accreditation number: ACC-REP-PL-0007',
+        'Charge: £328.00',
+        'Payment date: Not received'
+      ])
+      expect(
+        $(
+          '[data-testid="case-header-status"] [data-testid="work-item-state-tag"]'
+        )
+      ).toHaveLength(1)
+    })
+
+    test('shows the due date and assignee once the case is under way', async () => {
+      const $ = await detailPage(
+        anAddOrsItem({
+          assignedToName: 'Jo Officer',
+          slaDueDate: '2027-03-11T10:00:00Z',
+          slaState: 'OnTrack'
+        })
+      )
+
+      expect(squash($('[data-testid="case-header-assigned-to"]').text())).toBe(
+        'Jo Officer'
+      )
+      expect(squash($('[data-testid="case-header-due-on"]').text())).toBe(
+        '11 Mar 2027'
+      )
+    })
+
+    test('hides the due date when the SLA is cancelled', async () => {
+      const $ = await detailPage(
+        anAddOrsItem({
+          slaDueDate: '2027-03-11T10:00:00Z',
+          slaState: 'Cancelled'
+        })
+      )
+
+      expect(squash($('[data-testid="case-header-due-on"]').text())).toBe(
+        EM_DASH
+      )
+    })
+
+    test('shows a dash for each missing value', async () => {
+      const item = anAddOrsItem()
+      delete item.payload.material
+      delete item.payload.accreditationReference
+      delete item.payload.site.chargePence
+      const $ = await detailPage(item)
+
+      expect(squash($('[data-testid="case-header-material"]').text())).toBe(
+        EM_DASH
+      )
+      expect(
+        squash($('[data-testid="case-header-accreditation-number"]').text())
+      ).toBe(EM_DASH)
+      expect(squash($('[data-testid="case-header-charge"]').text())).toBe(
+        EM_DASH
+      )
+    })
+
+    test('shows the payment date once it is recorded', async () => {
+      const item = anAddOrsItem()
+      item.payload.paymentDate = '2027-02-20'
+      const $ = await detailPage(item)
+
+      expect(squash($('[data-testid="case-header-payment-date"]').text())).toBe(
+        '20 Feb 2027'
+      )
+    })
+
+    test('shows only the Application summary and Application history tabs', async () => {
+      const $ = await detailPage(anAddOrsItem())
+
+      expect(tabs($)).toEqual([
+        {
+          key: 'application-summary',
+          text: 'Application summary',
+          href: null
+        },
+        {
+          key: 'application-history',
+          text: 'Application history',
+          href: `/work-items/${ADD_ORS_ID}/audit-log`
+        }
+      ])
+      expect($('[data-testid="re-accreditation-detail"]')).toHaveLength(0)
+      expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
+    })
+
+    test('keeps the re-accreditation header and tabs unchanged', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aReAccreditationItem()
+      })
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${RE_ACCREDITATION_ID}`
+      })
+      const $ = cheerio.load(result)
+
+      expect($('[data-testid="case-header-caption"]')).toHaveLength(0)
+      expect($('[data-testid="case-header-title"]')).toHaveLength(0)
+      expect($('[data-testid="case-header-org-name"]').text()).toBe(
+        'Acme Recycling'
+      )
+      expect($('[data-testid="case-header-org-id"]').text()).toBe('424242')
+      expect(tabs($).map((tab) => tab.key)).toEqual([
+        'application-summary',
+        'application-history',
+        'additional-information'
+      ])
+    })
+  })
+
+  describe('Application history page', () => {
+    test('shows the add-ORS header and tabs', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ADD_ORS_ID}/audit-log`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const $ = cheerio.load(result)
+      expect(squash($('[data-testid="case-header-caption"]').text())).toBe(
+        'IYC-ORS-2026-00001'
+      )
+      expect(squash($('[data-testid="case-header-title"]').text())).toBe(
+        'Denmark PR (007)'
+      )
+      expect($('[data-testid="case-header-org-name"]')).toHaveLength(0)
       expect(squash($('[data-testid="case-header-request-type"]').text())).toBe(
         'New ORS accreditation'
       )
       expect(squash($('[data-testid="case-header-status"]').text())).toBe(
         'Not started'
       )
-      expect(squash($('[data-testid="case-header-assigned-to"]').text())).toBe(
-        'Unassigned'
+      expect(squash($('[data-testid="case-header-charge"]').text())).toBe(
+        '£328.00'
       )
-      // Only the request type, status and assigned to in the meta line.
-      expect(
-        $('[data-testid="case-header-meta"] dd')
-          .map((_, el) => $(el).attr('data-testid'))
-          .get()
-      ).toEqual([
-        'case-header-request-type',
-        'case-header-status',
-        'case-header-assigned-to'
+      expect(tabs($)).toEqual([
+        {
+          key: 'application-summary',
+          text: 'Application summary',
+          href: `/work-items/${ADD_ORS_ID}`
+        },
+        {
+          key: 'application-history',
+          text: 'Application history',
+          href: null
+        }
       ])
-      // No re-accreditation panels or tabs.
-      expect($('[data-testid="re-accreditation-detail"]')).toHaveLength(0)
-      expect($('.app-case-tabs, [data-testid="case-tabs"]')).toHaveLength(0)
-      expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
+    })
+  })
+
+  describe('Additional information page', () => {
+    test('shows the add-ORS header', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ADD_ORS_ID}/additional-information`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const $ = cheerio.load(result)
+      expect(squash($('[data-testid="case-header-title"]').text())).toBe(
+        'Denmark PR (007)'
+      )
+      expect(squash($('[data-testid="case-header-request-type"]').text())).toBe(
+        'New ORS accreditation'
+      )
     })
   })
 })

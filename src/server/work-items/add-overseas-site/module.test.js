@@ -29,7 +29,7 @@ describe('add-overseas-site module (RA-739)', () => {
     expect(addOverseasSiteType.transitions).toBe(standardWorkflow.transitions)
   })
 
-  test('is a valid module that registers its header-only detail template', async () => {
+  test('is a valid module that registers its detail template', async () => {
     expect(() => assertValidWorkItemModule(addOverseasSiteModule)).not.toThrow()
 
     await addOverseasSiteModule.register({})

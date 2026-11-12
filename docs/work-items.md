@@ -147,7 +147,12 @@ A type that follows the shared Standard workflow (RA-739) takes its
 `src/server/work-items/core/standard-workflow.js`, mirroring management-be's
 `StandardWorkflow`. A type may declare a `category`; an in-year change type
 (`in-year-change`, see `core/categories.js`) renders the in-year change card
-on the Applications list and a "Request type" entry in the case header.
+on the Applications list, its own case header (the reference as a caption,
+the site name and ORS id as the title, and two rows of four meta items) and
+only the Application summary and Application history tabs. Every work item
+page builds its header from a work item passed through
+`decorateForCaseHeader` (`routes/work-items/case-header.js`), so the
+type's header shows on every tab.
 `add-overseas-site/module.js` is the example.
 
 ## Cross-type list
