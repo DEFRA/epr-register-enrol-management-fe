@@ -430,7 +430,7 @@ describe('RA-739: in-year change (add-ORS) header and tabs', () => {
       ['Due date', EM_DASH],
       ['Material', 'Plastic'],
       ['Accreditation number', 'ACC-1'],
-      ['Charge', '£328.00'],
+      ['Charge', '£328'],
       ['Payment date', NOT_RECEIVED]
     ])
   })

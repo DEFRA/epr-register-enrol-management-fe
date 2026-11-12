@@ -1,0 +1,42 @@
+{# ------------------------------------------------------------------- #}
+{# Application card markup shared by the Applications list's card       #}
+{# variants in `index.njk`: the standard (re-accreditation) card and    #}
+{# the in-year change card (RA-739). Each variant supplies its own body #}
+{# through `caller()`; the tile, header, reference link, state tag and  #}
+{# archived line are defined once here, with their testids.             #}
+{# ------------------------------------------------------------------- #}
+
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+
+{# The reference link, opening the work item. #}
+{% macro applicationCardRef(item) %}
+  <h2 class="govuk-heading-s app-application-card__ref">
+    <a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.applicationRef }}{% if not item.applicationRef %}<span class="govuk-visually-hidden">View application</span>{% endif %}</a>
+  </h2>
+{% endmacro %}
+
+{# One application card. `header.lead` is optional markup shown above the #}
+{# reference link, in the same column (the in-year change card's         #}
+{# submission line); `header.modifier` an optional card class modifier.   #}
+{# The card's body comes from the caller.                                 #}
+{% macro applicationCard(item, header = {}) %}
+  <article class="app-application-card{% if header.modifier %} app-application-card--{{ header.modifier }}{% endif %}" data-testid="application-tile" data-work-item-id="{{ item.id }}">
+    <div class="app-application-card__header">
+      {% if header.lead %}
+        <div>
+          {{ header.lead | safe }}
+          {{ applicationCardRef(item) }}
+        </div>
+      {% else %}
+        {{ applicationCardRef(item) }}
+      {% endif %}
+      {{ govukTag({ text: item.stateDisplayName, classes: item.stateTagClass, attributes: { "data-testid": "work-item-state-tag-" + item.id } }) }}
+    </div>
+
+    {{ caller() }}
+
+    {% if item.archivedAt %}
+      <p class="govuk-body-s app-application-card__archived" data-testid="work-item-archived-at-{{ item.id }}">Archived: {{ item.archivedAt }}</p>
+    {% endif %}
+  </article>
+{% endmacro %}

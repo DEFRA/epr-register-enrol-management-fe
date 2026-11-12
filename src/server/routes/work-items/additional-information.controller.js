@@ -7,7 +7,7 @@ import {
   decorateForCaseHeader
 } from './case-header.js'
 import { deriveSiteAddress } from './application-summary.js'
-import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
+import { renderNonInYearChangeFetchError } from './work-item-fetch-errors.js'
 
 const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
 
@@ -102,15 +102,13 @@ export const workItemAdditionalInformationController = {
     const user = getUser(request)
     const result = await getWorkItem({ workItemId: id, user })
 
-    const errorResponse = renderWorkItemFetchError({ h, result, id })
+    const errorResponse = renderNonInYearChangeFetchError({ h, result, id })
     if (errorResponse) {
       return errorResponse
     }
 
     const workItem = result.workItem
     const applicationRef = workItem.payload?.applicationReference
-    // RA-739. Decorated with its type's category, so an add-ORS item gets
-    // its own header and tabs here too.
     const forHeader = decorateForCaseHeader(workItem)
 
     return h.view(ADDITIONAL_INFORMATION_VIEW, {

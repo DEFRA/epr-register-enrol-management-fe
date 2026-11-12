@@ -17,7 +17,7 @@ import {
   buildCaseTabs,
   decorateForCaseHeader
 } from './case-header.js'
-import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
+import { renderNonInYearChangeFetchError } from './work-item-fetch-errors.js'
 import { recyclingOperationLabel } from './recycling-operations.schema.js'
 import { overseasSitesOf } from './overseas-sites.js'
 
@@ -208,7 +208,7 @@ export const workItemRecyclingOperationsController = {
     const user = getUser(request)
     const result = await getWorkItem({ workItemId: id, user })
 
-    const errorResponse = renderWorkItemFetchError({ h, result, id })
+    const errorResponse = renderNonInYearChangeFetchError({ h, result, id })
     if (errorResponse) {
       return errorResponse
     }

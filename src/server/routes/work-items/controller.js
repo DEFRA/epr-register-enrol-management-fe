@@ -819,11 +819,11 @@ function decorate(item) {
  * reference with its request count, the organisation line, the site line and
  * the request type. Each comes from the work item's own payload, which
  * management-be stamps when it splits a submission into one work item per
- * site.
+ * site. The site line is type-specific, so the type describes it through its
+ * `describeCardSite(payload)` hook; without one the line shows a dash.
  */
 function buildInYearChangeCard(item, type) {
   const payload = item.payload ?? {}
-  const site = payload.site ?? {}
   const size = Number.isInteger(payload.submissionSize)
     ? payload.submissionSize
     : null
@@ -835,8 +835,7 @@ function buildInYearChangeCard(item, type) {
     orgName: payload.organisationName ?? null,
     orgId: resolveOrganisationId(payload),
     material: materialLabel(payload.material),
-    siteName: site.siteName ?? null,
-    orsId: site.orsId ?? null,
+    site: type.describeCardSite?.(payload) ?? { name: null, reference: null },
     requestType: type.displayName
   }
 }

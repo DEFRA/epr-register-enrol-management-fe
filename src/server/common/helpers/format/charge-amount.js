@@ -23,17 +23,6 @@ export function formatChargeAmount(pence) {
   return formatPounds(pence, pence % 100 === 0 ? 0 : 2)
 }
 
-/**
- * Format an integer minor-unit amount as GBP, always with pence
- * ("£328.00"). RA-739: the add-ORS case header's Charge follows its Figma
- * frame, which shows pence even for whole pounds.
- *
- * @returns {string|null} `null` when the amount is absent or not an integer.
- */
-export function formatChargeAmountWithPence(pence) {
-  return isPence(pence) ? formatPounds(pence, 2) : null
-}
-
 function isPence(value) {
   return typeof value === 'number' && Number.isInteger(value)
 }

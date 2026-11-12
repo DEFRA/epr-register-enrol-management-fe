@@ -24,7 +24,21 @@ export const addOverseasSiteType = {
   states: standardWorkflow.states,
   transitions: standardWorkflow.transitions,
   // The detail controller uses a type's own summary builder when it has one.
-  buildApplicationSummary: buildAddOverseasSiteSummary
+  buildApplicationSummary: buildAddOverseasSiteSummary,
+  // The Applications list's in-year change card shows this as its site line.
+  describeCardSite
+}
+
+/**
+ * The in-year change card's site line: the site's name and its ORS id, from
+ * the one site management-be stamps on each add-ORS work item.
+ *
+ * @param {object} payload work item payload
+ * @returns {{ name: string|null, reference: string|null }}
+ */
+function describeCardSite(payload) {
+  const site = payload?.site ?? {}
+  return { name: site.siteName ?? null, reference: site.orsId ?? null }
 }
 
 export const addOverseasSiteModule = {

@@ -24,7 +24,7 @@ import {
   buildCaseTabs,
   decorateForCaseHeader
 } from './case-header.js'
-import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
+import { renderNonInYearChangeFetchError } from './work-item-fetch-errors.js'
 import {
   applicableCodesForMaterialType,
   buildErrorSummary,
@@ -147,7 +147,7 @@ export function makeShowRecyclingOperationsEditController() {
       const user = getUser(request)
       const result = await getWorkItem({ workItemId: id, user })
 
-      const errorResponse = renderWorkItemFetchError({ h, result, id })
+      const errorResponse = renderNonInYearChangeFetchError({ h, result, id })
       if (errorResponse) {
         return errorResponse
       }
@@ -184,7 +184,7 @@ export function makeSubmitRecyclingOperationsEditController({
       const user = getUser(request)
       const result = await getWorkItem({ workItemId: id, user })
 
-      const errorResponse = renderWorkItemFetchError({ h, result, id })
+      const errorResponse = renderNonInYearChangeFetchError({ h, result, id })
       if (errorResponse) {
         return errorResponse
       }

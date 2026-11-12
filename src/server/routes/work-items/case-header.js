@@ -1,8 +1,5 @@
 import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
-import {
-  formatChargeAmount,
-  formatChargeAmountWithPence
-} from '#/server/common/helpers/format/charge-amount.js'
+import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
 import { isInYearChangeType } from '#/server/work-items/core/categories.js'
@@ -247,8 +244,8 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
  * RA-739. The add-ORS meta, two rows of four in Figma order. Status,
  * Assigned to and Due date are built exactly as for re-accreditation. The
  * charge is the site's own (`site.chargePence`), shown whenever it is known
- * (unlike re-accreditation's payment amount, which waits for payment), with
- * pence as in the design ("£328.00").
+ * (unlike re-accreditation's payment amount, which waits for payment),
+ * through the same formatter: whole pounds without pence ("£328").
  */
 function inYearChangeMeta({ workItem, assignment, payload }) {
   return [
@@ -269,7 +266,7 @@ function inYearChangeMeta({ workItem, assignment, payload }) {
     {
       key: 'charge',
       label: 'Charge',
-      value: formatChargeAmountWithPence(payload.site?.chargePence) ?? EM_DASH
+      value: formatChargeAmount(payload.site?.chargePence) ?? EM_DASH
     },
     {
       key: 'payment-date',

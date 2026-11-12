@@ -26,8 +26,13 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   updateRecyclingOperations: vi.fn()
 }))
 
-const { getWorkItem, getWorkItems, assignWorkItem, applyWorkItemAction } =
-  await import('#/server/common/helpers/backend-api/backend-api.js')
+const {
+  getWorkItem,
+  getWorkItems,
+  assignWorkItem,
+  applyWorkItemAction,
+  updateRecyclingOperations
+} = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ADD_ORS_ID = '73900003-0000-4000-8000-000000000001'
 const RE_ACCREDITATION_ID = '73900003-0000-4000-8000-000000000002'
@@ -206,6 +211,7 @@ describe('RA-739: in-year change applications', () => {
     getWorkItems.mockReset()
     assignWorkItem.mockReset()
     applyWorkItemAction.mockReset()
+    updateRecyclingOperations.mockReset()
   })
 
   async function listPage(...items) {
@@ -251,6 +257,17 @@ describe('RA-739: in-year change applications', () => {
         )
       ).toBe('Not started')
       expect(card.text()).toContain('Date submitted:')
+    })
+
+    test('shows the site name alone when the site has no ORS id', async () => {
+      const item = anAddOrsItem()
+      item.payload.site = { siteName: 'Denmark PR' }
+      const $ = await listPage(item)
+
+      expect(squash($('[data-testid="application-site"]').text())).toBe(
+        'Denmark PR'
+      )
+      expect($('[data-testid="ors-id"]')).toHaveLength(0)
     })
 
     test('says "(1 request)" for a single-site submission', async () => {
@@ -345,7 +362,7 @@ describe('RA-739: in-year change applications', () => {
         `Due date: ${EM_DASH}`,
         'Material: Plastic',
         'Accreditation number: ACC-REP-PL-0007',
-        'Charge: £328.00',
+        'Charge: £328',
         'Payment date: Not received'
       ])
       expect(
@@ -726,7 +743,7 @@ describe('RA-739: in-year change applications', () => {
         'Not started'
       )
       expect(squash($('[data-testid="case-header-charge"]').text())).toBe(
-        '£328.00'
+        '£328'
       )
       expect(tabs($)).toEqual([
         {
@@ -743,23 +760,63 @@ describe('RA-739: in-year change applications', () => {
     })
   })
 
-  describe('Additional information page', () => {
-    test('shows the add-ORS header', async () => {
+  // df7.21. The re-accreditation-only tab pages are not part of an in-year
+  // change's case: opened by URL they 404 exactly like an unknown work item.
+  describe('re-accreditation-only pages', () => {
+    const siteId = 'site-1'
+
+    async function expectApplicationNotFound(response) {
+      expect(response.statusCode).toBe(statusCodes.notFound)
+      const $ = cheerio.load(response.result)
+      expect(squash($('h1').text())).toBe('Application not found')
+      expect($('[data-testid="work-item-not-found"]')).toHaveLength(1)
+      expect($('[data-testid="case-header-title"]')).toHaveLength(0)
+    }
+
+    test.each([
+      ['Additional information', 'additional-information'],
+      ['Recycling operations', 'recycling-operations'],
+      ['Change recycling operations', `recycling-operations/${siteId}`]
+    ])('%s is not found for an add-ORS item', async (_, path) => {
       getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
 
-      const { result, statusCode } = await server.inject({
+      await expectApplicationNotFound(
+        await server.inject({
+          method: 'GET',
+          url: `/work-items/${ADD_ORS_ID}/${path}`
+        })
+      )
+    })
+
+    test('saving recycling operations is not found for an add-ORS item', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+
+      await expectApplicationNotFound(
+        await injectWithCrumb(server, {
+          method: 'POST',
+          url: `/work-items/${ADD_ORS_ID}/recycling-operations/${siteId}`,
+          payload: 'codes=R5',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' }
+        })
+      )
+      expect(updateRecyclingOperations).not.toHaveBeenCalled()
+    })
+
+    test.each([
+      ['Additional information', 'additional-information'],
+      ['Recycling operations', 'recycling-operations']
+    ])('%s still renders for a re-accreditation item', async (_, path) => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aReAccreditationItem()
+      })
+
+      const { statusCode } = await server.inject({
         method: 'GET',
-        url: `/work-items/${ADD_ORS_ID}/additional-information`
+        url: `/work-items/${RE_ACCREDITATION_ID}/${path}`
       })
 
       expect(statusCode).toBe(statusCodes.ok)
-      const $ = cheerio.load(result)
-      expect(squash($('[data-testid="case-header-title"]').text())).toBe(
-        'Denmark PR (007)'
-      )
-      expect(squash($('[data-testid="case-header-request-type"]').text())).toBe(
-        'New ORS accreditation'
-      )
     })
   })
 })
