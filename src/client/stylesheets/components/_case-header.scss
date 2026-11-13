@@ -73,6 +73,15 @@
   .app-case-header__meta {
     grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
   }
+
+  // RA-739. The in-year change header (Figma node 854:136663) has a narrower
+  // first column (about 287 / 204 / 205 / 204px), and its second column holds
+  // "Accreditation number" and its value, too long for a one-share column of
+  // the grid above. The last three columns never shrink below their content,
+  // so no label or value wraps; the first column gives way instead.
+  .app-case-header__meta--in-year-change {
+    grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(max-content, 1fr));
+  }
 }
 
 .app-case-header__meta-label {

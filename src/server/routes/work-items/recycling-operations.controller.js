@@ -12,10 +12,13 @@
 import { formatDateTimeGds } from '#/config/nunjucks/filters/format-date.js'
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { getWorkItemType } from '#/server/work-items/core/registry.js'
-import { stateTagClass } from '#/server/work-items/core/state-badge.js'
-import { buildCaseHeader, buildCaseTabs } from './case-header.js'
-import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
+import {
+  buildCaseHeader,
+  buildCaseTabs,
+  decorateForCaseHeader,
+  RECYCLING_OPERATIONS_TAB_KEY
+} from './case-header.js'
+import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
 import { recyclingOperationLabel } from './recycling-operations.schema.js'
 import { overseasSitesOf } from './overseas-sites.js'
 
@@ -206,18 +209,20 @@ export const workItemRecyclingOperationsController = {
     const user = getUser(request)
     const result = await getWorkItem({ workItemId: id, user })
 
-    const errorResponse = renderWorkItemFetchError({ h, result, id })
+    const errorResponse = renderFetchErrorUnlessCaseHasTab({
+      h,
+      result,
+      id,
+      tab: RECYCLING_OPERATIONS_TAB_KEY
+    })
     if (errorResponse) {
       return errorResponse
     }
 
     const workItem = result.workItem
     const applicationRef = workItem.payload?.applicationReference ?? null
-    const type = getWorkItemType(workItem.typeId)
-    const stateDisplayName =
-      type?.states?.find((s) => s.id === workItem.stateId)?.displayName ??
-      workItem.stateId
 
+    const forHeader = decorateForCaseHeader(workItem)
     const allSites = buildRecyclingOperationsSites(workItem)
     const searchTerm =
       typeof request.query?.q === 'string' ? request.query.q.trim() : ''
@@ -234,16 +239,11 @@ export const workItemRecyclingOperationsController = {
 
     return h.view(VIEW, {
       pageTitle: `Recycling operations — ${applicationRef}`,
-      caseHeader: buildCaseHeader({
-        workItem: {
-          ...workItem,
-          stateDisplayName,
-          stateTagClass: stateTagClass(workItem.stateId)
-        }
-      }),
+      caseHeader: buildCaseHeader({ workItem: forHeader }),
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
-        active: 'recycling-operations'
+        active: 'recycling-operations',
+        typeId: forHeader.typeId
       }),
       workItem: { id: workItem.id, applicationRef },
       sites: pageSites,

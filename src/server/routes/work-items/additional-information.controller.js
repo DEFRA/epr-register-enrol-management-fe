@@ -1,11 +1,14 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
-import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { formatSiteAddress } from '#/server/common/helpers/format/site-address.js'
-import { buildCaseHeader, buildCaseTabs } from './case-header.js'
+import {
+  buildCaseHeader,
+  buildCaseTabs,
+  decorateForCaseHeader,
+  ADDITIONAL_INFORMATION_TAB_KEY
+} from './case-header.js'
 import { deriveSiteAddress } from './application-summary.js'
-import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
+import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
 
 const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
 
@@ -100,32 +103,29 @@ export const workItemAdditionalInformationController = {
     const user = getUser(request)
     const result = await getWorkItem({ workItemId: id, user })
 
-    const errorResponse = renderWorkItemFetchError({ h, result, id })
+    const errorResponse = renderFetchErrorUnlessCaseHasTab({
+      h,
+      result,
+      id,
+      tab: ADDITIONAL_INFORMATION_TAB_KEY
+    })
     if (errorResponse) {
       return errorResponse
     }
 
     const workItem = result.workItem
     const applicationRef = workItem.payload?.applicationReference
-    const type = getWorkItemType(workItem.typeId)
-    const stateDisplayName =
-      type?.states?.find((s) => s.id === workItem.stateId)?.displayName ??
-      workItem.stateId
+    const forHeader = decorateForCaseHeader(workItem)
 
     return h.view(ADDITIONAL_INFORMATION_VIEW, {
       pageTitle: `Additional information — ${applicationRef}`,
       // RA-295 / RA-434. Same case header and tab strip as the other two
       // tabs.
-      caseHeader: buildCaseHeader({
-        workItem: {
-          ...workItem,
-          stateDisplayName,
-          stateTagClass: stateTagClass(workItem.stateId)
-        }
-      }),
+      caseHeader: buildCaseHeader({ workItem: forHeader }),
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
-        active: 'additional-information'
+        active: 'additional-information',
+        typeId: forHeader.typeId
       }),
       workItem: {
         id: workItem.id,

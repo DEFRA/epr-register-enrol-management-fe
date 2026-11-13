@@ -17,14 +17,21 @@
  *   amount and formats as "£0"; it must never be confused with absent.
  */
 export function formatChargeAmount(pence) {
-  if (typeof pence !== 'number' || !Number.isInteger(pence)) {
+  if (!isPence(pence)) {
     return null
   }
-  const hasFraction = pence % 100 !== 0
+  return formatPounds(pence, pence % 100 === 0 ? 0 : 2)
+}
+
+function isPence(value) {
+  return typeof value === 'number' && Number.isInteger(value)
+}
+
+function formatPounds(pence, fractionDigits) {
   return new Intl.NumberFormat('en-GB', {
     style: 'currency',
     currency: 'GBP',
-    minimumFractionDigits: hasFraction ? 2 : 0,
-    maximumFractionDigits: hasFraction ? 2 : 0
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
   }).format(pence / 100)
 }

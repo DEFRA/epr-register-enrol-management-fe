@@ -1,22 +1,18 @@
 /**
- * RA-527. Re-accreditation state ids that code outside `module.js` needs to
- * name. Kept in this dependency-free file (rather than exported from
- * `module.js`, which pulls in the type's routes and controllers) so a
- * controller or formatter can import one without risking an import cycle.
- * `module.js` declares its STATES from these same constants.
+ * RA-527. Re-accreditation state ids and groupings that code outside
+ * `module.js` needs to name. Kept apart from `module.js`, which pulls in the
+ * type's routes and controllers, so a controller or formatter can import them
+ * without risking an import cycle. RA-739: the ids are declared by the shared
+ * Standard workflow, which `module.js` also takes its states from; they are
+ * re-exported so re-accreditation code keeps naming them from here.
  */
 
-/**
- * Step 1 of the two-step determination: approved and the accreditation
- * number minted, but the applicant not yet contacted. Not terminal.
- */
-export const STATE_APPROVED_PENDING_CONTACT = 'approved-pending-contact'
+import {
+  STATE_APPROVED_PENDING_CONTACT,
+  STATE_REJECTED_PENDING_CONTACT
+} from '../core/standard-workflow.js'
 
-/**
- * Step 1 of the two-step determination for a refusal: refused (no number is
- * minted), but the applicant not yet contacted. Not terminal.
- */
-export const STATE_REJECTED_PENDING_CONTACT = 'rejected-pending-contact'
+export { STATE_APPROVED_PENDING_CONTACT, STATE_REJECTED_PENDING_CONTACT }
 
 /**
  * The states in which a determination has been made (step 1) but not yet

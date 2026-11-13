@@ -23,37 +23,37 @@ const logger = createLogger()
  * case" model, not an oversight.
  */
 
+function filesIn(container) {
+  const files = container?.files
+  return Array.isArray(files) ? files : []
+}
+
+/**
+ * Every file a work item's payload can link to: re-accreditation's sampling
+ * plan and each overseas site's BES evidence, and (RA-739) the add-ORS
+ * site's BES evidence under `payload.site`.
+ *
+ * RA-483 deliberately does NOT filter deselected sites out here. This is a
+ * lookup by `fileId`, reachable only from a link the summary renders — and
+ * the summary no longer renders a removed site's BES evidence, so no link
+ * to one is offered. Excluding them here would only break any already-
+ * issued link to a file that was legitimately part of the submission, and
+ * buys no access control: per ADR-0005 every caseworker may read every
+ * case's files regardless.
+ */
+function filesOf(payload) {
+  const overseasSites = payload?.overseasSites?.sites
+  return [
+    ...filesIn(payload?.samplingPlan),
+    ...(Array.isArray(overseasSites) ? overseasSites : []).flatMap((site) =>
+      filesIn(site?.besEvidence)
+    ),
+    ...filesIn(payload?.site?.besEvidence)
+  ]
+}
+
 function findFile(payload, fileId) {
-  const samplingPlanFiles = payload?.samplingPlan?.files
-  const fromSamplingPlan = Array.isArray(samplingPlanFiles)
-    ? samplingPlanFiles.find((f) => f.fileId === fileId)
-    : undefined
-  if (fromSamplingPlan) {
-    return fromSamplingPlan
-  }
-
-  // RA-483 deliberately does NOT filter deselected sites out here. This is a
-  // lookup by `fileId`, reachable only from a link the summary renders — and
-  // the summary no longer renders a removed site's BES evidence, so no link
-  // to one is offered. Excluding them here would only break any already-
-  // issued link to a file that was legitimately part of the submission, and
-  // buys no access control: per ADR-0005 every caseworker may read every
-  // case's files regardless.
-  const sites = payload?.overseasSites?.sites
-  if (!Array.isArray(sites)) {
-    return undefined
-  }
-
-  for (const site of sites) {
-    const besFiles = site?.besEvidence?.files
-    const found = Array.isArray(besFiles)
-      ? besFiles.find((f) => f.fileId === fileId)
-      : undefined
-    if (found) {
-      return found
-    }
-  }
-  return undefined
+  return filesOf(payload).find((file) => file?.fileId === fileId)
 }
 
 export const workItemDownloadFileController = {

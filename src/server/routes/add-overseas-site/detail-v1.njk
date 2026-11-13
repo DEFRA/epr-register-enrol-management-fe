@@ -1,0 +1,72 @@
+{# ------------------------------------------------------------------- #}
+{# Add-ORS detail template (v1) — RA-739.                               #}
+{#                                                                      #}
+{# The "Application summary" tab, from the Figma "Application page -    #}
+{# Summary" frame. Extends the generic detail page, as                  #}
+{# re-accreditation's does, for the case tabs, the notices and error    #}
+{# banners, and the assignment panel. It replaces the application data  #}
+{# with the add-ORS site summary (`applicationSummary`, built by the    #}
+{# type's own summary builder) and drops the actions panel: Duly make,  #}
+{# Query and decisions are RA-495.                                      #}
+{#                                                                      #}
+{# `data-state-id` carries the raw state id for the journey tests.      #}
+{# ------------------------------------------------------------------- #}
+{% extends 'work-items/detail.njk' %}
+
+{% from "work-items/summary-macros.njk" import documentItem, siteDetails %}
+
+{% block content %}
+  <div data-testid="add-overseas-site-detail"
+       data-state-id="{{ workItem.stateId }}">
+    {{ super() }}
+  </div>
+{% endblock %}
+
+{% block applicationSummary %}
+  {# The site. Every row renders; a missing value is the dash. The row  #}
+  {# and value testids match re-accreditation's application details.   #}
+  <dl class="govuk-summary-list" data-testid="application-details">
+    {% for row in applicationSummary.rows %}
+      <div class="govuk-summary-list__row"
+           data-testid="app-detail-row-{{ row.key }}">
+        <dt class="govuk-summary-list__key">{{ row.label }}</dt>
+        <dd class="govuk-summary-list__value"
+            data-testid="app-detail-value-{{ row.key }}">
+          {% if row.kind == 'files' %}
+            {% if row.files.length %}
+              <ul class="govuk-list govuk-!-margin-bottom-0">
+                {% for file in row.files %}{{ documentItem(file, showDates=true) }}{% endfor %}
+              </ul>
+            {% else %}
+              —
+            {% endif %}
+          {% else %}
+            {% for line in row.values %}
+              <p class="govuk-body govuk-!-margin-bottom-0">{{ line }}</p>
+            {% endfor %}
+          {% endif %}
+        </dd>
+      </div>
+    {% endfor %}
+  </dl>
+
+  {# Interim sites the operator has not withdrawn; no section without any. #}
+  {% if applicationSummary.interimSites.length %}
+    <div class="govuk-!-margin-top-8" data-testid="interim-sites">
+      <h2 class="govuk-heading-m" data-testid="interim-sites-heading">Interim sites ({{ applicationSummary.interimSites.length }})</h2>
+      {% for interimSite in applicationSummary.interimSites %}
+        <div class="govuk-!-margin-bottom-6" data-testid="interim-site">
+          <h3 class="govuk-heading-s govuk-!-margin-bottom-1" data-testid="interim-site-name">{{ interimSite.siteName }}</h3>
+          {% if interimSite.shortAddress %}
+            <p class="govuk-body-s govuk-!-margin-bottom-2" data-testid="interim-site-summary-address">{{ interimSite.shortAddress }}</p>
+          {% endif %}
+          {{ siteDetails(interimSite.details, 'interim-site', bordered=true) }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}
+
+{# No actions until RA-495 (Duly make, Query and decisions). #}
+{% block primaryActions %}{% endblock %}
+{% block actionsCard %}{% endblock %}
