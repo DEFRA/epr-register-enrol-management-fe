@@ -17,6 +17,7 @@ import {
 import { makeSelfAssignController } from './detail.controller.js'
 import { TEST_STANDARD_USER } from '#/server/common/helpers/auth/stub-auth-plugin.js'
 import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getReAccreditationPriorYear: vi.fn(),
@@ -119,6 +120,19 @@ function aWorkItem(overrides = {}) {
   }
 }
 
+const QUERY_TRANSITIONS = [
+  ['query-during-duly-making', 'submitted'],
+  ['query-during-duly-made', 'duly-made'],
+  ['query-during-assessment', 'assessment-in-progress'],
+  ['query-during-decision', 'awaiting-decision']
+].map(([actionId, fromStateId]) => ({
+  actionId,
+  displayName: 'Query',
+  fromStateId,
+  toStateId: 'queried',
+  callerInvocable: false
+}))
+
 function registerReaccreditation() {
   registerWorkItemType({
     id: 're-accreditation',
@@ -217,7 +231,10 @@ function registerReaccreditation() {
         fromStateId: 'updated',
         toStateId: 'duly-made',
         callerInvocable: false
-      }
+      },
+      // RA-000. `isQueryState` reads these to decide the Query link, as
+      // the real module declares them (it throws on a type without them).
+      ...QUERY_TRANSITIONS
     ]
   })
 }
@@ -687,6 +704,7 @@ describe('#workItemDetailController', () => {
   test.each(['withdraw', 'withdraw-during-decision', 'withdraw-during-query'])(
     'POST action rejects the %s id without calling the backend',
     async (actionId) => {
+      registerReaccreditation()
       getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
       const { statusCode, result } = await injectWithCrumb(server, {
@@ -699,6 +717,123 @@ describe('#workItemDetailController', () => {
         expect.stringContaining('This action is not available.')
       )
       expect(applyWorkItemAction).not.toHaveBeenCalled()
+    }
+  )
+
+  // RA-000. A query is applied only through `POST /work-items/{id}/query`,
+  // whose backend service stamps `currentQuery` before the operator push
+  // reads it; resume is, like withdraw, an operator action. The generic route
+  // rejects both categories without calling the backend, and logs at Error.
+  test.each([
+    'query',
+    'query-during-duly-making',
+    'query-during-duly-made',
+    'query-during-assessment',
+    'query-during-decision',
+    'resume-during-duly-making',
+    'resume-during-duly-made',
+    'resume-during-assessment',
+    'resume-during-decision',
+    'withdraw-during-decision'
+  ])(
+    'POST action rejects the %s id without calling the backend, logging at Error',
+    async (actionId) => {
+      const errorSpy = vi.spyOn(createLogger(), 'error')
+      registerReaccreditation()
+      getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
+
+      try {
+        const { statusCode, result } = await injectWithCrumb(server, {
+          method: 'POST',
+          url: `/work-items/${ID}/actions/${actionId}`
+        })
+
+        expect(statusCode).toBe(statusCodes.conflict)
+        expect(result).toEqual(
+          expect.stringContaining('This action is not available.')
+        )
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+        expect(errorSpy).toHaveBeenCalledWith(
+          {
+            workItemId: ID,
+            actionId,
+            route: '/work-items/{id}/actions/{actionId}'
+          },
+          'Rejected an action id the generic apply-action route never applies'
+        )
+      } finally {
+        errorSpy.mockRestore()
+      }
+    }
+  )
+
+  // RA-000. management-be matches action ids case-insensitively, so a
+  // mixed-case id must not slip past the prefix checks. The params
+  // validation refuses anything that is not lower-case kebab with the 400
+  // error page and an Error log, before the handler or the backend runs.
+  test.each([
+    'Withdraw',
+    'WITHDRAW-during-assessment',
+    'Query-During-Assessment',
+    'Resume-during-duly-made',
+    'sla_extend',
+    'sla-extend-'
+  ])(
+    'POST action refuses the malformed %s id without calling the backend',
+    async (actionId) => {
+      const errorSpy = vi.spyOn(createLogger(), 'error')
+
+      try {
+        const { statusCode, result } = await injectWithCrumb(server, {
+          method: 'POST',
+          url: `/work-items/${ID}/actions/${actionId}`
+        })
+
+        expect(statusCode).toBe(statusCodes.badRequest)
+        expect(result).toEqual(expect.stringContaining('Bad Request'))
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+        expect(getWorkItem).not.toHaveBeenCalled()
+        expect(errorSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            workItemId: ID,
+            actionId,
+            route: '/work-items/{id}/actions/{actionId}'
+          }),
+          'Rejected a malformed action id on the generic apply-action route'
+        )
+      } finally {
+        errorSpy.mockRestore()
+      }
+    }
+  )
+
+  // RA-000. Every other id is still forwarded: the backend's guard stays
+  // authoritative for it. Ids that only resemble a rejected category are
+  // not caught by the prefix rule.
+  test.each(['sla-extend', 'queried', 'resumed', 'withdrawn'])(
+    'POST action still forwards %s to the backend',
+    async (actionId) => {
+      const errorSpy = vi.spyOn(createLogger(), 'error')
+      applyWorkItemAction.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem()
+      })
+
+      try {
+        const { statusCode, headers } = await injectWithCrumb(server, {
+          method: 'POST',
+          url: `/work-items/${ID}/actions/${actionId}`
+        })
+
+        expect(statusCode).toBe(statusCodes.redirect)
+        expect(headers.location).toBe(`/work-items/${ID}`)
+        expect(applyWorkItemAction).toHaveBeenCalledWith(
+          expect.objectContaining({ workItemId: ID, actionId })
+        )
+        expect(errorSpy).not.toHaveBeenCalled()
+      } finally {
+        errorSpy.mockRestore()
+      }
     }
   )
 
@@ -918,6 +1053,7 @@ describe('#workItemDetailController', () => {
   // action-link/macro.njk. Route-level enforcement (403 on the underlying
   // POST) is covered separately in auth.test.js.
   test('shows reassign/unassign as disabled, hrefless spans for a support user', async () => {
+    registerReaccreditation()
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({ assignedToId: null, assignedToName: null })
@@ -1084,6 +1220,8 @@ describe('#workItemDetailController', () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
+        // RA-000. Not queryable, so no Query link joins the count.
+        stateId: 'queried',
         availableActions: [
           { actionId: 'sla-extend', displayName: 'Extend SLA' }
         ]
@@ -1311,6 +1449,8 @@ describe('#workItemDetailController', () => {
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
+          // RA-000. Not queryable, so no Query link joins the count.
+          stateId: 'queried',
           availableActions: [
             {
               actionId: 'hidden-one',
@@ -1360,6 +1500,8 @@ describe('#workItemDetailController', () => {
         getWorkItem.mockResolvedValue({
           ok: true,
           workItem: aWorkItem({
+            // RA-000. Not queryable, so no Query link joins the count.
+            stateId: 'queried',
             availableActions: [
               { actionId: 'visible-one', displayName: 'Visible one', ...flag },
               { actionId: 'visible-two', displayName: 'Visible two', ...flag }
@@ -1378,12 +1520,13 @@ describe('#workItemDetailController', () => {
       }
     )
 
-    // AC6. The query link special-casing is unchanged: the query link's
-    // testid is hardcoded `action-query` regardless of the real action id.
-    // RA-317: the withdraw link special-casing is GONE — a queried item
-    // renders the Query link but no withdraw affordance, and never links to
-    // the (removed) withdraw confirmation interstitial.
-    test('keeps the query link special-casing and drops the withdraw link', async () => {
+    // AC6. The query link's testid is hardcoded `action-query` regardless
+    // of the real action id. RA-000: it follows the state (`isQueryState`),
+    // not the projection, so a queried item offers no Query link even when a
+    // stale backend still projects a query action. RA-317: the withdraw link
+    // special-casing is GONE — no withdraw affordance renders, and nothing
+    // links to the (removed) withdraw confirmation interstitial.
+    test('offers no Query link and drops the withdraw link on a queried item', async () => {
       registerWorkItemType(reAccreditationType)
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -1404,8 +1547,8 @@ describe('#workItemDetailController', () => {
       const { result, statusCode } = await get()
 
       expect(statusCode).toBe(statusCodes.ok)
-      expect(actionTestIds(result)).toEqual(['action-query'])
-      expect(result).toContain(`/work-items/${ID}/query`)
+      expect(actionTestIds(result)).toEqual([])
+      expect(result).not.toContain(`/work-items/${ID}/query`)
       expect(result).not.toContain('action-withdraw-during-query')
       expect(result).not.toContain(
         `/work-items/${ID}/actions/withdraw-during-query/confirm`
@@ -1456,6 +1599,8 @@ describe('#workItemDetailController', () => {
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
+          // RA-000. Not queryable, so no Query link joins the count.
+          stateId: 'queried',
           availableActions: [
             ...RESUME_ACTIONS,
             { actionId: 'visible-one', displayName: 'Visible one' }
@@ -1480,6 +1625,8 @@ describe('#workItemDetailController', () => {
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({
+          // RA-000. Not queryable, so no Query link joins the count.
+          stateId: 'queried',
           availableActions: [
             { actionId: 'sla-extend', displayName: 'Extend SLA' },
             {
@@ -1510,7 +1657,7 @@ describe('#workItemDetailController', () => {
         registerReaccreditation()
         getWorkItem.mockResolvedValue({
           ok: true,
-          workItem: aWorkItem({ availableActions })
+          workItem: aWorkItem({ stateId: 'queried', availableActions })
         })
 
         const { result, statusCode } = await get()
@@ -1777,6 +1924,8 @@ describe('#workItemDetailController', () => {
       const request = {
         params: { id: ID },
         payload: {},
+        // Hapi always sets `request.route`; the detail render logs it.
+        route: { path: '/work-items/{id}/self-assign' },
         auth: { credentials: { name: 'No Id User' } },
         yar: { flash: () => [] }
       }
@@ -2323,7 +2472,9 @@ describe('#workItemDetailController', () => {
           { id: 'submitted', displayName: 'Submitted' },
           { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
         ],
-        getTasksForState: () => []
+        getTasksForState: () => [],
+        // RA-000. `isQueryState` throws on a type without query transitions.
+        transitions: QUERY_TRANSITIONS
       })
     }
 
@@ -2513,7 +2664,9 @@ describe('#workItemDetailController', () => {
           { id: 'rejected', displayName: 'Rejected', isTerminal: true },
           { id: 'withdrawn', displayName: 'Withdrawn', isTerminal: true }
         ],
-        getTasksForState: () => []
+        getTasksForState: () => [],
+        // RA-000. `isQueryState` throws on a type without query transitions.
+        transitions: QUERY_TRANSITIONS
       })
     }
 
@@ -3466,11 +3619,13 @@ describe('#workItemDetailController', () => {
     })
 
     test('still renders actions the declaration does NOT mark non-invocable', async () => {
-      // Guards against the filter over-reaching into a vacuous pass: the
-      // Query link must survive alongside the suppressed decision actions.
-      // RA-317: withdraw is no longer a Case Management service affordance,
-      // so the query link is
-      // now the survivor that proves the filter does not over-reach.
+      // Guards against the filter over-reaching into a vacuous pass: an
+      // action the declaration does not mark non-invocable must survive
+      // alongside the suppressed decision actions. RA-000: the Query link
+      // no longer rides on `availableActions` (it follows `isQueryState`),
+      // so an undeclared action is the survivor that proves the filter does
+      // not over-reach, and the stale projected `query-during-decision` must
+      // not become a generic button.
       registerReaccreditation()
       getWorkItem.mockResolvedValue({
         ok: true,
@@ -3490,6 +3645,13 @@ describe('#workItemDetailController', () => {
               fromStateId: 'awaiting-decision',
               toStateId: 'queried',
               callerInvocable: true
+            },
+            {
+              actionId: 'request-site-visit',
+              displayName: 'Request site visit',
+              fromStateId: 'awaiting-decision',
+              toStateId: 'awaiting-decision',
+              callerInvocable: true
             }
           ]
         })
@@ -3501,7 +3663,11 @@ describe('#workItemDetailController', () => {
       })
 
       expect(result).toEqual(
-        expect.stringContaining('data-testid="action-query"')
+        expect.stringContaining('data-testid="action-request-site-visit"')
+      )
+      expect(result.match(/data-testid="action-query"/g)).toHaveLength(1)
+      expect(result).not.toEqual(
+        expect.stringContaining('/actions/query-during-decision')
       )
       expect(result).not.toEqual(
         expect.stringContaining('data-testid="action-reject"')

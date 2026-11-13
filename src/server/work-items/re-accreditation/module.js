@@ -33,7 +33,7 @@ export const reAccreditationType = {
   // Mirrors `ReAccreditationType.TemplateVersion` in the backend, which is
   // the value actually stamped onto work items. Keep the two in lock-step
   // and add the matching entry to the detail-template map below.
-  templateVersion: 'v18',
+  templateVersion: 'v19',
   // RA-739. Re-accreditation follows the shared Standard workflow.
   initialState: standardWorkflow.initialState,
   states: standardWorkflow.states,
@@ -142,7 +142,8 @@ export const reAccreditationModule = {
       v15: DETAIL_TEMPLATE_V1,
       v16: DETAIL_TEMPLATE_V1,
       v17: DETAIL_TEMPLATE_V1,
-      v18: DETAIL_TEMPLATE_V1
+      v18: DETAIL_TEMPLATE_V1,
+      v19: DETAIL_TEMPLATE_V1
     })
 
     // RA-372. Continue-review flow: the onward path out of `updated` once

@@ -1,3 +1,6 @@
+import Boom from '@hapi/boom'
+import Joi from 'joi'
+
 import { workItemListController } from './controller.js'
 import { workItemDownloadFileController } from './download-file.controller.js'
 import {
@@ -27,6 +30,34 @@ import {
   makeSubmitRecyclingOperationsEditController
 } from './recycling-operations-edit.controller.js'
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { ACTION_ID_PATTERN } from './generic-route-action-ids.js'
+
+const logger = createLogger()
+
+/**
+ * Route `options.validate` for the generic apply-action route. An action id
+ * that is not lower-case kebab is refused before the handler runs: logged at
+ * Error and answered with the generic 400 error page.
+ */
+const applyActionParamsValidation = {
+  params: Joi.object({
+    id: Joi.string().required(),
+    actionId: Joi.string().pattern(ACTION_ID_PATTERN).required()
+  }),
+  failAction(request, _h, err) {
+    logger.error(
+      {
+        workItemId: request.params.id,
+        actionId: request.params.actionId,
+        route: request.route.path,
+        reason: err.message
+      },
+      'Rejected a malformed action id on the generic apply-action route'
+    )
+    throw Boom.badRequest('Invalid action id')
+  }
+}
 
 // The single content type every form on these pages posts as (all forms are
 // plain HTML forms with no JavaScript enhancement).
@@ -156,7 +187,13 @@ export const workItems = {
         {
           method: 'POST',
           path: '/work-items/{id}/actions/{actionId}',
-          options: requireStandard,
+          // RA-000. `actionId` must be lower-case kebab, so the withdraw /
+          // query / resume prefix checks cannot be dodged by case (the
+          // backend matches action ids case-insensitively).
+          options: {
+            ...requireStandard,
+            validate: applyActionParamsValidation
+          },
           ...makeApplyActionController()
         },
         // RA-317. The withdraw confirmation interstitial (RA-188) GET/POST
@@ -166,6 +203,8 @@ export const workItems = {
         // Management service withdraw journey. The generic apply-action route above additionally rejects
         // any `withdraw`/`withdraw-*` action id server-side (see
         // makeApplyActionController), so a crafted POST cannot withdraw.
+        // RA-000: it rejects `query`/`query-*` and `resume`/`resume-*` ids the
+        // same way, so a query can only be raised through the route below.
         {
           // RA-291. Query an application: the caseworker picks the areas
           // to unlock and gives a reason. The backend resolves the state

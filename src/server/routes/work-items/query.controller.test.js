@@ -15,8 +15,10 @@ import {
   REASON_TOO_LONG_MESSAGE,
   SELECT_SECTIONS_MESSAGE
 } from './query.schema.js'
-import { hasQueryAction, isQueryActionId } from './query.controller.js'
+import { isQueryState } from './re-accreditation-cta.js'
+import { isQueryActionId } from './generic-route-action-ids.js'
 import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', async () => {
   const actual = await vi.importActual(
@@ -38,7 +40,25 @@ const REF = 'RA-987654321'
 const DETAIL_HREF = `/work-items/${ID}`
 const QUERY_HREF = `/work-items/${ID}/query`
 
-const queryAction = { actionId: 'query-submitted', displayName: 'Query' }
+// RA-000. The states management-be v19 declares a `query-during-*`
+// transition from (`assessment-started` via its second
+// `query-during-assessment`).
+const QUERYABLE_STATES = [
+  'submitted',
+  'duly-made',
+  'assessment-started',
+  'assessment-in-progress',
+  'awaiting-decision'
+]
+const NON_QUERYABLE_STATES = [
+  'queried',
+  'updated',
+  'approved-pending-contact',
+  'rejected-pending-contact',
+  'approved',
+  'rejected',
+  'withdrawn'
+]
 
 function aWorkItem(overrides = {}) {
   return {
@@ -52,7 +72,9 @@ function aWorkItem(overrides = {}) {
     templateVersion: 'v1',
     payload: { applicationReference: REF },
     tasks: [],
-    availableActions: [queryAction],
+    // RA-000. management-be v19 does not project the non-caller-invocable
+    // `query-during-*` transitions, so a queryable item carries none.
+    availableActions: [],
     auditLog: [],
     ...overrides
   }
@@ -110,14 +132,54 @@ describe('query action id helpers', () => {
     expect(isQueryActionId(null)).toBe(false)
     expect(isQueryActionId(42)).toBe(false)
   })
+})
 
-  test('hasQueryAction tolerates missing or malformed availableActions', () => {
-    expect(hasQueryAction(undefined)).toBe(false)
-    expect(hasQueryAction({})).toBe(false)
-    expect(hasQueryAction({ availableActions: 'nope' })).toBe(false)
-    expect(hasQueryAction({ availableActions: [null] })).toBe(false)
-    expect(hasQueryAction({ availableActions: [{ actionId: 'query' }] })).toBe(
-      true
+describe('isQueryState', () => {
+  beforeEach(() => {
+    clearWorkItemRegistry()
+    registerWorkItemType(reAccreditationType)
+  })
+
+  test.each(QUERYABLE_STATES)('is true for %s', (stateId) => {
+    expect(isQueryState(stateId)).toBe(true)
+  })
+
+  test.each(NON_QUERYABLE_STATES)('is false for %s', (stateId) => {
+    expect(isQueryState(stateId)).toBe(false)
+  })
+
+  test('is false for a missing state', () => {
+    expect(isQueryState(undefined)).toBe(false)
+    expect(isQueryState(null)).toBe(false)
+  })
+
+  // A missing or query-less declaration is a boot defect, not "not
+  // queryable": it throws rather than silently hiding the Query link.
+  test('throws when the type is not registered', () => {
+    clearWorkItemRegistry()
+    expect(() => isQueryState('submitted')).toThrow(
+      'work item type "re-accreditation" is not registered'
+    )
+  })
+
+  test('throws when the type declares no query transition', () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({
+      ...reAccreditationType,
+      transitions: reAccreditationType.transitions.filter(
+        (t) => !isQueryActionId(t.actionId)
+      )
+    })
+    expect(() => isQueryState('assessment-started')).toThrow(
+      'work item type "re-accreditation" declares no query transition'
+    )
+  })
+
+  test('throws when the type declares no transitions array', () => {
+    clearWorkItemRegistry()
+    registerWorkItemType({ ...reAccreditationType, transitions: undefined })
+    expect(() => isQueryState('submitted')).toThrow(
+      'declares no query transition'
     )
   })
 })
@@ -137,17 +199,127 @@ describe('RA-291 Query link on the work item detail page', () => {
   beforeEach(() => {
     clearWorkItemRegistry()
     clearDetailTemplateRegistry()
-    registerWorkItemType({
-      id: 're-accreditation',
-      displayName: 'Re-accreditation',
-      initialState: { id: 'submitted', displayName: 'Submitted' },
-      states: [{ id: 'submitted', displayName: 'Submitted' }],
-      getTasksForState: () => []
-    })
+    registerWorkItemType(reAccreditationType)
     getWorkItem.mockReset()
   })
 
-  test('renders a Query link when a query action is available', async () => {
+  // RA-000. Driven by the state, not by `availableActions`, which no longer
+  // carries the query transitions.
+  test.each(QUERYABLE_STATES)(
+    'renders exactly one Query link in %s with no projected query action',
+    async (stateId) => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId, availableActions: [] })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: DETAIL_HREF
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result.match(/data-testid="action-query"/g)).toHaveLength(1)
+      expect(result).toEqual(expect.stringContaining(`href="${QUERY_HREF}"`))
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="work-item-no-actions"')
+      )
+    }
+  )
+
+  test.each(NON_QUERYABLE_STATES)(
+    'renders no Query link in %s',
+    async (stateId) => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId, availableActions: [] })
+      })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: DETAIL_HREF
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-query"')
+      )
+    }
+  )
+
+  // RA-000. `isQueryState` answers for re-accreditation only, so another
+  // type's item gets no Query link, and rendering it does not throw.
+  test('renders no Query link for a work item of another type', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ typeId: 'some-other-type' })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: DETAIL_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).not.toEqual(
+      expect.stringContaining('data-testid="action-query"')
+    )
+  })
+
+  // RA-000. A missing state on the detail page is a broken backend
+  // response: logged at Error, and no Query link.
+  test('logs at Error and offers no Query link when the item has no stateId', async () => {
+    const errorSpy = vi.spyOn(createLogger(), 'error')
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ stateId: undefined })
+    })
+
+    try {
+      const { result } = await server.inject({
+        method: 'GET',
+        url: DETAIL_HREF
+      })
+
+      expect(result).not.toEqual(
+        expect.stringContaining('data-testid="action-query"')
+      )
+      expect(errorSpy).toHaveBeenCalledWith(
+        { workItemId: ID, route: '/work-items/{id}' },
+        'Work item from management-be has no stateId; cannot decide whether it can be queried'
+      )
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  // RA-000. A backend still on v18 (or an item whose snapshot predates the
+  // v19 migration) projects `query-during-*` as caller-invocable. The module
+  // declares it non-invocable, so it never renders as a generic button
+  // posting to `/actions/query-during-*`; the single Query link remains.
+  test('renders no generic button for a query action a stale backend projects', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        availableActions: [
+          {
+            actionId: 'query-during-duly-making',
+            displayName: 'Query',
+            fromStateId: 'submitted',
+            toStateId: 'queried'
+          }
+        ]
+      })
+    })
+
+    const { result } = await server.inject({ method: 'GET', url: DETAIL_HREF })
+
+    expect(result.match(/data-testid="action-query"/g)).toHaveLength(1)
+    expect(result).not.toEqual(
+      expect.stringContaining('/actions/query-during-duly-making')
+    )
+  })
+
+  test('renders a Query link when the item is in a queryable state', async () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: aWorkItem() })
 
     const { statusCode, result } = await server.inject({
@@ -195,10 +367,11 @@ describe('RA-291 Query link on the work item detail page', () => {
     )
   })
 
-  test('hides the Query link when no query action is available', async () => {
+  test('hides the Query link when the item is not in a queryable state', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({
+        stateId: 'queried',
         availableActions: [{ actionId: 'withdraw', displayName: 'Withdraw' }]
       })
     })
@@ -517,10 +690,101 @@ describe('GET /work-items/{id}/query', () => {
     expect(result).toMatch(/name="crumb" value="[^"]+"/)
   })
 
-  test('redirects with a banner when the item cannot be queried', async () => {
+  // RA-000. Eligibility is the state, read off the module declaration.
+  test.each(QUERYABLE_STATES)(
+    'renders the form for an item in %s',
+    async (stateId) => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId, availableActions: [] })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: QUERY_HREF
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toEqual(
+        expect.stringContaining('data-testid="query-form"')
+      )
+    }
+  )
+
+  test.each(NON_QUERYABLE_STATES)(
+    'redirects with a banner when the item is in %s',
+    async (stateId) => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId })
+      })
+
+      const { statusCode, headers } = await server.inject({
+        method: 'GET',
+        url: QUERY_HREF
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(DETAIL_HREF)
+    }
+  )
+
+  // RA-000. A missing state is a broken backend response, not an
+  // ineligible item: the unavailable page and an Error log, not the
+  // ordinary redirect.
+  test.each([undefined, null])(
+    'renders the unavailable page and logs at Error when stateId is %s',
+    async (stateId) => {
+      const errorSpy = vi.spyOn(createLogger(), 'error')
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({ stateId })
+      })
+
+      try {
+        const { statusCode, result } = await server.inject({
+          method: 'GET',
+          url: QUERY_HREF
+        })
+
+        expect(statusCode).toBe(statusCodes.badGateway)
+        expect(result).toEqual(
+          expect.stringContaining('The work item has no state.')
+        )
+        expect(errorSpy).toHaveBeenCalledWith(
+          { workItemId: ID, route: '/work-items/{id}/query' },
+          'Work item from management-be has no stateId; cannot decide whether it can be queried'
+        )
+      } finally {
+        errorSpy.mockRestore()
+      }
+    }
+  )
+
+  test('does not log at Error for a legitimately non-queryable state', async () => {
+    const errorSpy = vi.spyOn(createLogger(), 'error')
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: aWorkItem({ availableActions: [] })
+      workItem: aWorkItem({ stateId: 'queried' })
+    })
+
+    try {
+      const { statusCode } = await server.inject({
+        method: 'GET',
+        url: QUERY_HREF
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(errorSpy).not.toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  test('redirects for a work item of a type other than re-accreditation', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ typeId: 'some-other-type' })
     })
 
     const { statusCode, headers } = await server.inject({

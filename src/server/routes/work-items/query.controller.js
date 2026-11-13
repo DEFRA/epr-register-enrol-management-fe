@@ -25,6 +25,10 @@ import {
 } from './query.schema.js'
 import { createQueryService } from './query.service.js'
 import { isExporterApplication } from './application-summary.js'
+import {
+  evaluateQueryEligibility,
+  QUERY_ELIGIBILITY
+} from './re-accreditation-cta.js'
 
 const VIEW_PATH = 'work-items/query'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -49,28 +53,23 @@ function breadcrumbs(id, ref) {
   ]
 }
 
+function unavailable(h, id, error) {
+  return h
+    .view(UNAVAILABLE_VIEW, {
+      pageTitle: 'Work item unavailable',
+      heading: 'Work item unavailable',
+      workItemId: id,
+      error,
+      breadcrumbs: [
+        { text: 'Work items', href: '/work-items' },
+        { text: 'Work item' }
+      ]
+    })
+    .code(502)
+}
+
 function flashBanner(request, banner) {
   request.yar?.flash?.('flashBanner', banner)
-}
-
-/**
- * A query transition is any action the backend projects whose id is
- * `query` or `query-<something>`. Deriving the affordance from the
- * projection rather than from state names means the link disappears by
- * itself once the item has already been queried.
- */
-export function isQueryActionId(actionId) {
-  if (typeof actionId !== 'string') {
-    return false
-  }
-  return actionId === 'query' || actionId.startsWith('query-')
-}
-
-export function hasQueryAction(workItem) {
-  const actions = Array.isArray(workItem?.availableActions)
-    ? workItem.availableActions
-    : []
-  return actions.some((a) => isQueryActionId(a?.actionId))
 }
 
 /**
@@ -150,18 +149,11 @@ async function loadWorkItem(request, h, id) {
 
   if (!result.ok) {
     return {
-      response: h
-        .view(UNAVAILABLE_VIEW, {
-          pageTitle: 'Work item unavailable',
-          heading: 'Work item unavailable',
-          workItemId: id,
-          error: result.error ?? `Backend returned ${result.status}`,
-          breadcrumbs: [
-            { text: 'Work items', href: '/work-items' },
-            { text: 'Work item' }
-          ]
-        })
-        .code(502)
+      response: unavailable(
+        h,
+        id,
+        result.error ?? `Backend returned ${result.status}`
+      )
     }
   }
 
@@ -178,7 +170,16 @@ export function makeShowQueryController() {
       }
 
       const workItem = loaded.workItem
-      if (!hasQueryAction(workItem)) {
+      // RA-000. The same gate as the detail page's Query link. A work item
+      // with no state is a broken backend response (already logged at
+      // Error): the unavailable page, not the "cannot be queried" redirect.
+      const eligibility = evaluateQueryEligibility(workItem, {
+        route: request.route.path
+      })
+      if (eligibility === QUERY_ELIGIBILITY.NO_STATE) {
+        return unavailable(h, id, 'The work item has no state.')
+      }
+      if (eligibility !== QUERY_ELIGIBILITY.OK) {
         flashBanner(request, {
           type: 'error',
           text: 'This application cannot be queried in its current state.'

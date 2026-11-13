@@ -101,6 +101,11 @@ describe('standardWorkflow (RA-739)', () => {
         'confirm-contact-approved',
         'make-determination-rejected',
         'confirm-contact-rejected',
+        // RA-000 (management-be v19).
+        'query-during-duly-making',
+        'query-during-duly-made',
+        'query-during-assessment',
+        'query-during-decision',
         'resume-during-duly-making',
         'resume-during-duly-made',
         'resume-during-assessment',

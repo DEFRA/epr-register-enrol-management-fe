@@ -601,48 +601,52 @@
         {# red). Withdraw is a LINK here, not a warning button — it still     #}
         {# goes through the RA-188 confirmation interstitial, so no state     #}
         {# changes on the click.                                              #}
-        {% if workItem.availableActions and workItem.availableActions.length > 0 %}
+        {# RA-000. `canQuery` counts too: the Query link no longer rides on  #}
+        {# `availableActions` (see the link row below), and a state whose    #}
+        {# only action is Query must still render it.                        #}
+        {% if (workItem.availableActions and workItem.availableActions.length > 0) or workItem.canQuery %}
           <div data-testid="work-item-actions">
             {# `sla-extend` is filtered out of `availableActions` by the     #}
             {# controller (it renders as "Change determination deadline"     #}
             {# in the assignment panel), so it never reaches this loop and   #}
             {# the length check above stays honest.                          #}
 
-            {# Primary actions — full-width buttons, stacked. Query is           #}
-            {# special-cased into the secondary link row below. RA-317: withdraw #}
+            {# Primary actions — full-width buttons, stacked. RA-317: withdraw   #}
             {# is stripped from `availableActions` in the controller, so it can  #}
-            {# never reach this loop — no withdraw guard is needed here.         #}
+            {# never reach this loop — no withdraw guard is needed here. RA-000: #}
+            {# nor can a `query-*` action: the module declares them              #}
+            {# non-caller-invocable, so `decorate` strips them too.              #}
             {% for action in workItem.availableActions %}
-              {% if not (action.actionId == 'query' or action.actionId.startsWith('query-')) %}
-                <form method="post"
-                      action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
-                      novalidate>
-                  <input type="hidden" name="crumb" value="{{ crumb }}" />
-                  {{ govukButton({
-                    text: action.displayName,
-                    classes: "app-case-panel__primary-action" + (action.actionId == 'reject' and ' govuk-button--warning' or ''),
-                    disabled: user.isReadOnly,
-                    attributes: { "data-testid": "action-" + action.actionId }
-                  }) }}
-                </form>
-              {% endif %}
+              <form method="post"
+                    action="/work-items/{{ workItem.id }}/actions/{{ action.actionId }}"
+                    novalidate>
+                <input type="hidden" name="crumb" value="{{ crumb }}" />
+                {{ govukButton({
+                  text: action.displayName,
+                  classes: "app-case-panel__primary-action" + (action.actionId == 'reject' and ' govuk-button--warning' or ''),
+                  disabled: user.isReadOnly,
+                  attributes: { "data-testid": "action-" + action.actionId }
+                }) }}
+              </form>
             {% endfor %}
 
             {# Secondary link row. RA-335: rendered via appActionLink so a  #}
             {# read-only support user's session gets an inert span rather   #}
             {# than a live link — see action-link/macro.njk.                #}
             <div class="app-case-panel__action-links">
-              {% for action in workItem.availableActions %}
-                {% if action.actionId == 'query' or action.actionId.startsWith('query-') %}
-                  {{ appActionLink({
-                    text: "Query",
-                    href: "/work-items/" + workItem.id + "/query",
-                    classes: "govuk-link",
-                    disabled: user.isReadOnly,
-                    testId: "action-query"
-                  }) }}
-                {% endif %}
-              {% endfor %}
+              {# RA-000. Gated by `canQuery` (the module's `query-during-*`    #}
+              {# declarations), not by `availableActions`: the backend no    #}
+              {# longer projects those transitions. One link, not one per    #}
+              {# entry.                                                      #}
+              {% if workItem.canQuery %}
+                {{ appActionLink({
+                  text: "Query",
+                  href: "/work-items/" + workItem.id + "/query",
+                  classes: "govuk-link",
+                  disabled: user.isReadOnly,
+                  testId: "action-query"
+                }) }}
+              {% endif %}
               {# RA-317. Withdraw is an OPERATOR action and must not appear in  #}
               {# Case Management. The link row that rendered it (and the        #}
               {# RA-188 confirmation interstitial it pointed at) is removed.    #}
