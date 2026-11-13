@@ -422,7 +422,9 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
   })
 
-  test('RA-412: Applicant type "Exporter" alone maps onto the real typeId AND narrows via wasteProcessingTypes', async () => {
+  // RA-739: applicant type is the accreditation's, carried on every work item
+  // type, so it narrows by wasteProcessingType alone and adds no typeId.
+  test('RA-412: Applicant type "Exporter" alone narrows via wasteProcessingTypes, across every type', async () => {
     getWorkItems.mockResolvedValue(emptyPage())
 
     await server.inject({
@@ -432,11 +434,7 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        // `exporter` is never a real typeId — it maps onto `re-accreditation`
-        // so an Exporter-only selection still carries a real type constraint
-        // (rather than an empty `typeIds`, which the backend reads as "no
-        // type filter" and would return everything).
-        typeIds: ['re-accreditation'],
+        typeIds: [],
         wasteProcessingTypes: ['Exporter']
       })
     )
@@ -457,7 +455,7 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        typeIds: ['re-accreditation'],
+        typeIds: [],
         wasteProcessingTypes: ['Reprocessor']
       })
     )
@@ -477,7 +475,7 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        typeIds: ['re-accreditation'],
+        typeIds: [],
         wasteProcessingTypes: []
       })
     )
@@ -1260,12 +1258,9 @@ describe('#workItemListController', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        // RA-412: Exporter is never a real typeId, so it maps onto the real
-        // `re-accreditation` typeId here. Both Reprocessor and Exporter are
-        // selected, so this is "either applicant type" — no
-        // wasteProcessingTypes narrowing (see the dedicated tests below for
-        // the single-selection cases).
-        typeIds: ['re-accreditation'],
+        // Both Reprocessor and Exporter are selected, so this is "either
+        // applicant type": no wasteProcessingTypes narrowing and no typeIds.
+        typeIds: [],
         wasteProcessingTypes: [],
         // "Updated" group expands to both ids; "Granted" -> approved.
         stateIds: ['assessment-in-progress', 'updated', 'approved'],
@@ -1512,9 +1507,9 @@ describe('#workItemListController', () => {
   })
 
   // RA-299 AC01/15. "Application type" is a second, independent filter
-  // section from "Applicant type" (typeId) above; both merge into the same
-  // backend typeIds query.
-  test('Forwards the applicationType filter, merged with typeId, into a single typeIds list', async () => {
+  // section from "Applicant type" (typeId) above. RA-739: only Application
+  // type sets typeIds; Applicant type narrows them by wasteProcessingType.
+  test('Applicant type narrows the Application type selection rather than adding to it', async () => {
     getWorkItems.mockResolvedValue(emptyPage())
 
     await server.inject({
@@ -1524,25 +1519,26 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        typeIds: [
-          're-accreditation',
-          'accreditation',
-          'registration-application'
-        ]
+        typeIds: ['accreditation', 'registration-application'],
+        wasteProcessingTypes: ['Reprocessor']
       })
     )
   })
 
-  test('De-dupes typeId and applicationType when both select re-accreditation', async () => {
+  test('Exporter with "In-year change" asks only for exporter in-year changes', async () => {
     getWorkItems.mockResolvedValue(emptyPage())
 
     await server.inject({
       method: 'GET',
-      url: '/work-items?typeId=re-accreditation&applicationType=re-accreditation&filtersApplied=1'
+      url: '/work-items?typeId=exporter&applicationType=in-year-change&filtersApplied=1'
     })
 
     expect(getWorkItems).toHaveBeenCalledWith(
-      expect.objectContaining({ typeIds: ['re-accreditation'] })
+      expect.objectContaining({
+        typeIds: [],
+        categories: ['in-year-change'],
+        wasteProcessingTypes: ['Exporter']
+      })
     )
   })
 
