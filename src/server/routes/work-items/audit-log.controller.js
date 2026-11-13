@@ -62,8 +62,8 @@ export const workItemAuditLogController = {
       // individual work item page, so it carries the same case header and
       // the same tab strip as the summary tab. The header's own
       // "Applications" back link replaces the GOV.UK breadcrumbs.
-      // RA-739. Decorated with its type's category, so an add-ORS item gets
-      // its own header and tabs here too.
+      // RA-739. The header and tabs come from the work item's type, so an
+      // add-ORS item gets its own here too.
       caseHeader: buildCaseHeader({ workItem: forHeader }),
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,

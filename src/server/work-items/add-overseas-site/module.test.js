@@ -29,9 +29,8 @@ describe('add-overseas-site module (RA-739)', () => {
     expect(addOverseasSiteType.transitions).toBe(standardWorkflow.transitions)
   })
 
-  // df7.10. The Applications list's in-year change card asks the type for
-  // its site line, so the category-level card builder never reads add-ORS
-  // payload fields itself.
+  // df7.10. The Applications list card asks the type for its site line, so
+  // the list never reads add-ORS payload fields itself.
   test('describes the card site as the site name and its ORS id', () => {
     expect(
       addOverseasSiteType.describeCardSite({

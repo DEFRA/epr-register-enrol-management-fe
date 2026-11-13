@@ -294,8 +294,9 @@ export function caseHasTab(type, tabKey) {
 }
 
 /**
- * The four tabs every individual work item page carries (RA-295, RA-434,
- * RA-469). "Application summary" is the detail page itself; "Recycling
+ * The tab strip of an individual work item page: the four tabs a case has
+ * by default (RA-295, RA-434, RA-469), narrowed to the type's own
+ * `caseTabs` when it declares them (RA-739). "Application summary" is the detail page itself; "Recycling
  * operations" (RA-469) lists each overseas reprocessing site's recycling
  * operation codes — currently hidden, see HIDDEN_TAB_KEYS above;
  * "Application history" is the audit log page; "Additional
@@ -308,8 +309,6 @@ export function caseHasTab(type, tabKey) {
  * Application summary and Application history". "Application history" and
  * "Additional information" both keep their existing order relative to each
  * other; only the new tab is inserted.
- *
- * RA-739. A type may declare its own `caseTabs` (see `caseHasTab`).
  *
  * @param {object} args
  * @param {string} args.workItemId

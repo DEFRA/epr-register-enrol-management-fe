@@ -899,8 +899,8 @@ function decorate(workItem) {
   const selfAssignActions = selfAssignActionIds(type)
   const declaredNonInvocable = nonInvocableActionIds(type)
   return {
-    // RA-739. The type's display name and category (the case header and tabs
-    // depend on the category) and the state's display name. RA-324 (AC08):
+    // RA-739. The type's display name and the state's display name, as every
+    // work item page decorates for its case header. RA-324 (AC08):
     // the state badge colour (`stateTagClass`) comes from the shared
     // state-badge map so the detail page and the Applications list colour a
     // given status identically.
