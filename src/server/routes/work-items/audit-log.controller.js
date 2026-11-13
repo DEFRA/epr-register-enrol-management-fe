@@ -68,7 +68,7 @@ export const workItemAuditLogController = {
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
         active: 'history',
-        category: forHeader.typeCategory
+        typeId: forHeader.typeId
       }),
       workItem: {
         id: workItem.id,

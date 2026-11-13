@@ -4,10 +4,11 @@ import { formatSiteAddress } from '#/server/common/helpers/format/site-address.j
 import {
   buildCaseHeader,
   buildCaseTabs,
-  decorateForCaseHeader
+  decorateForCaseHeader,
+  ADDITIONAL_INFORMATION_TAB_KEY
 } from './case-header.js'
 import { deriveSiteAddress } from './application-summary.js'
-import { renderNonInYearChangeFetchError } from './work-item-fetch-errors.js'
+import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
 
 const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
 
@@ -102,7 +103,12 @@ export const workItemAdditionalInformationController = {
     const user = getUser(request)
     const result = await getWorkItem({ workItemId: id, user })
 
-    const errorResponse = renderNonInYearChangeFetchError({ h, result, id })
+    const errorResponse = renderFetchErrorUnlessCaseHasTab({
+      h,
+      result,
+      id,
+      tab: ADDITIONAL_INFORMATION_TAB_KEY
+    })
     if (errorResponse) {
       return errorResponse
     }
@@ -119,7 +125,7 @@ export const workItemAdditionalInformationController = {
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
         active: 'additional-information',
-        category: forHeader.typeCategory
+        typeId: forHeader.typeId
       }),
       workItem: {
         id: workItem.id,

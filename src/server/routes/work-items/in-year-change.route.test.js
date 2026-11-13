@@ -231,7 +231,7 @@ describe('RA-739: in-year change applications', () => {
 
       expect(card.attr('data-testid')).toBe('application-tile')
       expect(squash(card.find('[data-testid="submitted-on"]').text())).toBe(
-        '11 Feb 2027'
+        '11 February 2027'
       )
       expect(
         squash(card.find('[data-testid="submission-reference"]').text())
@@ -282,7 +282,7 @@ describe('RA-739: in-year change applications', () => {
       ])
       const footer = card.find('[data-testid="application-card-footer"]')
       expect(squash(footer.text())).toBe(
-        'Submitted on: 11 Feb 2027 Assigned to: Unassigned'
+        'Submitted on: 11 February 2027 Assigned to: Unassigned'
       )
       const request = card.find('[data-testid="application-request"]')
       expect(
@@ -404,7 +404,7 @@ describe('RA-739: in-year change applications', () => {
       expect(
         squash(card.find('[data-testid="application-card-footer"]').text())
       ).toBe(
-        'Submitted on: 11 Feb 2027 Due on: 11 March 2027 Assigned to: Unassigned'
+        'Submitted on: 11 February 2027 Due on: 11 March 2027 Assigned to: Unassigned'
       )
     })
 

@@ -9,7 +9,7 @@
 {% from "govuk/components/input/macro.njk" import govukInput %}
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/pagination/macro.njk" import govukPagination %}
-{% from "work-items/application-card-macros.njk" import applicationCard %}
+{% from "work-items/application-card-macros.njk" import applicationCard, applicationCardOrg, applicationCardFooter %}
 {% from "action-link/macro.njk" import appActionLink %}
 
 {# RA-324 phase-2. Collapsible filter section built on the native <details>    #}
@@ -261,47 +261,27 @@
           {#   1. Application ref no   (header link)                           #}
           {#      Request type         (RA-739, the shared first line)         #}
           {#      Registration number  (RA-295 AC06 — not an RA-370 field;     #}
-          {#                            RA-739 puts it above the org line)     #}
+          {#      or site line         RA-739 puts it above the org line)     #}
           {#   2. Org name            \                                        #}
           {#   3. Org ID              / one "{Org} ({Org ID})" line            #}
           {#   4. Material type      \ on the org line (RA-739), material      #}
           {#   5. Applicant type     / first                                   #}
-          {#   6. Submitted on       \ footer — see the footer comment below   #}
-          {#   8. Due date           | for the visibility rules (RA-739: due  #}
+          {#   6. Submitted on       \ footer — see applicationCardFooter for #}
+          {#   8. Due date           | the visibility rules (RA-739: due      #}
           {#   7. Assigned to        / date before assigned to)               #}
           <ul class="govuk-list app-application-cards" data-testid="applications-list">
             {% for item in items %}
               <li>
-                {% if item.inYearChange %}
-                {# RA-739. In-year change card variant (Figma: Applications  #}
-                {# list, in-year change), laid out like the re-accreditation #}
-                {# card: under the shared request type line, the site and   #}
-                {# organisation lines, then a "Submitted on / Due           #}
-                {# on / Assigned to" footer (Due on once the SLA clock      #}
-                {# runs). No registration number.                           #}
-                {# The tile, header, link, request type line, state tag and #}
-                {# archived line are the shared card's (see                  #}
-                {# application-card-macros.njk).                             #}
-                {% set card = item.inYearChange %}
-                {% call applicationCard(item, { modifier: "in-year-change" }) %}
+                {# RA-739. A type that describes a site (add-ORS; Figma:     #}
+                {# Applications list, in-year change) shows the site line in #}
+                {# place of the registration number. The rest of the card is #}
+                {# the same for every type: see application-card-macros.njk. #}
+                {% call applicationCard(item, { modifier: item.cardModifier }) %}
+                  {% if item.cardSite %}
                   <p class="govuk-body app-application-card__site" data-testid="application-site">
-                    <span data-testid="site-name">{{ card.site.name or "—" }}</span>{% if card.site.reference %} (<span data-testid="ors-id">{{ card.site.reference }}</span>){% endif %}
+                    <span data-testid="site-name">{{ item.cardSite.name or "—" }}</span>{% if item.cardSite.reference %} (<span data-testid="ors-id">{{ item.cardSite.reference }}</span>){% endif %}
                   </p>
-                  <p class="govuk-body-s app-application-card__org" data-testid="application-org">
-                    <span data-testid="org-name">{{ card.orgName or "—" }}</span>{% if card.orgId %} (<span data-testid="org-id">{{ card.orgId }}</span>){% endif %}: <span data-testid="material">{{ card.material or "—" }}</span> (<span data-testid="applicant-type">{{ item.applicantType }}</span>)
-                  </p>
-                  {# The re-accreditation card's footer order: Submitted on, #}
-                  {# Due on (once the SLA clock runs), Assigned to.          #}
-                  <div class="app-application-card__footer" data-testid="application-card-footer">
-                    <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ card.submittedDate or "—" }}</span></span>
-                    {% if item.showDueDate %}
-                      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Due on:</span> <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
-                    {% endif %}
-                    <span class="app-application-card__meta" data-testid="application-assigned-to"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
-                  </div>
-                {% endcall %}
-                {% else %}
-                {% call applicationCard(item) %}
+                  {% else %}
                   {# RA-295 AC06. Registration number on every card. This is  #}
                   {# `registrationNumber` (EPR-xxxxxx), NOT the similarly     #}
                   {# named `operatorRegistrationId` (reg-xxx) from RA-223.    #}
@@ -310,39 +290,10 @@
                     <span class="app-application-card__meta-label">Registration number:</span>
                     <span data-testid="registration-number">{{ item.registrationNumber or "—" }}</span>
                   </p>
-
-                  {# RA-739. One small-text line:                              #}
-                  {# "{Org} ({Org ID}): {Material} ({Applicant type})".        #}
-                  {# RA-370. Material type then applicant type, in that order.   #}
-                  {# RA-412. Applicant type is set by decorate() from the real   #}
-                  {# `payload.wasteProcessingType` field, falling back to        #}
-                  {# "Reprocessor" for work items submitted before that field    #}
-                  {# existed (RA-314).                                          #}
-                  <p class="govuk-body-s app-application-card__org" data-testid="application-org">
-                    <span data-testid="org-name">{{ item.orgName or "—" }}</span>{% if item.orgId %} (<span data-testid="org-id">{{ item.orgId }}</span>){% endif %}: <span data-testid="material">{{ item.material or "—" }}</span> (<span data-testid="applicant-type">{{ item.applicantType }}</span>)
-                  </p>
-
-                  {# RA-370. The footer always renders, because "Assigned to" is #}
-                  {# no longer gated on the SLA clock — it shows "Unassigned"    #}
-                  {# when nobody holds the case. The two dates either side of it #}
-                  {# are gated on INDEPENDENT signals: "Submitted on" on the     #}
-                  {# work item's state (assessment not yet started) and "Due on" #}
-                  {# on the SLA clock. Any combination of the two can therefore  #}
-                  {# render, including both and neither — do not assume one. In  #}
-                  {# the neither case the footer legitimately carries just the   #}
-                  {# "Assigned to" value. See PRE_ASSESSMENT_STATE_IDS in        #}
-                  {# controller.js for the full reasoning.                       #}
-                  <div class="app-application-card__footer" data-testid="application-card-footer">
-                    {% if item.showSubmittedOn %}
-                      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ item.submittedOn | formatDateGds or "—" }}</span></span>
-                    {% endif %}
-                    {% if item.showDueDate %}
-                      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Due on:</span> <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
-                    {% endif %}
-                    <span class="app-application-card__meta"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
-                  </div>
+                  {% endif %}
+                  {{ applicationCardOrg(item) }}
+                  {{ applicationCardFooter(item) }}
                 {% endcall %}
-                {% endif %}
               </li>
             {% endfor %}
           </ul>

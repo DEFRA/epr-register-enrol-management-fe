@@ -22,9 +22,10 @@ import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import {
   buildCaseHeader,
   buildCaseTabs,
-  decorateForCaseHeader
+  decorateForCaseHeader,
+  RECYCLING_OPERATIONS_TAB_KEY
 } from './case-header.js'
-import { renderNonInYearChangeFetchError } from './work-item-fetch-errors.js'
+import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
 import {
   applicableCodesForMaterialType,
   buildErrorSummary,
@@ -125,7 +126,7 @@ function renderForm(
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
         active: 'recycling-operations',
-        category: forHeader.typeCategory
+        typeId: forHeader.typeId
       }),
       workItem: { id, applicationRef: workItem.payload?.applicationReference },
       site: { siteId, siteName: site?.siteName ?? null },
@@ -147,7 +148,12 @@ export function makeShowRecyclingOperationsEditController() {
       const user = getUser(request)
       const result = await getWorkItem({ workItemId: id, user })
 
-      const errorResponse = renderNonInYearChangeFetchError({ h, result, id })
+      const errorResponse = renderFetchErrorUnlessCaseHasTab({
+        h,
+        result,
+        id,
+        tab: RECYCLING_OPERATIONS_TAB_KEY
+      })
       if (errorResponse) {
         return errorResponse
       }
@@ -184,7 +190,12 @@ export function makeSubmitRecyclingOperationsEditController({
       const user = getUser(request)
       const result = await getWorkItem({ workItemId: id, user })
 
-      const errorResponse = renderNonInYearChangeFetchError({ h, result, id })
+      const errorResponse = renderFetchErrorUnlessCaseHasTab({
+        h,
+        result,
+        id,
+        tab: RECYCLING_OPERATIONS_TAB_KEY
+      })
       if (errorResponse) {
         return errorResponse
       }

@@ -10,6 +10,7 @@ import {
   NOT_RECEIVED,
   buildCaseHeader,
   buildCaseTabs,
+  caseHasTab,
   decorateForCaseHeader,
   formatDueOn,
   formatPayment
@@ -401,7 +402,6 @@ describe('RA-739: in-year change (add-ORS) header and tabs', () => {
   test('decorates the work item with its type and state', () => {
     const item = addOrs()
     expect(item.typeDisplayName).toBe('New ORS accreditation')
-    expect(item.typeCategory).toBe('in-year-change')
     expect(item.stateDisplayName).toBe('Not started')
     expect(item.stateTagClass).toEqual(expect.any(String))
   })
@@ -453,11 +453,21 @@ describe('RA-739: in-year change (add-ORS) header and tabs', () => {
     ).toBe(EM_DASH)
   })
 
+  test("a type's case has its own tabs, and a type without caseTabs has all four", () => {
+    expect(caseHasTab(addOverseasSiteType, 'application-history')).toBe(true)
+    expect(caseHasTab(addOverseasSiteType, 'additional-information')).toBe(
+      false
+    )
+    expect(caseHasTab(addOverseasSiteType, 'recycling-operations')).toBe(false)
+    expect(caseHasTab(null, 'recycling-operations')).toBe(true)
+    expect(caseHasTab({ id: 'other' }, 'additional-information')).toBe(true)
+  })
+
   test('has only the Application summary and Application history tabs', () => {
     const tabs = buildCaseTabs({
       workItemId: 'w-1',
       active: 'history',
-      category: 'in-year-change'
+      typeId: 'add-overseas-site'
     })
     expect(tabs.map((tab) => [tab.key, tab.active])).toEqual([
       ['application-summary', false],

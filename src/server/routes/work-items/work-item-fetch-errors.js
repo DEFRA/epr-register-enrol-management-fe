@@ -1,4 +1,4 @@
-import { isInYearChangeType } from '#/server/work-items/core/categories.js'
+import { caseHasTab } from '#/server/routes/work-items/case-header.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -42,21 +42,24 @@ export function renderWorkItemFetchError({ h, result, id }) {
 }
 
 /**
- * RA-739 (df7.21). As {@link renderWorkItemFetchError}, for a page that is
- * not part of an in-year change's case (Additional information, Recycling
- * operations): an in-year change work item 404s here exactly as an unknown
- * work item does, rather than rendering a re-accreditation page around it.
+ * RA-739 (df7.21). As {@link renderWorkItemFetchError}, for a tab page some
+ * case types don't have (Additional information, Recycling operations): a
+ * work item whose type's case has no such tab (add-ORS) 404s here exactly as
+ * an unknown work item does, rather than rendering another type's page
+ * around it.
  *
+ * @param {object} args
+ * @param {string} args.tab the page's tab key (see `caseHasTab`)
  * @returns the error response, or `null` when the caller should continue.
  */
-export function renderNonInYearChangeFetchError({ h, result, id }) {
+export function renderFetchErrorUnlessCaseHasTab({ h, result, id, tab }) {
   const errorResponse = renderWorkItemFetchError({ h, result, id })
   if (errorResponse) {
     return errorResponse
   }
-  return isInYearChangeType(getWorkItemType(result.workItem?.typeId))
-    ? renderWorkItemNotFound({ h, id })
-    : null
+  return caseHasTab(getWorkItemType(result.workItem?.typeId), tab)
+    ? null
+    : renderWorkItemNotFound({ h, id })
 }
 
 function renderWorkItemNotFound({ h, id }) {

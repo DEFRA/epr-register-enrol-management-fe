@@ -542,7 +542,7 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       caseTabs: buildCaseTabs({
         workItemId: enriched.id,
         active: 'summary',
-        category: enriched.typeCategory
+        typeId: enriched.typeId
       }),
       applicationDetails: applicationSummary.rows,
       applicationSummary,

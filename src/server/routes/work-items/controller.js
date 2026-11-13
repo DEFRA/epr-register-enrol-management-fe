@@ -1,10 +1,6 @@
 import { getWorkItems } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
-import {
-  IN_YEAR_CHANGE_CATEGORY,
-  isInYearChangeType
-} from '#/server/work-items/core/categories.js'
-import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
+import { IN_YEAR_CHANGE_CATEGORY } from '#/server/work-items/core/categories.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
 import { stateTagClass as resolveStateTagClass } from '#/server/work-items/core/state-badge.js'
 import {
@@ -769,10 +765,10 @@ function decorate(item) {
 
   return {
     ...item,
-    // RA-739. In-year change types render the in-year change card variant.
-    inYearChange: isInYearChangeType(type)
-      ? buildInYearChangeCard(item, type)
-      : null,
+    // RA-739. A type's category is its card's modifier, and a type that
+    // describes a site (add-ORS) shows it in place of the registration number.
+    cardModifier: type?.category ?? null,
+    cardSite: type?.describeCardSite?.(item.payload ?? {}) ?? null,
     // RA-739. The card's first line: the work item type's display name, then
     // the submission reference and request count, each when present.
     requestType: type?.displayName ?? null,
@@ -807,7 +803,9 @@ function decorate(item) {
     // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
     // neither render.
     showDueDate: slaStarted,
-    showSubmittedOn: PRE_ASSESSMENT_STATE_IDS.has(stateId),
+    showSubmittedOn:
+      Boolean(type?.cardAlwaysShowsSubmittedOn) ||
+      PRE_ASSESSMENT_STATE_IDS.has(stateId),
     // Both dates arrive either as a plain ISO-8601 string or as the Mongo
     // `{ $date }` wrapper, hence `unwrapMongoDate`; null for an absent or
     // unexpected shape. The template formats each via `formatDateGds`, which
@@ -825,26 +823,6 @@ function decorate(item) {
  */
 function formatSubmissionCount(size) {
   return Number.isInteger(size) && size > 1 ? `(${size} requests)` : null
-}
-
-/**
- * RA-739. The fields the in-year change card shows beyond the shared ones
- * (reference link, status tag, request type line, assigned to): date
- * submitted, the organisation line and the site line. Each comes from the
- * work item's own payload, which management-be stamps when it splits a
- * submission into one work item per site. The site line is type-specific, so
- * the type describes it through its `describeCardSite(payload)` hook; without
- * one the line shows a dash.
- */
-function buildInYearChangeCard(item, type) {
-  const payload = item.payload ?? {}
-  return {
-    submittedDate: formatDateShortGds(unwrapMongoDate(item.submittedAt)),
-    orgName: payload.organisationName ?? null,
-    orgId: resolveOrganisationId(payload),
-    material: materialLabel(payload.material),
-    site: type.describeCardSite?.(payload) ?? { name: null, reference: null }
-  }
 }
 
 /**

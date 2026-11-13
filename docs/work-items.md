@@ -145,14 +145,24 @@ That is the complete list of changes required outside the new module folder.
 A type that follows the shared Standard workflow (RA-739) takes its
 `initialState`, `states` and `transitions` from
 `src/server/work-items/core/standard-workflow.js`, mirroring management-be's
-`StandardWorkflow`. A type may declare a `category`; an in-year change type
-(`in-year-change`, see `core/categories.js`) renders the in-year change card
-on the Applications list, its own case header (the reference as a caption,
-the site name and ORS id as the title, and two rows of four meta items) and
-only the Application summary and Application history tabs. Every work item
-page builds its header from a work item passed through
-`decorateForCaseHeader` (`routes/work-items/case-header.js`), so the
-type's header shows on every tab.
+`StandardWorkflow`. A type may declare a `category` (`in-year-change`, see
+`core/categories.js`), which the Applications list's category filter and the
+card's class modifier use. Everything else a type shows differently comes
+from its own hooks, never from a check on its category:
+
+- `buildCaseHeader({ header, workItem, assignment })` builds the case header
+  from the fields every header shares. Add-ORS's
+  (`routes/add-overseas-site/case-header.js`) has the reference as a
+  caption, the site name and ORS id as the title, and two rows of four meta
+  items. Every work item page builds its header from a work item passed
+  through `decorateForCaseHeader` (`routes/work-items/case-header.js`), so
+  the type's header shows on every tab.
+- `caseTabs` lists the tab keys the type's case has (by default all four).
+  Add-ORS has only Application summary and Application history, and its
+  Additional information and Recycling operations pages are not found.
+- `describeCardSite(payload)` gives the card a site line in place of the
+  registration number, and `cardAlwaysShowsSubmittedOn` keeps "Submitted on"
+  on the card in every state.
 
 A type may also supply `buildApplicationSummary({ workItem })`, the view
 model for its Application summary; the detail controller uses it in place of

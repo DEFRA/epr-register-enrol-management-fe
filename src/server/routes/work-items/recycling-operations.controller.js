@@ -15,9 +15,10 @@ import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import {
   buildCaseHeader,
   buildCaseTabs,
-  decorateForCaseHeader
+  decorateForCaseHeader,
+  RECYCLING_OPERATIONS_TAB_KEY
 } from './case-header.js'
-import { renderNonInYearChangeFetchError } from './work-item-fetch-errors.js'
+import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
 import { recyclingOperationLabel } from './recycling-operations.schema.js'
 import { overseasSitesOf } from './overseas-sites.js'
 
@@ -208,7 +209,12 @@ export const workItemRecyclingOperationsController = {
     const user = getUser(request)
     const result = await getWorkItem({ workItemId: id, user })
 
-    const errorResponse = renderNonInYearChangeFetchError({ h, result, id })
+    const errorResponse = renderFetchErrorUnlessCaseHasTab({
+      h,
+      result,
+      id,
+      tab: RECYCLING_OPERATIONS_TAB_KEY
+    })
     if (errorResponse) {
       return errorResponse
     }
@@ -237,7 +243,7 @@ export const workItemRecyclingOperationsController = {
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
         active: 'recycling-operations',
-        category: forHeader.typeCategory
+        typeId: forHeader.typeId
       }),
       workItem: { id: workItem.id, applicationRef },
       sites: pageSites,

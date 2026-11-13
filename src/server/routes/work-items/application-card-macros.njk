@@ -1,9 +1,9 @@
 {# ------------------------------------------------------------------- #}
-{# Application card markup shared by the Applications list's card       #}
-{# variants in `index.njk`: the standard (re-accreditation) card and    #}
-{# the in-year change card (RA-739). Each variant supplies its own body #}
-{# through `caller()`; the tile, header, reference link, state tag and  #}
-{# archived line are defined once here, with their testids.             #}
+{# Application card markup for the Applications list (`index.njk`).     #}
+{# The tile, header, reference link, state tag and archived line are   #}
+{# defined once here, with their testids, as are the organisation line #}
+{# and footer every card shows (RA-739). The type-specific line comes  #}
+{# from the caller.                                                     #}
 {# ------------------------------------------------------------------- #}
 
 {% from "govuk/components/tag/macro.njk" import govukTag %}
@@ -40,4 +40,35 @@
       <p class="govuk-body-s app-application-card__archived" data-testid="work-item-archived-at-{{ item.id }}">Archived: {{ item.archivedAt }}</p>
     {% endif %}
   </article>
+{% endmacro %}
+
+{# RA-739. One small-text line:                                         #}
+{# "{Org} ({Org ID}): {Material} ({Applicant type})".                   #}
+{# RA-370. Material type then applicant type, in that order.            #}
+{# RA-412. Applicant type is set by decorate() from the real            #}
+{# `payload.wasteProcessingType` field, falling back to "Reprocessor"   #}
+{# for work items submitted before that field existed (RA-314).         #}
+{% macro applicationCardOrg(item) %}
+  <p class="govuk-body-s app-application-card__org" data-testid="application-org">
+    <span data-testid="org-name">{{ item.orgName or "—" }}</span>{% if item.orgId %} (<span data-testid="org-id">{{ item.orgId }}</span>){% endif %}: <span data-testid="material">{{ item.material or "—" }}</span> (<span data-testid="applicant-type">{{ item.applicantType }}</span>)
+  </p>
+{% endmacro %}
+
+{# RA-370. The footer always renders, because "Assigned to" is not gated  #}
+{# on the SLA clock: it shows "Unassigned" when nobody holds the case.   #}
+{# The two dates either side of it are gated on INDEPENDENT signals:     #}
+{# "Submitted on" on the work item's state (assessment not yet started,  #}
+{# or always for a type that asks for it, RA-739) and "Due on" on the    #}
+{# SLA clock. Any combination of the two can therefore render, including #}
+{# both and neither. See PRE_ASSESSMENT_STATE_IDS in controller.js.      #}
+{% macro applicationCardFooter(item) %}
+  <div class="app-application-card__footer" data-testid="application-card-footer">
+    {% if item.showSubmittedOn %}
+      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ item.submittedOn | formatDateGds or "—" }}</span></span>
+    {% endif %}
+    {% if item.showDueDate %}
+      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Due on:</span> <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
+    {% endif %}
+    <span class="app-application-card__meta" data-testid="application-assigned-to"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
+  </div>
 {% endmacro %}
