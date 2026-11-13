@@ -8,8 +8,11 @@ import {
 } from './audit-log-payment-date.js'
 import {
   ACCREDITATION_NUMBER_CORRECTED_ACTION,
+  LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION,
   accreditationNumberCorrectedRows,
-  summariseAccreditationNumberCorrected
+  lastYearsAccreditationNumberAddedRows,
+  summariseAccreditationNumberCorrected,
+  summariseLastYearsAccreditationNumberAdded
 } from './audit-log-accreditation-number.js'
 import {
   notificationDetailRows,
@@ -201,16 +204,17 @@ const STATE_BEARING_ACTIONS = new Set([
  * Submitted at, Submitted by, Last modified, Assigned to) — unlike every
  * other action, for which that context is exactly what a caseworker needs
  * alongside the entry. RA-526's routing/correction entries and RA-691's
- * accreditation-number correction are system-written (by a submission hook
- * or a one-off data migration) rather than a workflow action against the
- * item, so none of that context — including who the item happens to be
+ * accreditation-number correction, and RA-763's last year's accreditation
+ * number added, are system-written (by a submission hook or a one-off data
+ * migration) rather than a workflow action against the item, so none of that context — including who the item happens to be
  * assigned to — has anything to do with why a nation was chosen or a value
  * was corrected.
  */
 const NO_SNAPSHOT_CONTEXT_ACTIONS = new Set([
   ACTION_ROUTED_TO_NATION,
   ACTION_NATION_CORRECTED,
-  ACCREDITATION_NUMBER_CORRECTED_ACTION
+  ACCREDITATION_NUMBER_CORRECTED_ACTION,
+  LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION
 ])
 
 /**
@@ -334,6 +338,8 @@ const ACTION_DISPLAY_NAMES = {
   [ACTION_ROUTED_TO_NATION]: 'Routed to nation',
   [ACTION_NATION_CORRECTED]: 'Nation corrected',
   [ACCREDITATION_NUMBER_CORRECTED_ACTION]: 'Accreditation number corrected',
+  [LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION]:
+    "Last year's accreditation number added",
   [ACTION_APPLICATION_QUERIED]: 'Application queried'
 }
 
@@ -462,6 +468,8 @@ export function summariseAuditEntry(entry) {
       return details.errorMessage ?? ''
     case ACCREDITATION_NUMBER_CORRECTED_ACTION:
       return summariseAccreditationNumberCorrected(details)
+    case LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION:
+      return summariseLastYearsAccreditationNumberAdded(details)
     default:
       return ''
   }
@@ -679,6 +687,8 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
     }
     case ACCREDITATION_NUMBER_CORRECTED_ACTION:
       return accreditationNumberCorrectedRows(details)
+    case LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION:
+      return lastYearsAccreditationNumberAddedRows(details)
     default:
       return []
   }

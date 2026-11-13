@@ -638,7 +638,8 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
   test.each([
     'routed-to-nation',
     'nation-corrected',
-    'accreditation-number-corrected'
+    'accreditation-number-corrected',
+    'last-years-accreditation-number-added'
   ])(
     'omits ALL snapshot context rows for a %s entry, unlike every other action',
     (action) => {
@@ -659,7 +660,8 @@ describe('decorateAuditLog — workItemSnapshot rows', () => {
           nation: 'England',
           derivedFrom: 'submitted',
           from: 'Wales',
-          to: 'England'
+          to: 'England',
+          accreditationNumber: 'A26ER5000270063WO'
         },
         createdAt: '2026-05-01T09:00:00Z'
       }
@@ -1767,6 +1769,66 @@ describe('accreditation-number-corrected audit entries (RA-691)', () => {
     const [decorated] = decorateAuditLog([
       { action: 'accreditation-number-corrected', details: fullDetails }
     ])
+    expect(decorated.isFailure).toBe(false)
+  })
+})
+
+describe('last-years-accreditation-number-added audit entries (RA-763)', () => {
+  // The one-off RA-763 migration stamps this exact shape when it gives a 2027
+  // case its 2026 accreditation number from the public register. It changes
+  // no state.
+  const action = 'last-years-accreditation-number-added'
+  const fullDetails = {
+    year: '2026',
+    accreditationNumber: 'A26ER5000270063WO',
+    source: 'Public register of reprocessors and exporters, 5 November 2026',
+    reason: 'RA-763'
+  }
+
+  test('falls back to "Last year\'s accreditation number added" when the backend supplies no display name', () => {
+    const [decorated] = decorateAuditLog([{ action, details: fullDetails }])
+    expect(decorated.actionDisplayName).toBe(
+      "Last year's accreditation number added"
+    )
+  })
+
+  test('summarises the entry as the year and number', () => {
+    expect(summariseAuditEntry({ action, details: fullDetails })).toBe(
+      '2026: A26ER5000270063WO'
+    )
+  })
+
+  test('summarises as the number alone when there is no year', () => {
+    expect(
+      summariseAuditEntry({
+        action,
+        details: { accreditationNumber: 'A26ER5000270063WO' }
+      })
+    ).toBe('A26ER5000270063WO')
+  })
+
+  test('has no summary without a number', () => {
+    expect(summariseAuditEntry({ action, details: { year: '2026' } })).toBe('')
+  })
+
+  test('projects year, number, source and reason', () => {
+    expect(detailRowsForAuditEntry({ action, details: fullDetails })).toEqual([
+      { key: 'Accreditation year', value: '2026' },
+      { key: 'Accreditation number', value: 'A26ER5000270063WO' },
+      {
+        key: 'Source',
+        value: 'Public register of reprocessors and exporters, 5 November 2026'
+      },
+      { key: 'Reason', value: 'RA-763', multiline: true }
+    ])
+  })
+
+  test('returns an empty array when the entry has no details', () => {
+    expect(detailRowsForAuditEntry({ action })).toEqual([])
+  })
+
+  test('is not flagged as a failure', () => {
+    const [decorated] = decorateAuditLog([{ action, details: fullDetails }])
     expect(decorated.isFailure).toBe(false)
   })
 })
