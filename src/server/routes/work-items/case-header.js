@@ -227,6 +227,20 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
 }
 
 /**
+ * A state's display name from its work item type's declaration, or the raw
+ * state id when the type does not declare it.
+ *
+ * @param {object|null} type the registered work item type
+ * @param {string} stateId
+ * @returns {string}
+ */
+export function stateDisplayName(type, stateId) {
+  return (
+    type?.states?.find((state) => state.id === stateId)?.displayName ?? stateId
+  )
+}
+
+/**
  * Decorate a raw work item with the fields the case header and tabs read:
  * its type's display name, and its state's display name and
  * badge colour. Every work item page builds its header from a work item
@@ -241,9 +255,7 @@ export function decorateForCaseHeader(workItem) {
   return {
     ...workItem,
     typeDisplayName: type?.displayName ?? workItem.typeId,
-    stateDisplayName:
-      type?.states?.find((state) => state.id === workItem.stateId)
-        ?.displayName ?? workItem.stateId,
+    stateDisplayName: stateDisplayName(type, workItem.stateId),
     stateTagClass: stateTagClass(workItem.stateId)
   }
 }

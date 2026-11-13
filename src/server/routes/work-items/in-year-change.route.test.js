@@ -23,15 +23,18 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
   raiseWorkItemQuery: vi.fn(),
-  updateRecyclingOperations: vi.fn()
+  updateRecyclingOperations: vi.fn(),
+  extendWorkItemSla: vi.fn()
 }))
 
 const {
   getWorkItem,
   getWorkItems,
   assignWorkItem,
+  unassignWorkItem,
   applyWorkItemAction,
-  updateRecyclingOperations
+  updateRecyclingOperations,
+  extendWorkItemSla
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ADD_ORS_ID = '73900003-0000-4000-8000-000000000001'
@@ -210,8 +213,10 @@ describe('RA-739: in-year change applications', () => {
     getWorkItem.mockReset()
     getWorkItems.mockReset()
     assignWorkItem.mockReset()
+    unassignWorkItem.mockReset()
     applyWorkItemAction.mockReset()
     updateRecyclingOperations.mockReset()
+    extendWorkItemSla.mockReset()
   })
 
   async function listPage(...items) {
@@ -886,6 +891,178 @@ describe('RA-739: in-year change applications', () => {
       expect(summary).not.toContain('EU country')
       expect(summary).not.toContain('OECD country')
       expect($('.app-new-flag')).toHaveLength(0)
+    })
+  })
+
+  // Stories 30 and 31: reassign, unassign and change the due date through
+  // the routes re-accreditation uses. Recording each in Application history
+  // is management-be's.
+  describe('managing an add-ORS application', () => {
+    const DETAIL_URL = `/work-items/${ADD_ORS_ID}`
+    const FORM = { 'content-type': 'application/x-www-form-urlencoded' }
+
+    async function followRedirect(posted) {
+      expect(posted.statusCode).toBe(statusCodes.redirect)
+      expect(posted.headers.location).toBe(DETAIL_URL)
+      const cookie = []
+        .concat(posted.headers['set-cookie'] ?? [])
+        .map((header) => header.split(';')[0])
+        .join('; ')
+      const followed = await server.inject({
+        method: 'GET',
+        url: DETAIL_URL,
+        headers: { cookie }
+      })
+      return cheerio.load(followed.result)
+    }
+
+    test('reassigning sends the chosen caseworker to the backend and returns to the application', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      assignWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anAddOrsItem({ assignedToName: 'Stub Caseworker One' })
+      })
+
+      const { statusCode, headers } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `${DETAIL_URL}/assign`,
+        payload: 'assigneeId=stub-caseworker-1',
+        headers: FORM
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(DETAIL_URL)
+      expect(assignWorkItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ADD_ORS_ID,
+          assigneeId: 'stub-caseworker-1',
+          assigneeName: 'Stub Caseworker One',
+          user: expect.objectContaining({ id: expect.any(String) })
+        })
+      )
+      expect(applyWorkItemAction).not.toHaveBeenCalled()
+    })
+
+    test('unassigning clears the assignment and returns to the application', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anAddOrsItem({ assignedToName: 'Stub Caseworker One' })
+      })
+      unassignWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+
+      const { statusCode, headers } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `${DETAIL_URL}/unassign`
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(DETAIL_URL)
+      expect(unassignWorkItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ADD_ORS_ID,
+          user: expect.objectContaining({ id: expect.any(String) })
+        })
+      )
+    })
+
+    test('a refused unassign shows the backend reason on the application', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      unassignWorkItem.mockResolvedValue({
+        ok: false,
+        status: statusCodes.conflict,
+        problem: {
+          detail: 'This work item cannot be unassigned in its current state.'
+        }
+      })
+
+      const { statusCode, result } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: `${DETAIL_URL}/unassign`
+      })
+
+      expect(statusCode).toBe(statusCodes.conflict)
+      expect(result).toContain('Could not unassign work item')
+      expect(result).toContain(
+        'This work item cannot be unassigned in its current state.'
+      )
+      expect(
+        squash(cheerio.load(result)('[data-testid="case-header-title"]').text())
+      ).toBe('Denmark PR (007)')
+    })
+
+    describe('changing the due date', () => {
+      const EXTEND_URL = `${DETAIL_URL}/sla/extend`
+
+      // Duly made on 20 February 2027, due 15 May 2027. The clock is pinned
+      // so the deadline floor holds still.
+      const inAssessment = () => ({
+        ...anAddOrsItem({
+          assignedToName: 'Test Standard User',
+          slaDueDate: '2027-05-15T00:00:00Z',
+          slaState: 'OnTrack'
+        }),
+        stateId: 'assessment-in-progress',
+        slaStartedAt: '2027-02-20T00:00:00Z'
+      })
+
+      beforeEach(() => {
+        vi.useFakeTimers({
+          toFake: ['Date'],
+          now: new Date('2027-03-01T09:00:00Z')
+        })
+      })
+
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      test('sends the change to the backend and confirms it on the application', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: inAssessment() })
+        extendWorkItemSla.mockResolvedValue({
+          ok: true,
+          workItem: inAssessment()
+        })
+
+        const $ = await followRedirect(
+          await injectWithCrumb(server, {
+            method: 'POST',
+            url: EXTEND_URL,
+            payload:
+              'reason=Waiting+on+evidence&new-deadline-day=19&new-deadline-month=6&new-deadline-year=2027',
+            headers: FORM
+          })
+        )
+
+        expect(extendWorkItemSla).toHaveBeenCalledWith(
+          expect.objectContaining({
+            workItemId: ADD_ORS_ID,
+            reason: 'Waiting on evidence',
+            additionalDuration: 'P35D'
+          })
+        )
+        expect(assignWorkItem).not.toHaveBeenCalled()
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+        expect($('body').text()).toContain('Determination deadline changed')
+        expect($('body').text()).toContain(
+          'The determination deadline has been changed.'
+        )
+      })
+
+      test('a change without a reason re-renders the form and sends nothing', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: inAssessment() })
+
+        const { statusCode, result } = await injectWithCrumb(server, {
+          method: 'POST',
+          url: EXTEND_URL,
+          payload:
+            'reason=&new-deadline-day=19&new-deadline-month=6&new-deadline-year=2027',
+          headers: FORM
+        })
+
+        expect(statusCode).toBe(statusCodes.badRequest)
+        expect(result).toContain('Reason is required')
+        expect(extendWorkItemSla).not.toHaveBeenCalled()
+      })
     })
   })
 

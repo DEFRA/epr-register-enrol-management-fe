@@ -13,7 +13,8 @@ import {
   caseHasTab,
   decorateForCaseHeader,
   formatDueOn,
-  formatPayment
+  formatPayment,
+  stateDisplayName
 } from './case-header.js'
 
 const EM_DASH = '—'
@@ -379,78 +380,40 @@ describe('#buildCaseTabs (RA-295, RA-434, RA-469)', () => {
   })
 })
 
-describe('RA-739: in-year change (add-ORS) header and tabs', () => {
+describe('#stateDisplayName', () => {
+  test("reads the state's display name from the type", () => {
+    expect(stateDisplayName(addOverseasSiteType, 'submitted')).toBe(
+      'Not started'
+    )
+  })
+
+  test('falls back to the raw state id when the type does not declare it', () => {
+    expect(stateDisplayName(addOverseasSiteType, 'mystery')).toBe('mystery')
+    expect(stateDisplayName(null, 'submitted')).toBe('submitted')
+  })
+})
+
+describe("RA-739: a type's own header and tabs", () => {
   beforeAll(() => registerWorkItemType(addOverseasSiteType))
   afterAll(() => clearWorkItemRegistry())
 
-  const addOrs = (overrides = {}) =>
-    decorateForCaseHeader({
-      id: 'w-1',
-      typeId: 'add-overseas-site',
-      stateId: 'submitted',
-      payload: {
-        applicationReference: 'IYC-ORS-2026-00001',
-        organisationName: 'GreenLoop Recovery',
-        operatorOrgNumber: 123001,
-        material: 'Plastic',
-        accreditationReference: 'ACC-1',
-        site: { orsId: '007', siteName: 'Denmark PR', chargePence: 32800 }
-      },
-      ...overrides
+  test("builds the header with the type's own buildCaseHeader, given the shared fields", () => {
+    const header = buildCaseHeader({
+      workItem: decorateForCaseHeader({
+        id: 'w-1',
+        typeId: 'add-overseas-site',
+        stateId: 'submitted',
+        payload: { site: { siteName: 'Denmark PR' } }
+      })
     })
-
-  test('decorates the work item with its type and state', () => {
-    const item = addOrs()
-    expect(item.typeDisplayName).toBe('New ORS accreditation')
-    expect(item.stateDisplayName).toBe('Not started')
-    expect(item.stateTagClass).toEqual(expect.any(String))
-  })
-
-  test('captions with the reference and titles with the site, without the organisation', () => {
-    const header = buildCaseHeader({ workItem: addOrs() })
-    expect(header.caption).toBe('IYC-ORS-2026-00001')
-    expect(header.title).toBe('Denmark PR (007)')
-    expect(header.applicationRef).toBe('IYC-ORS-2026-00001')
-    expect(header.organisationName).toBeUndefined()
-    expect(header.organisationId).toBeUndefined()
-  })
-
-  test('titles with the site name alone when there is no ORS id', () => {
-    const item = addOrs()
-    item.payload.site = { siteName: 'Denmark PR' }
-    expect(buildCaseHeader({ workItem: item }).title).toBe('Denmark PR')
-  })
-
-  test('has the eight meta items in Figma order', () => {
-    const header = buildCaseHeader({ workItem: addOrs() })
-    expect(header.meta.map((entry) => [entry.label, entry.value])).toEqual([
-      ['Request type', 'New ORS accreditation'],
-      ['Status', 'Not started'],
-      ['Assigned to', 'Unassigned'],
-      ['Due date', EM_DASH],
-      ['Material', 'Plastic'],
-      ['Accreditation number', 'ACC-1'],
-      ['Charge', '£328'],
-      ['Payment date', NOT_RECEIVED]
-    ])
-  })
-
-  test('suppresses the due date for a cancelled SLA, as on re-accreditation', () => {
-    const due = { slaDueDate: '2027-03-11T10:00:00Z' }
-    expect(
-      metaValue(
-        buildCaseHeader({ workItem: addOrs({ ...due, slaState: 'OnTrack' }) }),
-        'due-on'
-      )
-    ).toBe('11 Mar 2027')
-    expect(
-      metaValue(
-        buildCaseHeader({
-          workItem: addOrs({ ...due, slaState: 'Cancelled' })
-        }),
-        'due-on'
-      )
-    ).toBe(EM_DASH)
+    expect(header).toMatchObject({
+      backHref: '/work-items',
+      backText: 'Applications',
+      applicationRef: 'w-1',
+      caption: 'w-1',
+      title: 'Denmark PR',
+      metaLayout: 'in-year-change'
+    })
   })
 
   test("a type's case has its own tabs, and a type without caseTabs has all four", () => {
@@ -463,7 +426,7 @@ describe('RA-739: in-year change (add-ORS) header and tabs', () => {
     expect(caseHasTab({ id: 'other' }, 'additional-information')).toBe(true)
   })
 
-  test('has only the Application summary and Application history tabs', () => {
+  test('has only the Application summary and Application history tabs for add-ORS', () => {
     const tabs = buildCaseTabs({
       workItemId: 'w-1',
       active: 'history',

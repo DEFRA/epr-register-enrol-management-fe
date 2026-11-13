@@ -6,7 +6,8 @@ import {
   buildCaseHeader,
   buildCaseTabs,
   decorateForCaseHeader,
-  resolveOrganisationId
+  resolveOrganisationId,
+  stateDisplayName
 } from './case-header.js'
 import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
 
@@ -33,15 +34,13 @@ export const workItemAuditLogController = {
 
     const workItem = result.workItem
     const applicationRef = workItem.payload.applicationReference
-    const type = getWorkItemType(workItem.typeId)
-    const typeDisplayName = type?.displayName ?? workItem.typeId
-    // Single state-code → display-name resolver, reused for the live case
-    // state (header) AND for each audit entry's own `stateId` (epr-rr9s),
-    // so historical entries render their state as-of the event rather than
-    // the current one.
-    const resolveStateDisplayName = (stateId) =>
-      type?.states?.find((s) => s.id === stateId)?.displayName ?? stateId
     const forHeader = decorateForCaseHeader(workItem)
+    const { typeDisplayName } = forHeader
+    // The header's own state-name lookup, applied to each audit entry's own
+    // `stateId` (epr-rr9s), so historical entries render their state as-of
+    // the event rather than the current one.
+    const type = getWorkItemType(workItem.typeId)
+    const resolveStateDisplayName = (stateId) => stateDisplayName(type, stateId)
 
     const workItemSnapshot = {
       // RA-503: operatorOrganisationId is ReEx's internal ObjectId for a real operator

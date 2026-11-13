@@ -19,7 +19,7 @@ import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { config } from '#/config/config.js'
 import { isExporterApplication } from './application-summary.js'
-import { resolveOrganisationId } from './case-header.js'
+import { resolveOrganisationId, stateDisplayName } from './case-header.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -736,8 +736,6 @@ function clampPositiveInt(value, fallback) {
 function decorate(item) {
   const type = getWorkItemType(item.typeId)
   const stateId = item.stateId
-  const stateDisplayName =
-    type?.states?.find((state) => state.id === stateId)?.displayName ?? stateId
 
   const archivedAtRaw = item.payload?.archivedAt
   const archivedAt = formatArchivedAt(archivedAtRaw)
@@ -774,7 +772,7 @@ function decorate(item) {
     requestType: type?.displayName ?? null,
     submissionReference: item.payload?.submissionReference ?? null,
     submissionCount: formatSubmissionCount(item.payload?.submissionSize),
-    stateDisplayName,
+    stateDisplayName: stateDisplayName(type, stateId),
     stateTagClass: resolveStateTagClass(stateId),
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
     archivedAt,
