@@ -25,3 +25,36 @@ export function accreditationNumberCorrectedRows(details) {
     { key: 'Reason', value: details?.reason, multiline: true }
   ].filter((row) => row.value)
 }
+
+/**
+ * Audit log rendering for last year's accreditation number added (RA-763).
+ *
+ * management-be's one-off RA-763 migration appends a
+ * `last-years-accreditation-number-added` entry (no state change) when it
+ * gives a 2027 case its 2026 accreditation number from the public register.
+ * The case's own 2027 number is derived from it. Details carry the `year`,
+ * the `accreditationNumber`, the `source` it was taken from and a `reason`.
+ */
+
+export const LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION =
+  'last-years-accreditation-number-added'
+
+/** At-a-glance summary: "2026: A26…" (empty without a number). */
+export function summariseLastYearsAccreditationNumberAdded(details) {
+  if (!details?.accreditationNumber) {
+    return ''
+  }
+  return details.year
+    ? `${details.year}: ${details.accreditationNumber}`
+    : details.accreditationNumber
+}
+
+/** Detail rows: year, number, where it came from and the reason, when present. */
+export function lastYearsAccreditationNumberAddedRows(details) {
+  return [
+    { key: 'Accreditation year', value: details?.year },
+    { key: 'Accreditation number', value: details?.accreditationNumber },
+    { key: 'Source', value: details?.source },
+    { key: 'Reason', value: details?.reason, multiline: true }
+  ].filter((row) => row.value)
+}

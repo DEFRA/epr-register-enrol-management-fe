@@ -660,4 +660,59 @@ describe('#workItemAuditLogController', () => {
       )
     )
   })
+
+  // RA-763: the Application history tab shows a "Last year's accreditation
+  // number added" entry with the number and where it came from.
+  test('Shows the number and source for a last-years-accreditation-number-added entry', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        auditLog: [
+          {
+            id: 'ffff6666-ffff-ffff-ffff-ffffffffffff',
+            action: 'last-years-accreditation-number-added',
+            actionDisplayName: "Last year's accreditation number added",
+            // The shape the RA-763 migration writes: no stateId (no state
+            // change) and a system actor.
+            details: {
+              year: '2026',
+              accreditationNumber: 'A26ER5000270063WO',
+              source:
+                'Public register of reprocessors and exporters, 5 November 2026',
+              reason: 'RA-763'
+            },
+            createdAt: '2026-11-13T09:00:00Z',
+            createdBy: 'migration',
+            createdByName: "Migration: RA-763 last year's accreditation number"
+          }
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(
+      expect.stringContaining(
+        'data-action="last-years-accreditation-number-added"'
+      )
+    )
+    expect(result).toEqual(expect.stringContaining('2026: A26ER5000270063WO'))
+    expect(result).toEqual(expect.stringContaining('Accreditation number'))
+    expect(result).toEqual(
+      expect.stringContaining(
+        'Public register of reprocessors and exporters, 5 November 2026'
+      )
+    )
+    expect(result).toEqual(expect.stringContaining('RA-763'))
+    expect(result).not.toEqual(
+      expect.stringContaining(
+        '<dt class="govuk-summary-list__key">Assigned to</dt>'
+      )
+    )
+  })
 })
