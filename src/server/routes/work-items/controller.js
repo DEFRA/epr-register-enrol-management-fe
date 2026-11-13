@@ -657,12 +657,58 @@ function clampPositiveInt(value, fallback) {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback
 }
 
+function typeCardFields(type, payload, stateId) {
+  return {
+    // RA-739. A type's category is its card's modifier, and a type that
+    // describes a site (add-ORS) shows it in place of the registration number.
+    cardModifier: type?.category ?? null,
+    cardSite: type?.describeCardSite?.(payload) ?? null,
+    // RA-739. The card's first line starts with the work item type's display
+    // name.
+    requestType: type?.displayName ?? null,
+    stateDisplayName: stateDisplayName(type, stateId),
+    // The two card dates are gated INDEPENDENTLY — see the block comment above
+    // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
+    // neither render.
+    showSubmittedOn:
+      Boolean(type?.cardAlwaysShowsSubmittedOn) ||
+      PRE_ASSESSMENT_STATE_IDS.has(stateId)
+  }
+}
+
+function payloadCardFields(payload) {
+  return {
+    // RA-739. After the type's display name, the card's first line shows the
+    // submission reference and request count, each when present.
+    submissionReference: payload.submissionReference ?? null,
+    submissionCount: formatSubmissionCount(payload.submissionSize),
+    archivedAt: formatArchivedAt(payload.archivedAt),
+    // RA-249. The "Application ref" must show the human RA-* reference or
+    // nothing — never the work-item Guid. The card link still navigates via
+    // `item.id`, so dropping the id fallback here loses no navigation.
+    applicationRef: payload.applicationReference ?? null,
+    orgName: payload.organisationName ?? null,
+    // RA-503: operatorOrganisationId is ReEx's internal ObjectId for a real operator
+    // submission — never safe to show. resolveOrganisationId prefers operatorOrgNumber and only
+    // falls back to operatorOrganisationId when it is itself genuinely 6-digit numeric (an
+    // admin-created work item). See case-header.js.
+    orgId: resolveOrganisationId(payload),
+    // RA-295 AC06. The operator's registration number on each card. NOTE:
+    // this is `registrationNumber` (e.g. "EPR-100999") — deliberately NOT
+    // `operatorRegistrationId` (e.g. "reg-008", RA-223's "Registration ID"),
+    // which is a different field with a confusingly similar name.
+    registrationNumber: payload.registrationNumber ?? null,
+    // RA-324. Present the material DISPLAY LABEL on the card (e.g. "Plastic",
+    // "Fibre-based composite material"), matching the filter checkboxes,
+    // active-filter chips and summary — never the raw lowercase token.
+    material: materialLabel(payload.material)
+  }
+}
+
 function decorate(item) {
   const type = getWorkItemType(item.typeId)
   const stateId = item.stateId
-
-  const archivedAtRaw = item.payload?.archivedAt
-  const archivedAt = formatArchivedAt(archivedAtRaw)
+  const payload = item.payload ?? {}
 
   // RA-412. `payload.wasteProcessingType` is the real reprocessor/exporter
   // discriminator: the operator backend has written it into every submitted
@@ -687,47 +733,15 @@ function decorate(item) {
 
   return {
     ...item,
-    // RA-739. A type's category is its card's modifier, and a type that
-    // describes a site (add-ORS) shows it in place of the registration number.
-    cardModifier: type?.category ?? null,
-    cardSite: type?.describeCardSite?.(item.payload ?? {}) ?? null,
-    // RA-739. The card's first line: the work item type's display name, then
-    // the submission reference and request count, each when present.
-    requestType: type?.displayName ?? null,
-    submissionReference: item.payload?.submissionReference ?? null,
-    submissionCount: formatSubmissionCount(item.payload?.submissionSize),
-    stateDisplayName: stateDisplayName(type, stateId),
+    ...typeCardFields(type, payload, stateId),
+    ...payloadCardFields(payload),
     stateTagClass: resolveStateTagClass(stateId),
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
-    archivedAt,
-    // RA-249. The "Application ref" must show the human RA-* reference or
-    // nothing — never the work-item Guid. The card link still navigates via
-    // `item.id`, so dropping the id fallback here loses no navigation.
-    applicationRef: item.payload?.applicationReference ?? null,
-    orgName: item.payload?.organisationName ?? null,
-    // RA-503: operatorOrganisationId is ReEx's internal ObjectId for a real operator
-    // submission — never safe to show. resolveOrganisationId prefers operatorOrgNumber and only
-    // falls back to operatorOrganisationId when it is itself genuinely 6-digit numeric (an
-    // admin-created work item). See case-header.js.
-    orgId: resolveOrganisationId(item.payload ?? {}),
-    // RA-295 AC06. The operator's registration number on each card. NOTE:
-    // this is `registrationNumber` (e.g. "EPR-100999") — deliberately NOT
-    // `operatorRegistrationId` (e.g. "reg-008", RA-223's "Registration ID"),
-    // which is a different field with a confusingly similar name.
-    registrationNumber: item.payload?.registrationNumber ?? null,
-    // RA-324. Present the material DISPLAY LABEL on the card (e.g. "Plastic",
-    // "Fibre-based composite material"), matching the filter checkboxes,
-    // active-filter chips and summary — never the raw lowercase token.
-    material: materialLabel(item.payload?.material),
     // RA-412. The card's applicant-type label — see the comment above.
     applicantType,
-    // The two card dates are gated INDEPENDENTLY — see the block comment above
-    // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
-    // neither render.
+    // The due date is gated independently of `showSubmittedOn` — see the
+    // block comment above PRE_ASSESSMENT_STATE_IDS.
     showDueDate: slaStarted,
-    showSubmittedOn:
-      Boolean(type?.cardAlwaysShowsSubmittedOn) ||
-      PRE_ASSESSMENT_STATE_IDS.has(stateId),
     // Both dates arrive either as a plain ISO-8601 string or as the Mongo
     // `{ $date }` wrapper, hence `unwrapMongoDate`; null for an absent or
     // unexpected shape. The template formats each via `formatDateGds`, which
