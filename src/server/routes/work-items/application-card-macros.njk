@@ -1,0 +1,74 @@
+{# ------------------------------------------------------------------- #}
+{# Application card markup for the Applications list (`index.njk`).     #}
+{# The tile, header, reference link, state tag and archived line are   #}
+{# defined once here, with their testids, as are the organisation line #}
+{# and footer every card shows (RA-739). The type-specific line comes  #}
+{# from the caller.                                                     #}
+{# ------------------------------------------------------------------- #}
+
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+
+{# The reference link, opening the work item. #}
+{% macro applicationCardRef(item) %}
+  <h2 class="govuk-heading-s app-application-card__ref">
+    <a class="govuk-link" href="/work-items/{{ item.id | urlencode }}" data-testid="work-item-link-{{ item.id }}">{{ item.applicationRef }}{% if not item.applicationRef %}<span class="govuk-visually-hidden">View application</span>{% endif %}</a>
+  </h2>
+{% endmacro %}
+
+{# One application card. `header.modifier` is an optional card class      #}
+{# modifier. The card's body comes from the caller.                       #}
+{% macro applicationCard(item, header = {}) %}
+  <article class="app-application-card{% if header.modifier %} app-application-card--{{ header.modifier }}{% endif %}" data-testid="application-tile" data-work-item-id="{{ item.id }}">
+    <div class="app-application-card__header">
+      {{ applicationCardRef(item) }}
+      {{ govukTag({ text: item.stateDisplayName, classes: item.stateTagClass, attributes: { "data-testid": "work-item-state-tag-" + item.id } }) }}
+    </div>
+
+    {# RA-739. The first line of every card: the request type, then after a  #}
+    {# divider the submission reference and "(N requests)" — each only when #}
+    {# present, and no divider when both are absent.                        #}
+    <p class="govuk-body app-application-card__request" data-testid="application-request">
+      <span class="app-application-card__meta" data-testid="request-type"><span class="app-application-card__meta-label">Request type:</span> {{ item.requestType }}</span>
+      {%- if item.submissionReference or item.submissionCount %}
+        <span class="app-application-card__meta app-application-card__meta--divided" data-testid="submission-reference">{{ [item.submissionReference, item.submissionCount] | select | join(" ") }}</span>
+      {%- endif %}
+    </p>
+
+    {{ caller() }}
+
+    {% if item.archivedAt %}
+      <p class="govuk-body-s app-application-card__archived" data-testid="work-item-archived-at-{{ item.id }}">Archived: {{ item.archivedAt }}</p>
+    {% endif %}
+  </article>
+{% endmacro %}
+
+{# RA-739. One small-text line:                                         #}
+{# "{Org} ({Org ID}): {Material} ({Applicant type})".                   #}
+{# RA-370. Material type then applicant type, in that order.            #}
+{# RA-412. Applicant type is set by decorate() from the real            #}
+{# `payload.wasteProcessingType` field, falling back to "Reprocessor"   #}
+{# for work items submitted before that field existed (RA-314).         #}
+{% macro applicationCardOrg(item) %}
+  <p class="govuk-body-s app-application-card__org" data-testid="application-org">
+    <span data-testid="org-name">{{ item.orgName or "—" }}</span>{% if item.orgId %} (<span data-testid="org-id">{{ item.orgId }}</span>){% endif %}: <span data-testid="material">{{ item.material or "—" }}</span> (<span data-testid="applicant-type">{{ item.applicantType }}</span>)
+  </p>
+{% endmacro %}
+
+{# RA-370. The footer always renders, because "Assigned to" is not gated  #}
+{# on the SLA clock: it shows "Unassigned" when nobody holds the case.   #}
+{# The two dates either side of it are gated on INDEPENDENT signals:     #}
+{# "Submitted on" on the work item's state (assessment not yet started,  #}
+{# or always for a type that asks for it, RA-739) and "Due on" on the    #}
+{# SLA clock. Any combination of the two can therefore render, including #}
+{# both and neither. See PRE_ASSESSMENT_STATE_IDS in controller.js.      #}
+{% macro applicationCardFooter(item) %}
+  <div class="app-application-card__footer" data-testid="application-card-footer">
+    {% if item.showSubmittedOn %}
+      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Submitted on:</span> <span data-testid="submitted-on">{{ item.submittedOn | formatDateGds or "—" }}</span></span>
+    {% endif %}
+    {% if item.showDueDate %}
+      <span class="app-application-card__meta"><span class="app-application-card__meta-label">Due on:</span> <span data-testid="due-on">{{ item.dueOn | formatDateGds or "—" }}</span></span>
+    {% endif %}
+    <span class="app-application-card__meta" data-testid="application-assigned-to"><span class="app-application-card__meta-label">Assigned to:</span> <span data-testid="assigned-to">{{ item.assigneeDisplayName or "Unassigned" }}</span></span>
+  </div>
+{% endmacro %}

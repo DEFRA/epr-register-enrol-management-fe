@@ -1,5 +1,6 @@
 import { getWorkItems } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
+import { IN_YEAR_CHANGE_CATEGORY } from '#/server/work-items/core/categories.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
 import { stateTagClass as resolveStateTagClass } from '#/server/work-items/core/state-badge.js'
 import {
@@ -18,7 +19,7 @@ import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { config } from '#/config/config.js'
 import { isExporterApplication } from './application-summary.js'
-import { resolveOrganisationId } from './case-header.js'
+import { resolveOrganisationId, stateDisplayName } from './case-header.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -68,53 +69,20 @@ const ASSIGNEE_FILTER_MINE = 'mine'
 const ASSIGNEE_FILTER_UNASSIGNED = 'unassigned'
 const ASSIGNEE_FILTER_USER = 'user'
 
-// RA-324 phase-2 (RA-299: relabelled "Applicant type" in the UI to
-// disambiguate from the new "Application type" filter below — the underlying
-// param name/values are unchanged). Reprocessor keeps mapping to the real
-// `re-accreditation` typeId (filters all current data — every work item
-// submitted so far, reprocessor or exporter, has that same typeId, so this
-// alone doesn't discriminate applicant kind).
+// "Applicant type" (RA-324, relabelled by RA-299): who is applying, the
+// accreditation's own waste processing type. Every work item type carries it
+// as `payload.wasteProcessingType`, so it is sent only as the backend's
+// `wasteProcessingTypes` filter, which narrows whatever "Application type"
+// selected (RA-739: it used to add a `re-accreditation` typeId, which widened
+// an In-year change selection and hid add-ORS items from an Exporter one).
+// The URL keeps its RA-324 values: `typeId=re-accreditation` is Reprocessor
+// and `typeId=exporter` is Exporter.
 //
-// PR #179 review, resolved: a "Reprocessor" filter used to also return
-// Exporter items, and a returned card could show a contradictory
-// "(Exporter)" label under it, because `wasteProcessingTypes` was only ever
-// narrowed for an Exporter-only selection. Fixed by also narrowing for a
-// Reprocessor-only selection (see `wasteProcessingTypes` derivation in
-// readFilters below) — checked against management-be#118's `BuildFilter`
-// directly rather than guessing: any `WasteProcessingTypes` value other
-// than a literal case-insensitive "exporter" is matched as `$not` of the
-// exporter regex, which Mongo already matches against a MISSING field too.
-// So a Reprocessor-only filter narrowed this way still includes pre-RA-314
-// legacy items with no `wasteProcessingType` at all — the drop-legacy-items
-// regression this was previously left unfixed to avoid does not occur.
-//
-// RA-412 gave the CARD LABEL and the applicant-kind derivation a real
-// `payload.wasteProcessingType` field to read (see decorate() below and
-// isExporterApplication() in application-summary.js, which decorate() also
-// uses). The Exporter checkbox now reads from the SAME field via the
-// backend's `WasteProcessingTypes` query param (management-be RA-412,
-// mirroring the existing `Nations` filter) — see the `wasteProcessingTypes`
-// derivation in readFilters below. `exporter` is never forwarded as a
-// `typeId` itself (there is no such real typeId — there is only ever
-// `re-accreditation` today); instead it is mapped onto `re-accreditation`
-// (see the handler's `typeIds` merge below) alongside the
-// `wasteProcessingTypes` narrowing, so an Exporter-only selection still
-// carries a real type constraint even where the backend's
-// `WasteProcessingTypes` support isn't deployed yet, rather than silently
-// falling back to the full unfiltered list.
-//
-// The backend ANDs `typeIds` and `wasteProcessingTypes` (confirmed against
-// management-be#118), so `wasteProcessingTypes` must only be sent when
-// exactly one of Exporter/Reprocessor is selected — selecting BOTH
-// checkboxes (or neither) is "either applicant kind", i.e. no
-// wasteProcessingType narrowing at all, not an AND of the two (which would
-// silently narrow to one kind and defeat the GDS checkbox-group OR
-// semantics). See readFilters below.
-//
-// PR review (#179): this used to be two near-identical top-level constants
-// ('exporter' and 'Exporter') disambiguated only by a comment. Bundled into
-// one mapping so the UI/URL token and the backend wire value can't drift
-// apart from each other silently.
+// management-be matches "exporter" case-insensitively and treats any other
+// value as "not exporter", which includes pre-RA-314 items with no
+// `wasteProcessingType` (read everywhere as reprocessor). So it is sent only
+// when exactly one of the two is ticked: both, or neither, is "either
+// applicant type" (GDS checkbox-group OR), not a narrowing to one kind.
 const EXPORTER_TYPE_FILTER = {
   // UI/URL token for the Applicant type checkbox (`typeId=exporter`).
   typeIdToken: 'exporter',
@@ -138,29 +106,31 @@ const EXPORTER_TYPE_FILTER = {
 // already matches a missing field).
 const REPROCESSOR_WASTE_PROCESSING_TYPE = 'Reprocessor'
 
-// The only work item typeId that exists on the backend today (see the
-// APPLICATION_TYPE_FILTER_OPTIONS comment below).
+// The re-accreditation work item typeId; also the Reprocessor URL value.
 const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
 const TYPE_FILTER_OPTIONS = [
-  { value: RE_ACCREDITATION_TYPE_ID, text: 'Reprocessor reaccreditation' },
-  { value: EXPORTER_TYPE_FILTER.typeIdToken, text: 'Exporter reaccreditation' }
+  { value: RE_ACCREDITATION_TYPE_ID, text: 'Reprocessor' },
+  { value: EXPORTER_TYPE_FILTER.typeIdToken, text: 'Exporter' }
 ]
 const ALLOWED_TYPE_IDS = new Set(TYPE_FILTER_OPTIONS.map((o) => o.value))
 const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
 
 // RA-299 AC01/15. A SECOND, distinct type-style filter: "Application type"
 // (what kind of application it is), separate from "Applicant type" (who is
-// applying) above. Both dimensions ultimately constrain the same backend
-// `typeIds` field (the handler merges the two selections before calling
-// getWorkItems), submitted via a separate `applicationType=` query param so
-// the two checkbox groups don't collide in the form / active-filter chips.
-// Mirrors the SAME not-yet-existing-typeId stub pattern as Exporter above:
-// only "Re-accreditation" maps to the real `re-accreditation` typeId (today's
-// only work item type); "Accreditation", "Registration application" and
+// applying) above. It alone sets the backend's `typeIds`, submitted via a
+// separate `applicationType=` query param so the two checkbox groups don't
+// collide in the form / active-filter chips.
+// "Re-accreditation" maps to the real `re-accreditation` typeId;
+// "Accreditation", "Registration application" and
 // "Payment of annual registration fee" are BA-requested options with no
 // backend type yet, so they are given not-yet-existing typeId tokens and
 // correctly return zero results via the backend's `builder.In(w => w.TypeId,
 // typeIds)` until those work item types exist.
+//
+// RA-739. "In-year change" is a CATEGORY, not a typeId: it is sent as
+// `category=in-year-change` and management-be expands it to every type
+// registered with that category (add-ORS now, update ORS / tonnage band
+// upgrade later), unioned with the typeIds.
 const APPLICATION_TYPE_FILTER_OPTIONS = [
   { value: RE_ACCREDITATION_TYPE_ID, text: 'Re-accreditation' },
   { value: 'accreditation', text: 'Accreditation' },
@@ -168,13 +138,19 @@ const APPLICATION_TYPE_FILTER_OPTIONS = [
   {
     value: 'annual-fee-payment',
     text: 'Payment of annual registration fee'
-  }
+  },
+  { value: IN_YEAR_CHANGE_CATEGORY, text: 'In-year change', isCategory: true }
 ]
 const ALLOWED_APPLICATION_TYPE_IDS = new Set(
   APPLICATION_TYPE_FILTER_OPTIONS.map((o) => o.value)
 )
 const APPLICATION_TYPE_LABEL = new Map(
   APPLICATION_TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text])
+)
+const APPLICATION_TYPE_CATEGORIES = new Set(
+  APPLICATION_TYPE_FILTER_OPTIONS.filter((o) => o.isCategory).map(
+    (o) => o.value
+  )
 )
 
 // RA-324 phase-2. The "Status" filter groups the backend state ids under the
@@ -345,24 +321,16 @@ export const workItemListController = {
     const assignableUsers = await getAssignableUsers()
 
     const result = await getWorkItems({
-      // RA-299 AC01/15. "Applicant type" and "Application type" are two
-      // separate filter sections in the UI but both constrain the same
-      // backend field — merge (and de-dup) the two selections here.
-      // RA-412: `filters.typeIds` still carries the Exporter stub value for
-      // checkbox/chip rendering, but it is never a real typeId — map it onto
-      // `re-accreditation`, the one real typeId Exporter items actually carry
-      // today. This keeps a genuine type constraint on an Exporter-only
-      // selection (rather than sending an empty `typeIds`, which the backend
-      // reads as "no type filter" and would return the full unfiltered list
-      // until management-be#118's `wasteProcessingTypes` support is live —
-      // see the EXPORTER_TYPE_FILTER comment above). Exporter's real
-      // discrimination still comes from `wasteProcessingTypes` below.
-      typeIds: [
-        ...new Set([
-          ...toBackendTypeIds(filters.typeIds),
-          ...filters.applicationTypeIds
-        ])
-      ],
+      // RA-299 AC01/15. Application type only: Applicant type narrows these
+      // through `wasteProcessingTypes` below.
+      typeIds: filters.applicationTypeIds.filter(
+        (id) => !APPLICATION_TYPE_CATEGORIES.has(id)
+      ),
+      // RA-739. Category options ("In-year change") are expanded to typeIds
+      // by the backend and unioned with `typeIds` above.
+      categories: filters.applicationTypeIds.filter((id) =>
+        APPLICATION_TYPE_CATEGORIES.has(id)
+      ),
       stateIds: filters.stateIds,
       // RA-299 AC05. `filters.materials` holds the UI-facing filter values
       // (e.g. the split 'glass-remelt' / 'glass-other'); translate to the
@@ -374,8 +342,7 @@ export const workItemListController = {
       assigneeId: filters.backendAssigneeId,
       unassigned: filters.backendUnassignedOnly,
       nations: filters.nations,
-      // RA-412. Exporter's real discriminator (management-be matches this
-      // against `payload.wasteProcessingType`, case-insensitively).
+      // RA-412. Applicant type (see EXPORTER_TYPE_FILTER above).
       wasteProcessingTypes: filters.wasteProcessingTypes,
       includeArchived: filters.includeArchived,
       page: filters.page,
@@ -443,23 +410,6 @@ export const workItemListController = {
   }
 }
 
-/**
- * Translate the UI's Applicant-type filter tokens (already validated against
- * `ALLOWED_TYPE_IDS`) into real backend typeIds, mapping the Exporter stub
- * token onto `re-accreditation` — see the EXPORTER_TYPE_FILTER comment above.
- * Mirrors `toBackendMaterialTokens`' UI-token -> backend-token translation
- * shape (materials.js) for the same reason: a filter value with no typeId of
- * its own on the backend today.
- *
- * @param {string[]} typeIds
- * @returns {string[]}
- */
-function toBackendTypeIds(typeIds) {
-  return typeIds.map((id) =>
-    id === EXPORTER_TYPE_FILTER.typeIdToken ? RE_ACCREDITATION_TYPE_ID : id
-  )
-}
-
 function readFilters(query, user) {
   // Hidden form marker that lets the controller distinguish 'user
   // submitted the filter form' from 'fresh GET of /work-items'. Without
@@ -474,14 +424,8 @@ function readFilters(query, user) {
     ALLOWED_TYPE_IDS.has(id)
   )
 
-  // RA-412 (PR #179 review follow-up). The applicant-kind backend filter —
-  // see the EXPORTER_TYPE_FILTER / REPROCESSOR_WASTE_PROCESSING_TYPE
-  // comments above for why this is derived separately from `typeIds` rather
-  // than forwarded as one. Only sent when exactly one of Exporter/Reprocessor
-  // is selected: since the backend ANDs `typeIds` and `wasteProcessingTypes`,
-  // sending it while BOTH (or neither) are selected would narrow the
-  // combined "either applicant type" selection down to one kind — the
-  // opposite of GDS checkbox-group OR semantics.
+  // RA-412. The backend filter for Applicant type: only when exactly one of
+  // Exporter/Reprocessor is ticked (see EXPORTER_TYPE_FILTER above).
   const exporterSelected = typeIds.includes(EXPORTER_TYPE_FILTER.typeIdToken)
   const reprocessorSelected = typeIds.includes(RE_ACCREDITATION_TYPE_ID)
   const wasteProcessingTypes =
@@ -496,8 +440,7 @@ function readFilters(query, user) {
   // RA-299 AC01/15. "Application type": a second, independent typeId-style
   // filter (see APPLICATION_TYPE_FILTER_OPTIONS above for the stub-typeId
   // reasoning). Read exactly like `typeIds` above, just from a different
-  // query param and option list; merged with `typeIds` by the handler before
-  // querying the backend.
+  // query param and option list.
   const applicationTypeIds = uniqueStringList(query.applicationType).filter(
     (id) => ALLOWED_APPLICATION_TYPE_IDS.has(id)
   )
@@ -714,14 +657,58 @@ function clampPositiveInt(value, fallback) {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback
 }
 
+function typeCardFields(type, payload, stateId) {
+  return {
+    // RA-739. A type's category is its card's modifier, and a type that
+    // describes a site (add-ORS) shows it in place of the registration number.
+    cardModifier: type?.category ?? null,
+    cardSite: type?.describeCardSite?.(payload) ?? null,
+    // RA-739. The card's first line starts with the work item type's display
+    // name.
+    requestType: type?.displayName ?? null,
+    stateDisplayName: stateDisplayName(type, stateId),
+    // The two card dates are gated INDEPENDENTLY — see the block comment above
+    // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
+    // neither render.
+    showSubmittedOn:
+      Boolean(type?.cardAlwaysShowsSubmittedOn) ||
+      PRE_ASSESSMENT_STATE_IDS.has(stateId)
+  }
+}
+
+function payloadCardFields(payload) {
+  return {
+    // RA-739. After the type's display name, the card's first line shows the
+    // submission reference and request count, each when present.
+    submissionReference: payload.submissionReference ?? null,
+    submissionCount: formatSubmissionCount(payload.submissionSize),
+    archivedAt: formatArchivedAt(payload.archivedAt),
+    // RA-249. The "Application ref" must show the human RA-* reference or
+    // nothing — never the work-item Guid. The card link still navigates via
+    // `item.id`, so dropping the id fallback here loses no navigation.
+    applicationRef: payload.applicationReference ?? null,
+    orgName: payload.organisationName ?? null,
+    // RA-503: operatorOrganisationId is ReEx's internal ObjectId for a real operator
+    // submission — never safe to show. resolveOrganisationId prefers operatorOrgNumber and only
+    // falls back to operatorOrganisationId when it is itself genuinely 6-digit numeric (an
+    // admin-created work item). See case-header.js.
+    orgId: resolveOrganisationId(payload),
+    // RA-295 AC06. The operator's registration number on each card. NOTE:
+    // this is `registrationNumber` (e.g. "EPR-100999") — deliberately NOT
+    // `operatorRegistrationId` (e.g. "reg-008", RA-223's "Registration ID"),
+    // which is a different field with a confusingly similar name.
+    registrationNumber: payload.registrationNumber ?? null,
+    // RA-324. Present the material DISPLAY LABEL on the card (e.g. "Plastic",
+    // "Fibre-based composite material"), matching the filter checkboxes,
+    // active-filter chips and summary — never the raw lowercase token.
+    material: materialLabel(payload.material)
+  }
+}
+
 function decorate(item) {
   const type = getWorkItemType(item.typeId)
   const stateId = item.stateId
-  const stateDisplayName =
-    type?.states?.find((state) => state.id === stateId)?.displayName ?? stateId
-
-  const archivedAtRaw = item.payload?.archivedAt
-  const archivedAt = formatArchivedAt(archivedAtRaw)
+  const payload = item.payload ?? {}
 
   // RA-412. `payload.wasteProcessingType` is the real reprocessor/exporter
   // discriminator: the operator backend has written it into every submitted
@@ -746,36 +733,15 @@ function decorate(item) {
 
   return {
     ...item,
-    stateDisplayName,
+    ...typeCardFields(type, payload, stateId),
+    ...payloadCardFields(payload),
     stateTagClass: resolveStateTagClass(stateId),
     assigneeDisplayName: item.assignedToName ?? item.assignedToId ?? null,
-    archivedAt,
-    // RA-249. The "Application ref" must show the human RA-* reference or
-    // nothing — never the work-item Guid. The card link still navigates via
-    // `item.id`, so dropping the id fallback here loses no navigation.
-    applicationRef: item.payload?.applicationReference ?? null,
-    orgName: item.payload?.organisationName ?? null,
-    // RA-503: operatorOrganisationId is ReEx's internal ObjectId for a real operator
-    // submission — never safe to show. resolveOrganisationId prefers operatorOrgNumber and only
-    // falls back to operatorOrganisationId when it is itself genuinely 6-digit numeric (an
-    // admin-created work item). See case-header.js.
-    orgId: resolveOrganisationId(item.payload ?? {}),
-    // RA-295 AC06. The operator's registration number on each card. NOTE:
-    // this is `registrationNumber` (e.g. "EPR-100999") — deliberately NOT
-    // `operatorRegistrationId` (e.g. "reg-008", RA-223's "Registration ID"),
-    // which is a different field with a confusingly similar name.
-    registrationNumber: item.payload?.registrationNumber ?? null,
-    // RA-324. Present the material DISPLAY LABEL on the card (e.g. "Plastic",
-    // "Fibre-based composite material"), matching the filter checkboxes,
-    // active-filter chips and summary — never the raw lowercase token.
-    material: materialLabel(item.payload?.material),
     // RA-412. The card's applicant-type label — see the comment above.
     applicantType,
-    // The two card dates are gated INDEPENDENTLY — see the block comment above
-    // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
-    // neither render.
+    // The due date is gated independently of `showSubmittedOn` — see the
+    // block comment above PRE_ASSESSMENT_STATE_IDS.
     showDueDate: slaStarted,
-    showSubmittedOn: PRE_ASSESSMENT_STATE_IDS.has(stateId),
     // Both dates arrive either as a plain ISO-8601 string or as the Mongo
     // `{ $date }` wrapper, hence `unwrapMongoDate`; null for an absent or
     // unexpected shape. The template formats each via `formatDateGds`, which
@@ -784,6 +750,15 @@ function decorate(item) {
     dueOn: unwrapMongoDate(item.slaDueDate),
     submittedOn: unwrapMongoDate(item.submittedAt)
   }
+}
+
+/**
+ * RA-739. "(N requests)" for a submission split into more than one work item;
+ * null for a single request or an absent/invalid size, so the card shows no
+ * count.
+ */
+function formatSubmissionCount(size) {
+  return Number.isInteger(size) && size > 1 ? `(${size} requests)` : null
 }
 
 /**
@@ -1084,7 +1059,7 @@ function withoutFilter(filters, key, value) {
 /**
  * Build the "Active filters" block: one removable tag per active filter value,
  * each with an href that rebuilds the query minus that one filter. Chip
- * labels are just the value ("England", "Reprocessor reaccreditation") — no
+ * labels are just the value ("England", "Reprocessor") — no
  * category prefix — except Sort, which keeps "Sorted by: {value}" since a
  * bare sort value reads ambiguously as a chip. Sort is included so the user
  * can revert to the default order without JavaScript (there is no explicit
@@ -1119,7 +1094,7 @@ function buildActiveFilters(filters, assignableUsers) {
     })
 
   // RA-324 prototype fix: chips show ONLY the value (e.g. "England",
-  // "Reprocessor reaccreditation") — no "Nation:" / "Type:" category prefix,
+  // "Reprocessor") — no "Nation:" / "Type:" category prefix,
   // since the category is inferable from the value itself. Sort is the sole
   // exception (kept below): a bare sort value ("Due date") reads ambiguously
   // as a chip, so it keeps its "Sorted by: " prefix.

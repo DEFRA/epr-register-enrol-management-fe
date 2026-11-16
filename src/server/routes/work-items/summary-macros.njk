@@ -1,0 +1,76 @@
+{# ------------------------------------------------------------------- #}
+{# Summary fragments shared by the work item detail templates: the     #}
+{# generic (re-accreditation) Application summary in `detail.njk` and  #}
+{# the add-ORS one in `add-overseas-site/detail-v1.njk` (RA-739).      #}
+{# ------------------------------------------------------------------- #}
+
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+
+{# One supporting document: a link when the file has passed the virus scan, #}
+{# otherwise its name plus the scan-status tag. The `app-detail-document`   #}
+{# testid is repeated (not indexed) so the e2e suite can count them and     #}
+{# prove EVERY document renders, not just files[0] (AC02 item 7).           #}
+{# `showUpdated` is opt-in: the upload hint carries the                     #}
+{# `app-detail-sampling-updated-by` testid, which is the "S&I updated by"   #}
+{# hook the e2e suite reads with a single-element lookup. BES-evidence      #}
+{# files also carry `uploadedAt`, so rendering it for them too would        #}
+{# duplicate that testid and let a BES occurrence satisfy an assertion      #}
+{# about the sampling row. Only the sampling row opts in.                   #}
+{# `showDates` is opt-in too (RA-739): the add-ORS BES files show their     #}
+{# valid-from and expiry dates, from the view model's `validFrom` and       #}
+{# `expiryDate`.                                                            #}
+{% macro documentItem(file, showUpdated=false, showDates=false) %}
+  <li>
+    {% if file.href %}
+      <a class="govuk-link"
+         href="{{ file.href }}"
+         data-testid="app-detail-document">{{ file.filename }}</a>
+    {% else %}
+      <span data-testid="app-detail-document">{{ file.filename }}</span>
+      {{ govukTag({ text: file.scanStatus, classes: file.scanTagClass }) }}
+    {% endif %}
+    {% if showUpdated and (file.uploadedAt or file.uploadedBy) %}
+      {# "S&I updated by" — retained per RA-295's Jira notes. #}
+      <span class="govuk-hint govuk-!-margin-bottom-0"
+            data-testid="app-detail-sampling-updated-by">Updated{% if file.uploadedAt %} {{ file.uploadedAt }}{% endif %}{% if file.uploadedBy %} by {{ file.uploadedBy }}{% endif %}</span>
+    {% endif %}
+    {% if showDates %}
+      <p class="govuk-body-s govuk-!-margin-top-1 govuk-!-margin-bottom-0"
+         data-testid="app-detail-document-valid-from">Valid from: {{ file.validFrom }}</p>
+      <p class="govuk-body-s govuk-!-margin-bottom-0"
+         data-testid="app-detail-document-expiry-date">Expiry date: {{ file.expiryDate }}</p>
+    {% endif %}
+  </li>
+{% endmacro %}
+
+{# RA-292 AC04. A site's detail fields as a nested summary list,           #}
+{# borderless unless `bordered` (RA-739's add-ORS interim sites, per its    #}
+{# Figma frame).                                                            #}
+{#                                                                          #}
+{# `testIdPrefix` ("overseas-site" / "interim-site") plus the view model's   #}
+{# own field key forms the value testid — e.g. `overseas-site-address`,     #}
+{# which is also how the pre-RA-292 address hook keeps its exact name.      #}
+{#                                                                          #}
+{# Which rows render is decided upstream (re-accreditation omits an absent  #}
+{# field; add-ORS shows the dash), so there is no emptiness test here — and #}
+{# critically no truthiness test either: a                                  #}
+{# `repatriatedLoads` of 0 and a `registeredNowAccredited` of false are      #}
+{# answers a regulator needs, and a `{% if value %}` guard anywhere on this  #}
+{# path would silently drop exactly those.                                   #}
+{% macro siteDetails(details, testIdPrefix, bordered=false) %}
+  {% if details.length %}
+    <dl class="govuk-summary-list {% if not bordered %}app-summary-list--borderless {% endif %}govuk-!-margin-bottom-2">
+      {% for detail in details %}
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">{{ detail.label }}</dt>
+          <dd class="govuk-summary-list__value"
+              data-testid="{{ testIdPrefix }}-{{ detail.key }}">
+            {% for line in detail.values %}
+              <p class="govuk-body govuk-!-margin-bottom-0">{{ line }}</p>
+            {% endfor %}
+          </dd>
+        </div>
+      {% endfor %}
+    </dl>
+  {% endif %}
+{% endmacro %}

@@ -169,7 +169,7 @@ export function buildBusinessPlanPairs(businessPlan) {
   })
 }
 
-function fileViewModel(file, workItemId) {
+export function fileViewModel(file, workItemId) {
   const scanStatus = file?.scanStatus ?? null
   const isClean = scanStatus === 'Clean'
   return {
@@ -401,7 +401,7 @@ function addressSegments(lines) {
  * a substring test by another name and would resurrect the `"York"` /
  * `"New York Road"` loss.
  */
-function overseasSiteAddressLines(site, summary) {
+export function overseasSiteAddressLines(site, summary) {
   const structured = [
     site.addressLine1,
     ...(summary ? [] : [site.addressLine2, site.townOrCity])
@@ -448,7 +448,7 @@ function overseasSiteAddressLines(site, summary) {
  * Unlike the ORS shape this one carries `stateOrRegion` and `postcode`; the
  * ORS shape has NO postcode field on the wire at all.
  */
-function interimSiteAddressLines(site) {
+export function interimSiteAddressLines(site) {
   return [
     site.addressLine1,
     site.addressLine2,
@@ -593,9 +593,12 @@ export function buildInterimSite(site) {
  * regulator's detail page is not where that reporting happens, and a caseworker reviewing an
  * application wants what is on it now.
  *
+ * `build` turns one active interim site into its view model. It defaults to this page's; the
+ * add-ORS summary (RA-739) passes its own, for its different field list.
+ *
  * @returns {object[]} possibly empty, never null.
  */
-export function buildInterimSites(site) {
+export function buildInterimSites(site, build = buildInterimSite) {
   const source = site ?? {}
   const fromList = Array.isArray(source.interimSites) ? source.interimSites : []
   // The list wins when it has anything. Falling back to the singular field is
@@ -607,7 +610,7 @@ export function buildInterimSites(site) {
     .filter(
       (interimSite) => interimSite != null && interimSite.removedAt == null
     )
-    .map((interimSite) => buildInterimSite(interimSite))
+    .map((interimSite) => build(interimSite))
     .filter((built) => built != null)
 }
 

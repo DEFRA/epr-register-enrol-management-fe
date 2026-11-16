@@ -10,6 +10,7 @@
  * No other core code needs to change.
  */
 
+import { addOverseasSiteModule } from './add-overseas-site/module.js'
 import { reAccreditationModule } from './re-accreditation/module.js'
 
-export const workItemModules = [reAccreditationModule]
+export const workItemModules = [reAccreditationModule, addOverseasSiteModule]

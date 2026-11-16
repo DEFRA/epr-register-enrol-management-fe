@@ -1,4 +1,5 @@
 import { vi, beforeEach, afterEach } from 'vitest'
+import * as cheerio from 'cheerio'
 
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
@@ -281,10 +282,10 @@ describe('#workItemListController', () => {
     expect(result).not.toContain('app-work-items__table-wrapper')
   })
 
-  // RA-324 phase-2, re-ordered by RA-370: the "{Org} ({Org ID})" line now
-  // precedes the "{Material} reaccreditation ({Applicant type})" title line,
-  // so material leads the title and applicant type follows it.
-  test('Renders the card title, applicant type, material and org line', async () => {
+  // RA-324 phase-2, re-ordered by RA-370. RA-739 merges the org line and the
+  // material/applicant-type title into one small-text line,
+  // "{Org} ({Org ID}): {Material} ({Applicant type})".
+  test('Renders the org, material and applicant type on one line', async () => {
     clearWorkItemRegistry()
     getWorkItems.mockResolvedValue(
       emptyPage({
@@ -316,7 +317,7 @@ describe('#workItemListController', () => {
       url: '/work-items'
     })
 
-    expect(result).toContain('data-testid="application-card-title"')
+    expect(result).not.toContain('data-testid="application-card-title"')
     expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
     // Card shows the material DISPLAY LABEL, not the raw token.
     expect(result).toContain('data-testid="material">Plastic</span>')
@@ -324,18 +325,13 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="application-org"')
     expect(result).toContain('data-testid="org-name">Acme Recycling</span>')
     expect(result).toContain('data-testid="org-id">424242</span>')
-    // RA-370. The org line comes BEFORE the material/applicant-type title,
-    // and within the title material comes before applicant type.
-    expect(result.indexOf('data-testid="application-org"')).toBeLessThan(
-      result.indexOf('data-testid="application-card-title"')
+    const $ = cheerio.load(result)
+    const line = $('[data-testid="application-org"]')
+    expect(line.text().replace(/\s+/g, ' ').trim()).toBe(
+      'Acme Recycling (424242): Plastic (Reprocessor)'
     )
-    expect(result.indexOf('data-testid="material"')).toBeLessThan(
-      result.indexOf('data-testid="applicant-type"')
-    )
-    // RA-324 prototype fix: the title is normal weight, not bold.
-    expect(result).not.toContain(
-      'govuk-!-font-weight-bold app-application-card__title'
-    )
+    // The design's slightly smaller text.
+    expect(line.hasClass('govuk-body-s')).toBe(true)
   })
 
   // RA-412. The applicant-type label is read from the real
@@ -426,7 +422,9 @@ describe('#workItemListController', () => {
     expect(result).toContain('data-testid="applicant-type">Reprocessor</span>')
   })
 
-  test('RA-412: Applicant type "Exporter" alone maps onto the real typeId AND narrows via wasteProcessingTypes', async () => {
+  // RA-739: applicant type is the accreditation's, carried on every work item
+  // type, so it narrows by wasteProcessingType alone and adds no typeId.
+  test('RA-412: Applicant type "Exporter" alone narrows via wasteProcessingTypes, across every type', async () => {
     getWorkItems.mockResolvedValue(emptyPage())
 
     await server.inject({
@@ -436,11 +434,7 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        // `exporter` is never a real typeId — it maps onto `re-accreditation`
-        // so an Exporter-only selection still carries a real type constraint
-        // (rather than an empty `typeIds`, which the backend reads as "no
-        // type filter" and would return everything).
-        typeIds: ['re-accreditation'],
+        typeIds: [],
         wasteProcessingTypes: ['Exporter']
       })
     )
@@ -461,7 +455,7 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        typeIds: ['re-accreditation'],
+        typeIds: [],
         wasteProcessingTypes: ['Reprocessor']
       })
     )
@@ -481,7 +475,7 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        typeIds: ['re-accreditation'],
+        typeIds: [],
         wasteProcessingTypes: []
       })
     )
@@ -782,13 +776,13 @@ describe('#workItemListController', () => {
     // The clock is running, so Due on renders too — the two dates are gated
     // independently and are NOT mutually exclusive.
     expect(result).toContain('data-testid="due-on">10 February 2026</span>')
-    // Footer order stays Submitted on -> Assigned to -> Due on even when all
+    // RA-739. Footer order is Submitted on -> Due on -> Assigned to when all
     // three render.
     expect(result.indexOf('data-testid="submitted-on"')).toBeLessThan(
-      result.indexOf('data-testid="assigned-to"')
-    )
-    expect(result.indexOf('data-testid="assigned-to"')).toBeLessThan(
       result.indexOf('data-testid="due-on"')
+    )
+    expect(result.indexOf('data-testid="due-on"')).toBeLessThan(
+      result.indexOf('data-testid="assigned-to"')
     )
   })
 
@@ -1032,9 +1026,10 @@ describe('#workItemListController', () => {
 
     const order = [
       'data-testid="work-item-link-aaaaaaaa-0000-0000-0000-000000000006"',
+      // RA-739: the registration number moved above the organisation line.
+      'data-testid="registration-number"',
       'data-testid="org-name"',
       'data-testid="org-id"',
-      'data-testid="registration-number"',
       'data-testid="material"',
       'data-testid="applicant-type"',
       'data-testid="submitted-on"',
@@ -1263,12 +1258,9 @@ describe('#workItemListController', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        // RA-412: Exporter is never a real typeId, so it maps onto the real
-        // `re-accreditation` typeId here. Both Reprocessor and Exporter are
-        // selected, so this is "either applicant type" — no
-        // wasteProcessingTypes narrowing (see the dedicated tests below for
-        // the single-selection cases).
-        typeIds: ['re-accreditation'],
+        // Both Reprocessor and Exporter are selected, so this is "either
+        // applicant type": no wasteProcessingTypes narrowing and no typeIds.
+        typeIds: [],
         wasteProcessingTypes: [],
         // "Updated" group expands to both ids; "Granted" -> approved.
         stateIds: ['assessment-in-progress', 'updated', 'approved'],
@@ -1515,9 +1507,9 @@ describe('#workItemListController', () => {
   })
 
   // RA-299 AC01/15. "Application type" is a second, independent filter
-  // section from "Applicant type" (typeId) above; both merge into the same
-  // backend typeIds query.
-  test('Forwards the applicationType filter, merged with typeId, into a single typeIds list', async () => {
+  // section from "Applicant type" (typeId) above. RA-739: only Application
+  // type sets typeIds; Applicant type narrows them by wasteProcessingType.
+  test('Applicant type narrows the Application type selection rather than adding to it', async () => {
     getWorkItems.mockResolvedValue(emptyPage())
 
     await server.inject({
@@ -1527,25 +1519,26 @@ describe('#workItemListController', () => {
 
     expect(getWorkItems).toHaveBeenCalledWith(
       expect.objectContaining({
-        typeIds: [
-          're-accreditation',
-          'accreditation',
-          'registration-application'
-        ]
+        typeIds: ['accreditation', 'registration-application'],
+        wasteProcessingTypes: ['Reprocessor']
       })
     )
   })
 
-  test('De-dupes typeId and applicationType when both select re-accreditation', async () => {
+  test('Exporter with "In-year change" asks only for exporter in-year changes', async () => {
     getWorkItems.mockResolvedValue(emptyPage())
 
     await server.inject({
       method: 'GET',
-      url: '/work-items?typeId=re-accreditation&applicationType=re-accreditation&filtersApplied=1'
+      url: '/work-items?typeId=exporter&applicationType=in-year-change&filtersApplied=1'
     })
 
     expect(getWorkItems).toHaveBeenCalledWith(
-      expect.objectContaining({ typeIds: ['re-accreditation'] })
+      expect.objectContaining({
+        typeIds: [],
+        categories: ['in-year-change'],
+        wasteProcessingTypes: ['Exporter']
+      })
     )
   })
 
@@ -2315,9 +2308,13 @@ describe('#workItemListController', () => {
       expect(result).toContain('data-testid="filter-sort-due-date"')
       expect(result).toContain('data-testid="filter-sort-organisation"')
       expect(result).toContain('data-testid="filter-sort-status"')
-      // Type labels (both real filters as of RA-412).
-      expect(result).toContain('Reprocessor reaccreditation')
-      expect(result).toContain('Exporter reaccreditation')
+      // Applicant type labels (both real filters as of RA-412). Plain
+      // "Reprocessor" / "Exporter": Application type already says
+      // reaccreditation or in-year change.
+      expect(result).toMatch(/for="filter-type">\s*Reprocessor\s*<\/label>/)
+      expect(result).toMatch(/for="filter-type-2">\s*Exporter\s*<\/label>/)
+      expect(result).not.toContain('Reprocessor reaccreditation')
+      expect(result).not.toContain('Exporter reaccreditation')
       // Material labels.
       expect(result).toContain('Fibre-based composite material')
       expect(result).toContain('Paper or board')
@@ -2355,7 +2352,7 @@ describe('#workItemListController', () => {
       // RA-324 prototype fix: chips show ONLY the value — no category prefix
       // — except Sort, which keeps its "Sorted by: " prefix.
       expect(result).toContain(
-        'data-testid="active-filter-label">Reprocessor reaccreditation</span>'
+        'data-testid="active-filter-label">Reprocessor</span>'
       )
       expect(result).toContain(
         'data-testid="active-filter-label">England</span>'
@@ -2372,7 +2369,7 @@ describe('#workItemListController', () => {
       )
       expect(result).toContain('Sorted by: Due date')
       // None of the non-sort chips carry a category prefix.
-      expect(result).not.toContain('Type: Reprocessor reaccreditation')
+      expect(result).not.toContain('Type: Reprocessor')
       expect(result).not.toContain('Nation: England')
       expect(result).not.toContain('Material: Plastic')
       expect(result).not.toContain('Status: Updated')
@@ -2765,6 +2762,146 @@ describe('#workItemListController', () => {
       )
       expect(result).toContain(
         'href="/work-items?applicationType=re-accreditation&amp;filtersApplied=1"'
+      )
+    })
+  })
+
+  // ---------------------------------------------------------------- //
+  // RA-739 — "In-year change" application type, sent as a category   //
+  // ---------------------------------------------------------------- //
+  describe('RA-739 in-year change application type', () => {
+    test('Offers "In-year change" as the last application type', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      const section = result.slice(
+        result.indexOf('data-testid="filter-section-application-type"'),
+        result.indexOf('data-testid="filter-section-status"')
+      )
+      const values = [
+        ...section.matchAll(/name="applicationType"[^>]*value="([^"]+)"/g)
+      ].map((m) => m[1])
+      expect(values).toEqual([
+        're-accreditation',
+        'accreditation',
+        'registration-application',
+        'annual-fee-payment',
+        'in-year-change'
+      ])
+      expect(section).toContain('In-year change')
+    })
+
+    test('Sends "In-year change" to the backend as a category, not a typeId', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          typeIds: [],
+          categories: ['in-year-change']
+        })
+      )
+    })
+
+    test('Combines with "Re-accreditation" as a union of typeId and category', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=re-accreditation&applicationType=in-year-change&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          typeIds: ['re-accreditation'],
+          categories: ['in-year-change']
+        })
+      )
+    })
+
+    test('Sends no categories when "In-year change" is not selected', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=re-accreditation&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ categories: [] })
+      )
+    })
+
+    test('Keeps the other filters alongside it', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&material=plastic&nation=England&organisation=Acme&sort=organisation&page=2&filtersApplied=1'
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          categories: ['in-year-change'],
+          materials: ['plastic'],
+          nations: ['England'],
+          organisation: 'Acme',
+          sort: 'organisation',
+          page: 2
+        })
+      )
+    })
+
+    test('Shows a removable chip, ticks the option and counts the section', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&material=plastic&filtersApplied=1'
+      })
+
+      expect(result).toContain(
+        'data-testid="active-filter-label">In-year change</span>'
+      )
+      expect(result).toContain(
+        'href="/work-items?material=plastic&amp;filtersApplied=1"'
+      )
+      expect(result).toMatch(
+        /name="applicationType"[^>]*value="in-year-change"[^>]*checked/
+      )
+      const section = result.slice(
+        result.indexOf('data-testid="filter-section-application-type"'),
+        result.indexOf('data-testid="filter-section-status"')
+      )
+      expect(section).toContain('Application type (1 selected)')
+    })
+
+    test('Is restored from the session on a bare landing', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&filtersApplied=1'
+      })
+      const cookie = [].concat(applied.headers['set-cookie'] ?? []).join('; ')
+
+      getWorkItems.mockClear()
+      await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ categories: ['in-year-change'] })
       )
     })
   })
