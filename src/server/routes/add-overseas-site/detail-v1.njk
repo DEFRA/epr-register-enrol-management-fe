@@ -2,18 +2,25 @@
 {# Add-ORS detail template (v1) — RA-739.                               #}
 {#                                                                      #}
 {# The "Application summary" tab, from the Figma "Application page -    #}
-{# Summary" frame. Extends the generic detail page, as                  #}
-{# re-accreditation's does, for the case tabs, the notices and error    #}
-{# banners, and the assignment panel. It replaces the application data  #}
+{# Summary" frame. RA-495: extends the Standard-lifecycle detail page,  #}
+{# as re-accreditation's does, for the case tabs, the notices and error #}
+{# banners, the assignment panel, the pending-contact banner, the       #}
+{# Duly make / Make Determination / Confirm applicant contact CTAs and   #}
+{# the closed case's Outcome panel. It replaces the application data   #}
 {# with the add-ORS site summary (`applicationSummary`, built by the    #}
-{# type's own summary builder) and its own actions card (RA-495).       #}
+{# type's own summary builder).                                         #}
+{#                                                                      #}
+{# add-ORS has no generic actions (no Query, no Withdraw), so the       #}
+{# generic actions list and its "No actions" line never render under    #}
+{# the lifecycle CTAs.                                                  #}
 {#                                                                      #}
 {# `data-state-id` carries the raw state id for the journey tests.      #}
 {# ------------------------------------------------------------------- #}
-{% extends 'work-items/detail.njk' %}
+{% extends 'standard-lifecycle/detail.njk' %}
+
+{% set lifecycleHidesGenericActions = true %}
 
 {% from "work-items/summary-macros.njk" import documentItem, newPrefix, siteDetails %}
-{% from "action-link/macro.njk" import appActionLink %}
 
 {% block content %}
   <div data-testid="add-overseas-site-detail"
@@ -69,25 +76,12 @@
   {% endif %}
 {% endblock %}
 
-{# RA-495. Only "Duly make" so far, while the application is Not      #}
-{# started (`workItem.canDulyMake`, from the same gate as its page).    #}
-{# Make determination and Confirm applicant contact follow in a later   #}
-{# RA-495 task; until then no actions card renders in any other state. #}
-{# The testids match the Standard-lifecycle template's.                  #}
-{% block primaryActions %}{% endblock %}
+{# RA-495. With the generic actions hidden, the card would be empty in a  #}
+{# state with no lifecycle step to offer, so it renders only when one is: #}
+{# Duly make, Make Determination, Confirm applicant contact, or the       #}
+{# closed case's Outcome panel.                                           #}
 {% block actionsCard %}
-  {% if workItem.canDulyMake %}
-    <div class="app-case-panel" data-testid="actions-panel">
-      <div data-testid="re-accreditation-duly-make-cta">
-        {{ appActionLink({
-          text: "Duly make",
-          href: workItem.dulyMakeHref,
-          variant: "button",
-          classes: "app-case-panel__primary-action govuk-!-margin-bottom-0",
-          disabled: user.isReadOnly,
-          testId: "duly-make-cta"
-        }) }}
-      </div>
-    </div>
+  {% if workItem.isReadOnlyState or workItem.isPendingContact or workItem.canDulyMake or workItem.canLogDecision %}
+    {{ super() }}
   {% endif %}
 {% endblock %}

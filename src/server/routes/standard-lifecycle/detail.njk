@@ -133,6 +133,12 @@
         }) }}
       </div>
     {% endif %}
-    {{ super() }}
+    {# RA-495. A type with no generic actions (add-ORS) sets              #}
+    {# `lifecycleHidesGenericActions` at its template's top level, so    #}
+    {# the generic list and its "No actions" line never render under the #}
+    {# lifecycle CTAs.                                                   #}
+    {% if not lifecycleHidesGenericActions %}
+      {{ super() }}
+    {% endif %}
   {% endif %}
 {% endblock %}

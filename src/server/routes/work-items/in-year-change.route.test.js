@@ -26,7 +26,9 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   updateRecyclingOperations: vi.fn(),
   extendWorkItemSla: vi.fn(),
   dulyMakeWorkItem: vi.fn(),
-  getDulyMakeDetails: vi.fn()
+  getDulyMakeDetails: vi.fn(),
+  recordWorkItemDecision: vi.fn(),
+  confirmWorkItemApplicantContact: vi.fn()
 }))
 
 const {
@@ -38,7 +40,10 @@ const {
   updateRecyclingOperations,
   extendWorkItemSla,
   dulyMakeWorkItem,
-  getDulyMakeDetails
+  getDulyMakeDetails,
+  addWorkItemNote,
+  recordWorkItemDecision,
+  confirmWorkItemApplicantContact
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ADD_ORS_ID = '73900003-0000-4000-8000-000000000001'
@@ -254,6 +259,9 @@ describe('RA-739 / RA-495: in-year change applications', () => {
     extendWorkItemSla.mockReset()
     dulyMakeWorkItem.mockReset()
     getDulyMakeDetails.mockReset()
+    addWorkItemNote.mockReset()
+    recordWorkItemDecision.mockReset()
+    confirmWorkItemApplicantContact.mockReset()
   })
 
   async function listPage(...items) {
@@ -1230,7 +1238,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
     })
 
-    test('the detail page offers nothing once the application is duly made', async () => {
+    test('the detail page no longer offers Duly make once the application is duly made', async () => {
       getWorkItem.mockResolvedValue({
         ok: true,
         workItem: { ...anAddOrsItem(), stateId: 'duly-made' }
@@ -1240,7 +1248,6 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       const $ = cheerio.load(result)
 
       expect($('[data-testid="duly-make-cta"]')).toHaveLength(0)
-      expect($('[data-testid="actions-panel"]')).toHaveLength(0)
     })
 
     test('the page shows the site charge, the payment reference and the payment date input', async () => {
@@ -1383,6 +1390,333 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(relatedRows($)).toHaveLength(2)
       expect(dulyMakeWorkItem).not.toHaveBeenCalled()
     })
+  })
+
+  // RA-495 AC5 to AC8. The shared Make determination and Confirm applicant
+  // contact pages, the pending-contact banner and the closed case's Outcome
+  // panel, for an add-ORS work item.
+  describe('determining an add-ORS application', () => {
+    const DETAIL_URL = `/work-items/${ADD_ORS_ID}`
+    const DECISION_URL = `/work-items/add-overseas-site/${ADD_ORS_ID}/decision`
+    const CONFIRM_URL = `/work-items/add-overseas-site/${ADD_ORS_ID}/confirm-contact`
+
+    function anItemIn(stateId) {
+      return {
+        ...anAddOrsItem({ assignedToName: 'Test Standard User' }),
+        assignedToId: 'test-standard-id',
+        stateId
+      }
+    }
+
+    async function detailPage(stateId) {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anItemIn(stateId) })
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: DETAIL_URL
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      return cheerio.load(result)
+    }
+
+    function postForm(url, payload) {
+      return injectWithCrumb(server, {
+        method: 'POST',
+        url,
+        payload,
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }
+      })
+    }
+
+    test.each(['duly-made', 'assessment-started'])(
+      'a %s application offers Make Determination and nothing else',
+      async (stateId) => {
+        const $ = await detailPage(stateId)
+
+        const cta = $('[data-testid="log-decision-cta"]')
+        expect(squash(cta.text())).toBe('Make Determination')
+        expect(cta.attr('href')).toBe(DECISION_URL)
+        expect($('[data-testid="duly-make-cta"]')).toHaveLength(0)
+        expect($('[data-testid="confirm-applicant-contact-cta"]')).toHaveLength(
+          0
+        )
+        // No generic, Query or Withdraw actions, and no empty-state line
+        // under the CTA.
+        expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
+        expect($('[data-testid="work-item-no-actions"]')).toHaveLength(0)
+        expect($('[data-testid="action-query"]')).toHaveLength(0)
+      }
+    )
+
+    // Not reachable for add-ORS today (it has no Query), but a state with no
+    // lifecycle step to offer must not draw an empty actions card.
+    test('an application with no lifecycle step to offer has no actions card', async () => {
+      const $ = await detailPage('queried')
+
+      expect($('[data-testid="actions-panel"]')).toHaveLength(0)
+      expect($('[data-testid="case-assignment-panel"]')).toHaveLength(1)
+    })
+
+    test('the Make determination page offers Approved or Refused for a duly made application', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('duly-made')
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: DECISION_URL
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const $ = cheerio.load(result)
+      expect(squash($('h1').text())).toBe('Make determination')
+      expect($('[data-testid="log-decision-form"]').attr('action')).toBe(
+        DECISION_URL
+      )
+      expect($('[data-testid="decision-approved"]')).toHaveLength(1)
+      expect($('[data-testid="decision-refused"]')).toHaveLength(1)
+      // AC5. The caseworker is told the determination is final.
+      expect($('[data-testid="log-decision-warning"]')).toHaveLength(1)
+    })
+
+    test.each([
+      'submitted',
+      'approved-pending-contact',
+      'approved',
+      'rejected'
+    ])(
+      'the Make determination page is refused for a %s application',
+      async (stateId) => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anItemIn(stateId) })
+
+        const { statusCode, headers } = await server.inject({
+          method: 'GET',
+          url: DECISION_URL
+        })
+
+        expect(statusCode).toBe(statusCodes.redirect)
+        expect(headers.location).toBe(DETAIL_URL)
+      }
+    )
+
+    test('approving records the note, starts the assessment and records the decision', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('duly-made')
+      })
+      applyWorkItemAction.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('assessment-started')
+      })
+      addWorkItemNote.mockResolvedValue({ ok: true })
+      recordWorkItemDecision.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('approved-pending-contact')
+      })
+
+      const { statusCode, headers } = await postForm(
+        DECISION_URL,
+        'decision=approved&decisionNote=Site%20meets%20the%20conditions'
+      )
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(DETAIL_URL)
+      expect(applyWorkItemAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ADD_ORS_ID,
+          actionId: 'start-assessment'
+        })
+      )
+      expect(addWorkItemNote).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ADD_ORS_ID,
+          text: 'Site meets the conditions'
+        })
+      )
+      expect(recordWorkItemDecision).toHaveBeenCalledWith(
+        expect.objectContaining({ workItemId: ADD_ORS_ID, outcome: 'approved' })
+      )
+    })
+
+    test('refusing without a note records the decision only', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('assessment-started')
+      })
+      recordWorkItemDecision.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('rejected-pending-contact')
+      })
+
+      const { statusCode } = await postForm(DECISION_URL, 'decision=rejected')
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(addWorkItemNote).not.toHaveBeenCalled()
+      expect(recordWorkItemDecision).toHaveBeenCalledWith(
+        expect.objectContaining({ workItemId: ADD_ORS_ID, outcome: 'rejected' })
+      )
+    })
+
+    test('submitting no decision re-renders the page with the error and records nothing', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('assessment-started')
+      })
+
+      const { statusCode, result } = await postForm(DECISION_URL, '')
+
+      expect(statusCode).toBe(statusCodes.badRequest)
+      const $ = cheerio.load(result)
+      expect($('[data-testid="log-decision-error-summary"]')).toHaveLength(1)
+      expect($('[data-testid="decision-error"]')).toHaveLength(1)
+      expect(recordWorkItemDecision).not.toHaveBeenCalled()
+    })
+
+    test.each([
+      ['approved-pending-contact', 'Application approved'],
+      ['rejected-pending-contact', 'Application refused']
+    ])(
+      'a %s application shows the banner and only Confirm applicant contact',
+      async (stateId, title) => {
+        const $ = await detailPage(stateId)
+
+        const banner = $(
+          '[data-testid="re-accreditation-pending-contact-banner"]'
+        )
+        expect(squash(banner.text())).toContain(title)
+        expect(squash(banner.text())).toContain(
+          'You now need to contact the applicant about the decision.'
+        )
+        // No accreditation number is minted for an add-ORS approval.
+        expect(
+          $('[data-testid="re-accreditation-pending-contact-accreditation-id"]')
+        ).toHaveLength(0)
+        const cta = $('[data-testid="confirm-applicant-contact-cta"]')
+        expect(cta.attr('href')).toBe(CONFIRM_URL)
+        expect($('[data-testid="log-decision-cta"]')).toHaveLength(0)
+        expect($('[data-testid="duly-make-cta"]')).toHaveLength(0)
+        expect($('[data-testid="action-sla-extend"]')).toHaveLength(0)
+        expect($('[data-testid="work-item-no-actions"]')).toHaveLength(0)
+      }
+    )
+
+    test('the Confirm applicant contact page renders for a determination pending contact', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('approved-pending-contact')
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: CONFIRM_URL
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const $ = cheerio.load(result)
+      expect(squash($('h1').text())).toBe('Confirm applicant contact')
+      expect($('[data-testid="confirm-contact-form"]').attr('action')).toBe(
+        CONFIRM_URL
+      )
+    })
+
+    test('the Confirm applicant contact page is refused before a determination', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('assessment-started')
+      })
+
+      const { statusCode, headers } = await server.inject({
+        method: 'GET',
+        url: CONFIRM_URL
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(DETAIL_URL)
+    })
+
+    test.each([
+      ['approved-pending-contact', 'approved'],
+      ['rejected-pending-contact', 'rejected']
+    ])(
+      'confirming contact on a %s application applies the determination',
+      async (stateId, closedStateId) => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anItemIn(stateId) })
+        confirmWorkItemApplicantContact.mockResolvedValue({
+          ok: true,
+          workItem: anItemIn(closedStateId)
+        })
+
+        const { statusCode, headers } = await postForm(
+          CONFIRM_URL,
+          'applicantContacted=yes'
+        )
+
+        expect(statusCode).toBe(statusCodes.redirect)
+        expect(headers.location).toBe(DETAIL_URL)
+        expect(confirmWorkItemApplicantContact).toHaveBeenCalledWith(
+          expect.objectContaining({ workItemId: ADD_ORS_ID })
+        )
+      }
+    )
+
+    test('a failed confirmation changes nothing and can be retried', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('approved-pending-contact')
+      })
+      confirmWorkItemApplicantContact.mockResolvedValue({
+        ok: false,
+        reason: 'server',
+        status: 500
+      })
+
+      const { statusCode, result } = await postForm(
+        CONFIRM_URL,
+        'applicantContacted=yes'
+      )
+
+      expect(statusCode).toBe(statusCodes.badGateway)
+      const $ = cheerio.load(result)
+      expect(
+        squash($('[data-testid="confirm-contact-failure-banner"]').text())
+      ).toContain('Nothing has been changed. Try again.')
+      expect($('[data-testid="confirm-contact-form"]').attr('action')).toBe(
+        CONFIRM_URL
+      )
+    })
+
+    test.each([
+      ['approved', 'Granted', 'govuk-tag--green'],
+      ['rejected', 'Refused', 'govuk-tag--red']
+    ])(
+      'a closed %s application shows its outcome, no actions and no assignment controls',
+      async (stateId, label, tagClass) => {
+        const $ = await detailPage(stateId)
+
+        expect(
+          $('[data-testid="re-accreditation-readonly-actions"]')
+        ).toHaveLength(1)
+        const tag = $('[data-testid="re-accreditation-state-tag"]')
+        expect(squash(tag.text())).toBe(label)
+        expect(tag.hasClass(tagClass)).toBe(true)
+        expect(squash($('[data-testid="case-header-status"]').text())).toBe(
+          label
+        )
+        for (const testId of [
+          'duly-make-cta',
+          'log-decision-cta',
+          'confirm-applicant-contact-cta',
+          're-accreditation-pending-contact-banner',
+          'self-assign-submit',
+          'reassign-link',
+          'unassign-link',
+          'action-sla-extend'
+        ]) {
+          expect($(`[data-testid="${testId}"]`)).toHaveLength(0)
+        }
+        expect($('[data-testid="assignment-closed"]')).toHaveLength(1)
+      }
+    )
   })
 
   describe('Application history page', () => {

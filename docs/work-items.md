@@ -179,10 +179,11 @@ model for its Application summary; the detail controller uses it in place of
 re-accreditation's `buildApplicationSummary` and passes it to the template as
 `applicationSummary`. Add-ORS builds its summary from `payload.site`
 (`routes/add-overseas-site/application-summary.js`). Its detail template
-extends `work-items/detail.njk`, overrides the `applicationSummary` block
-with the site summary and interim sites, and empties the `actionsCard`
-block, so it keeps the tabs, banners and assignment panel but has no actions
-panel. Both templates import the document and site-detail macros from
+extends `standard-lifecycle/detail.njk` (see below) and overrides the
+`applicationSummary` block with the site summary and interim sites, so it
+keeps the tabs, banners, assignment panel and lifecycle CTAs; it draws the
+actions card only when there is a lifecycle step or an outcome to show. Both
+templates import the document and site-detail macros from
 `work-items/summary-macros.njk`. The file download route also finds BES
 files under `payload.site.besEvidence.files`.
 `add-overseas-site/module.js` is the example.
@@ -230,13 +231,17 @@ are the same for every type. The detail controller layers the CTA flags on
 through `routes/work-items/standard-lifecycle-view-model.js`, and the
 `standard-lifecycle/detail.njk` template renders them; a type's own detail
 template extends it (re-accreditation's adds Continue review in the
-`lifecycleActionsExtra` block). Re-accreditation opts in with its own
-type-scoped management-be endpoints (`re-accreditation/lifecycle-backend.js`)
-and keeps its existing URLs; its `duly-making/`, `decision/` and
-`confirm-contact/` folders are thin wrappers scoped to its type. Add-ORS
+`lifecycleActionsExtra` block). A type with no generic actions sets
+`{% set lifecycleHidesGenericActions = true %}` at its template's top level,
+so the generic actions list and its "No actions" line never render under the
+lifecycle CTAs. Re-accreditation opts in with its own type-scoped
+management-be endpoints (`re-accreditation/lifecycle-backend.js`) and keeps
+its existing URLs; its `duly-making/`, `decision/` and `confirm-contact/`
+folders are thin wrappers scoped to its type. Add-ORS
 opts in with the type-less endpoints, the site's own charge and
-`relatedWorkItems`; it mounts only the Duly make routes so far, and its own
-detail template shows only the Duly make CTA.
+`relatedWorkItems`, mounts all three pages and hides the generic actions.
+An add-ORS approval mints nothing: the site joins an accreditation that
+already exists, so the approval banner has no accreditation ID.
 
 ## Cross-type list
 

@@ -52,7 +52,7 @@ describe('add-overseas-site module (RA-739)', () => {
     })
   })
 
-  test('is a valid module that registers its detail template and its Duly make page', async () => {
+  test('is a valid module that registers its detail template and its Standard-lifecycle pages', async () => {
     expect(() => assertValidWorkItemModule(addOverseasSiteModule)).not.toThrow()
     const server = { route: vi.fn() }
 
@@ -61,11 +61,15 @@ describe('add-overseas-site module (RA-739)', () => {
     expect(resolveDetailTemplate('add-overseas-site', 'v1')).toBe(
       'add-overseas-site/detail-v1'
     )
-    // RA-495. Only Duly make so far.
+    // RA-495. Duly make, Make determination and Confirm applicant contact.
     const routes = server.route.mock.calls.flatMap(([mounted]) => mounted)
     expect(routes.map((r) => `${r.method} ${r.path}`)).toEqual([
       'GET /work-items/add-overseas-site/{id}/duly-make',
-      'POST /work-items/add-overseas-site/{id}/duly-make'
+      'POST /work-items/add-overseas-site/{id}/duly-make',
+      'GET /work-items/add-overseas-site/{id}/decision',
+      'POST /work-items/add-overseas-site/{id}/decision',
+      'GET /work-items/add-overseas-site/{id}/confirm-contact',
+      'POST /work-items/add-overseas-site/{id}/confirm-contact'
     ])
   })
 

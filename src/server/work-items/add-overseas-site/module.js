@@ -1,7 +1,7 @@
 import { registerModuleDetailTemplates } from '../core/templates.js'
 import { IN_YEAR_CHANGE_CATEGORY } from '../core/categories.js'
 import { standardWorkflow } from '../core/standard-workflow.js'
-import { buildDulyMakingRoutes } from '../core/standard-lifecycle/duly-making/routes.js'
+import { buildStandardLifecycleRoutes } from '../core/standard-lifecycle/routes.js'
 import { buildAddOverseasSiteSummary } from '#/server/routes/add-overseas-site/application-summary.js'
 import { buildAddOverseasSiteHeader } from '#/server/routes/add-overseas-site/case-header.js'
 import {
@@ -24,10 +24,12 @@ import {
  * by the type's own `buildApplicationSummary`, and the assignment panel.
  *
  * RA-495. The type opts into the shared Standard lifecycle
- * (`standardLifecycle`), using management-be's type-less endpoints. Only
- * Duly make is mounted so far: Make determination and Confirm applicant
- * contact follow in a later RA-495 task. The Duly make page shows the site's
- * own charge and the related change requests from the same submission.
+ * (`standardLifecycle`), using management-be's type-less endpoints: Duly make,
+ * Make determination and Confirm applicant contact, with the pending-contact
+ * banner and the closed case's Outcome panel from the shared detail template.
+ * The Duly make page shows the site's own charge and the related change
+ * requests from the same submission. An approval mints nothing: the site
+ * joins an accreditation that already exists.
  */
 export const addOverseasSiteType = {
   id: 'add-overseas-site',
@@ -83,6 +85,6 @@ export const addOverseasSiteModule = {
     registerModuleDetailTemplates(addOverseasSiteType.id, {
       v1: 'add-overseas-site/detail-v1'
     })
-    server.route(buildDulyMakingRoutes(addOverseasSiteType.id))
+    server.route(buildStandardLifecycleRoutes(addOverseasSiteType.id))
   }
 }
