@@ -24,7 +24,9 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   addWorkItemNote: vi.fn(),
   raiseWorkItemQuery: vi.fn(),
   updateRecyclingOperations: vi.fn(),
-  extendWorkItemSla: vi.fn()
+  extendWorkItemSla: vi.fn(),
+  dulyMakeWorkItem: vi.fn(),
+  getDulyMakeDetails: vi.fn()
 }))
 
 const {
@@ -34,7 +36,9 @@ const {
   unassignWorkItem,
   applyWorkItemAction,
   updateRecyclingOperations,
-  extendWorkItemSla
+  extendWorkItemSla,
+  dulyMakeWorkItem,
+  getDulyMakeDetails
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ADD_ORS_ID = '73900003-0000-4000-8000-000000000001'
@@ -248,6 +252,8 @@ describe('RA-739 / RA-495: in-year change applications', () => {
     applyWorkItemAction.mockReset()
     updateRecyclingOperations.mockReset()
     extendWorkItemSla.mockReset()
+    dulyMakeWorkItem.mockReset()
+    getDulyMakeDetails.mockReset()
   })
 
   async function listPage(...items) {
@@ -858,9 +864,10 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('body').text()).not.toContain('Interim sites')
     })
 
-    test('has the assignment panel and no Duly make, Query or decision actions', async () => {
+    test('has the assignment panel, and no generic, Query or decision actions', async () => {
       const item = anAddOrsItem()
-      // Even if the backend projects actions, none render until RA-495.
+      // Even if the backend projects actions, none render as generic
+      // buttons. Only the Duly make CTA (RA-495) is offered.
       item.availableActions = [
         { actionId: 'duly-make', displayName: 'Duly make' },
         { actionId: 'query', displayName: 'Query' },
@@ -883,7 +890,8 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         squash(panel.find('[data-testid="action-sla-extend"]').text())
       ).toBe('Change determination deadline')
 
-      expect($('[data-testid="actions-panel"]')).toHaveLength(0)
+      expect($('[data-testid="duly-make-cta"]')).toHaveLength(1)
+      expect($('[data-testid="log-decision-cta"]')).toHaveLength(0)
       expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
       expect($('[data-testid="work-item-no-actions"]')).toHaveLength(0)
       expect($('[data-testid="action-duly-make"]')).toHaveLength(0)
@@ -1137,6 +1145,243 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         expect(result).toContain('Reason is required')
         expect(extendWorkItemSla).not.toHaveBeenCalled()
       })
+    })
+  })
+
+  // RA-495 AC4. A Not started add-ORS work item is duly made on its own,
+  // through the shared Duly make page and the type-less management-be
+  // endpoint.
+  describe('duly making an add-ORS application', () => {
+    const DETAIL_URL = `/work-items/${ADD_ORS_ID}`
+    const DULY_MAKE_URL = `/work-items/add-overseas-site/${ADD_ORS_ID}/duly-make`
+    const SIBLING_1 = '73900003-0000-4000-8000-000000000011'
+    const SIBLING_2 = '73900003-0000-4000-8000-000000000012'
+
+    /** The duly make details as management-be returns them. */
+    function details(relatedWorkItems) {
+      return {
+        ok: true,
+        details: {
+          workItemId: ADD_ORS_ID,
+          chargePence: 32800,
+          relatedWorkItems
+        }
+      }
+    }
+
+    const relatedWorkItems = [
+      {
+        id: SIBLING_1,
+        typeId: 'add-overseas-site',
+        stateId: 'duly-made',
+        applicationReference: 'IYC-ORS-2026-00002',
+        siteName: 'Belgium PR',
+        orsId: '010',
+        chargePence: 32800
+      },
+      {
+        id: SIBLING_2,
+        typeId: 'add-overseas-site',
+        stateId: 'submitted',
+        applicationReference: 'IYC-ORS-2026-00003',
+        siteName: 'Berlin Steel GmbH',
+        orsId: '003',
+        chargePence: null
+      }
+    ]
+
+    async function dulyMakePage() {
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: DULY_MAKE_URL
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      return cheerio.load(result)
+    }
+
+    function relatedRows($) {
+      return $('[data-testid="duly-making-related-row"]')
+        .map((_, row) =>
+          ['reference', 'site', 'type', 'charge', 'status'].reduce(
+            (cells, key) => ({
+              ...cells,
+              [key]: squash(
+                $(row).find(`[data-testid="duly-making-related-${key}"]`).text()
+              )
+            }),
+            {}
+          )
+        )
+        .get()
+    }
+
+    test('the detail page offers Duly make on a Not started application', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+
+      const { result } = await server.inject({ method: 'GET', url: DETAIL_URL })
+      const $ = cheerio.load(result)
+
+      const cta = $('[data-testid="duly-make-cta"]')
+      expect(cta).toHaveLength(1)
+      expect(squash(cta.text())).toBe('Duly make')
+      expect(cta.attr('href')).toBe(DULY_MAKE_URL)
+      // Only duly making is offered on add-ORS for now.
+      expect($('[data-testid="log-decision-cta"]')).toHaveLength(0)
+      expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
+    })
+
+    test('the detail page offers nothing once the application is duly made', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: { ...anAddOrsItem(), stateId: 'duly-made' }
+      })
+
+      const { result } = await server.inject({ method: 'GET', url: DETAIL_URL })
+      const $ = cheerio.load(result)
+
+      expect($('[data-testid="duly-make-cta"]')).toHaveLength(0)
+      expect($('[data-testid="actions-panel"]')).toHaveLength(0)
+    })
+
+    test('the page shows the site charge, the payment reference and the payment date input', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      getDulyMakeDetails.mockResolvedValue(details(relatedWorkItems))
+
+      const $ = await dulyMakePage()
+
+      expect(squash($('h1').text())).toContain('Duly make the application')
+      expect(
+        squash($('[data-testid="duly-making-charge-amount"]').text())
+      ).toBe('£328')
+      expect(
+        squash($('[data-testid="duly-making-payment-reference"]').text())
+      ).toBe('PR/PK/REP/123001')
+      expect($('[data-testid="duly-making-payment-date"]')).toHaveLength(1)
+      expect($('[data-testid="duly-making-form"]').attr('action')).toBe(
+        DULY_MAKE_URL
+      )
+    })
+
+    test('the page lists the related change requests from the same submission with their status', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      getDulyMakeDetails.mockResolvedValue(details(relatedWorkItems))
+
+      const $ = await dulyMakePage()
+
+      expect(getDulyMakeDetails).toHaveBeenCalledWith(
+        expect.objectContaining({ workItemId: ADD_ORS_ID })
+      )
+      expect(
+        squash($('[data-testid="duly-making-related-heading"]').text())
+      ).toBe('Related change requests')
+      expect(relatedRows($)).toEqual([
+        {
+          reference: 'IYC-ORS-2026-00002',
+          site: 'Belgium PR (010)',
+          type: 'New ORS accreditation',
+          charge: '£328',
+          status: 'Duly made'
+        },
+        {
+          reference: 'IYC-ORS-2026-00003',
+          site: 'Berlin Steel GmbH (003)',
+          type: 'New ORS accreditation',
+          charge: EM_DASH,
+          status: 'Not started'
+        }
+      ])
+      // Read-only: nothing in the table can be acted on.
+      expect(
+        $(
+          '[data-testid="duly-making-related"] a, [data-testid="duly-making-related"] input'
+        )
+      ).toHaveLength(0)
+    })
+
+    test('the page has no related change requests section for a single-site submission', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anAddOrsItem({ submissionSize: 1 })
+      })
+      getDulyMakeDetails.mockResolvedValue(details([]))
+
+      const $ = await dulyMakePage()
+
+      expect($('[data-testid="duly-making-related"]')).toHaveLength(0)
+      expect($('[data-testid="duly-making-payment-date"]')).toHaveLength(1)
+    })
+
+    test('the page says when the related change requests cannot be loaded, and still offers duly making', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      getDulyMakeDetails.mockResolvedValue({ ok: false, status: 500 })
+
+      const $ = await dulyMakePage()
+
+      expect(
+        squash($('[data-testid="duly-making-related-unavailable"]').text())
+      ).toBe('The related change requests could not be loaded.')
+      expect($('[data-testid="duly-making-related-row"]')).toHaveLength(0)
+      expect($('[data-testid="duly-making-payment-date"]')).toHaveLength(1)
+    })
+
+    test('the page is refused once the application is duly made', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: { ...anAddOrsItem(), stateId: 'duly-made' }
+      })
+
+      const { statusCode, headers } = await server.inject({
+        method: 'GET',
+        url: DULY_MAKE_URL
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(DETAIL_URL)
+      expect(getDulyMakeDetails).not.toHaveBeenCalled()
+    })
+
+    test('submitting a payment date duly makes the application through the shared endpoint', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      dulyMakeWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: { ...anAddOrsItem(), stateId: 'duly-made' }
+      })
+
+      const { statusCode, headers } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: DULY_MAKE_URL,
+        payload:
+          'payment-date-day=20&payment-date-month=2&payment-date-year=2026',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }
+      })
+
+      expect(statusCode).toBe(statusCodes.redirect)
+      expect(headers.location).toBe(DETAIL_URL)
+      expect(dulyMakeWorkItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ADD_ORS_ID,
+          paymentDate: '2026-02-20'
+        })
+      )
+      expect(applyWorkItemAction).not.toHaveBeenCalled()
+    })
+
+    test('an invalid payment date re-renders the page with the error and the related change requests', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      getDulyMakeDetails.mockResolvedValue(details(relatedWorkItems))
+
+      const { statusCode, result } = await injectWithCrumb(server, {
+        method: 'POST',
+        url: DULY_MAKE_URL,
+        payload: 'payment-date-day=&payment-date-month=&payment-date-year=',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' }
+      })
+
+      expect(statusCode).toBe(statusCodes.badRequest)
+      const $ = cheerio.load(result)
+      expect($('[data-testid="duly-making-error-summary"]')).toHaveLength(1)
+      expect(relatedRows($)).toHaveLength(2)
+      expect(dulyMakeWorkItem).not.toHaveBeenCalled()
     })
   })
 

@@ -1,6 +1,7 @@
 import { registerModuleDetailTemplates } from '../core/templates.js'
 import { IN_YEAR_CHANGE_CATEGORY } from '../core/categories.js'
 import { standardWorkflow } from '../core/standard-workflow.js'
+import { buildDulyMakingRoutes } from '../core/standard-lifecycle/duly-making/routes.js'
 import { buildAddOverseasSiteSummary } from '#/server/routes/add-overseas-site/application-summary.js'
 import { buildAddOverseasSiteHeader } from '#/server/routes/add-overseas-site/case-header.js'
 import {
@@ -20,8 +21,13 @@ import {
  * tabs (`caseTabs`, RA-495): Application summary, Accreditation summary and
  * Related applications (empty until RA-769 and RA-770), and Application
  * history. The Application summary shows the site from `payload.site`, built
- * by the type's own `buildApplicationSummary`, and the assignment panel;
- * later RA-495 tasks add the actions.
+ * by the type's own `buildApplicationSummary`, and the assignment panel.
+ *
+ * RA-495. The type opts into the shared Standard lifecycle
+ * (`standardLifecycle`), using management-be's type-less endpoints. Only
+ * Duly make is mounted so far: Make determination and Confirm applicant
+ * contact follow in a later RA-495 task. The Duly make page shows the site's
+ * own charge and the related change requests from the same submission.
  */
 export const addOverseasSiteType = {
   id: 'add-overseas-site',
@@ -46,7 +52,17 @@ export const addOverseasSiteType = {
   // registration number.
   describeCardSite,
   // The card shows "Submitted on" in every state, not only before assessment.
-  cardAlwaysShowsSubmittedOn: true
+  cardAlwaysShowsSubmittedOn: true,
+  standardLifecycle: {
+    // Both live INSIDE `payload`, as the operator backend sends them: the
+    // charge is the site's own, the payment reference the whole request's.
+    readPaymentDetails: (workItem) => ({
+      chargePence: workItem?.payload?.site?.chargePence,
+      paymentReference: workItem?.payload?.paymentReference
+    }),
+    // The Duly make page lists the other work items from the same submission.
+    relatedWorkItems: true
+  }
 }
 
 /**
@@ -63,9 +79,10 @@ function describeCardSite(payload) {
 
 export const addOverseasSiteModule = {
   type: addOverseasSiteType,
-  async register() {
+  async register(server) {
     registerModuleDetailTemplates(addOverseasSiteType.id, {
       v1: 'add-overseas-site/detail-v1'
     })
+    server.route(buildDulyMakingRoutes(addOverseasSiteType.id))
   }
 }

@@ -4,11 +4,12 @@
 {% from "govuk/components/date-input/macro.njk" import govukDateInput %}
 {% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
 {% from "govuk/components/summary-list/macro.njk" import govukSummaryList %}
+{% from "govuk/components/tag/macro.njk" import govukTag %}
 
 {# ------------------------------------------------------------------- #}
 {# Duly make the application (RA-316).                                  #}
 {#                                                                      #}
-{# Reached from the "Duly make" CTA on the re-accreditation detail      #}
+{# Reached from the "Duly make" CTA on a Standard-lifecycle detail      #}
 {# page. Posts back to its own URL and PRG-redirects to the detail page #}
 {# on success.                                                          #}
 {#                                                                      #}
@@ -72,6 +73,49 @@
           }
         ]
       }) }}
+
+      {# RA-495. The other work items from the same submission (types that  #}
+      {# declare `standardLifecycle.relatedWorkItems`), read-only, so the    #}
+      {# caseworker can see the whole payment. No section when there are   #}
+      {# none; a line saying so when they could not be read.               #}
+      {% if relatedWorkItems and (relatedWorkItems.unavailable or relatedWorkItems.rows.length) %}
+        <div data-testid="duly-making-related">
+          <h2 class="govuk-heading-m" data-testid="duly-making-related-heading">Related change requests</h2>
+          {% if relatedWorkItems.unavailable %}
+            <p class="govuk-body" data-testid="duly-making-related-unavailable">The related change requests could not be loaded.</p>
+          {% else %}
+            <table class="govuk-table">
+              <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                  <th scope="col" class="govuk-table__header">Site name</th>
+                  <th scope="col" class="govuk-table__header">Type</th>
+                  <th scope="col" class="govuk-table__header">Charge</th>
+                  <th scope="col" class="govuk-table__header">Status</th>
+                </tr>
+              </thead>
+              <tbody class="govuk-table__body">
+                {% for row in relatedWorkItems.rows %}
+                  <tr class="govuk-table__row" data-testid="duly-making-related-row">
+                    <td class="govuk-table__cell">
+                      <strong data-testid="duly-making-related-reference">{{ row.reference }}</strong><br>
+                      <span class="govuk-body-s" data-testid="duly-making-related-site">{{ row.site }}</span>
+                    </td>
+                    <td class="govuk-table__cell" data-testid="duly-making-related-type">{{ row.type }}</td>
+                    <td class="govuk-table__cell" data-testid="duly-making-related-charge">{{ row.charge }}</td>
+                    <td class="govuk-table__cell">
+                      {{ govukTag({
+                        text: row.status,
+                        classes: row.statusTagClass,
+                        attributes: { "data-testid": "duly-making-related-status" }
+                      }) }}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+        </div>
+      {% endif %}
 
       <form method="post"
             action="{{ formAction }}"

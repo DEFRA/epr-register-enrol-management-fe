@@ -6,15 +6,14 @@
 {# re-accreditation's does, for the case tabs, the notices and error    #}
 {# banners, and the assignment panel. It replaces the application data  #}
 {# with the add-ORS site summary (`applicationSummary`, built by the    #}
-{# type's own summary builder) and drops the actions panel until the    #}
-{# add-ORS lifecycle actions (Duly make and decisions; no Query) arrive  #}
-{# with later RA-495 tasks.                                              #}
+{# type's own summary builder) and its own actions card (RA-495).       #}
 {#                                                                      #}
 {# `data-state-id` carries the raw state id for the journey tests.      #}
 {# ------------------------------------------------------------------- #}
 {% extends 'work-items/detail.njk' %}
 
 {% from "work-items/summary-macros.njk" import documentItem, newPrefix, siteDetails %}
+{% from "action-link/macro.njk" import appActionLink %}
 
 {% block content %}
   <div data-testid="add-overseas-site-detail"
@@ -70,6 +69,25 @@
   {% endif %}
 {% endblock %}
 
-{# No actions until later RA-495 tasks (Duly make and decisions). #}
+{# RA-495. Only "Duly make" so far, while the application is Not      #}
+{# started (`workItem.canDulyMake`, from the same gate as its page).    #}
+{# Make determination and Confirm applicant contact follow in a later   #}
+{# RA-495 task; until then no actions card renders in any other state. #}
+{# The testids match the Standard-lifecycle template's.                  #}
 {% block primaryActions %}{% endblock %}
-{% block actionsCard %}{% endblock %}
+{% block actionsCard %}
+  {% if workItem.canDulyMake %}
+    <div class="app-case-panel" data-testid="actions-panel">
+      <div data-testid="re-accreditation-duly-make-cta">
+        {{ appActionLink({
+          text: "Duly make",
+          href: workItem.dulyMakeHref,
+          variant: "button",
+          classes: "app-case-panel__primary-action govuk-!-margin-bottom-0",
+          disabled: user.isReadOnly,
+          testId: "duly-make-cta"
+        }) }}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

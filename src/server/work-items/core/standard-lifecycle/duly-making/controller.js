@@ -42,6 +42,7 @@ import {
   validatePaymentDate
 } from './payment-date.js'
 import { createDulyMakingService } from './service.js'
+import { loadRelatedWorkItems } from './related-work-items.js'
 
 const VIEW_PATH = 'standard-lifecycle/duly-making/index'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -126,6 +127,7 @@ function renderForm(
     id,
     applicationRef,
     paymentDetails,
+    relatedWorkItems = null,
     values = { day: '', month: '', year: '' },
     errorCode = null,
     statusCode = 200
@@ -139,6 +141,7 @@ function renderForm(
       breadcrumbs: breadcrumbs(id, applicationRef),
       workItem: { id, applicationRef },
       paymentDetails,
+      relatedWorkItems,
       dateInputId: PAYMENT_DATE_ID,
       formAction: lifecyclePageHref(typeId, id, DULY_MAKE_PAGE),
       cancelHref: detailHref(id),
@@ -217,7 +220,12 @@ export function makeShowDulyMakingController({ typeId }) {
         typeId,
         id,
         applicationRef: applicationRefOf(workItem),
-        paymentDetails: buildPaymentDetails(workItem, typeId)
+        paymentDetails: buildPaymentDetails(workItem, typeId),
+        relatedWorkItems: await loadRelatedWorkItems({
+          typeId,
+          workItemId: id,
+          user: getUser(request)
+        })
       })
     }
   }
@@ -315,6 +323,11 @@ async function renderInvalid(h, { typeId, id, user, values, errorCode }) {
     paymentDetails: item.ok
       ? buildPaymentDetails(item.workItem, typeId)
       : { chargeAmount: NOT_PROVIDED, paymentReference: NOT_PROVIDED },
+    relatedWorkItems: await loadRelatedWorkItems({
+      typeId,
+      workItemId: id,
+      user
+    }),
     values,
     errorCode,
     statusCode: 400

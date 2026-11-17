@@ -714,6 +714,51 @@ export async function dulyMakeReAccreditation({
 }
 
 /**
+ * RA-495. What the Duly make page needs that management-be works out: the
+ * work item's charge and the other work items from the same submission
+ * (`relatedWorkItems`, each `{ id, typeId, stateId, applicationReference,
+ * siteName, orsId, chargePence }`).
+ *
+ * Wraps the type-less `GET /work-items/{id}/duly-make`.
+ *
+ * @returns {Promise<{ ok: true, details: object } | { ok: false, status?: number, error: string }>}
+ */
+export async function getDulyMakeDetails({
+  workItemId,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  const url = lifecycleStepUrl(baseUrl, workItemId, 'duly-make')
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetchImpl(url, {
+      signal: controller.signal,
+      headers: buildHeaders({ accept: 'application/json' }, user)
+    })
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: `Backend returned ${response.status}`
+      }
+    }
+    return { ok: true, details: await response.json() }
+  } catch (error) {
+    logger.warn({ err: error, url }, 'Backend API getDulyMakeDetails failed')
+    return {
+      ok: false,
+      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * Duly make a work item of any type that has opted into the Standard
  * lifecycle (RA-495).
  *

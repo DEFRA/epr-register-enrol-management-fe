@@ -12,7 +12,11 @@
  *     readPaymentDetails: (workItem) => ({ chargePence, paymentReference }),
  *     // Optional. The management-be calls. Each defaults to the type-less
  *     // Standard-lifecycle endpoint (`/work-items/{id}/duly-make` etc.).
- *     backend: { dulyMake, recordDecision, confirmContact }
+ *     backend: { dulyMake, recordDecision, confirmContact },
+ *     // Optional. When true the Duly make page lists the other work items
+ *     // from the same submission ("Related change requests"), read from
+ *     // management-be's `GET /work-items/{id}/duly-make`.
+ *     relatedWorkItems: true
  *   }
  *
  * The pages live under `/work-items/{typeId}/{id}/…`, so re-accreditation's

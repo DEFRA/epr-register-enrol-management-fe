@@ -1,3 +1,5 @@
+import { vi } from 'vitest'
+
 import { assertValidWorkItemModule } from '../core/module.js'
 import {
   clearDetailTemplateRegistry,
@@ -50,13 +52,41 @@ describe('add-overseas-site module (RA-739)', () => {
     })
   })
 
-  test('is a valid module that registers its detail template', async () => {
+  test('is a valid module that registers its detail template and its Duly make page', async () => {
     expect(() => assertValidWorkItemModule(addOverseasSiteModule)).not.toThrow()
+    const server = { route: vi.fn() }
 
-    await addOverseasSiteModule.register({})
+    await addOverseasSiteModule.register(server)
 
     expect(resolveDetailTemplate('add-overseas-site', 'v1')).toBe(
       'add-overseas-site/detail-v1'
     )
+    // RA-495. Only Duly make so far.
+    const routes = server.route.mock.calls.flatMap(([mounted]) => mounted)
+    expect(routes.map((r) => `${r.method} ${r.path}`)).toEqual([
+      'GET /work-items/add-overseas-site/{id}/duly-make',
+      'POST /work-items/add-overseas-site/{id}/duly-make'
+    ])
+  })
+
+  // RA-495. The Duly make page shows the site's own charge and the request's
+  // payment reference, and the related change requests.
+  test('opts into the Standard lifecycle with the site charge as the payment details', () => {
+    const { standardLifecycle } = addOverseasSiteType
+    expect(
+      standardLifecycle.readPaymentDetails({
+        payload: {
+          chargePence: 98400,
+          paymentReference: 'PR/PK/REP/123001',
+          site: { chargePence: 32800 }
+        }
+      })
+    ).toEqual({ chargePence: 32800, paymentReference: 'PR/PK/REP/123001' })
+    expect(standardLifecycle.readPaymentDetails({})).toEqual({
+      chargePence: undefined,
+      paymentReference: undefined
+    })
+    expect(standardLifecycle.relatedWorkItems).toBe(true)
+    expect(standardLifecycle.backend).toBeUndefined()
   })
 })

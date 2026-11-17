@@ -233,10 +233,10 @@ describe('RA-495: the type scopes its own pages', () => {
     expect(response.headers.location).toBe(DETAIL_URL)
   })
 
-  test('a type that has not opted in has no lifecycle pages', async () => {
+  test('a type that has not mounted the lifecycle pages has none', async () => {
     const response = await server.inject({
       method: 'GET',
-      url: `/work-items/add-overseas-site/${ID}/duly-make`
+      url: `/work-items/not-a-standard-type/${ID}/duly-make`
     })
 
     expect(response.statusCode).toBe(statusCodes.notFound)

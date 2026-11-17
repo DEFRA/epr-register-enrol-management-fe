@@ -205,7 +205,11 @@ export const myType = {
     // Optional: the management-be calls. Each defaults to the type-less
     // Standard-lifecycle endpoint (`POST /work-items/{id}/duly-make`,
     // `/decision`, `/confirm-contact`).
-    backend: { dulyMake, recordDecision, confirmContact }
+    backend: { dulyMake, recordDecision, confirmContact },
+    // Optional: list the other work items from the same submission on the
+    // Duly make page ("Related change requests", from management-be's
+    // `GET /work-items/{id}/duly-make`).
+    relatedWorkItems: true
   }
 }
 
@@ -229,7 +233,10 @@ template extends it (re-accreditation's adds Continue review in the
 `lifecycleActionsExtra` block). Re-accreditation opts in with its own
 type-scoped management-be endpoints (`re-accreditation/lifecycle-backend.js`)
 and keeps its existing URLs; its `duly-making/`, `decision/` and
-`confirm-contact/` folders are thin wrappers scoped to its type.
+`confirm-contact/` folders are thin wrappers scoped to its type. Add-ORS
+opts in with the type-less endpoints, the site's own charge and
+`relatedWorkItems`; it mounts only the Duly make routes so far, and its own
+detail template shows only the Duly make CTA.
 
 ## Cross-type list
 

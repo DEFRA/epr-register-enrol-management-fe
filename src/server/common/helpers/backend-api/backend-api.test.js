@@ -12,6 +12,7 @@ import {
   continueReviewReAccreditation,
   createWorkItem,
   dulyMakeWorkItem,
+  getDulyMakeDetails,
   extendWorkItemSla,
   getBackendHealth,
   getWorkItem,
@@ -2495,5 +2496,74 @@ describe('Standard-lifecycle endpoints (RA-495)', () => {
       status: 500,
       message: 'The operator journey could not be notified.'
     })
+  })
+})
+
+describe('#getDulyMakeDetails (RA-495)', () => {
+  test('GETs /work-items/{id}/duly-make and returns the details', async () => {
+    const details = {
+      workItemId: 'wi-1',
+      chargePence: 32800,
+      relatedWorkItems: [{ id: 'wi-2', stateId: 'submitted' }]
+    }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(details)
+    })
+
+    const result = await getDulyMakeDetails({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/duly-make',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        headers: expect.objectContaining({
+          accept: 'application/json',
+          'x-cdp-user-id': 'u-1'
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, details })
+  })
+
+  test('returns ok=false with the status on a failure', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({})
+    })
+
+    const result = await getDulyMakeDetails({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      status: 400,
+      error: 'Backend returned 400'
+    })
+  })
+
+  test('returns the transport error when fetch throws', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+
+    const result = await getDulyMakeDetails({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
   })
 })
