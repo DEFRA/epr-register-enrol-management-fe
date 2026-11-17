@@ -222,34 +222,14 @@ export async function getWorkItems({
     page,
     pageSize
   })
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const response = await fetchImpl(url, {
-      signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' }, user)
-    })
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        status: response.status,
-        error: `Backend returned ${response.status}`
-      }
-    }
-
-    const body = await response.json()
-    return parseWorkItemsBody(body)
-  } catch (error) {
-    logger.warn({ err: error, url }, 'Backend API getWorkItems failed')
-    return {
-      ok: false,
-      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
-    }
-  } finally {
-    clearTimeout(timer)
-  }
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getWorkItems',
+    read: parseWorkItemsBody
+  })
 }
 
 // buildWorkItemsUrl's own repeated-value params (typeId, stateId, nation,
@@ -396,37 +376,15 @@ export async function getWorkItem({
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}`
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const response = await fetchImpl(url, {
-      signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' }, user)
-    })
-
-    if (response.status === statusCodes.notFound) {
-      return { ok: false, status: statusCodes.notFound }
-    }
-    if (!response.ok) {
-      return {
-        ok: false,
-        status: response.status,
-        error: `Backend returned ${response.status}`
-      }
-    }
-
-    const workItem = await response.json()
-    return { ok: true, workItem }
-  } catch (error) {
-    logger.warn({ err: error, url }, 'Backend API getWorkItem failed')
-    return {
-      ok: false,
-      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
-    }
-  } finally {
-    clearTimeout(timer)
-  }
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getWorkItem',
+    notFoundIsDistinct: true,
+    read: (workItem) => ({ ok: true, workItem })
+  })
 }
 
 /**
@@ -731,31 +689,14 @@ export async function getDulyMakeDetails({
   fetchImpl = fetch
 }) {
   const url = lifecycleStepUrl(baseUrl, workItemId, 'duly-make')
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const response = await fetchImpl(url, {
-      signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' }, user)
-    })
-    if (!response.ok) {
-      return {
-        ok: false,
-        status: response.status,
-        error: `Backend returned ${response.status}`
-      }
-    }
-    return { ok: true, details: await response.json() }
-  } catch (error) {
-    logger.warn({ err: error, url }, 'Backend API getDulyMakeDetails failed')
-    return {
-      ok: false,
-      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
-    }
-  } finally {
-    clearTimeout(timer)
-  }
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getDulyMakeDetails',
+    read: (details) => ({ ok: true, details })
+  })
 }
 
 /**
@@ -1340,6 +1281,49 @@ export async function getReAccreditationPriorYear({
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/prior-year`
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getReAccreditationPriorYear',
+    notFoundIsDistinct: true,
+    read: (priorYear) => ({ ok: true, priorYear })
+  })
+}
+
+async function safeReadJson(response) {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * GET a JSON resource from management-be, with the request timeout every
+ * call here shares.
+ *
+ * Result shape:
+ *  - whatever `read` returns for the parsed body, on success
+ *  - { ok: false, status: 404 }   when `notFoundIsDistinct` and nothing exists
+ *  - { ok: false, status, error } on other 4xx/5xx
+ *  - { ok: false, error }         on transport errors and timeouts (logged)
+ *
+ * @param {object} options
+ * @param {string} options.label the caller's name, for the log
+ * @param {(body: any) => object} options.read builds the success result
+ * @param {boolean} [options.notFoundIsDistinct] answer a bare 404 result
+ */
+async function getJson({
+  url,
+  timeoutMs,
+  fetchImpl,
+  user,
+  label,
+  read,
+  notFoundIsDistinct = false
+}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -1349,7 +1333,7 @@ export async function getReAccreditationPriorYear({
       headers: buildHeaders({ accept: 'application/json' }, user)
     })
 
-    if (response.status === statusCodes.notFound) {
+    if (notFoundIsDistinct && response.status === statusCodes.notFound) {
       return { ok: false, status: statusCodes.notFound }
     }
     if (!response.ok) {
@@ -1360,27 +1344,15 @@ export async function getReAccreditationPriorYear({
       }
     }
 
-    const priorYear = await response.json()
-    return { ok: true, priorYear }
+    return read(await response.json())
   } catch (error) {
-    logger.warn(
-      { err: error, url },
-      'Backend API getReAccreditationPriorYear failed'
-    )
+    logger.warn({ err: error, url }, `Backend API ${label} failed`)
     return {
       ok: false,
       error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
-  }
-}
-
-async function safeReadJson(response) {
-  try {
-    return await response.json()
-  } catch {
-    return null
   }
 }
 
