@@ -3,10 +3,8 @@ import { registerModuleDetailTemplates } from '../core/templates.js'
 import { buildChangePaymentDateRoutes } from './change-payment-date/routes.js'
 import { buildContinueReviewRoutes } from './continue-review/routes.js'
 import { buildCreateWorkItemRoutes } from './create/routes.js'
-import { buildConfirmContactRoutes } from './confirm-contact/routes.js'
-import { buildDecisionRoutes } from './decision/routes.js'
-import { buildDulyMakingRoutes } from './duly-making/routes.js'
 import { standardWorkflow } from '../core/standard-workflow.js'
+import { buildStandardLifecycleRoutes } from '../core/standard-lifecycle/routes.js'
 import { reAccreditationLifecycleBackend } from './lifecycle-backend.js'
 import { RE_ACCREDITATION_TYPE_ID } from './type-id.js'
 
@@ -168,15 +166,6 @@ export const reAccreditationModule = {
     // renders for a work item actually in `updated`.
     server.route(buildContinueReviewRoutes())
 
-    // RA-316. Duly-making flow: the payment-date page and its POST
-    // handler. Hits the type-specific backend endpoint because
-    // `duly-make` is declared non-caller-invocable and carries a payment
-    // date the generic action route cannot express — see the TRANSITIONS
-    // comment above. Always mounted; the CTA only renders for a work item
-    // actually in `submitted`, and both the CTA and the GET handler go
-    // through the same `evaluateDulyMakeEligibility` gate.
-    server.route(buildDulyMakingRoutes())
-
     // RA-576. Change-payment-date flow: corrects the payment date entered at
     // duly making without moving the application's status or SLA clock. Hits
     // the type-specific `/change-payment-date` endpoint. Always mounted; the
@@ -184,6 +173,18 @@ export const reAccreditationModule = {
     // work item that is eligible (`evaluateChangePaymentDateEligibility`).
     server.route(buildChangePaymentDateRoutes())
 
+    // RA-495. The shared Standard-lifecycle pages at re-accreditation's own
+    // URLs (`/work-items/re-accreditation/{id}/duly-make|decision|confirm-contact`),
+    // posting to its own endpoints (`standardLifecycle.backend` above):
+    //
+    // RA-316. Duly-making flow: the payment-date page and its POST
+    // handler. Hits the type-specific backend endpoint because
+    // `duly-make` is declared non-caller-invocable and carries a payment
+    // date the generic action route cannot express — see the TRANSITIONS
+    // comment above. Always mounted; the CTA only renders for a work item
+    // actually in `submitted`, and both the CTA and the GET handler go
+    // through the same `evaluateDulyMakeEligibility` gate.
+    //
     // RA-410. Log-decision flow: the Approved / Refused radio page and its
     // POST handler, replacing the task-gated approve interstitial as the
     // way a case worker records an outcome. Hits the type-specific
@@ -195,14 +196,13 @@ export const reAccreditationModule = {
     //
     // Always mounted; the CTA and the GET handler share one eligibility
     // gate so the button and the URL cannot disagree.
-    server.route(buildDecisionRoutes())
-
+    //
     // RA-527. Confirm-contact flow: step 2 of the two-step determination.
     // The page and its POST handler, which calls the type-specific
     // `/confirm-contact` endpoint to apply the outcome step 1 recorded.
     // Always mounted; the CTA only renders, and both handlers only proceed,
     // for a work item actually pending contact.
-    server.route(buildConfirmContactRoutes())
+    server.route(buildStandardLifecycleRoutes(RE_ACCREDITATION_TYPE_ID))
 
     // RA-127. The create-work-item demo form is feature-flagged so it
     // can be hidden in production. When the flag is off the routes are

@@ -1,16 +1,22 @@
 import { describe, expect, test, beforeEach } from 'vitest'
 
-import {
-  clearWorkItemRegistry,
-  registerWorkItemType
-} from '../../core/registry.js'
-import { reAccreditationType } from '../module.js'
+import { clearWorkItemRegistry, registerWorkItemType } from '../../registry.js'
+import { reAccreditationType } from '../../../re-accreditation/module.js'
+import { RE_ACCREDITATION_TYPE_ID } from '../../../re-accreditation/type-id.js'
 import {
   DECISION_OUTCOMES,
-  evaluateLogDecisionEligibility,
+  evaluateLogDecisionEligibility as evaluateStandardLogDecisionEligibility,
   isValidDecisionOutcome,
-  targetStateForOutcome
+  targetStateForOutcome as standardTargetStateForOutcome
 } from './eligibility.js'
+
+// RA-495. Exercised through re-accreditation, the first type on the shared
+// Standard lifecycle.
+const SCOPE = Object.freeze({ typeId: RE_ACCREDITATION_TYPE_ID })
+const evaluateLogDecisionEligibility = (workItem) =>
+  evaluateStandardLogDecisionEligibility(workItem, SCOPE)
+const targetStateForOutcome = (outcome) =>
+  standardTargetStateForOutcome(outcome, SCOPE)
 
 /**
  * RA-410. The single gate behind BOTH the Log decision CTA's visibility and

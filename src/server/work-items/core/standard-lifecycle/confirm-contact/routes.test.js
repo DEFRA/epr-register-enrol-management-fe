@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'vitest'
 
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
+import { RE_ACCREDITATION_TYPE_ID } from '../../../re-accreditation/type-id.js'
 import { buildConfirmContactRoutes } from './routes.js'
 
 const PATH = '/work-items/re-accreditation/{id}/confirm-contact'
 
 describe('buildConfirmContactRoutes (RA-527)', () => {
-  const routes = buildConfirmContactRoutes()
+  const routes = buildConfirmContactRoutes(RE_ACCREDITATION_TYPE_ID)
 
   test('mounts GET and POST on the same type-namespaced path', () => {
     expect(routes.map((r) => [r.method, r.path])).toEqual([

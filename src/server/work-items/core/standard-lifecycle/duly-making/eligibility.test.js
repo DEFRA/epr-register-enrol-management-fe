@@ -1,12 +1,17 @@
 import { describe, expect, test, beforeEach } from 'vitest'
 
-import {
-  clearWorkItemRegistry,
-  registerWorkItemType
-} from '../../core/registry.js'
-import { canApplyAction } from '../../core/engine.js'
-import { reAccreditationType } from '../module.js'
-import { evaluateDulyMakeEligibility } from './eligibility.js'
+import { clearWorkItemRegistry, registerWorkItemType } from '../../registry.js'
+import { canApplyAction } from '../../engine.js'
+import { reAccreditationType } from '../../../re-accreditation/module.js'
+import { RE_ACCREDITATION_TYPE_ID } from '../../../re-accreditation/type-id.js'
+import { evaluateDulyMakeEligibility as evaluateStandardDulyMakeEligibility } from './eligibility.js'
+
+// RA-495. Exercised through re-accreditation, the first type on the shared
+// Standard lifecycle.
+const evaluateDulyMakeEligibility = (workItem) =>
+  evaluateStandardDulyMakeEligibility(workItem, {
+    typeId: RE_ACCREDITATION_TYPE_ID
+  })
 
 /**
  * RA-316. The single gate behind BOTH the Duly make CTA's visibility and

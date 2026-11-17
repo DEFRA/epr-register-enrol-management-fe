@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 // The default `recordDecision`/`addNote` collaborators lazily `import()`
 // backend-api.js rather than importing it statically (so tests can stub the
@@ -10,11 +10,31 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   addWorkItemNote: vi.fn()
 }))
 
-import { createDecisionService, DECISION_NOTE_MAX_LENGTH } from './service.js'
+import { clearWorkItemRegistry, registerWorkItemType } from '../../registry.js'
+import { reAccreditationType } from '../../../re-accreditation/module.js'
+import { RE_ACCREDITATION_TYPE_ID } from '../../../re-accreditation/type-id.js'
+import {
+  createDecisionService as createStandardDecisionService,
+  DECISION_NOTE_MAX_LENGTH
+} from './service.js'
 import {
   recordReAccreditationDecision,
   addWorkItemNote
 } from '#/server/common/helpers/backend-api/backend-api.js'
+
+// RA-495. Exercised through re-accreditation, the first type on the shared
+// Standard lifecycle: by default the service calls the backend its type
+// declares, so the real type is registered as the plugin does at boot.
+beforeEach(() => {
+  clearWorkItemRegistry()
+  registerWorkItemType(reAccreditationType)
+})
+
+const createDecisionService = (options) =>
+  createStandardDecisionService({
+    typeId: RE_ACCREDITATION_TYPE_ID,
+    ...options
+  })
 
 /**
  * RA-410. One call, both outcomes. The service's job is to validate the

@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'vitest'
 
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
-import { buildDulyMakingRoutes } from './routes.js'
+import { RE_ACCREDITATION_TYPE_ID } from '../../../re-accreditation/type-id.js'
+import { buildDecisionRoutes } from './routes.js'
 
-const PATH = '/work-items/re-accreditation/{id}/duly-make'
+const PATH = '/work-items/re-accreditation/{id}/decision'
 
-describe('buildDulyMakingRoutes', () => {
-  const routes = buildDulyMakingRoutes()
+describe('buildDecisionRoutes', () => {
+  const routes = buildDecisionRoutes(RE_ACCREDITATION_TYPE_ID)
 
   test('mounts GET and POST on the same type-namespaced path', () => {
     // Namespaced under `/work-items/re-accreditation/` because this page is
@@ -19,11 +20,11 @@ describe('buildDulyMakingRoutes', () => {
   })
 
   test('both routes are authenticated', () => {
-    // `requireStandard` mirrors the backend: any authenticated case
-    // worker may duly make. There is deliberately no `assign` gate —
-    // management-be does not use 403 on this endpoint at all, so a
-    // UI-only role check would block legitimate users while enforcing
-    // nothing.
+    // `requireStandard` mirrors the backend: any authenticated case worker
+    // may log a decision (RA-323 removed the decision-maker role tier), and
+    // management-be returns no 403 on this endpoint at all. It is still the
+    // enforcement point that keeps an RA-335 read-only support session out,
+    // since such a session never holds ROLE_STANDARD.
     for (const route of routes) {
       expect(route.options.auth).toEqual(requireStandard.auth)
     }
@@ -32,7 +33,11 @@ describe('buildDulyMakingRoutes', () => {
   test('the POST accepts only form-encoded bodies, with a size cap', () => {
     const post = routes.find((r) => r.method === 'POST')
     expect(post.options.payload.allow).toBe('application/x-www-form-urlencoded')
-    expect(post.options.payload.maxBytes).toBeLessThanOrEqual(10 * 1024)
+    // RA-203. Sized for the 2000-character decision note. 10 KiB would 413 a
+    // legitimate note written in a multi-byte script once percent-encoding is
+    // applied, so the floor matters as much as the ceiling here.
+    expect(post.options.payload.maxBytes).toBeGreaterThanOrEqual(32 * 1024)
+    expect(post.options.payload.maxBytes).toBeLessThanOrEqual(64 * 1024)
   })
 
   test('every route has a handler', () => {

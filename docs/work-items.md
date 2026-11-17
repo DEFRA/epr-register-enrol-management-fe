@@ -85,7 +85,7 @@ export const myTypeModule = {
     // frontend never RENDERS an affordance the backend would refuse.
     //
     // The declared `approve` transition is read by
-    // `re-accreditation/decision/eligibility.js` to gate the decision CTA.
+    // `core/standard-lifecycle/decision/eligibility.js` to gate the decision CTA.
     // That does not make the BFF authoritative either: management-be only
     // approves via its `/decision` endpoint, which applies the same rule
     // server-side and rejects a forged POST regardless. Frontend gate for
@@ -236,8 +236,10 @@ template extends it (re-accreditation's adds Continue review in the
 so the generic actions list and its "No actions" line never render under the
 lifecycle CTAs. Re-accreditation opts in with its own type-scoped
 management-be endpoints (`re-accreditation/lifecycle-backend.js`) and keeps
-its existing URLs; its `duly-making/`, `decision/` and `confirm-contact/`
-folders are thin wrappers scoped to its type. Add-ORS
+its existing URLs, mounting the pages with
+`buildStandardLifecycleRoutes(RE_ACCREDITATION_TYPE_ID)` like any other type.
+The shared pages' unit tests live beside them in
+`core/standard-lifecycle/` and run against re-accreditation. Add-ORS
 opts in with the type-less endpoints, the site's own charge and
 `relatedWorkItems`, mounts all three pages and hides the generic actions.
 An add-ORS approval mints nothing: the site joins an accreditation that

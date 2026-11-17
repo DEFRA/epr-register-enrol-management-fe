@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   confirmApplicantContact: vi.fn()
@@ -7,7 +7,24 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
 const { confirmApplicantContact } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
-import { createConfirmContactService } from './service.js'
+import { clearWorkItemRegistry, registerWorkItemType } from '../../registry.js'
+import { reAccreditationType } from '../../../re-accreditation/module.js'
+import { RE_ACCREDITATION_TYPE_ID } from '../../../re-accreditation/type-id.js'
+import { createConfirmContactService as createStandardConfirmContactService } from './service.js'
+
+// RA-495. Exercised through re-accreditation, the first type on the shared
+// Standard lifecycle: by default the service calls the backend its type
+// declares, so the real type is registered as the plugin does at boot.
+beforeEach(() => {
+  clearWorkItemRegistry()
+  registerWorkItemType(reAccreditationType)
+})
+
+const createConfirmContactService = (options) =>
+  createStandardConfirmContactService({
+    typeId: RE_ACCREDITATION_TYPE_ID,
+    ...options
+  })
 
 describe('createConfirmContactService (RA-527)', () => {
   test('forwards the work item id and acting user to the backend client', async () => {

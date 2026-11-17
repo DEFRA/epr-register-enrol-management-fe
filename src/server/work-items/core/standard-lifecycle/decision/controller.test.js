@@ -22,12 +22,23 @@ import {
   clearWorkItemRegistry,
   registerWorkItemType
 } from '#/server/work-items/core/registry.js'
-import { reAccreditationType } from '../module.js'
+import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
+import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/type-id.js'
 
 import {
-  makeShowDecisionController,
-  makeSubmitDecisionController
+  makeShowDecisionController as makeShowStandardDecisionController,
+  makeSubmitDecisionController as makeSubmitStandardDecisionController
 } from './controller.js'
+
+// RA-495. Exercised through re-accreditation, the first type on the shared
+// Standard lifecycle.
+const makeShowDecisionController = () =>
+  makeShowStandardDecisionController({ typeId: RE_ACCREDITATION_TYPE_ID })
+const makeSubmitDecisionController = (options) =>
+  makeSubmitStandardDecisionController({
+    typeId: RE_ACCREDITATION_TYPE_ID,
+    ...options
+  })
 
 // Both handlers gate on the module's DECLARED decision transitions, resolved
 // through the type registry — so these unit tests register the real type,
