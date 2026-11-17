@@ -1,41 +1,12 @@
 /**
  * RA-527. Re-accreditation state ids and groupings that code outside
- * `module.js` needs to name. Kept apart from `module.js`, which pulls in the
- * type's routes and controllers, so a controller or formatter can import them
- * without risking an import cycle. RA-739: the ids are declared by the shared
- * Standard workflow, which `module.js` also takes its states from; they are
- * re-exported so re-accreditation code keeps naming them from here.
+ * `module.js` needs to name. RA-495: they are the shared Standard-lifecycle
+ * ones (`standard-lifecycle/states.js`), re-exported so re-accreditation code
+ * keeps naming them from here.
  */
 
-import {
+export {
+  PENDING_CONTACT_STATE_IDS,
   STATE_APPROVED_PENDING_CONTACT,
   STATE_REJECTED_PENDING_CONTACT
-} from '../core/standard-workflow.js'
-
-export { STATE_APPROVED_PENDING_CONTACT, STATE_REJECTED_PENDING_CONTACT }
-
-/**
- * The states in which a determination has been made (step 1) but not yet
- * applied, because the applicant has not been contacted. Not closed: the
- * case stays reassignable so someone else can make the contact, and
- * "Confirm applicant contact" (step 2) is the only way on. One list, read by
- * the detail page and the confirm-contact routes alike.
- */
-export const PENDING_CONTACT_STATE_IDS = new Set([
-  STATE_APPROVED_PENDING_CONTACT,
-  STATE_REJECTED_PENDING_CONTACT
-])
-
-/**
- * Is the work item a re-accreditation awaiting confirmation of applicant
- * contact?
- *
- * @param {{ typeId?: string, stateId?: string } | null | undefined} workItem
- * @returns {boolean}
- */
-export function isPendingContact(workItem) {
-  return (
-    workItem?.typeId === 're-accreditation' &&
-    PENDING_CONTACT_STATE_IDS.has(workItem.stateId)
-  )
-}
+} from '../core/standard-lifecycle/states.js'

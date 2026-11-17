@@ -608,6 +608,71 @@ export async function continueReviewReAccreditation({
 }
 
 /**
+ * RA-495. The POST behind every Standard-lifecycle step (duly make,
+ * decision, confirm contact), whichever URL a type uses for it. Surfaces the
+ * ProblemDetails `errorCode` when `withErrorCode` is set, for the steps
+ * whose 400s bind to a form field.
+ */
+async function postLifecycleStep({
+  url,
+  body,
+  label,
+  user,
+  timeoutMs,
+  fetchImpl,
+  withErrorCode
+}) {
+  const result = await postJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    body,
+    label
+  })
+
+  if (result.ok) {
+    return { ok: true, workItem: result.workItem }
+  }
+
+  // `postJson` reports transport failures without a status.
+  if (result.status == null) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: result.error ?? REQUEST_FAILED
+    }
+  }
+
+  return {
+    ok: false,
+    reason: REASON_BY_STATUS[result.status] ?? 'server',
+    status: result.status,
+    ...(withErrorCode && {
+      errorCode:
+        typeof result.problem?.errorCode === 'string'
+          ? result.problem.errorCode
+          : null
+    }),
+    message:
+      result.problem?.detail ??
+      result.problem?.title ??
+      `Backend returned ${result.status}`
+  }
+}
+
+/**
+ * `{baseUrl}/work-items/[{typeSegment}/]{id}/{step}` for a lifecycle step.
+ * Re-accreditation's own endpoints carry its type segment; the type-less
+ * Standard-lifecycle ones do not.
+ */
+function lifecycleStepUrl(baseUrl, workItemId, step, typeSegment = null) {
+  const root = `${baseUrl.replace(/\/$/, '')}/work-items`
+  const prefix = typeSegment ? `${root}/${typeSegment}` : root
+  return `${prefix}/${encodeURIComponent(workItemId)}/${step}`
+}
+
+/**
  * Duly make a re-accreditation work item (RA-316).
  *
  * Wraps `POST /work-items/re-accreditation/{id}/duly-make`.
@@ -637,43 +702,43 @@ export async function dulyMakeReAccreditation({
   timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/duly-make`
-
-  const result = await postJson({
-    url,
+  return postLifecycleStep({
+    url: lifecycleStepUrl(baseUrl, workItemId, 'duly-make', 're-accreditation'),
+    body: { paymentDate },
+    label: 'dulyMakeReAccreditation',
+    user,
     timeoutMs,
     fetchImpl,
-    user,
-    body: { paymentDate },
-    label: 'dulyMakeReAccreditation'
+    withErrorCode: true
   })
+}
 
-  if (result.ok) {
-    return { ok: true, workItem: result.workItem }
-  }
-
-  // `postJson` reports transport failures without a status.
-  if (result.status == null) {
-    return {
-      ok: false,
-      reason: 'network',
-      message: result.error ?? REQUEST_FAILED
-    }
-  }
-
-  return {
-    ok: false,
-    reason: REASON_BY_STATUS[result.status] ?? 'server',
-    status: result.status,
-    errorCode:
-      typeof result.problem?.errorCode === 'string'
-        ? result.problem.errorCode
-        : null,
-    message:
-      result.problem?.detail ??
-      result.problem?.title ??
-      `Backend returned ${result.status}`
-  }
+/**
+ * Duly make a work item of any type that has opted into the Standard
+ * lifecycle (RA-495).
+ *
+ * Wraps the type-less `POST /work-items/{id}/duly-make`. Same body, result
+ * shape and `errorCode` vocabulary as {@link dulyMakeReAccreditation}; a type
+ * that has not opted in management-be side gets a 400
+ * `wrong-work-item-type`.
+ */
+export async function dulyMakeWorkItem({
+  workItemId,
+  paymentDate,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  return postLifecycleStep({
+    url: lifecycleStepUrl(baseUrl, workItemId, 'duly-make'),
+    body: { paymentDate },
+    label: 'dulyMakeWorkItem',
+    user,
+    timeoutMs,
+    fetchImpl,
+    withErrorCode: true
+  })
 }
 
 /**
@@ -774,43 +839,41 @@ export async function recordReAccreditationDecision({
   timeoutMs = config.get('backendApi.decisionTimeoutMs'),
   fetchImpl = fetch
 }) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/decision`
-
-  const result = await postJson({
-    url,
+  return postLifecycleStep({
+    url: lifecycleStepUrl(baseUrl, workItemId, 'decision', 're-accreditation'),
+    body: { outcome },
+    label: 'recordReAccreditationDecision',
+    user,
     timeoutMs,
     fetchImpl,
-    user,
-    body: { outcome },
-    label: 'recordReAccreditationDecision'
+    withErrorCode: true
   })
+}
 
-  if (result.ok) {
-    return { ok: true, workItem: result.workItem }
-  }
-
-  // `postJson` reports transport failures without a status.
-  if (result.status == null) {
-    return {
-      ok: false,
-      reason: 'network',
-      message: result.error ?? REQUEST_FAILED
-    }
-  }
-
-  return {
-    ok: false,
-    reason: REASON_BY_STATUS[result.status] ?? 'server',
-    status: result.status,
-    errorCode:
-      typeof result.problem?.errorCode === 'string'
-        ? result.problem.errorCode
-        : null,
-    message:
-      result.problem?.detail ??
-      result.problem?.title ??
-      `Backend returned ${result.status}`
-  }
+/**
+ * Record the determination on a work item of any type that has opted into
+ * the Standard lifecycle (RA-495).
+ *
+ * Wraps the type-less `POST /work-items/{id}/decision`. Same body, timeout
+ * budget and result shape as {@link recordReAccreditationDecision}.
+ */
+export async function recordWorkItemDecision({
+  workItemId,
+  outcome,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get('backendApi.decisionTimeoutMs'),
+  fetchImpl = fetch
+}) {
+  return postLifecycleStep({
+    url: lifecycleStepUrl(baseUrl, workItemId, 'decision'),
+    body: { outcome },
+    label: 'recordWorkItemDecision',
+    user,
+    timeoutMs,
+    fetchImpl,
+    withErrorCode: true
+  })
 }
 
 /**
@@ -839,38 +902,43 @@ export async function confirmApplicantContact({
   timeoutMs = config.get('backendApi.decisionTimeoutMs'),
   fetchImpl = fetch
 }) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/confirm-contact`
-
-  const result = await postJson({
-    url,
+  return postLifecycleStep({
+    url: lifecycleStepUrl(
+      baseUrl,
+      workItemId,
+      'confirm-contact',
+      're-accreditation'
+    ),
+    label: 'confirmApplicantContact',
+    user,
     timeoutMs,
     fetchImpl,
-    user,
-    label: 'confirmApplicantContact'
+    withErrorCode: false
   })
+}
 
-  if (result.ok) {
-    return { ok: true, workItem: result.workItem }
-  }
-
-  // `postJson` reports transport failures without a status.
-  if (result.status == null) {
-    return {
-      ok: false,
-      reason: 'network',
-      message: result.error ?? REQUEST_FAILED
-    }
-  }
-
-  return {
-    ok: false,
-    reason: REASON_BY_STATUS[result.status] ?? 'server',
-    status: result.status,
-    message:
-      result.problem?.detail ??
-      result.problem?.title ??
-      `Backend returned ${result.status}`
-  }
+/**
+ * Confirm applicant contact on a work item of any type that has opted into
+ * the Standard lifecycle (RA-495), which applies its determination.
+ *
+ * Wraps the type-less `POST /work-items/{id}/confirm-contact`. Same timeout
+ * budget and result shape as {@link confirmApplicantContact}.
+ */
+export async function confirmWorkItemApplicantContact({
+  workItemId,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get('backendApi.decisionTimeoutMs'),
+  fetchImpl = fetch
+}) {
+  return postLifecycleStep({
+    url: lifecycleStepUrl(baseUrl, workItemId, 'confirm-contact'),
+    label: 'confirmWorkItemApplicantContact',
+    user,
+    timeoutMs,
+    fetchImpl,
+    withErrorCode: false
+  })
 }
 
 /**

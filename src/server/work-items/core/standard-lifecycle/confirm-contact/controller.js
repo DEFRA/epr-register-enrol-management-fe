@@ -1,8 +1,9 @@
 /**
- * Re-accreditation confirm-contact controllers (RA-527, step 2 of the
- * two-step determination).
+ * Standard-lifecycle confirm-contact controllers (RA-527, step 2 of the
+ * two-step determination; shared since RA-495).
  *
- * Two handlers — both at `/work-items/re-accreditation/{id}/confirm-contact`:
+ * Two handlers — both at `/work-items/{typeId}/{id}/confirm-contact`, each
+ * factory taking the `typeId` whose routes it serves:
  *
  *  - GET: render the confirm page — one checkbox ("I have contacted the
  *    applicant about the decision"), "Confirm and continue" and Cancel.
@@ -30,9 +31,10 @@ import {
   STATE_REJECTED_PENDING_CONTACT,
   isPendingContact
 } from '../states.js'
+import { CONFIRM_CONTACT_PAGE, lifecyclePageHref } from '../lifecycle.js'
 import { createConfirmContactService } from './service.js'
 
-const VIEW_PATH = 're-accreditation/confirm-contact/index'
+const VIEW_PATH = 'standard-lifecycle/confirm-contact/index'
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
 const WORK_ITEMS_HREF = '/work-items'
@@ -70,8 +72,8 @@ function detailHref(id) {
   return `/work-items/${encodeURIComponent(id)}`
 }
 
-function confirmContactHref(id) {
-  return `/work-items/re-accreditation/${encodeURIComponent(id)}/confirm-contact`
+function confirmContactHref(typeId, id) {
+  return lifecyclePageHref(typeId, id, CONFIRM_CONTACT_PAGE)
 }
 
 function renderNotFound(h, id) {
@@ -105,6 +107,7 @@ function renderUnavailable(h, id, result) {
  * unticked box, `failureBanner` for a backend failure.
  */
 function pageView(
+  typeId,
   workItem,
   { errorSummary = null, fieldError = null, failureBanner = null } = {}
 ) {
@@ -120,7 +123,7 @@ function pageView(
       { text: applicationRef ?? 'Work item', href: detailHref(id) },
       { text: PAGE_TITLE }
     ],
-    formAction: confirmContactHref(id),
+    formAction: confirmContactHref(typeId, id),
     cancelHref: detailHref(id),
     fieldId: CONFIRM_FIELD_ID,
     errorSummary,
@@ -133,7 +136,7 @@ function pageView(
  * Loads the work item and settles the cases where there is no page to show.
  * Returns `{ response }` to hand straight back, or `{ workItem }`.
  */
-async function loadPendingWorkItem(request, h, user) {
+async function loadPendingWorkItem(request, h, user, typeId) {
   const id = request.params.id
   const result = await getWorkItem({ workItemId: id, user })
 
@@ -147,7 +150,7 @@ async function loadPendingWorkItem(request, h, user) {
   // Guard the ROUTE, not just the button: this URL is guessable and
   // bookmarkable, and the item may have moved on since the detail page was
   // rendered (including a confirmation that already landed).
-  if (!isPendingContact(result.workItem)) {
+  if (!isPendingContact(result.workItem, { typeId })) {
     return { response: h.redirect(detailHref(id)) }
   }
 
@@ -170,18 +173,19 @@ function failureBannerFor(result) {
 /**
  * GET — render the confirm page.
  */
-export function makeShowConfirmContactController() {
+export function makeShowConfirmContactController({ typeId }) {
   return {
     async handler(request, h) {
       const { response, workItem } = await loadPendingWorkItem(
         request,
         h,
-        getUser(request)
+        getUser(request),
+        typeId
       )
       if (response) {
         return response
       }
-      return h.view(VIEW_PATH, pageView(workItem))
+      return h.view(VIEW_PATH, pageView(typeId, workItem))
     }
   }
 }
@@ -191,14 +195,20 @@ export function makeShowConfirmContactController() {
  * pending contact; re-renders in place for an unticked box or a failure.
  */
 export function makeSubmitConfirmContactController({
-  service = createConfirmContactService()
-} = {}) {
+  typeId,
+  service = createConfirmContactService({ typeId })
+}) {
   return {
     async handler(request, h) {
       const id = request.params.id
       const user = getUser(request)
 
-      const { response, workItem } = await loadPendingWorkItem(request, h, user)
+      const { response, workItem } = await loadPendingWorkItem(
+        request,
+        h,
+        user,
+        typeId
+      )
       if (response) {
         return response
       }
@@ -207,7 +217,7 @@ export function makeSubmitConfirmContactController({
         return h
           .view(
             VIEW_PATH,
-            pageView(workItem, {
+            pageView(typeId, workItem, {
               errorSummary: {
                 titleText: 'There is a problem',
                 items: [
@@ -243,12 +253,14 @@ export function makeSubmitConfirmContactController({
           status: result.status,
           message: result.message
         },
-        'Confirming re-accreditation applicant contact failed'
+        'Confirming applicant contact failed'
       )
       return h
         .view(
           VIEW_PATH,
-          pageView(workItem, { failureBanner: failureBannerFor(result) })
+          pageView(typeId, workItem, {
+            failureBanner: failureBannerFor(result)
+          })
         )
         .code(
           result.outcome === 'conflict'

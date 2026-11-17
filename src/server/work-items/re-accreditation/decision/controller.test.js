@@ -93,7 +93,7 @@ describe('makeShowDecisionController', () => {
     await makeShowDecisionController().handler(makeRequest(), h)
 
     expect(h.view).toHaveBeenCalledWith(
-      're-accreditation/decision/index',
+      'standard-lifecycle/decision/index',
       expect.objectContaining({
         formAction: DECISION_HREF,
         cancelHref: DETAIL_HREF,
@@ -245,7 +245,7 @@ describe('makeSubmitDecisionController', () => {
     }).handler(makeRequest({ decisionNote: 'Half-written rationale' }), h)
 
     expect(h.view).toHaveBeenCalledWith(
-      're-accreditation/decision/index',
+      'standard-lifecycle/decision/index',
       expect.objectContaining({
         values: { decision: null, decisionNote: 'Half-written rationale' }
       })
@@ -270,7 +270,7 @@ describe('makeSubmitDecisionController', () => {
     expect(recordWorkItemDecision).not.toHaveBeenCalled()
     expect(h.redirect).not.toHaveBeenCalled()
     expect(h.view).toHaveBeenCalledWith(
-      're-accreditation/decision/index',
+      'standard-lifecycle/decision/index',
       expect.objectContaining({
         // The note must come back — it is the thing they need to shorten.
         values: { decision: 'approved', decisionNote: longNote },
@@ -384,7 +384,7 @@ describe('makeSubmitDecisionController', () => {
       expect(recordWorkItemDecision).not.toHaveBeenCalled()
       expect(h.redirect).not.toHaveBeenCalled()
       expect(h.view).toHaveBeenCalledWith(
-        're-accreditation/decision/index',
+        'standard-lifecycle/decision/index',
         expect.objectContaining({
           errorSummary: {
             titleText: 'There is a problem',
@@ -412,7 +412,7 @@ describe('makeSubmitDecisionController', () => {
     }).handler(makeRequest({ decision: '"><script>' }), h)
 
     expect(h.view).toHaveBeenCalledWith(
-      're-accreditation/decision/index',
+      'standard-lifecycle/decision/index',
       expect.objectContaining({
         values: { decision: null, decisionNote: '' }
       })

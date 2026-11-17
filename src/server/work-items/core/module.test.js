@@ -285,6 +285,45 @@ describe('assertValidWorkItemModule', () => {
     ).toThrow(/duplicate transition `actionId` "finish"/)
   })
 
+  // RA-495. A type opting into the shared Standard-lifecycle pages must say
+  // where its payment details live; a missing hook would render "Not
+  // provided" on every Duly make page with nothing logged.
+  test('accepts a Standard-lifecycle opt-in with its payment details', () => {
+    expect(() =>
+      assertValidWorkItemModule(
+        validModule({
+          type: {
+            standardLifecycle: { readPaymentDetails: () => ({}) }
+          }
+        })
+      )
+    ).not.toThrow()
+  })
+
+  test.each([
+    ['no payment details', {}],
+    ['a non-function payment details hook', { readPaymentDetails: 'payload' }]
+  ])('rejects a Standard-lifecycle opt-in with %s', (_, standardLifecycle) => {
+    expect(() =>
+      assertValidWorkItemModule(validModule({ type: { standardLifecycle } }))
+    ).toThrow(/`standardLifecycle.readPaymentDetails` must be a function/)
+  })
+
+  test('rejects a Standard-lifecycle backend call that is not a function', () => {
+    expect(() =>
+      assertValidWorkItemModule(
+        validModule({
+          type: {
+            standardLifecycle: {
+              readPaymentDetails: () => ({}),
+              backend: { dulyMake: 'POST /duly-make' }
+            }
+          }
+        })
+      )
+    ).toThrow(/`standardLifecycle.backend.dulyMake` must be a function/)
+  })
+
   // RA-410. `getTasksForState` is no longer part of the type contract, so
   // there is nothing left to validate — the two suites that asserted the
   // validator rejected a missing / non-function member went with it.

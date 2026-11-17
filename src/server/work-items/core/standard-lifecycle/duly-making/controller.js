@@ -1,7 +1,10 @@
 /**
- * Re-accreditation duly-making controllers (RA-316).
+ * Standard-lifecycle duly-making controllers (RA-316; shared by every
+ * opted-in type since RA-495). Each factory takes the `typeId` whose routes
+ * it serves: the page is that type's, and its payment details are the ones
+ * the type supplies (`standardLifecycle.readPaymentDetails`).
  *
- *  - GET  /work-items/re-accreditation/{id}/duly-make — the form. Fetches
+ *  - GET  /work-items/{typeId}/{id}/duly-make — the form. Fetches
  *    the work item so the payment details can be pre-populated and so an
  *    application that is no longer duly-makeable bounces before the user
  *    types a date they cannot submit.
@@ -24,6 +27,11 @@ import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
 
+import {
+  DULY_MAKE_PAGE,
+  getStandardLifecycle,
+  lifecyclePageHref
+} from '../lifecycle.js'
 import { evaluateDulyMakeEligibility } from './eligibility.js'
 import {
   PAYMENT_DATE_ID,
@@ -35,7 +43,7 @@ import {
 } from './payment-date.js'
 import { createDulyMakingService } from './service.js'
 
-const VIEW_PATH = 're-accreditation/duly-making/index'
+const VIEW_PATH = 'standard-lifecycle/duly-making/index'
 const NOT_FOUND_VIEW = 'work-items/not-found'
 const UNAVAILABLE_VIEW = 'work-items/detail-error'
 
@@ -56,10 +64,6 @@ function detailHref(id) {
   return `/work-items/${encodeURIComponent(id)}`
 }
 
-function dulyMakeHref(id) {
-  return `/work-items/re-accreditation/${encodeURIComponent(id)}/duly-make`
-}
-
 function breadcrumbs(id, ref) {
   return [
     { text: 'Applications', href: '/work-items' },
@@ -78,25 +82,25 @@ function flashBanner(request, banner) {
  * Both fields degrade independently — an older work item may carry neither,
  * and duly making still succeeds without them, so a missing value must
  * never block the page or the submission.
+ *
+ * RA-495. The raw values come from the type
+ * (`standardLifecycle.readPaymentDetails`): which payload fields hold the
+ * charge and the payment reference differs between types.
  */
-export function buildPaymentDetails(workItem) {
-  // Both fields live INSIDE `payload`, not at the top level. `payload` is
-  // passed through verbatim from MongoDB and is not re-cased by the
-  // backend's response serialiser, so these two keys' casing is owned by
-  // legacy-be — a mis-cased key throws nowhere and simply renders blank,
-  // which is why the tests assert on rendered VALUES rather than on the
-  // element being present.
-  const payload = workItem?.payload ?? {}
+export function buildPaymentDetails(workItem, typeId) {
+  const raw = getStandardLifecycle(typeId)?.readPaymentDetails?.(workItem) ?? {}
   // `formatChargeAmount` returns null for absent/non-integer only. A
   // legitimate 0 formats as "£0" and must NOT collapse to "Not provided" —
   // `??` rather than `||` is doing real work here.
-  const charge = formatChargeAmount(payload.chargeAmountPence)
+  const charge = formatChargeAmount(raw.chargePence)
   return {
     chargeAmount: charge ?? NOT_PROVIDED,
     // No fallback to `applicationReference` — see `resolvePaymentReference`.
     // Almost every work item renders "Not provided" here today, and that
     // visibility is the point.
-    paymentReference: resolvePaymentReference(payload) ?? NOT_PROVIDED
+    paymentReference:
+      resolvePaymentReference({ paymentReference: raw.paymentReference }) ??
+      NOT_PROVIDED
   }
 }
 
@@ -118,6 +122,7 @@ function applicationRefOf(workItem) {
 function renderForm(
   h,
   {
+    typeId,
     id,
     applicationRef,
     paymentDetails,
@@ -135,7 +140,7 @@ function renderForm(
       workItem: { id, applicationRef },
       paymentDetails,
       dateInputId: PAYMENT_DATE_ID,
-      formAction: dulyMakeHref(id),
+      formAction: lifecyclePageHref(typeId, id, DULY_MAKE_PAGE),
       cancelHref: detailHref(id),
       values,
       errorMessage,
@@ -185,7 +190,7 @@ async function loadWorkItem(request, h, id) {
 }
 
 /** GET — render the duly-making form. */
-export function makeShowDulyMakingController() {
+export function makeShowDulyMakingController({ typeId }) {
   return {
     async handler(request, h) {
       const id = request.params.id
@@ -195,10 +200,10 @@ export function makeShowDulyMakingController() {
       }
 
       const workItem = loaded.workItem
-      const eligibility = evaluateDulyMakeEligibility(workItem)
+      const eligibility = evaluateDulyMakeEligibility(workItem, { typeId })
       if (!eligibility.allowed) {
         logger.info(
-          { workItemId: id, reason: eligibility.reason },
+          { workItemId: id, typeId, reason: eligibility.reason },
           'Duly making form refused'
         )
         flashBanner(request, {
@@ -209,9 +214,10 @@ export function makeShowDulyMakingController() {
       }
 
       return renderForm(h, {
+        typeId,
         id,
         applicationRef: applicationRefOf(workItem),
-        paymentDetails: buildPaymentDetails(workItem)
+        paymentDetails: buildPaymentDetails(workItem, typeId)
       })
     }
   }
@@ -219,8 +225,9 @@ export function makeShowDulyMakingController() {
 
 /** POST — validate, submit, PRG. */
 export function makeSubmitDulyMakingController({
-  service = createDulyMakingService()
-} = {}) {
+  typeId,
+  service = createDulyMakingService({ typeId })
+}) {
   return {
     async handler(request, h) {
       const id = request.params.id
@@ -235,6 +242,7 @@ export function makeSubmitDulyMakingController({
       const validation = validatePaymentDate(values)
       if (!validation.ok) {
         return renderInvalid(h, {
+          typeId,
           request,
           id,
           user,
@@ -261,6 +269,7 @@ export function makeSubmitDulyMakingController({
       logger.warn(
         {
           workItemId: id,
+          typeId,
           outcome: result.outcome,
           status: result.status,
           errorCode: result.errorCode,
@@ -268,7 +277,7 @@ export function makeSubmitDulyMakingController({
           // sees our own copy.
           message: result.message
         },
-        'Re-accreditation duly making failed'
+        'Duly making failed'
       )
 
       // Only a payment-date rejection binds to the field. Everything else
@@ -276,6 +285,7 @@ export function makeSubmitDulyMakingController({
       // the wrong thing.
       if (isPaymentDateErrorCode(result.errorCode)) {
         return renderInvalid(h, {
+          typeId,
           request,
           id,
           user,
@@ -296,13 +306,14 @@ export function makeSubmitDulyMakingController({
  * page still renders, degraded, rather than turning a validation error into
  * a 502.
  */
-async function renderInvalid(h, { request, id, user, values, errorCode }) {
+async function renderInvalid(h, { typeId, id, user, values, errorCode }) {
   const item = await getWorkItem({ workItemId: id, user })
   return renderForm(h, {
+    typeId,
     id,
     applicationRef: item.ok ? applicationRefOf(item.workItem) : null,
     paymentDetails: item.ok
-      ? buildPaymentDetails(item.workItem)
+      ? buildPaymentDetails(item.workItem, typeId)
       : { chargeAmount: NOT_PROVIDED, paymentReference: NOT_PROVIDED },
     values,
     errorCode,

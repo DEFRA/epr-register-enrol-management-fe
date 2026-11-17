@@ -138,7 +138,42 @@ export function assertValidWorkItemModule(mod) {
     actionIds.add(transition.actionId)
   }
 
+  assertValidStandardLifecycle(type)
+
   // RA-410. A type no longer declares `getTasksForState`. The member was
   // removed from the contract along with the tasks feature, so requiring it
   // here would reject every module at boot.
+}
+
+const STANDARD_LIFECYCLE_BACKEND_STEPS = [
+  'dulyMake',
+  'recordDecision',
+  'confirmContact'
+]
+
+/**
+ * RA-495. A type opting into the shared Standard-lifecycle pages
+ * (`standardLifecycle`, see `standard-lifecycle/lifecycle.js`) must say where
+ * its payment details live, and any backend call it declares must be one.
+ * Checked at boot because a missing hook would otherwise render "Not
+ * provided" on every Duly make page, and a bad call fail only on submit.
+ */
+function assertValidStandardLifecycle(type) {
+  const lifecycle = type.standardLifecycle
+  if (lifecycle == null) {
+    return
+  }
+  if (typeof lifecycle.readPaymentDetails !== 'function') {
+    throw new TypeError(
+      `Work item type "${type.id}" \`standardLifecycle.readPaymentDetails\` must be a function`
+    )
+  }
+  for (const step of STANDARD_LIFECYCLE_BACKEND_STEPS) {
+    const call = lifecycle.backend?.[step]
+    if (call !== undefined && typeof call !== 'function') {
+      throw new TypeError(
+        `Work item type "${type.id}" \`standardLifecycle.backend.${step}\` must be a function`
+      )
+    }
+  }
 }

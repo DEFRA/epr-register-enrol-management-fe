@@ -183,6 +183,50 @@ panel. Both templates import the document and site-detail macros from
 files under `payload.site.besEvidence.files`.
 `add-overseas-site/module.js` is the example.
 
+### Standard lifecycle pages (RA-495)
+
+The Duly make, Make determination and Confirm applicant contact pages, their
+eligibility checks, the detail page's lifecycle CTAs and the pending-contact
+banner are shared by every type on the Standard workflow
+(`src/server/work-items/core/standard-lifecycle/`). A type opts in by declaring
+`standardLifecycle` on its type and mounting the routes from its module:
+
+```js
+export const myType = {
+  // …the Standard workflow's states and transitions…
+  standardLifecycle: {
+    // Required: the raw charge (pence) and payment reference the Duly make
+    // page shows. The page formats them and says "Not provided" for a gap.
+    readPaymentDetails: (workItem) => ({ chargePence, paymentReference }),
+    // Optional: the management-be calls. Each defaults to the type-less
+    // Standard-lifecycle endpoint (`POST /work-items/{id}/duly-make`,
+    // `/decision`, `/confirm-contact`).
+    backend: { dulyMake, recordDecision, confirmContact }
+  }
+}
+
+export const myTypeModule = {
+  type: myType,
+  async register(server) {
+    registerModuleDetailTemplates(myType.id, {
+      v1: STANDARD_LIFECYCLE_DETAIL_TEMPLATE // or a template extending it
+    })
+    server.route(buildStandardLifecycleRoutes(myType.id))
+  }
+}
+```
+
+The pages live at `/work-items/{typeId}/{id}/duly-make|decision|confirm-contact`
+and refuse a work item of any other type. Their copy, status labels and badges
+are the same for every type. The detail controller layers the CTA flags on
+through `routes/work-items/standard-lifecycle-view-model.js`, and the
+`standard-lifecycle/detail.njk` template renders them; a type's own detail
+template extends it (re-accreditation's adds Continue review in the
+`lifecycleActionsExtra` block). Re-accreditation opts in with its own
+type-scoped management-be endpoints (`re-accreditation/lifecycle-backend.js`)
+and keeps its existing URLs; its `duly-making/`, `decision/` and
+`confirm-contact/` folders are thin wrappers scoped to its type.
+
 ## Cross-type list
 
 The cross-type work item list lives outside any module — it shows every

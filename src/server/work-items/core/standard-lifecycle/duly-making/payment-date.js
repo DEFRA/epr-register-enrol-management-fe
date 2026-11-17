@@ -1,6 +1,6 @@
 /**
  * Payment-date validation and payment-details formatting for the
- * re-accreditation duly-making page (RA-316).
+ * Standard-lifecycle duly-making page (RA-316; shared since RA-495).
  *
  * Server-side validation is mandatory: the page carries no browser
  * JavaScript (RA-94), so a `govukDateInput` is three plain text boxes and

@@ -1,22 +1,12 @@
-import { stateTagClass } from '#/server/work-items/core/state-badge.js'
-import {
-  evaluateLogDecisionEligibility,
-  RE_ACCREDITATION_TYPE_ID
-} from '#/server/work-items/re-accreditation/decision/eligibility.js'
-import { evaluateDulyMakeEligibility } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
+import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/type-id.js'
 import { evaluateChangePaymentDateEligibility } from '#/server/work-items/re-accreditation/change-payment-date/eligibility.js'
-import {
-  PENDING_CONTACT_STATE_IDS,
-  STATE_APPROVED_PENDING_CONTACT,
-  STATE_REJECTED_PENDING_CONTACT
-} from '#/server/work-items/re-accreditation/states.js'
 import {
   isContinueReviewState,
   canQueryWorkItem,
   isPreDulyMadeWaypoint
 } from './re-accreditation-cta.js'
-import { TERMINAL_STATE_IDS } from './assignment-view-model.js'
 import { buildDecisionMetadata } from './re-accreditation-decision-metadata.js'
+import { buildStandardLifecycleFields } from './standard-lifecycle-view-model.js'
 
 // RA-132. ----------------------------------------------------------------
 // Re-accreditation-specific UI decoration.
@@ -62,20 +52,6 @@ import { buildDecisionMetadata } from './re-accreditation-decision-metadata.js'
 //  - `decisionMetadata` — for approved work items, the issued
 //    accreditation id + a GOV.UK formatted start date for display.
 // -----------------------------------------------------------------------
-// RA-527. The persistent banner on a determination awaiting applicant
-// contact, keyed by pending state. The refusal copy is provisional (it
-// extrapolates Design 3's approval-only screens) — keep it to this entry.
-const PENDING_CONTACT_BANNERS = Object.freeze({
-  [STATE_APPROVED_PENDING_CONTACT]: Object.freeze({
-    title: 'Application approved',
-    text: 'The application was approved. You now need to contact the applicant about the decision.'
-  }),
-  [STATE_REJECTED_PENDING_CONTACT]: Object.freeze({
-    title: 'Application refused',
-    text: 'The application was refused. You now need to contact the applicant about the decision.'
-  })
-})
-
 export function applyReAccreditationViewModel({
   workItem,
   source = workItem,
@@ -84,18 +60,6 @@ export function applyReAccreditationViewModel({
   if (workItem.typeId !== RE_ACCREDITATION_TYPE_ID) {
     return workItem
   }
-
-  // Gate on `source` (the raw backend DTO), never on `workItem` (the
-  // decorated view model) — see the call site in `detail.controller.js` for
-  // why. The flag is then merged into the view model below.
-  const canLogDecision = evaluateLogDecisionEligibility(source).allowed
-
-  // RA-316. Same discipline as the approve gate: evaluated against
-  // `source` (the raw backend DTO), and through the SAME helper the
-  // duly-making route guards itself with, so the CTA and the URL cannot
-  // disagree. The `submitted` state rule lives in the module's `duly-make`
-  // transition declaration, not here.
-  const canDulyMake = evaluateDulyMakeEligibility(source).allowed
 
   // RA-576. Same discipline: the raw DTO, through the helper the change
   // page's own route guard uses. Hidden for terminal items and for items
@@ -130,47 +94,27 @@ export function applyReAccreditationViewModel({
     isContinueReviewState(source?.stateId) &&
     !isPreDulyMadeWaypoint(source?.originStateId)
 
-  const isReadOnlyState = TERMINAL_STATE_IDS.has(workItem.stateId)
-  // RA-324 (AC08). Source the terminal "Outcome" tag colour from the shared
-  // state-badge map so it matches the list and the envelope State badge.
-  const stateTagClasses = stateTagClass(workItem.stateId)
-
   const decisionMetadata = buildDecisionMetadata(workItem)
-
-  // RA-527. Step 1 of the determination is done but the applicant has not
-  // been contacted: a persistent banner says so on every visit, and the only
-  // forward action is "Confirm applicant contact" (step 2). No
-  // determination, query or due-date change may be offered from here.
-  const isPendingContact = PENDING_CONTACT_STATE_IDS.has(workItem.stateId)
-  const pendingContactCopy = PENDING_CONTACT_BANNERS[workItem.stateId]
 
   return {
     ...workItem,
-    isPendingContact,
+    // RA-495. Duly make, Make Determination, the pending-contact banner and
+    // Confirm applicant contact, and the read-only Outcome panel: the shared
+    // Standard-lifecycle fields. Gated on `source` (the raw backend DTO),
+    // never on `workItem` — see the call site in `detail.controller.js`.
     // Only an approval has an accreditation ID to show (decision metadata is
     // never built for a refusal).
-    pendingContactBanner: pendingContactCopy
-      ? {
-          ...pendingContactCopy,
-          accreditationId: decisionMetadata?.accreditationId ?? null
-        }
-      : null,
-    confirmContactHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/confirm-contact`,
-    // Belt and braces: management-be projects no `sla-extend` here, but a
-    // determination already made must never show a deadline control.
-    canChangeDueDate: isPendingContact ? false : workItem.canChangeDueDate,
-    canLogDecision,
-    logDecisionHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/decision`,
-    canDulyMake,
-    dulyMakeHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/duly-make`,
+    ...buildStandardLifecycleFields({
+      workItem,
+      source,
+      accreditationId: decisionMetadata?.accreditationId ?? null
+    }),
     canChangePaymentDate,
     changePaymentDateHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/change-payment-date`,
     canContinueReview,
     // RA-000. The Query link — see `evaluateQueryEligibility`.
     canQuery: canQueryWorkItem(source, { route }),
     continueReviewHref: `/work-items/re-accreditation/${encodeURIComponent(workItem.id)}/continue-review`,
-    isReadOnlyState,
-    stateTagClasses,
     decisionMetadata
   }
 }
