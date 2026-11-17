@@ -53,8 +53,12 @@
 {# `showDates` is opt-in too (RA-739): the add-ORS BES files show their     #}
 {# valid-from and expiry dates, from the view model's `validFrom` and       #}
 {# `expiryDate`.                                                            #}
-{% macro documentItem(file, showUpdated=false, showDates=false) %}
+{# `newTestId` (3bb.13) puts the "NEW: " prefix, with that testid, before    #}
+{# the file: the add-ORS summary marks the first BES file when the operator  #}
+{# uploaded the evidence on the request.                                     #}
+{% macro documentItem(file, showUpdated=false, showDates=false, newTestId='') %}
   <li>
+    {% if newTestId %}{{ newPrefix(newTestId) }}{% endif %}
     {% if file.href %}
       <a class="govuk-link"
          href="{{ file.href }}"

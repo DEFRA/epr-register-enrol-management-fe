@@ -138,7 +138,7 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
     test.each([
       ['an empty list', []],
       ['no list', undefined],
-      ['a list of unknown fields', ['siteName', 'besEvidence']]
+      ['a list of unknown fields', ['siteName', 'contactName']]
     ])('marks nothing for %s', (_, suppliedFields) => {
       expect(suppliedKeys(aSite({ suppliedFields }))).toEqual([])
     })
@@ -147,6 +147,22 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
       expect(
         suppliedKeys(
           aSite({ suppliedFields: ['coordinates'], coordinates: '' })
+        )
+      ).toEqual([])
+    })
+
+    // 3bb.13: the operator backend lists besEvidence when the operator
+    // uploaded the site's evidence on the request.
+    test('marks the BES evidence row when the operator uploaded the files', () => {
+      expect(suppliedKeys(aSite({ suppliedFields: ['besEvidence'] }))).toEqual([
+        'bes-evidence'
+      ])
+    })
+
+    test('does not mark the BES evidence row with no files', () => {
+      expect(
+        suppliedKeys(
+          aSite({ suppliedFields: ['besEvidence'], besEvidence: { files: [] } })
         )
       ).toEqual([])
     })

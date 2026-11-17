@@ -982,6 +982,24 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       $ = await summaryPage(item)
       expect($('.app-new-flag')).toHaveLength(0)
     })
+
+    // 3bb.13: evidence the operator uploaded on the request is marked once,
+    // on the first file, as a supplied value is on its first line.
+    test('marks the BES evidence the operator uploaded on its first file', async () => {
+      const item = anAddOrsItem()
+      item.payload.site.suppliedFields = ['besEvidence']
+      const $ = await summaryPage(item)
+      const marks = rowValue($, 'bes-evidence').find(
+        '.app-new-flag[data-testid="app-detail-supplied-bes-evidence"]'
+      )
+      expect(marks).toHaveLength(1)
+      expect(
+        squash(rowValue($, 'bes-evidence').find('li').first().text())
+      ).toMatch(/^NEW: bes-evidence.pdf/)
+      expect(
+        $('[data-testid="application-details"] .app-new-flag')
+      ).toHaveLength(1)
+    })
   })
 
   // Stories 30 and 31: reassign, unassign and change the due date through

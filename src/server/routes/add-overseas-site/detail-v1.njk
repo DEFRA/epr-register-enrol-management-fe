@@ -44,7 +44,7 @@
           {% if row.kind == 'files' %}
             {% if row.files.length %}
               <ul class="govuk-list govuk-!-margin-bottom-0">
-                {% for file in row.files %}{{ documentItem(file, showDates=true) }}{% endfor %}
+                {% for file in row.files %}{{ documentItem(file, showDates=true, newTestId=('app-detail-supplied-' + row.key) if (row.supplied and loop.first) else '') }}{% endfor %}
               </ul>
             {% else %}
               —

@@ -19,7 +19,8 @@ import {
  * RA-495. A row is `supplied` when the operator gave its value on this
  * request rather than it coming from the site's registration: the operator
  * backend lists those fields in `site.suppliedFields`, named as in
- * `SITE_FIELDS`.
+ * `SITE_FIELDS`, and `besEvidence` when the operator uploaded the BES
+ * evidence files on the request (3bb.13).
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
@@ -44,14 +45,7 @@ export function buildAddOverseasSiteSummary({ workItem }) {
           supplied: lines.length > 0 && supplied.has(suppliedField)
         }
       }),
-      {
-        key: 'bes-evidence',
-        label: 'Evidence of broadly equivalent standards',
-        kind: 'files',
-        files: besFilesOf(site).map((file) =>
-          besFileViewModel(file, workItemId)
-        )
-      }
+      besEvidenceRow(site, workItemId, supplied.has(BES_EVIDENCE_FIELD))
     ],
     interimSites: buildInterimSites(site, buildAddOrsInterimSite)
   }
@@ -123,6 +117,22 @@ const SITE_FIELDS = [
     'conditionsOfExport'
   ]
 ]
+
+/** 3bb.13: the operator backend's name for BES evidence uploaded on the request. */
+const BES_EVIDENCE_FIELD = 'besEvidence'
+
+function besEvidenceRow(site, workItemId, isSupplied) {
+  const files = besFilesOf(site).map((file) =>
+    besFileViewModel(file, workItemId)
+  )
+  return {
+    key: 'bes-evidence',
+    label: 'Evidence of broadly equivalent standards',
+    kind: 'files',
+    files,
+    supplied: files.length > 0 && isSupplied
+  }
+}
 
 function besFilesOf(site) {
   const files = site.besEvidence?.files
