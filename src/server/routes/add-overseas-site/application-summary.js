@@ -14,8 +14,12 @@ import {
  * overseas site shape) and its interim sites.
  *
  * Every row always renders, so a missing value shows the dash rather than a
- * gap. ORS ID, EU and OECD are not shown (the design has no rows for them),
- * and neither is which values the operator supplied (RA-495).
+ * gap. ORS ID, EU and OECD are not shown (the design has no rows for them).
+ *
+ * RA-495. A row is `supplied` when the operator gave its value on this
+ * request rather than it coming from the site's registration: the operator
+ * backend lists those fields in `site.suppliedFields`, named as in
+ * `SITE_FIELDS`.
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
@@ -24,15 +28,22 @@ import {
 export function buildAddOverseasSiteSummary({ workItem }) {
   const site = workItem?.payload?.site ?? {}
   const workItemId = workItem?.id ?? ''
+  const supplied = new Set(
+    Array.isArray(site.suppliedFields) ? site.suppliedFields : []
+  )
 
   return {
     rows: [
-      ...SITE_FIELDS.map(([key, label, read]) => ({
-        key,
-        label,
-        kind: 'lines',
-        values: orDash(read(site))
-      })),
+      ...SITE_FIELDS.map(([key, label, read, suppliedField]) => {
+        const lines = read(site)
+        return {
+          key,
+          label,
+          kind: 'lines',
+          values: orDash(lines),
+          supplied: lines.length > 0 && supplied.has(suppliedField)
+        }
+      }),
       {
         key: 'bes-evidence',
         label: 'Evidence of broadly equivalent standards',
@@ -55,16 +66,28 @@ function orDash(lines) {
   return lines.length > 0 ? lines : [EM_DASH]
 }
 
-/** Figma's labels and order. Keys form the `app-detail-*` testids. */
+/**
+ * Figma's labels and order. Keys form the `app-detail-*` testids. The fourth
+ * entry, where there is one, is the operator backend's name for the field
+ * when the operator supplied it (`ChangeRequestRules`: the four fields an
+ * ORS may lack and the operator then answers on the request). The location
+ * row is marked when the operator supplied the country.
+ */
 const SITE_FIELDS = [
   ['site-name', 'Site name', (site) => toDisplayLines(site.siteName)],
   [
     'location',
     'Location',
-    (site) => joined(overseasSiteAddressLines(site, false))
+    (site) => joined(overseasSiteAddressLines(site, false)),
+    'country'
   ],
   // Not in the Figma frame: re-accreditation's site view wording.
-  ['coordinates', 'Coordinates', (site) => toDisplayLines(site.coordinates)],
+  [
+    'coordinates',
+    'Coordinates',
+    (site) => toDisplayLines(site.coordinates),
+    'coordinates'
+  ],
   ['contact-name', 'Contact name', (site) => toDisplayLines(site.contactName)],
   [
     'contact-email',
@@ -79,7 +102,8 @@ const SITE_FIELDS = [
   [
     'recycling-operation',
     'Recycling operation',
-    (site) => joined(toDisplayLines(site.operationCodes))
+    (site) => joined(toDisplayLines(site.operationCodes)),
+    'operationCodes'
   ],
   [
     'basel-codes',
@@ -95,7 +119,8 @@ const SITE_FIELDS = [
   [
     'conditions-of-export',
     'Conditions of export',
-    (site) => toDisplayLines(site.conditionsOfExport)
+    (site) => toDisplayLines(site.conditionsOfExport),
+    'conditionsOfExport'
   ]
 ]
 

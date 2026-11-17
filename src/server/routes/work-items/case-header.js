@@ -69,6 +69,19 @@ export function formatPayment(payload) {
 }
 
 /**
+ * A date for the case header ("12 Feb 2027"), or the em dash when it is
+ * absent or cannot be parsed (RA-495: add-ORS's Date added).
+ */
+export function formatHeaderDate(value) {
+  const iso = unwrapMongoDate(value)
+  if (!iso) {
+    return EM_DASH
+  }
+  const formatted = formatDateShortGds(iso)
+  return formatted === '' ? EM_DASH : formatted
+}
+
+/**
  * Format the absolute SLA due date for the header.
  *
  * `slaDueDate` is supplied by management-be once the SLA clock has started
@@ -77,12 +90,7 @@ export function formatPayment(payload) {
  * degrades to the em dash rather than throwing out of the template.
  */
 export function formatDueOn(value) {
-  const iso = unwrapMongoDate(value)
-  if (!iso) {
-    return EM_DASH
-  }
-  const formatted = formatDateShortGds(iso)
-  return formatted === '' ? EM_DASH : formatted
+  return formatHeaderDate(value)
 }
 
 // RA-503: operatorOrganisationId means two different things depending on how the work item was
@@ -267,6 +275,10 @@ export const RECYCLING_OPERATIONS_TAB_KEY = 'recycling-operations'
 export const APPLICATION_SUMMARY_TAB_KEY = 'application-summary'
 export const APPLICATION_HISTORY_TAB_KEY = 'application-history'
 export const ADDITIONAL_INFORMATION_TAB_KEY = 'additional-information'
+// RA-495. Add-ORS tabs whose content arrives later: Accreditation summary
+// (RA-769) and Related applications (RA-770).
+export const ACCREDITATION_SUMMARY_TAB_KEY = 'accreditation-summary'
+export const RELATED_APPLICATIONS_TAB_KEY = 'related-applications'
 
 // RA-469 follow-up. Product asked for the "Recycling operations" tab to be
 // hidden for now — the copy may be reworded before it's shown again. This
@@ -283,8 +295,9 @@ export const ADDITIONAL_INFORMATION_TAB_KEY = 'additional-information'
 // and "included" outcomes across the four tabs in every existing test.
 const HIDDEN_TAB_KEYS = new Set([RECYCLING_OPERATIONS_TAB_KEY])
 
-// The tabs a type's case has unless it declares its own `caseTabs` (RA-739:
-// add-ORS has only Application summary and Application history).
+// The tabs a type's case has unless it declares its own `caseTabs` (RA-739,
+// RA-495: add-ORS has Application summary, Accreditation summary, Related
+// applications and Application history).
 const DEFAULT_CASE_TAB_KEYS = [
   APPLICATION_SUMMARY_TAB_KEY,
   RECYCLING_OPERATIONS_TAB_KEY,
@@ -322,9 +335,13 @@ export function caseHasTab(type, tabKey) {
  * "Additional information" both keep their existing order relative to each
  * other; only the new tab is inserted.
  *
+ * RA-495. "Accreditation summary" and "Related applications" sit between
+ * "Application summary" and "Application history" (Figma "Flows 5"); only
+ * types that declare them in `caseTabs` (add-ORS) have them.
+ *
  * @param {object} args
  * @param {string} args.workItemId
- * @param {'summary'|'recycling-operations'|'history'|'additional-information'} args.active
+ * @param {'summary'|'recycling-operations'|'history'|'additional-information'|'accreditation-summary'|'related-applications'} args.active
  * @param {string|null} [args.typeId] the work item's type
  */
 export function buildCaseTabs({ workItemId, active, typeId = null }) {
@@ -335,6 +352,18 @@ export function buildCaseTabs({ workItemId, active, typeId = null }) {
       text: 'Application summary',
       href: base,
       active: active === 'summary'
+    },
+    {
+      key: ACCREDITATION_SUMMARY_TAB_KEY,
+      text: 'Accreditation summary',
+      href: `${base}/${ACCREDITATION_SUMMARY_TAB_KEY}`,
+      active: active === ACCREDITATION_SUMMARY_TAB_KEY
+    },
+    {
+      key: RELATED_APPLICATIONS_TAB_KEY,
+      text: 'Related applications',
+      href: `${base}/${RELATED_APPLICATIONS_TAB_KEY}`,
+      active: active === RELATED_APPLICATIONS_TAB_KEY
     },
     {
       key: RECYCLING_OPERATIONS_TAB_KEY,

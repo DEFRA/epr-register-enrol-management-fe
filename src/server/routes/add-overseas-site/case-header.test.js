@@ -32,7 +32,7 @@ function headerFor(workItem, assignment = null) {
   })
 }
 
-describe('RA-739: add-ORS case header', () => {
+describe('RA-739 / RA-495: add-ORS case header', () => {
   beforeAll(() => registerWorkItemType(addOverseasSiteType))
   afterAll(() => clearWorkItemRegistry())
 
@@ -41,13 +41,26 @@ describe('RA-739: add-ORS case header', () => {
       id: 'w-1',
       typeId: 'add-overseas-site',
       stateId: 'submitted',
+      submittedAt: '2027-02-12T10:00:00Z',
       payload: {
         applicationReference: 'IYC-ORS-2026-00001',
         organisationName: 'GreenLoop Recovery',
         operatorOrgNumber: 123001,
         material: 'Plastic',
         accreditationReference: 'ACC-1',
-        site: { orsId: '007', siteName: 'Denmark PR', chargePence: 32800 }
+        submittedBy: {
+          fullName: 'Sam Operator',
+          jobTitle: 'Director',
+          email: 'sam@greenloop.example'
+        },
+        site: {
+          orsId: '007',
+          siteName: 'Denmark PR',
+          addressLine1: 'Ejbyvvej 12',
+          townOrCity: 'Copenhagen',
+          country: 'Denmark',
+          chargePence: 32800
+        }
       },
       ...overrides
     })
@@ -81,13 +94,17 @@ describe('RA-739: add-ORS case header', () => {
     expect(headerFor(item).title).toBe(EM_DASH)
   })
 
-  test('has the eight meta items in Figma order', () => {
+  test('has the twelve meta items in ticket and Figma order', () => {
     const header = headerFor(addOrs())
     expect(header.meta.map((entry) => [entry.label, entry.value])).toEqual([
-      ['Request type', 'New ORS accreditation'],
+      ['Change request type', 'New ORS accreditation'],
       ['Status', 'Not started'],
       ['Assigned to', 'Unassigned'],
       ['Due date', EM_DASH],
+      ['Location', 'Copenhagen, Denmark'],
+      ['Site ID', '007'],
+      ['Date added', '12 Feb 2027'],
+      ['Submitted by', 'Sam Operator'],
       ['Material', 'Plastic'],
       ['Accreditation number', 'ACC-1'],
       ['Charge', '£328'],
@@ -95,13 +112,36 @@ describe('RA-739: add-ORS case header', () => {
     ])
   })
 
-  test('shows the dash for a missing accreditation number and charge', () => {
+  test('shows the payment date once the item is duly made', () => {
     const item = addOrs()
+    item.payload.paymentDate = '2027-02-20'
+    expect(metaValue(headerFor(item), 'payment-date')).toBe('20 Feb 2027')
+  })
+
+  test('shows the country alone as the location when there is no town', () => {
+    const item = addOrs()
+    item.payload.site = { siteName: 'Denmark PR', country: 'Denmark' }
+    expect(metaValue(headerFor(item), 'location')).toBe('Denmark')
+  })
+
+  test('shows the dash for every missing value', () => {
+    const item = addOrs({ submittedAt: null })
+    item.payload.material = undefined
     item.payload.accreditationReference = undefined
+    item.payload.submittedBy = undefined
     item.payload.site = { siteName: 'Denmark PR' }
     const header = headerFor(item)
-    expect(metaValue(header, 'accreditation-number')).toBe(EM_DASH)
-    expect(metaValue(header, 'charge')).toBe(EM_DASH)
+    for (const key of [
+      'location',
+      'site-id',
+      'date-added',
+      'submitted-by',
+      'material',
+      'accreditation-number',
+      'charge'
+    ]) {
+      expect(metaValue(header, key), key).toBe(EM_DASH)
+    }
   })
 
   test('shows the assignment panel name in Assigned to when there is one', () => {

@@ -424,17 +424,24 @@ describe("RA-739: a type's own header and tabs", () => {
     expect(caseHasTab(addOverseasSiteType, 'recycling-operations')).toBe(false)
     expect(caseHasTab(null, 'recycling-operations')).toBe(true)
     expect(caseHasTab({ id: 'other' }, 'additional-information')).toBe(true)
+    // RA-495. Only add-ORS has the Accreditation summary and Related
+    // applications tabs.
+    expect(caseHasTab(addOverseasSiteType, 'accreditation-summary')).toBe(true)
+    expect(caseHasTab(null, 'accreditation-summary')).toBe(false)
+    expect(caseHasTab(null, 'related-applications')).toBe(false)
   })
 
-  test('has only the Application summary and Application history tabs for add-ORS', () => {
+  test('has the four RA-495 tabs for add-ORS, in Figma order', () => {
     const tabs = buildCaseTabs({
       workItemId: 'w-1',
-      active: 'history',
+      active: 'related-applications',
       typeId: 'add-overseas-site'
     })
-    expect(tabs.map((tab) => [tab.key, tab.active])).toEqual([
-      ['application-summary', false],
-      ['application-history', true]
+    expect(tabs.map((tab) => [tab.key, tab.text, tab.active])).toEqual([
+      ['application-summary', 'Application summary', false],
+      ['accreditation-summary', 'Accreditation summary', false],
+      ['related-applications', 'Related applications', true],
+      ['application-history', 'Application history', false]
     ])
   })
 })

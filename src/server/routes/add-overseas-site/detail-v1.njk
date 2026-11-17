@@ -6,14 +6,15 @@
 {# re-accreditation's does, for the case tabs, the notices and error    #}
 {# banners, and the assignment panel. It replaces the application data  #}
 {# with the add-ORS site summary (`applicationSummary`, built by the    #}
-{# type's own summary builder) and drops the actions panel: Duly make,  #}
-{# Query and decisions are RA-495.                                      #}
+{# type's own summary builder) and drops the actions panel until the    #}
+{# add-ORS lifecycle actions (Duly make and decisions; no Query) arrive  #}
+{# with later RA-495 tasks.                                              #}
 {#                                                                      #}
 {# `data-state-id` carries the raw state id for the journey tests.      #}
 {# ------------------------------------------------------------------- #}
 {% extends 'work-items/detail.njk' %}
 
-{% from "work-items/summary-macros.njk" import documentItem, siteDetails %}
+{% from "work-items/summary-macros.njk" import documentItem, newPrefix, siteDetails %}
 
 {% block content %}
   <div data-testid="add-overseas-site-detail"
@@ -25,6 +26,8 @@
 {% block applicationSummary %}
   {# The site. Every row renders; a missing value is the dash. The row  #}
   {# and value testids match re-accreditation's application details.   #}
+  {# RA-495: a value the operator supplied on this request, rather than #}
+  {# one from the site's registration, carries the "NEW: " prefix.      #}
   <dl class="govuk-summary-list" data-testid="application-details">
     {% for row in applicationSummary.rows %}
       <div class="govuk-summary-list__row"
@@ -42,7 +45,7 @@
             {% endif %}
           {% else %}
             {% for line in row.values %}
-              <p class="govuk-body govuk-!-margin-bottom-0">{{ line }}</p>
+              <p class="govuk-body govuk-!-margin-bottom-0">{% if row.supplied and loop.first %}{{ newPrefix('app-detail-supplied-' + row.key) }}{% endif %}{{ line }}</p>
             {% endfor %}
           {% endif %}
         </dd>
@@ -67,6 +70,6 @@
   {% endif %}
 {% endblock %}
 
-{# No actions until RA-495 (Duly make, Query and decisions). #}
+{# No actions until later RA-495 tasks (Duly make and decisions). #}
 {% block primaryActions %}{% endblock %}
 {% block actionsCard %}{% endblock %}

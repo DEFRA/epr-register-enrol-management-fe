@@ -6,6 +6,40 @@
 
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 
+{# RA-292. The "NEW: " prefix. RA-495: the add-ORS summary marks the    #}
+{# values the operator supplied on the request with it too.             #}
+{#                                                                          #}
+{# DESIGN NOTE: the design is RATIFIED. The mock-ups show newness as a       #}
+{# literal `NEW: ` prefix on the value itself — `NEW: Bharat Recycling` —    #}
+{# not as a badge beside it, and the BA confirmed that on the ticket thread  #}
+{# and asked for it in colour to make it prominent. Settled, not             #}
+{# provisional. An earlier revision used a `govuk-tag--blue` reading "New",  #}
+{# which was correct while no design existed (GDS is this service's default  #}
+{# in that case) and is superseded now that one does. Do not revert it to a  #}
+{# tag.                                                                      #}
+{#                                                                          #}
+{# The prefix is LITERAL TEXT, deliberately. It must not become a CSS        #}
+{# ::before, a background image or anything else that conveys it by styling  #}
+{# alone. The colour on `.app-new-flag` is ADDITIVE ONLY: strip the CSS and  #}
+{# the word "NEW:" is still there for a colour-blind user, a screen-reader   #}
+{# user, and anyone copying the value out. That is precisely what makes      #}
+{# colouring it safe. The contrast working — measured against this page's    #}
+{# GREY background, not white — is in `_work-items.scss`.                    #}
+{#                                                                          #}
+{# An icon was raised and deferred by the requester ("bigger fish to fry").  #}
+{# If one is ever added it belongs inside this macro, beside the text and    #}
+{# never replacing it. Do not build one speculatively.                       #}
+{#                                                                          #}
+{# The space after the colon is an ordinary ASCII space, NOT `&nbsp;`. A     #}
+{# non-breaking space renders identically and would silently break every     #}
+{# downstream `NEW: ` string assertion, so the wrapping it would prevent is  #}
+{# not worth buying here.                                                    #}
+{#                                                                          #}
+{# Rendered ONLY when the flag is strictly true (the view model resolves     #}
+{# that, not this macro), so a caller's `{% if %}` guard is the whole story: #}
+{# absent means absent from the DOM, never merely hidden.                    #}
+{% macro newPrefix(testId) %}<span class="app-new-flag" data-testid="{{ testId }}">NEW:</span> {% endmacro %}
+
 {# One supporting document: a link when the file has passed the virus scan, #}
 {# otherwise its name plus the scan-status tag. The `app-detail-document`   #}
 {# testid is repeated (not indexed) so the e2e suite can count them and     #}

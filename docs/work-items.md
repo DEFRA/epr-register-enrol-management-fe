@@ -159,13 +159,17 @@ from its own hooks, never from a check on its category:
 - `buildCaseHeader({ header, workItem, assignment })` builds the case header
   from the fields every header shares. Add-ORS's
   (`routes/add-overseas-site/case-header.js`) has the reference as a
-  caption, the site name and ORS id as the title, and two rows of four meta
-  items. Every work item page builds its header from a work item passed
+  caption, the site name and ORS id as the title, and three rows of four
+  meta items (RA-495). Every work item page builds its header from a work item passed
   through `decorateForCaseHeader` (`routes/work-items/case-header.js`), so
   the type's header shows on every tab.
 - `caseTabs` lists the tab keys the type's case has (by default all four).
-  Add-ORS has only Application summary and Application history, and its
-  Additional information and Recycling operations pages are not found.
+  Add-ORS has Application summary, Accreditation summary, Related
+  applications and Application history (RA-495; the middle two are empty
+  until RA-769 and RA-770, rendered by `empty-tab.controller.js`). Its
+  Additional information and Recycling operations pages are not found, and a
+  type without the Accreditation summary or Related applications tab gets
+  not found for those.
 - `describeCardSite(payload)` gives the card a site line in place of the
   registration number, and `cardAlwaysShowsSubmittedOn` keeps "Submitted on"
   on the card in every state.

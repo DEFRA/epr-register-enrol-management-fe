@@ -4,8 +4,10 @@ import { standardWorkflow } from '../core/standard-workflow.js'
 import { buildAddOverseasSiteSummary } from '#/server/routes/add-overseas-site/application-summary.js'
 import { buildAddOverseasSiteHeader } from '#/server/routes/add-overseas-site/case-header.js'
 import {
+  ACCREDITATION_SUMMARY_TAB_KEY,
   APPLICATION_HISTORY_TAB_KEY,
-  APPLICATION_SUMMARY_TAB_KEY
+  APPLICATION_SUMMARY_TAB_KEY,
+  RELATED_APPLICATIONS_TAB_KEY
 } from '#/server/routes/work-items/case-header.js'
 
 /**
@@ -14,11 +16,12 @@ import {
  * `AddOverseasSiteType`: an in-year change following the Standard workflow.
  * management-be splits each submission into one work item per site.
  *
- * The detail page has the add-ORS case header (`buildCaseHeader`) and only
- * the Application summary and Application history tabs (`caseTabs`); later
- * tickets add Accreditation summary and Related applications. The Application summary shows the site from
- * `payload.site`, built by the type's own `buildApplicationSummary`, and the
- * assignment panel; RA-495 adds the actions.
+ * The detail page has the add-ORS case header (`buildCaseHeader`) and four
+ * tabs (`caseTabs`, RA-495): Application summary, Accreditation summary and
+ * Related applications (empty until RA-769 and RA-770), and Application
+ * history. The Application summary shows the site from `payload.site`, built
+ * by the type's own `buildApplicationSummary`, and the assignment panel;
+ * later RA-495 tasks add the actions.
  */
 export const addOverseasSiteType = {
   id: 'add-overseas-site',
@@ -31,7 +34,12 @@ export const addOverseasSiteType = {
   transitions: standardWorkflow.transitions,
   // Every work item page uses a type's own header and tabs when it has them.
   buildCaseHeader: buildAddOverseasSiteHeader,
-  caseTabs: [APPLICATION_SUMMARY_TAB_KEY, APPLICATION_HISTORY_TAB_KEY],
+  caseTabs: [
+    APPLICATION_SUMMARY_TAB_KEY,
+    ACCREDITATION_SUMMARY_TAB_KEY,
+    RELATED_APPLICATIONS_TAB_KEY,
+    APPLICATION_HISTORY_TAB_KEY
+  ],
   // The detail controller uses a type's own summary builder when it has one.
   buildApplicationSummary: buildAddOverseasSiteSummary,
   // The Applications list card shows this as its site line, in place of the

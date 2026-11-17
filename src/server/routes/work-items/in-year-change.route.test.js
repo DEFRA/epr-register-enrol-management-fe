@@ -71,6 +71,11 @@ function anAddOrsItem({
       accreditationReference: 'ACC-REP-PL-0007',
       paymentReference: 'PR/PK/REP/123001',
       chargePence: 98400,
+      submittedBy: {
+        fullName: 'Sam Operator',
+        jobTitle: 'Director',
+        email: 'sam@greenloop.example'
+      },
       site: aSite()
     },
     availableActions: []
@@ -197,9 +202,35 @@ function tabs($) {
     .get()
 }
 
+/**
+ * RA-495. The add-ORS case tabs, in Figma's order with the ticket's names,
+ * as `tabs($)` reads them with `active` the current tab (no link).
+ */
+function addOrsTabs(active) {
+  const base = `/work-items/${ADD_ORS_ID}`
+  return [
+    ['application-summary', 'Application summary', base],
+    [
+      'accreditation-summary',
+      'Accreditation summary',
+      `${base}/accreditation-summary`
+    ],
+    [
+      'related-applications',
+      'Related applications',
+      `${base}/related-applications`
+    ],
+    ['application-history', 'Application history', `${base}/audit-log`]
+  ].map(([key, text, href]) => ({
+    key,
+    text,
+    href: key === active ? null : href
+  }))
+}
+
 let server
 
-describe('RA-739: in-year change applications', () => {
+describe('RA-739 / RA-495: in-year change applications', () => {
   beforeAll(async () => {
     server = await createServer()
     await server.initialize()
@@ -513,7 +544,7 @@ describe('RA-739: in-year change applications', () => {
       expect($('[data-testid="case-header"]').text()).not.toContain('123001')
     })
 
-    test('shows the eight meta items in Figma order with the site charge', async () => {
+    test('shows the twelve meta items in ticket order with the site charge', async () => {
       const $ = await detailPage(anAddOrsItem())
 
       const meta = $(
@@ -522,10 +553,14 @@ describe('RA-739: in-year change applications', () => {
         .map((_, el) => squash($(el).text()))
         .get()
       expect(meta).toEqual([
-        'Request type: New ORS accreditation',
+        'Change request type: New ORS accreditation',
         'Status: Not started',
         'Assigned to: Unassigned',
         `Due date: ${EM_DASH}`,
+        'Location: Copenhagen, Denmark',
+        'Site ID: 007',
+        'Date added: 11 Feb 2027',
+        'Submitted by: Sam Operator',
         'Material: Plastic',
         'Accreditation number: ACC-REP-PL-0007',
         'Charge: £328',
@@ -579,18 +614,25 @@ describe('RA-739: in-year change applications', () => {
       const item = anAddOrsItem()
       delete item.payload.material
       delete item.payload.accreditationReference
-      delete item.payload.site.chargePence
+      delete item.payload.submittedBy
+      delete item.submittedAt
+      item.payload.site = { siteName: 'Denmark PR' }
       const $ = await detailPage(item)
 
-      expect(squash($('[data-testid="case-header-material"]').text())).toBe(
-        EM_DASH
-      )
-      expect(
-        squash($('[data-testid="case-header-accreditation-number"]').text())
-      ).toBe(EM_DASH)
-      expect(squash($('[data-testid="case-header-charge"]').text())).toBe(
-        EM_DASH
-      )
+      for (const key of [
+        'location',
+        'site-id',
+        'date-added',
+        'submitted-by',
+        'material',
+        'accreditation-number',
+        'charge'
+      ]) {
+        expect(
+          squash($(`[data-testid="case-header-${key}"]`).text()),
+          key
+        ).toBe(EM_DASH)
+      }
     })
 
     test('shows the payment date once it is recorded', async () => {
@@ -603,21 +645,10 @@ describe('RA-739: in-year change applications', () => {
       )
     })
 
-    test('shows only the Application summary and Application history tabs', async () => {
+    test('shows the four add-ORS tabs, with Application summary active', async () => {
       const $ = await detailPage(anAddOrsItem())
 
-      expect(tabs($)).toEqual([
-        {
-          key: 'application-summary',
-          text: 'Application summary',
-          href: null
-        },
-        {
-          key: 'application-history',
-          text: 'Application history',
-          href: `/work-items/${ADD_ORS_ID}/audit-log`
-        }
-      ])
+      expect(tabs($)).toEqual(addOrsTabs('application-summary'))
       expect($('[data-testid="re-accreditation-detail"]')).toHaveLength(0)
       expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
     })
@@ -694,7 +725,8 @@ describe('RA-739: in-year change applications', () => {
       ])
       expect(rows.slice(0, 10).map((row) => row.value)).toEqual([
         'Denmark PR',
-        'Ejbyvvej 12, Industrial Park, Copenhagen, Denmark',
+        // The fixture's operator supplied the country (RA-495).
+        'NEW: Ejbyvvej 12, Industrial Park, Copenhagen, Denmark',
         '55.6761, 12.5683',
         'John Smith',
         'john.smith@denmarkpr.com',
@@ -883,13 +915,55 @@ describe('RA-739: in-year change applications', () => {
       expect(applyWorkItemAction).not.toHaveBeenCalled()
     })
 
-    test('does not show ORS ID, EU or OECD rows, or a supplied-value marker', async () => {
+    test('does not show ORS ID, EU or OECD rows', async () => {
       const $ = await summaryPage(anAddOrsItem())
       const summary = $('[data-testid="application-details"]').text()
 
       expect(summary).not.toContain('ORS ID')
       expect(summary).not.toContain('EU country')
       expect(summary).not.toContain('OECD country')
+    })
+
+    // RA-495 AC2. The fixture's operator supplied the country only.
+    test('marks the values the operator supplied with the NEW: prefix', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+
+      expect(squash(rowValue($, 'location').text())).toBe(
+        'NEW: Ejbyvvej 12, Industrial Park, Copenhagen, Denmark'
+      )
+      expect(
+        rowValue($, 'location').find(
+          '.app-new-flag[data-testid="app-detail-supplied-location"]'
+        )
+      ).toHaveLength(1)
+      expect(
+        $('[data-testid="application-details"] .app-new-flag')
+      ).toHaveLength(1)
+    })
+
+    test('marks every supplied field, and nothing when none was supplied', async () => {
+      const item = anAddOrsItem()
+      item.payload.site.suppliedFields = [
+        'country',
+        'coordinates',
+        'operationCodes',
+        'conditionsOfExport'
+      ]
+      let $ = await summaryPage(item)
+      expect(
+        $('[data-testid^="app-detail-supplied-"]')
+          .map((_, el) => $(el).attr('data-testid'))
+          .get()
+      ).toEqual([
+        'app-detail-supplied-location',
+        'app-detail-supplied-coordinates',
+        'app-detail-supplied-recycling-operation',
+        'app-detail-supplied-conditions-of-export'
+      ])
+      expect(squash(rowValue($, 'recycling-operation').text())).toBe('NEW: R5')
+
+      item.payload.site.suppliedFields = []
+      $ = await summaryPage(item)
       expect($('.app-new-flag')).toHaveLength(0)
     })
   })
@@ -1067,6 +1141,57 @@ describe('RA-739: in-year change applications', () => {
   })
 
   describe('Application history page', () => {
+    // RA-495 AC3. The entries are management-be's; the page lists each.
+    test('lists the assignment and due date changes', async () => {
+      const item = anAddOrsItem()
+      item.auditLog = [
+        {
+          id: 'e0000003-0000-4000-8000-000000000000',
+          action: 'sla-extended',
+          actionDisplayName: 'Determination deadline extended',
+          stateId: 'assessment-in-progress',
+          details: {
+            reason: 'Waiting on evidence',
+            additionalDuration: 'P35D'
+          },
+          createdAt: '2027-03-01T09:00:00Z'
+        },
+        {
+          id: 'e0000002-0000-4000-8000-000000000000',
+          action: 'unassigned',
+          actionDisplayName: 'Unassigned',
+          stateId: 'submitted',
+          details: {},
+          createdAt: '2027-02-13T09:00:00Z'
+        },
+        {
+          id: 'e0000001-0000-4000-8000-000000000000',
+          action: 'assigned',
+          actionDisplayName: 'Assigned',
+          stateId: 'submitted',
+          details: { assigneeName: 'Stub Caseworker One' },
+          createdAt: '2027-02-12T09:00:00Z'
+        }
+      ]
+      getWorkItem.mockResolvedValue({ ok: true, workItem: item })
+
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ADD_ORS_ID}/audit-log`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const $ = cheerio.load(result)
+      expect(
+        $('[data-testid="work-item-audit-log"] > li')
+          .map((_, el) => $(el).attr('data-action'))
+          .get()
+      ).toEqual(['sla-extended', 'unassigned', 'assigned'])
+      expect($('[data-testid="work-item-audit-log"]').text()).toContain(
+        'Waiting on evidence'
+      )
+    })
+
     test('shows the add-ORS header and tabs', async () => {
       getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
 
@@ -1093,18 +1218,61 @@ describe('RA-739: in-year change applications', () => {
       expect(squash($('[data-testid="case-header-charge"]').text())).toBe(
         '£328'
       )
-      expect(tabs($)).toEqual([
-        {
-          key: 'application-summary',
-          text: 'Application summary',
-          href: `/work-items/${ADD_ORS_ID}`
-        },
-        {
-          key: 'application-history',
-          text: 'Application history',
-          href: null
-        }
-      ])
+      expect(tabs($)).toEqual(addOrsTabs('application-history'))
+    })
+  })
+
+  // RA-495. Accreditation summary (RA-769) and Related applications (RA-770)
+  // are tabs of an add-ORS case with nothing in them yet.
+  describe.each([
+    ['Accreditation summary', 'accreditation-summary'],
+    ['Related applications', 'related-applications']
+  ])('%s tab', (_, tabKey) => {
+    const url = `/work-items/${ADD_ORS_ID}/${tabKey}`
+
+    test('renders an empty tab under the add-ORS header, with itself active', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+
+      const { result, statusCode } = await server.inject({ method: 'GET', url })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      const $ = cheerio.load(result)
+      expect(squash($('[data-testid="case-header-title"]').text())).toBe(
+        'Denmark PR (007)'
+      )
+      expect(squash($('[data-testid="case-header-site-id"]').text())).toBe(
+        '007'
+      )
+      expect(tabs($)).toEqual(addOrsTabs(tabKey))
+      const panel = $(`[data-testid="${tabKey}-tab"]`)
+      expect(panel).toHaveLength(1)
+      expect(squash(panel.text())).toBe('')
+      expect($('[data-testid="case-assignment-panel"]')).toHaveLength(0)
+    })
+
+    test('is not found for a re-accreditation item', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aReAccreditationItem()
+      })
+
+      const response = await server.inject({
+        method: 'GET',
+        url: `/work-items/${RE_ACCREDITATION_ID}/${tabKey}`
+      })
+
+      expect(response.statusCode).toBe(statusCodes.notFound)
+      expect(squash(cheerio.load(response.result)('h1').text())).toBe(
+        'Application not found'
+      )
+    })
+
+    test('is not found for an unknown work item', async () => {
+      getWorkItem.mockResolvedValue({ ok: false, status: 404 })
+
+      const response = await server.inject({ method: 'GET', url })
+
+      expect(response.statusCode).toBe(statusCodes.notFound)
     })
   })
 

@@ -102,6 +102,56 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
     })
   })
 
+  describe('RA-495: operator-supplied values', () => {
+    function suppliedKeys(site) {
+      return summaryFor(site)
+        .rows.filter((row) => row.supplied)
+        .map((row) => row.key)
+    }
+
+    test('marks the row of each field the operator supplied', () => {
+      expect(
+        suppliedKeys(
+          aSite({
+            suppliedFields: [
+              'country',
+              'coordinates',
+              'operationCodes',
+              'conditionsOfExport'
+            ]
+          })
+        )
+      ).toEqual([
+        'location',
+        'coordinates',
+        'recycling-operation',
+        'conditions-of-export'
+      ])
+    })
+
+    test('marks only the supplied fields', () => {
+      expect(suppliedKeys(aSite({ suppliedFields: ['coordinates'] }))).toEqual([
+        'coordinates'
+      ])
+    })
+
+    test.each([
+      ['an empty list', []],
+      ['no list', undefined],
+      ['a list of unknown fields', ['siteName', 'besEvidence']]
+    ])('marks nothing for %s', (_, suppliedFields) => {
+      expect(suppliedKeys(aSite({ suppliedFields }))).toEqual([])
+    })
+
+    test('does not mark a supplied field with no value', () => {
+      expect(
+        suppliedKeys(
+          aSite({ suppliedFields: ['coordinates'], coordinates: '' })
+        )
+      ).toEqual([])
+    })
+  })
+
   test('does not show ORS ID, EU or OECD', () => {
     const labels = summaryFor(aSite()).rows.map((row) => row.label)
     expect(labels).not.toContain('ORS ID')
