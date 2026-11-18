@@ -761,7 +761,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(squash(rowValue($, 'conditions-of-export').text())).toBe('No')
     })
 
-    test('shows a dash for each missing value', async () => {
+    test('shows a dash for each missing value, and no documents for missing BES evidence', async () => {
       const item = anAddOrsItem()
       item.payload.site = { orsId: '007', siteName: 'Denmark PR' }
       const $ = await summaryPage(item)
@@ -769,9 +769,16 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       const rows = summaryRows($)
       expect(rows).toHaveLength(11)
       expect(rows[0].value).toBe('Denmark PR')
-      for (const row of rows.slice(1)) {
+      for (const row of rows.slice(1, -1)) {
         expect(row.value, row.label).toBe(EM_DASH)
       }
+      // As re-accreditation words an empty file row.
+      expect(rows.at(-1).value).toBe('No documents uploaded.')
+      expect(
+        rowValue($, 'bes-evidence').find(
+          '[data-testid="app-detail-documents-none"]'
+        )
+      ).toHaveLength(1)
       expect($('[data-testid="interim-sites"]')).toHaveLength(0)
     })
 

@@ -47,7 +47,7 @@
                 {% for file in row.files %}{{ documentItem(file, showDates=true, newTestId=('app-detail-supplied-' + row.key) if (row.supplied and loop.first) else '') }}{% endfor %}
               </ul>
             {% else %}
-              —
+              <span data-testid="app-detail-documents-none">No documents uploaded.</span>
             {% endif %}
           {% else %}
             {% for line in row.values %}
