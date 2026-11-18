@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 
 import { assertValidWorkItemModule } from '../core/module.js'
 import {
+  assertCurrentTemplateVersionIsRegistered,
   clearDetailTemplateRegistry,
   resolveDetailTemplate
 } from '../core/templates.js'
@@ -18,7 +19,7 @@ describe('add-overseas-site module (RA-739)', () => {
       id: 'add-overseas-site',
       displayName: 'New ORS accreditation',
       category: 'in-year-change',
-      templateVersion: 'v1'
+      templateVersion: 'v2'
     })
     expect(addOverseasSiteType.initialState).toEqual({
       id: 'submitted',
@@ -58,9 +59,20 @@ describe('add-overseas-site module (RA-739)', () => {
 
     await addOverseasSiteModule.register(server)
 
-    expect(resolveDetailTemplate('add-overseas-site', 'v1')).toBe(
-      'add-overseas-site/detail-v1'
-    )
+    // The current version (what management-be stamps) and every older one
+    // render with the add-ORS template, never the generic fallback.
+    expect(addOverseasSiteType.templateVersion).toBe('v2')
+    for (const version of ['v1', 'v2']) {
+      expect(resolveDetailTemplate('add-overseas-site', version)).toBe(
+        'add-overseas-site/detail-v1'
+      )
+    }
+    expect(() =>
+      assertCurrentTemplateVersionIsRegistered(
+        addOverseasSiteType.id,
+        addOverseasSiteType.templateVersion
+      )
+    ).not.toThrow()
     // RA-495. Duly make, Make determination and Confirm applicant contact.
     const routes = server.route.mock.calls.flatMap(([mounted]) => mounted)
     expect(routes.map((r) => `${r.method} ${r.path}`)).toEqual([

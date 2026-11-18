@@ -11,6 +11,8 @@ import {
   RELATED_APPLICATIONS_TAB_KEY
 } from '#/server/routes/work-items/case-header.js'
 
+const DETAIL_TEMPLATE_V1 = 'add-overseas-site/detail-v1'
+
 /**
  * RA-739. Add-ORS work item module: an operator's request to add an overseas
  * reprocessing site to an accreditation. Mirrors management-be's
@@ -35,8 +37,10 @@ export const addOverseasSiteType = {
   id: 'add-overseas-site',
   displayName: 'New ORS accreditation',
   category: IN_YEAR_CHANGE_CATEGORY,
-  // Mirrors `AddOverseasSiteType.TemplateVersion` in management-be.
-  templateVersion: 'v1',
+  // Mirrors `AddOverseasSiteType.TemplateVersion` in management-be, which is
+  // the value stamped onto work items. Keep the two in lock-step and add the
+  // matching entry to the detail-template map below.
+  templateVersion: 'v2',
   initialState: standardWorkflow.initialState,
   states: standardWorkflow.states,
   transitions: standardWorkflow.transitions,
@@ -95,8 +99,15 @@ function describeCardSite(payload) {
 export const addOverseasSiteModule = {
   type: addOverseasSiteType,
   async register(server) {
+    // Every version renders with the one template. v2 only made the
+    // withdraw transitions non-callable (management-be migrates live items
+    // to v2), which this service never offered (RA-317). v1 stays
+    // registered so any item still stamped v1 keeps its own template rather
+    // than silently falling back to the generic one; the boot-time guard
+    // (`assertCurrentTemplateVersionIsRegistered`) needs the current version.
     registerModuleDetailTemplates(addOverseasSiteType.id, {
-      v1: 'add-overseas-site/detail-v1'
+      v1: DETAIL_TEMPLATE_V1,
+      v2: DETAIL_TEMPLATE_V1
     })
     server.route(buildStandardLifecycleRoutes(addOverseasSiteType.id))
   }

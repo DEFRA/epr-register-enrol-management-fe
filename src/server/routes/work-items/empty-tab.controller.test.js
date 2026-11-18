@@ -28,7 +28,7 @@ function anAddOrsItem() {
     id: ID,
     typeId: 'add-overseas-site',
     stateId: 'submitted',
-    templateVersion: 'v1',
+    templateVersion: 'v2',
     submittedAt: '2027-02-11T10:00:00Z',
     payload: {
       applicationReference: 'IYC-ORS-2027-00001',

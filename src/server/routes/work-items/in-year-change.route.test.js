@@ -61,7 +61,7 @@ function anAddOrsItem({
     id,
     typeId: 'add-overseas-site',
     stateId: 'submitted',
-    templateVersion: 'v1',
+    templateVersion: 'v2',
     submittedAt: '2027-02-11T10:00:00Z',
     lastModifiedAt: '2027-02-11T10:00:00Z',
     assignedToId: assignedToName ? 'officer-1' : null,
