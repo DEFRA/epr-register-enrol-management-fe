@@ -175,7 +175,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
       header.meta.slice(-2).map(({ label, value }) => ({ label, value }))
     ).toEqual([
       { label: 'Payment date', value: '01 Nov 2026' },
-      { label: 'Payment amount', value: '£2,184.00' }
+      { label: 'Charge', value: '£2,184.00' }
     ])
   })
 

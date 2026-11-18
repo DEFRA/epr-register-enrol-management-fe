@@ -4497,7 +4497,7 @@ describe('RA-295 individual work item page', () => {
       'Due date:',
       'Registration number:',
       'Payment date:',
-      'Payment amount:'
+      'Charge:'
     ])
   })
 
@@ -4533,7 +4533,7 @@ describe('RA-295 individual work item page', () => {
       /Payment date:<\/dt>\s*<dd[^>]*data-testid="case-header-payment-date">Not received</
     )
     expect(result).toMatch(
-      /Payment amount:<\/dt>\s*<dd[^>]*data-testid="case-header-payment-amount">Not received</
+      /Charge:<\/dt>\s*<dd[^>]*data-testid="case-header-payment-amount">Not received</
     )
   })
 

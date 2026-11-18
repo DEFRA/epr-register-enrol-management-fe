@@ -228,7 +228,7 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
     },
     {
       key: 'payment-amount',
-      label: 'Payment amount',
+      label: 'Charge',
       value: payment.amount
     }
   ]

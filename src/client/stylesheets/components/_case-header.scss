@@ -50,7 +50,7 @@
 // wide (Material / Registration number carry the longest values):
 //
 //   Material             | Status       | Assigned to    | Due date
-//   Registration number  | Payment date | Payment amount |
+//   Registration number  | Payment date | Charge |
 //
 // The rows fall out of the order of `buildCaseHeader().meta` via grid
 // auto-placement, so the template stays a plain loop. Mobile-first: one
