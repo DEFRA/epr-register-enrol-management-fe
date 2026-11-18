@@ -160,7 +160,7 @@ describe('RA-595: make a determination from Duly made', () => {
       )
       expect(page).not.toContain('Decision logged: Refused')
       expect(page).toContain(
-        'data-testid="re-accreditation-pending-contact-banner"'
+        'data-testid="standard-lifecycle-pending-contact-banner"'
       )
       expect(page).toContain('Application refused')
     })
@@ -193,7 +193,7 @@ describe('RA-595: make a determination from Duly made', () => {
       )
       expect(page).not.toContain('Decision logged: Approved')
       expect(page).toContain(
-        'data-testid="re-accreditation-pending-contact-banner"'
+        'data-testid="standard-lifecycle-pending-contact-banner"'
       )
     })
 

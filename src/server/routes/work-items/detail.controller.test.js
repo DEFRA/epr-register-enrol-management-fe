@@ -2637,11 +2637,11 @@ describe('#workItemDetailController', () => {
       )
       expect(result).toEqual(
         expect.stringContaining(
-          'data-testid="re-accreditation-readonly-actions"'
+          'data-testid="standard-lifecycle-readonly-actions"'
         )
       )
       expect(result).toEqual(
-        expect.stringContaining('data-testid="re-accreditation-state-tag"')
+        expect.stringContaining('data-testid="standard-lifecycle-state-tag"')
       )
     })
   })
@@ -3167,7 +3167,7 @@ describe('#workItemDetailController', () => {
         // a closed case never offers approval by either route.
         expect(result).not.toContain('data-testid="log-decision-cta"')
         expect(result).toContain(
-          'data-testid="re-accreditation-readonly-actions"'
+          'data-testid="standard-lifecycle-readonly-actions"'
         )
       }
     )
@@ -3236,7 +3236,7 @@ describe('#workItemDetailController', () => {
       )
       expect(result).toEqual(
         expect.stringContaining(
-          'data-testid="re-accreditation-log-decision-cta"'
+          'data-testid="standard-lifecycle-log-decision-cta"'
         )
       )
       // The Approve CTA is a govukButton styled as a link (href-based),
@@ -3709,7 +3709,7 @@ describe('#workItemDetailController', () => {
     const REMOVED_PAYMENT_BUTTON =
       'data-testid="action-payment-received-during-duly-made"'
     const CONTINUE_CTA = 'data-testid="re-accreditation-continue-review-cta"'
-    const DULY_MAKE_CTA = 'data-testid="re-accreditation-duly-make-cta"'
+    const DULY_MAKE_CTA = 'data-testid="standard-lifecycle-duly-make-cta"'
 
     async function renderUpdated(originStateId) {
       registerReaccreditation()
@@ -4116,7 +4116,9 @@ describe('#workItemDetailController', () => {
       )
       // canDulyMake === true: Duly make is the only onward CTA.
       expect(result).toEqual(
-        expect.stringContaining('data-testid="re-accreditation-duly-make-cta"')
+        expect.stringContaining(
+          'data-testid="standard-lifecycle-duly-make-cta"'
+        )
       )
     })
 
@@ -4144,7 +4146,9 @@ describe('#workItemDetailController', () => {
       )
       // canDulyMake === false: no Duly make CTA for a post-duly-made query.
       expect(result).not.toEqual(
-        expect.stringContaining('data-testid="re-accreditation-duly-make-cta"')
+        expect.stringContaining(
+          'data-testid="standard-lifecycle-duly-make-cta"'
+        )
       )
     })
 

@@ -17,8 +17,8 @@
 {# `lifecycleActionsExtra` block.                                        #}
 {#                                                                      #}
 {# The `data-testid` hooks are an EXTERNAL CONTRACT consumed by the      #}
-{# mgmt-tests journey suite; they keep their `re-accreditation-` names  #}
-{# for every type so the existing specs run unchanged.                  #}
+{# mgmt-tests and fe-tests journey suites. Every type renders them, so  #}
+{# they carry the type-neutral `standard-lifecycle-` prefix.            #}
 {# ------------------------------------------------------------------- #}
 
 {% extends 'work-items/detail.njk' %}
@@ -39,7 +39,7 @@
     {% set pendingContactHtml %}
       <p class="govuk-notification-banner__heading">{{ workItem.pendingContactBanner.text }}</p>
       {% if workItem.pendingContactBanner.accreditationId %}
-        <p class="govuk-body">Accreditation ID: <strong data-testid="re-accreditation-pending-contact-accreditation-id">{{ workItem.pendingContactBanner.accreditationId }}</strong></p>
+        <p class="govuk-body">Accreditation ID: <strong data-testid="standard-lifecycle-pending-contact-accreditation-id">{{ workItem.pendingContactBanner.accreditationId }}</strong></p>
       {% endif %}
     {% endset %}
     {{ govukNotificationBanner({
@@ -48,7 +48,7 @@
       html: pendingContactHtml,
       disableAutoFocus: true,
       role: 'region',
-      attributes: { "data-testid": "re-accreditation-pending-contact-banner" }
+      attributes: { "data-testid": "standard-lifecycle-pending-contact-banner" }
     }) }}
   {% endif %}
 {% endblock %}
@@ -64,14 +64,14 @@
 {% block actionsPanel %}
   {% if workItem.isReadOnlyState %}
     <h2 class="govuk-heading-m">Outcome</h2>
-    <p class="govuk-body" data-testid="re-accreditation-readonly-actions">
+    <p class="govuk-body" data-testid="standard-lifecycle-readonly-actions">
       This work item is in a final state. No further decision actions are available.
     </p>
     <p class="govuk-body govuk-!-margin-bottom-0">
       {{ govukTag({
         text: workItem.stateDisplayName,
         classes: workItem.stateTagClasses,
-        attributes: { "data-testid": "re-accreditation-state-tag" }
+        attributes: { "data-testid": "standard-lifecycle-state-tag" }
       }) }}
     </p>
   {% elif workItem.isPendingContact %}
@@ -79,7 +79,7 @@
     {# action while a determination awaits applicant contact: no Make      #}
     {# determination, Query or generic actions (`super()` is not called).  #}
     {# A LINK to the confirm page, so clicking it changes nothing.          #}
-    <div data-testid="re-accreditation-confirm-contact">
+    <div data-testid="standard-lifecycle-confirm-contact">
       {{ appActionLink({
         text: "Confirm applicant contact",
         href: workItem.confirmContactHref,
@@ -102,7 +102,7 @@
     {# clicking it changes nothing. Gated by `workItem.canDulyMake`, which #}
     {# goes through the same helper that guards the route itself.          #}
     {% if workItem.canDulyMake %}
-      <div data-testid="re-accreditation-duly-make-cta">
+      <div data-testid="standard-lifecycle-duly-make-cta">
         {{ appActionLink({
           text: "Duly make",
           href: workItem.dulyMakeHref,
@@ -122,7 +122,7 @@
     {# Gated by `workItem.canLogDecision`, which goes through the same     #}
     {# helper that guards the route itself.                                #}
     {% if workItem.canLogDecision %}
-      <div data-testid="re-accreditation-log-decision-cta">
+      <div data-testid="standard-lifecycle-log-decision-cta">
         {{ appActionLink({
           text: "Make Determination",
           href: workItem.logDecisionHref,

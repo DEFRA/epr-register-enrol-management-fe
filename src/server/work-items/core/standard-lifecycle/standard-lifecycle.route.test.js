@@ -358,7 +358,9 @@ describe('RA-495: the detail page of a non-re-accreditation Standard type', () =
       ]
     })
 
-    const banner = $('[data-testid="re-accreditation-pending-contact-banner"]')
+    const banner = $(
+      '[data-testid="standard-lifecycle-pending-contact-banner"]'
+    )
     expect(squash(banner.text())).toContain('Application approved')
     expect(squash(banner.text())).toContain(
       'You now need to contact the applicant about the decision.'
@@ -374,11 +376,11 @@ describe('RA-495: the detail page of a non-re-accreditation Standard type', () =
 
     expect(
       squash(
-        $('[data-testid="re-accreditation-pending-contact-banner"]').text()
+        $('[data-testid="standard-lifecycle-pending-contact-banner"]').text()
       )
     ).toContain('Application refused')
     expect(
-      $('[data-testid="re-accreditation-pending-contact-accreditation-id"]')
+      $('[data-testid="standard-lifecycle-pending-contact-accreditation-id"]')
         .length
     ).toBe(0)
   })
@@ -392,9 +394,9 @@ describe('RA-495: the detail page of a non-re-accreditation Standard type', () =
       const $ = await renderDetail({ stateId })
 
       expect(
-        $('[data-testid="re-accreditation-readonly-actions"]').length
+        $('[data-testid="standard-lifecycle-readonly-actions"]').length
       ).toBe(1)
-      const tag = $('[data-testid="re-accreditation-state-tag"]')
+      const tag = $('[data-testid="standard-lifecycle-state-tag"]')
       expect(squash(tag.text())).toBe(label)
       expect(tag.hasClass(tagClass)).toBe(true)
       expect($('[data-testid="confirm-applicant-contact-cta"]').length).toBe(0)

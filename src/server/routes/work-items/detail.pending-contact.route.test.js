@@ -107,7 +107,9 @@ describe('RA-527: detail page while an approval is pending applicant contact', (
   test('shows the persistent "Application approved" banner with the accreditation ID', async () => {
     const $ = await renderDetail()
 
-    const banner = $('[data-testid="re-accreditation-pending-contact-banner"]')
+    const banner = $(
+      '[data-testid="standard-lifecycle-pending-contact-banner"]'
+    )
     expect(banner.length).toBe(1)
     // Green success banner, not the red error treatment.
     expect(banner.hasClass('govuk-notification-banner--success')).toBe(true)
@@ -125,7 +127,7 @@ describe('RA-527: detail page while an approval is pending applicant contact', (
       squash(
         banner
           .find(
-            '[data-testid="re-accreditation-pending-contact-accreditation-id"]'
+            '[data-testid="standard-lifecycle-pending-contact-accreditation-id"]'
           )
           .text()
       )
@@ -137,7 +139,7 @@ describe('RA-527: detail page while an approval is pending applicant contact', (
     const $ = await renderDetail()
 
     expect(
-      $('[data-testid="re-accreditation-pending-contact-banner"]').length
+      $('[data-testid="standard-lifecycle-pending-contact-banner"]').length
     ).toBe(1)
     expect($('[data-testid="work-item-flash-banner"]').length).toBe(0)
   })
@@ -237,7 +239,7 @@ describe('RA-527: detail page while an approval is pending applicant contact', (
     // It is the only thing in that box.
     expect(box.find('[data-testid="work-item-no-actions"]').length).toBe(0)
     expect(
-      box.find('[data-testid="re-accreditation-readonly-actions"]').length
+      box.find('[data-testid="standard-lifecycle-readonly-actions"]').length
     ).toBe(0)
   })
 
@@ -282,7 +284,7 @@ describe('RA-527: detail page while an approval is pending applicant contact', (
     })
 
     expect(
-      $('[data-testid="re-accreditation-pending-contact-banner"]').length
+      $('[data-testid="standard-lifecycle-pending-contact-banner"]').length
     ).toBe(0)
     expect($('[data-testid="confirm-applicant-contact-cta"]').length).toBe(0)
     expect($('[data-testid="re-accreditation-approval-panel"]').length).toBe(1)
@@ -328,7 +330,9 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
   test('shows the persistent "Application refused" banner, with no accreditation ID', async () => {
     const $ = await renderDetail({ workItem: aRefusalItem() })
 
-    const banner = $('[data-testid="re-accreditation-pending-contact-banner"]')
+    const banner = $(
+      '[data-testid="standard-lifecycle-pending-contact-banner"]'
+    )
     expect(banner.length).toBe(1)
     expect(
       squash(banner.find('.govuk-notification-banner__title').text())
@@ -341,7 +345,7 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
     )
     expect(
       banner.find(
-        '[data-testid="re-accreditation-pending-contact-accreditation-id"]'
+        '[data-testid="standard-lifecycle-pending-contact-accreditation-id"]'
       ).length
     ).toBe(0)
   })
@@ -351,7 +355,7 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
     const $ = await renderDetail({ workItem: aRefusalItem() })
 
     expect(
-      $('[data-testid="re-accreditation-pending-contact-banner"]').length
+      $('[data-testid="standard-lifecycle-pending-contact-banner"]').length
     ).toBe(1)
     expect($('[data-testid="work-item-flash-banner"]').length).toBe(0)
   })
@@ -432,7 +436,7 @@ describe('RA-527: detail page while a refusal is pending applicant contact', () 
     })
 
     expect(
-      $('[data-testid="re-accreditation-pending-contact-banner"]').length
+      $('[data-testid="standard-lifecycle-pending-contact-banner"]').length
     ).toBe(0)
     expect($('[data-testid="confirm-applicant-contact-cta"]').length).toBe(0)
   })

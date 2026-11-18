@@ -1599,7 +1599,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         const $ = await detailPage(stateId)
 
         const banner = $(
-          '[data-testid="re-accreditation-pending-contact-banner"]'
+          '[data-testid="standard-lifecycle-pending-contact-banner"]'
         )
         expect(squash(banner.text())).toContain(title)
         expect(squash(banner.text())).toContain(
@@ -1607,7 +1607,9 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         )
         // No accreditation number is minted for an add-ORS approval.
         expect(
-          $('[data-testid="re-accreditation-pending-contact-accreditation-id"]')
+          $(
+            '[data-testid="standard-lifecycle-pending-contact-accreditation-id"]'
+          )
         ).toHaveLength(0)
         const cta = $('[data-testid="confirm-applicant-contact-cta"]')
         expect(cta.attr('href')).toBe(CONFIRM_URL)
@@ -1712,9 +1714,9 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         const $ = await detailPage(stateId)
 
         expect(
-          $('[data-testid="re-accreditation-readonly-actions"]')
+          $('[data-testid="standard-lifecycle-readonly-actions"]')
         ).toHaveLength(1)
-        const tag = $('[data-testid="re-accreditation-state-tag"]')
+        const tag = $('[data-testid="standard-lifecycle-state-tag"]')
         expect(squash(tag.text())).toBe(label)
         expect(tag.hasClass(tagClass)).toBe(true)
         expect(squash($('[data-testid="case-header-status"]').text())).toBe(
@@ -1724,7 +1726,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
           'duly-make-cta',
           'log-decision-cta',
           'confirm-applicant-contact-cta',
-          're-accreditation-pending-contact-banner',
+          'standard-lifecycle-pending-contact-banner',
           'self-assign-submit',
           'reassign-link',
           'unassign-link',
