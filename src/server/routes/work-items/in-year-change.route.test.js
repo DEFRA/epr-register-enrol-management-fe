@@ -577,7 +577,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Submitted by: Sam Operator',
         'Material: Plastic',
         'Accreditation number: ACC-REP-PL-0007',
-        'Charge: £328',
+        'Charge: £328.00',
         'Payment date: Not received'
       ])
       // Its own column widths (Figma: the second column holds the
@@ -1202,7 +1202,19 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       }
     }
 
+    // Every work item in the submission, the current one included, by
+    // application reference (user decision 2026-11-18).
+    const currentWorkItem = {
+      id: ADD_ORS_ID,
+      typeId: 'add-overseas-site',
+      stateId: 'submitted',
+      applicationReference: 'IYC-ORS-2026-00001',
+      siteName: 'Denmark PR',
+      orsId: '007',
+      chargePence: 32800
+    }
     const relatedWorkItems = [
+      currentWorkItem,
       {
         id: SIBLING_1,
         typeId: 'add-overseas-site',
@@ -1284,7 +1296,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(squash($('h1').text())).toContain('Duly make the application')
       expect(
         squash($('[data-testid="duly-making-charge-amount"]').text())
-      ).toBe('£328')
+      ).toBe('£328.00')
       expect(
         squash($('[data-testid="duly-making-payment-reference"]').text())
       ).toBe('PR/PK/REP/123001')
@@ -1294,7 +1306,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       )
     })
 
-    test('the page lists the related change requests from the same submission with their status', async () => {
+    test('the page lists every change request from the same submission, this one included, with their status', async () => {
       getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
       getDulyMakeDetails.mockResolvedValue(details(relatedWorkItems))
 
@@ -1308,10 +1320,17 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       ).toBe('Related change requests')
       expect(relatedRows($)).toEqual([
         {
+          reference: 'IYC-ORS-2026-00001',
+          site: 'Denmark PR (007)',
+          type: 'New ORS accreditation',
+          charge: '£328.00',
+          status: 'Not started'
+        },
+        {
           reference: 'IYC-ORS-2026-00002',
           site: 'Belgium PR (010)',
           type: 'New ORS accreditation',
-          charge: '£328',
+          charge: '£328.00',
           status: 'Duly made'
         },
         {
@@ -1335,12 +1354,36 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         ok: true,
         workItem: anAddOrsItem({ submissionSize: 1 })
       })
-      getDulyMakeDetails.mockResolvedValue(details([]))
+      // management-be lists the current work item even when it is alone.
+      getDulyMakeDetails.mockResolvedValue(details([currentWorkItem]))
 
       const $ = await dulyMakePage()
 
       expect($('[data-testid="duly-making-related"]')).toHaveLength(0)
       expect($('[data-testid="duly-making-payment-date"]')).toHaveLength(1)
+    })
+
+    test('the page has no related change requests section when management-be lists none', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anAddOrsItem({ submissionSize: 1 })
+      })
+      getDulyMakeDetails.mockResolvedValue(details([]))
+
+      const $ = await dulyMakePage()
+
+      expect($('[data-testid="duly-making-related"]')).toHaveLength(0)
+    })
+
+    test('the page still lists a two-site submission when the current work item is left out', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      getDulyMakeDetails.mockResolvedValue(details([relatedWorkItems[1]]))
+
+      const $ = await dulyMakePage()
+
+      expect(relatedRows($).map(({ reference }) => reference)).toEqual([
+        'IYC-ORS-2026-00002'
+      ])
     })
 
     test('the page says when the related change requests cannot be loaded, and still offers duly making', async () => {
@@ -1412,7 +1455,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(statusCode).toBe(statusCodes.badRequest)
       const $ = cheerio.load(result)
       expect($('[data-testid="duly-making-error-summary"]')).toHaveLength(1)
-      expect(relatedRows($)).toHaveLength(2)
+      expect(relatedRows($)).toHaveLength(3)
       expect(dulyMakeWorkItem).not.toHaveBeenCalled()
     })
   })
@@ -1822,7 +1865,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Not started'
       )
       expect(squash($('[data-testid="case-header-charge"]').text())).toBe(
-        '£328'
+        '£328.00'
       )
       expect(tabs($)).toEqual(addOrsTabs('application-history'))
     })

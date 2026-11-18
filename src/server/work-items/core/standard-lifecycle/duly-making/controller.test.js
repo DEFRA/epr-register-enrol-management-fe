@@ -115,7 +115,7 @@ describe('GET the duly-making page', () => {
     expect(result).toContain('Duly make the application')
     // AC02 — charge and reference, pre-populated and read-only.
     expect(result).toContain('Payment details')
-    expect(cellText(result, 'duly-making-charge-amount')).toBe('£3,276')
+    expect(cellText(result, 'duly-making-charge-amount')).toBe('£3,276.00')
     // No `paymentReference` in the fixture, and there is NO fallback to
     // the application reference — so this cell is "Not provided" even
     // though REF appears elsewhere on the page. Asserted on the CELL for
@@ -174,7 +174,7 @@ describe('GET the duly-making page', () => {
       method: 'GET',
       url: DULY_MAKE_HREF
     })
-    expect(cellText(result, 'duly-making-charge-amount')).toBe('£3,276')
+    expect(cellText(result, 'duly-making-charge-amount')).toBe('£3,276.00')
     expect(cellText(result, 'duly-making-payment-reference')).toBe(
       'A27ER1230040001GR'
     )
@@ -217,7 +217,7 @@ describe('GET the duly-making page', () => {
       method: 'GET',
       url: DULY_MAKE_HREF
     })
-    expect(cellText(result, 'duly-making-charge-amount')).toBe('£0')
+    expect(cellText(result, 'duly-making-charge-amount')).toBe('£0.00')
   })
 
   test('shows a MISSING payment reference rather than substituting one', async () => {
@@ -379,7 +379,7 @@ describe('POST the duly-making form', () => {
     // Asserted on the cells, not page-wide: the re-render path builds the
     // payment details separately from the GET path, so it needs its own
     // real check rather than one that any occurrence anywhere satisfies.
-    expect(cellText(result, 'duly-making-charge-amount')).toBe('£3,276')
+    expect(cellText(result, 'duly-making-charge-amount')).toBe('£3,276.00')
     expect(cellText(result, 'duly-making-payment-reference')).toBe(
       'A27ER1230040001GR'
     )

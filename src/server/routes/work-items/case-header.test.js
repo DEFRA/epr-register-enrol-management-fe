@@ -71,17 +71,17 @@ describe('#formatPayment (RA-493)', () => {
     ).toEqual({ date: '01 Nov 2026', amount: '£3,276.50' })
   })
 
-  test('renders whole-pound charges without pence, matching the duly-making page', () => {
+  test('renders whole-pound charges with pence, matching the duly-making page (user decision 2026-11-18)', () => {
     expect(
       formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 327600 })
         .amount
-    ).toBe('£3,276')
+    ).toBe('£3,276.00')
   })
 
   test('treats a £0 charge as a real amount, not a missing one', () => {
     expect(
       formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 0 }).amount
-    ).toBe('£0')
+    ).toBe('£0.00')
   })
 
   test('renders an em dash for the amount when duly made but no charge is recorded', () => {
@@ -103,7 +103,7 @@ describe('#formatPayment (RA-493)', () => {
         paymentDate: { $date: '2026-11-01T00:00:00Z' },
         chargeAmountPence: 54600
       })
-    ).toEqual({ date: '01 Nov 2026', amount: '£546' })
+    ).toEqual({ date: '01 Nov 2026', amount: '£546.00' })
   })
 })
 
@@ -175,7 +175,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
       header.meta.slice(-2).map(({ label, value }) => ({ label, value }))
     ).toEqual([
       { label: 'Payment date', value: '01 Nov 2026' },
-      { label: 'Payment amount', value: '£2,184' }
+      { label: 'Payment amount', value: '£2,184.00' }
     ])
   })
 

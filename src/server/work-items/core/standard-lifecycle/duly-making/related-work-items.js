@@ -1,8 +1,12 @@
 /**
- * RA-495. The "Related change requests" on the Duly make page: the other
- * work items from the same submission (management-be matches them on the
- * submission reference), so the caseworker can see the whole payment. Shown
- * only for a type that declares `standardLifecycle.relatedWorkItems`.
+ * RA-495. The "Related change requests" on the Duly make page: every work
+ * item from the same submission, the one being duly made included, in
+ * management-be's order (application reference), so the caseworker can see
+ * the whole payment (user decision 2026-11-18). management-be matches them
+ * on the submission reference. Shown only for a type that declares
+ * `standardLifecycle.relatedWorkItems`, and only when the submission has
+ * more than one site: a lone row for the current work item tells the
+ * caseworker nothing the page does not already.
  *
  * Read-only: reference, site, type, charge and current status. A failed read
  * never blocks duly making; the page says the list could not be loaded.
@@ -42,7 +46,13 @@ export async function loadRelatedWorkItems({ typeId, workItemId, user }) {
     return { unavailable: true }
   }
 
-  return { rows: (result.details?.relatedWorkItems ?? []).map(toRow) }
+  const related = result.details?.relatedWorkItems ?? []
+  // "Anything besides this one" rather than a row count, so a backend that
+  // still leaves the current work item out lists the same submissions.
+  if (!related.some(({ id }) => id !== workItemId)) {
+    return { rows: [] }
+  }
+  return { rows: related.map(toRow) }
 }
 
 function toRow(related) {

@@ -91,7 +91,7 @@ function flashBanner(request, banner) {
 export function buildPaymentDetails(workItem, typeId) {
   const raw = getStandardLifecycle(typeId)?.readPaymentDetails?.(workItem) ?? {}
   // `formatChargeAmount` returns null for absent/non-integer only. A
-  // legitimate 0 formats as "£0" and must NOT collapse to "Not provided" —
+  // legitimate 0 formats as "£0.00" and must NOT collapse to "Not provided" —
   // `??` rather than `||` is doing real work here.
   const charge = formatChargeAmount(raw.chargePence)
   return {

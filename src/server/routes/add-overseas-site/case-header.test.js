@@ -107,7 +107,7 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
       ['Submitted by', 'Sam Operator'],
       ['Material', 'Plastic'],
       ['Accreditation number', 'ACC-1'],
-      ['Charge', '£328'],
+      ['Charge', '£328.00'],
       ['Payment date', NOT_RECEIVED]
     ])
   })

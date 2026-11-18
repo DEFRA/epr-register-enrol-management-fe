@@ -207,9 +207,10 @@ export const myType = {
     // Standard-lifecycle endpoint (`POST /work-items/{id}/duly-make`,
     // `/decision`, `/confirm-contact`).
     backend: { dulyMake, recordDecision, confirmContact },
-    // Optional: list the other work items from the same submission on the
-    // Duly make page ("Related change requests", from management-be's
-    // `GET /work-items/{id}/duly-make`).
+    // Optional: list every work item from the same submission, this one
+    // included, on the Duly make page ("Related change requests", from
+    // management-be's `GET /work-items/{id}/duly-make`). No section for a
+    // one-site submission.
     relatedWorkItems: true,
     // Optional: the "Applicant contacted" success banner by outcome, each
     // `{ title, text }`. An outcome left out keeps the default copy

@@ -13,9 +13,10 @@
  *     // Optional. The management-be calls. Each defaults to the type-less
  *     // Standard-lifecycle endpoint (`/work-items/{id}/duly-make` etc.).
  *     backend: { dulyMake, recordDecision, confirmContact },
- *     // Optional. When true the Duly make page lists the other work items
- *     // from the same submission ("Related change requests"), read from
- *     // management-be's `GET /work-items/{id}/duly-make`.
+ *     // Optional. When true the Duly make page lists every work item from
+ *     // the same submission, this one included ("Related change
+ *     // requests"), read from management-be's
+ *     // `GET /work-items/{id}/duly-make`; none for a one-site submission.
  *     relatedWorkItems: true,
  *     // Optional. The "Applicant contacted" success banner's copy by
  *     // outcome, `{ title, text }` each; an outcome left out keeps the

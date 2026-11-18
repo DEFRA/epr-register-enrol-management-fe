@@ -679,8 +679,8 @@ export async function dulyMakeWorkItem({
 
 /**
  * RA-495. What the Duly make page needs that management-be works out: the
- * work item's charge and the other work items from the same submission
- * (`relatedWorkItems`, each `{ id, typeId, stateId, applicationReference,
+ * work item's charge and every work item from the same submission, this one
+ * included, by application reference (`relatedWorkItems`, each `{ id, typeId, stateId, applicationReference,
  * siteName, orsId, chargePence }`).
  *
  * Wraps the type-less `GET /work-items/{id}/duly-make`.

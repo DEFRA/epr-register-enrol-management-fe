@@ -157,7 +157,7 @@ describe('RA-495: Duly make for a non-re-accreditation Standard type', () => {
     const $ = cheerio.load(result)
     expect(squash($('h1').text())).toBe('Duly make the application')
     expect(squash($('[data-testid="duly-making-charge-amount"]').text())).toBe(
-      '£984'
+      '£984.00'
     )
     expect(
       squash($('[data-testid="duly-making-payment-reference"]').text())

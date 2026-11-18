@@ -50,7 +50,7 @@ export const NOT_RECEIVED = 'Not received'
  * is already known from submission.
  *
  * Once duly made, the amount is the charge currently recorded against the
- * application (AC03). `0` is a legitimate charge and formats as "£0"; an
+ * application (AC03). `0` is a legitimate charge and formats as "£0.00"; an
  * absent or malformed charge degrades to the em dash rather than claiming
  * payment was not received.
  *

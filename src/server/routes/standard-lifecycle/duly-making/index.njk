@@ -74,10 +74,11 @@
         ]
       }) }}
 
-      {# RA-495. The other work items from the same submission (types that  #}
-      {# declare `standardLifecycle.relatedWorkItems`), read-only, so the    #}
-      {# caseworker can see the whole payment. No section when there are   #}
-      {# none; a line saying so when they could not be read.               #}
+      {# RA-495. Every work item from the same submission, this one        #}
+      {# included (types that declare `standardLifecycle.relatedWorkItems`), #}
+      {# read-only, so the caseworker can see the whole payment. No section #}
+      {# for a one-site submission (no rows); a line saying so when they  #}
+      {# could not be read.                                                #}
       {% if relatedWorkItems and (relatedWorkItems.unavailable or relatedWorkItems.rows.length) %}
         <div data-testid="duly-making-related">
           <h2 class="govuk-heading-m" data-testid="duly-making-related-heading">Related change requests</h2>

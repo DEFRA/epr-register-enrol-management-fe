@@ -61,7 +61,7 @@ function siteLocation(site) {
  * re-accreditation. Date added is the work item's submission date. The
  * charge is the site's own (`site.chargePence`), shown whenever it is known
  * (unlike re-accreditation's payment amount, which waits for payment),
- * through the same formatter: whole pounds without pence ("£328"). The
+ * through the same formatter, always with pence ("£328.00"). The
  * payment date reads "Not received" until the item is duly made, as on
  * re-accreditation. The `request-type` key keeps RA-739's testid.
  */

@@ -66,7 +66,7 @@ export const addOverseasSiteType = {
       chargePence: workItem?.payload?.site?.chargePence,
       paymentReference: workItem?.payload?.paymentReference
     }),
-    // The Duly make page lists the other work items from the same submission.
+    // The Duly make page lists every work item from the same submission.
     relatedWorkItems: true,
     // Confirming contact adds the site to an existing accreditation (or
     // refuses to); it grants no accreditation, so the default copy is wrong.
