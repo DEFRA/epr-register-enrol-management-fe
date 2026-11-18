@@ -730,7 +730,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Coordinates',
         'Contact name',
         'Contact email',
-        'Contact phone number',
+        'Contact phone',
         'Recycling operation',
         'Basel convention codes',
         'Arrangements for rejected or returned loads',

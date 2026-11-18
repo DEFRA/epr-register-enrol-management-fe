@@ -10,7 +10,7 @@ const ROW_LABELS = [
   ['coordinates', 'Coordinates'],
   ['contact-name', 'Contact name'],
   ['contact-email', 'Contact email'],
-  ['contact-phone', 'Contact phone number'],
+  ['contact-phone', 'Contact phone'],
   ['recycling-operation', 'Recycling operation'],
   ['basel-codes', 'Basel convention codes'],
   ['repatriated-loads', 'Arrangements for rejected or returned loads'],

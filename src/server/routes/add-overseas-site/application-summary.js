@@ -90,7 +90,7 @@ const SITE_FIELDS = [
   ],
   [
     'contact-phone',
-    'Contact phone number',
+    'Contact phone',
     (site) => toDisplayLines(site.contactPhone)
   ],
   [
