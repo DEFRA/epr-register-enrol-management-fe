@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
-  confirmApplicantContact: vi.fn()
+  confirmWorkItemApplicantContact: vi.fn()
 }))
 
-const { confirmApplicantContact } =
+const { confirmWorkItemApplicantContact } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
 import { clearWorkItemRegistry, registerWorkItemType } from '../../registry.js'
@@ -102,7 +102,7 @@ describe('createConfirmContactService (RA-527)', () => {
   )
 
   test('calls the real backend client by default', async () => {
-    confirmApplicantContact.mockResolvedValue({
+    confirmWorkItemApplicantContact.mockResolvedValue({
       ok: true,
       workItem: { id: 'wi-1' }
     })
@@ -111,9 +111,10 @@ describe('createConfirmContactService (RA-527)', () => {
       workItemId: 'wi-1'
     })
 
-    expect(confirmApplicantContact).toHaveBeenCalledWith({
+    expect(confirmWorkItemApplicantContact).toHaveBeenCalledWith({
       workItemId: 'wi-1',
-      user: null
+      user: null,
+      typeSegment: 're-accreditation'
     })
     expect(result.ok).toBe(true)
   })

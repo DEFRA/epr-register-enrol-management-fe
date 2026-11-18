@@ -22,9 +22,9 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   unassignWorkItem: vi.fn(),
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
-  recordReAccreditationDecision: vi.fn(),
+  recordWorkItemDecision: vi.fn(),
   continueReviewReAccreditation: vi.fn(),
-  dulyMakeReAccreditation: vi.fn(),
+  dulyMakeWorkItem: vi.fn(),
   extendWorkItemSla: vi.fn(),
   raiseWorkItemQuery: vi.fn(),
   updateRecyclingOperations: vi.fn(),
@@ -36,7 +36,7 @@ const {
   assignWorkItem,
   applyWorkItemAction,
   addWorkItemNote,
-  recordReAccreditationDecision
+  recordWorkItemDecision
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '33333333-3333-3333-3333-333333333333'
@@ -94,7 +94,7 @@ describe('RA-595: make a determination from Duly made', () => {
         expect(result).toContain('Make determination for this application')
         expect(assignWorkItem).not.toHaveBeenCalled()
         expect(applyWorkItemAction).not.toHaveBeenCalled()
-        expect(recordReAccreditationDecision).not.toHaveBeenCalled()
+        expect(recordWorkItemDecision).not.toHaveBeenCalled()
       }
     )
   })
@@ -144,15 +144,19 @@ describe('RA-595: make a determination from Duly made', () => {
         stateId: 'rejected-pending-contact',
         templateVersion: 'v17'
       })
-      recordReAccreditationDecision.mockImplementation(async () => {
+      recordWorkItemDecision.mockImplementation(async () => {
         getWorkItem.mockResolvedValue({ ok: true, workItem: pending })
         return { ok: true, workItem: pending }
       })
 
       const page = await followRedirect(await submitDecision('rejected'))
 
-      expect(recordReAccreditationDecision).toHaveBeenCalledWith(
-        expect.objectContaining({ workItemId: ID, outcome: 'rejected' })
+      expect(recordWorkItemDecision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ID,
+          outcome: 'rejected',
+          typeSegment: 're-accreditation'
+        })
       )
       expect(page).not.toContain('Decision logged: Refused')
       expect(page).toContain(
@@ -173,15 +177,19 @@ describe('RA-595: make a determination from Duly made', () => {
           accreditationId: 'A26ER5000270036WO'
         }
       })
-      recordReAccreditationDecision.mockImplementation(async () => {
+      recordWorkItemDecision.mockImplementation(async () => {
         getWorkItem.mockResolvedValue({ ok: true, workItem: pending })
         return { ok: true, workItem: pending }
       })
 
       const page = await followRedirect(await submitDecision('approved'))
 
-      expect(recordReAccreditationDecision).toHaveBeenCalledWith(
-        expect.objectContaining({ workItemId: ID, outcome: 'approved' })
+      expect(recordWorkItemDecision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workItemId: ID,
+          outcome: 'approved',
+          typeSegment: 're-accreditation'
+        })
       )
       expect(page).not.toContain('Decision logged: Approved')
       expect(page).toContain(
@@ -298,12 +306,10 @@ describe('RA-595: make a determination from Duly made', () => {
 
     test('decision fails after the start: says it was started, and a resubmit skips the start', async () => {
       const calls = recordBackendCalls(aWorkItem())
-      recordReAccreditationDecision.mockImplementationOnce(
-        async ({ outcome }) => {
-          calls.push(`decision:${outcome}`)
-          return { ok: false, reason: 'server', status: 500, message: 'Boom' }
-        }
-      )
+      recordWorkItemDecision.mockImplementationOnce(async ({ outcome }) => {
+        calls.push(`decision:${outcome}`)
+        return { ok: false, reason: 'server', status: 500, message: 'Boom' }
+      })
 
       const page = await followRedirect(await submitDecision('approved'))
 
@@ -380,7 +386,7 @@ function recordBackendCalls(workItem) {
     calls.push('note')
     return { ok: true, workItem }
   })
-  recordReAccreditationDecision.mockImplementation(async ({ outcome }) => {
+  recordWorkItemDecision.mockImplementation(async ({ outcome }) => {
     calls.push(`decision:${outcome}`)
     return { ok: true, workItem }
   })

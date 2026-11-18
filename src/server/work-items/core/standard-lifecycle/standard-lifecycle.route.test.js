@@ -65,9 +65,6 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   dulyMakeWorkItem: vi.fn(),
   recordWorkItemDecision: vi.fn(),
   confirmWorkItemApplicantContact: vi.fn(),
-  dulyMakeReAccreditation: vi.fn(),
-  recordReAccreditationDecision: vi.fn(),
-  confirmApplicantContact: vi.fn(),
   extendWorkItemSla: vi.fn(),
   raiseWorkItemQuery: vi.fn(),
   updateRecyclingOperations: vi.fn(),
@@ -80,10 +77,7 @@ const {
   applyWorkItemAction,
   dulyMakeWorkItem,
   recordWorkItemDecision,
-  confirmWorkItemApplicantContact,
-  dulyMakeReAccreditation,
-  recordReAccreditationDecision,
-  confirmApplicantContact
+  confirmWorkItemApplicantContact
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '49500002-0000-4000-8000-000000000495'
@@ -189,7 +183,7 @@ describe('RA-495: Duly make for a non-re-accreditation Standard type', () => {
     expect(dulyMakeWorkItem).toHaveBeenCalledWith(
       expect.objectContaining({ workItemId: ID, paymentDate: '2026-10-01' })
     )
-    expect(dulyMakeReAccreditation).not.toHaveBeenCalled()
+    expect(dulyMakeWorkItem.mock.calls[0][0]).not.toHaveProperty('typeSegment')
   })
 
   test('POST re-renders a payment-date error in place without calling the backend', async () => {
@@ -293,7 +287,9 @@ describe('RA-495: Make determination for a non-re-accreditation Standard type', 
     expect(recordWorkItemDecision).toHaveBeenCalledWith(
       expect.objectContaining({ workItemId: ID, outcome: 'rejected' })
     )
-    expect(recordReAccreditationDecision).not.toHaveBeenCalled()
+    expect(recordWorkItemDecision.mock.calls[0][0]).not.toHaveProperty(
+      'typeSegment'
+    )
   })
 
   test('POST starts assessment first for a Duly made work item', async () => {
@@ -448,7 +444,9 @@ describe('RA-495: Confirm applicant contact for a non-re-accreditation Standard 
     expect(confirmWorkItemApplicantContact).toHaveBeenCalledWith(
       expect.objectContaining({ workItemId: ID })
     )
-    expect(confirmApplicantContact).not.toHaveBeenCalled()
+    expect(confirmWorkItemApplicantContact.mock.calls[0][0]).not.toHaveProperty(
+      'typeSegment'
+    )
   })
 
   test('POST re-renders with a retryable failure banner when the backend fails', async () => {

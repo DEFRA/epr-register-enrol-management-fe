@@ -20,11 +20,11 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', async () => {
     ...actual,
     getWorkItem: vi.fn(),
     getWorkItems: vi.fn(),
-    dulyMakeReAccreditation: vi.fn()
+    dulyMakeWorkItem: vi.fn()
   }
 })
 
-const { getWorkItem, dulyMakeReAccreditation } =
+const { getWorkItem, dulyMakeWorkItem } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '44444444-4444-4444-4444-444444444444'
@@ -319,18 +319,22 @@ describe('POST the duly-making form', () => {
 
   test('sends a plain YYYY-MM-DD date and redirects on success', async () => {
     getWorkItem.mockResolvedValue(okWorkItem())
-    dulyMakeReAccreditation.mockResolvedValue({
+    dulyMakeWorkItem.mockResolvedValue({
       ok: true,
       workItem: aWorkItem({ stateId: 'duly-made' })
     })
 
     const { statusCode, headers } = await submit(VALID)
 
-    expect(dulyMakeReAccreditation).toHaveBeenCalledWith(
-      expect.objectContaining({ workItemId: ID, paymentDate: '2026-03-27' })
+    expect(dulyMakeWorkItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workItemId: ID,
+        paymentDate: '2026-03-27',
+        typeSegment: 're-accreditation'
+      })
     )
     // No time component — the backend rejects ISO timestamps.
-    const { paymentDate } = dulyMakeReAccreditation.mock.calls[0][0]
+    const { paymentDate } = dulyMakeWorkItem.mock.calls[0][0]
     expect(paymentDate).not.toContain('T')
     // PRG so a refresh cannot re-post.
     expect(statusCode).toBe(statusCodes.redirect)
@@ -345,7 +349,7 @@ describe('POST the duly-making form', () => {
       'payment-date-year': ''
     })
 
-    expect(dulyMakeReAccreditation).not.toHaveBeenCalled()
+    expect(dulyMakeWorkItem).not.toHaveBeenCalled()
     expect(statusCode).toBe(statusCodes.badRequest)
     expect(result).toContain('govuk-error-summary')
     expect(result).toContain('Enter the payment date')
@@ -401,7 +405,7 @@ describe('POST the duly-making form', () => {
     'binds the backend code %s to the date input as a field error',
     async (errorCode, message) => {
       getWorkItem.mockResolvedValue(okWorkItem())
-      dulyMakeReAccreditation.mockResolvedValue({
+      dulyMakeWorkItem.mockResolvedValue({
         ok: false,
         reason: 'invalid',
         status: 400,
@@ -422,7 +426,7 @@ describe('POST the duly-making form', () => {
 
   test('a 409 is a page-level banner, not a field error', async () => {
     getWorkItem.mockResolvedValue(okWorkItem())
-    dulyMakeReAccreditation.mockResolvedValue({
+    dulyMakeWorkItem.mockResolvedValue({
       ok: false,
       reason: 'conflict',
       status: 409,
@@ -438,7 +442,7 @@ describe('POST the duly-making form', () => {
 
   test('an unrecognised errorCode is treated as page-level', async () => {
     getWorkItem.mockResolvedValue(okWorkItem())
-    dulyMakeReAccreditation.mockResolvedValue({
+    dulyMakeWorkItem.mockResolvedValue({
       ok: false,
       reason: 'invalid',
       status: 400,
@@ -451,7 +455,7 @@ describe('POST the duly-making form', () => {
 
   test('a 404 redirects rather than rendering a field error', async () => {
     getWorkItem.mockResolvedValue(okWorkItem())
-    dulyMakeReAccreditation.mockResolvedValue({
+    dulyMakeWorkItem.mockResolvedValue({
       ok: false,
       reason: 'not-found',
       status: 404,
@@ -563,6 +567,6 @@ describe('AC04 — Cancel changes nothing', () => {
     // touch the backend at all.
     getWorkItem.mockResolvedValue(okWorkItem())
     await server.inject({ method: 'GET', url: DULY_MAKE_HREF })
-    expect(dulyMakeReAccreditation).not.toHaveBeenCalled()
+    expect(dulyMakeWorkItem).not.toHaveBeenCalled()
   })
 })

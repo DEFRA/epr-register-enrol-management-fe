@@ -239,8 +239,9 @@ template extends it (re-accreditation's adds Continue review in the
 `{% set lifecycleHidesGenericActions = true %}` at its template's top level,
 so the generic actions list and its "No actions" line never render under the
 lifecycle CTAs. Re-accreditation opts in with its own type-scoped
-management-be endpoints (`re-accreditation/lifecycle-backend.js`) and keeps
-its existing URLs, mounting the pages with
+management-be endpoints (`re-accreditation/lifecycle-backend.js`, built with
+`buildLifecycleBackend(typeSegment)` from `core/standard-lifecycle/lifecycle.js`)
+and keeps its existing URLs, mounting the pages with
 `buildStandardLifecycleRoutes(RE_ACCREDITATION_TYPE_ID)` like any other type.
 The shared pages' unit tests live beside them in
 `core/standard-lifecycle/` and run against re-accreditation. Add-ORS

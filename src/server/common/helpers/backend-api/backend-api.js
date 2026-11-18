@@ -631,9 +631,14 @@ function lifecycleStepUrl(baseUrl, workItemId, step, typeSegment = null) {
 }
 
 /**
- * Duly make a re-accreditation work item (RA-316).
+ * Duly make a work item (RA-316, RA-495).
  *
- * Wraps `POST /work-items/re-accreditation/{id}/duly-make`.
+ * Wraps `POST /work-items/[{typeSegment}/]{id}/duly-make`: re-accreditation
+ * passes its `typeSegment` for its own endpoint, which refuses any other
+ * type; without one this is the type-less Standard-lifecycle endpoint, and a
+ * type that has not opted in management-be side gets a 400
+ * `wrong-work-item-type`.
+ *
  * Body: `{ paymentDate }` — a plain `YYYY-MM-DD` string and nothing else.
  * The backend parses with an exact `yyyy-MM-dd` invariant-culture format
  * and REJECTS a full ISO timestamp, so never widen this to a Date or an
@@ -652,18 +657,19 @@ function lifecycleStepUrl(baseUrl, workItemId, step, typeSegment = null) {
  * `message` still carries the backend's developer-facing `detail` for
  * LOGGING. It is never rendered to the user; the frontend owns the copy.
  */
-export async function dulyMakeReAccreditation({
+export async function dulyMakeWorkItem({
   workItemId,
   paymentDate,
+  typeSegment = null,
   user = null,
   baseUrl = config.get(CONFIG_BACKEND_API_URL),
   timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
   fetchImpl = fetch
 }) {
   return postLifecycleStep({
-    url: lifecycleStepUrl(baseUrl, workItemId, 'duly-make', 're-accreditation'),
+    url: lifecycleStepUrl(baseUrl, workItemId, 'duly-make', typeSegment),
     body: { paymentDate },
-    label: 'dulyMakeReAccreditation',
+    label: 'dulyMakeWorkItem',
     user,
     timeoutMs,
     fetchImpl,
@@ -700,41 +706,13 @@ export async function getDulyMakeDetails({
 }
 
 /**
- * Duly make a work item of any type that has opted into the Standard
- * lifecycle (RA-495).
- *
- * Wraps the type-less `POST /work-items/{id}/duly-make`. Same body, result
- * shape and `errorCode` vocabulary as {@link dulyMakeReAccreditation}; a type
- * that has not opted in management-be side gets a 400
- * `wrong-work-item-type`.
- */
-export async function dulyMakeWorkItem({
-  workItemId,
-  paymentDate,
-  user = null,
-  baseUrl = config.get(CONFIG_BACKEND_API_URL),
-  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
-  fetchImpl = fetch
-}) {
-  return postLifecycleStep({
-    url: lifecycleStepUrl(baseUrl, workItemId, 'duly-make'),
-    body: { paymentDate },
-    label: 'dulyMakeWorkItem',
-    user,
-    timeoutMs,
-    fetchImpl,
-    withErrorCode: true
-  })
-}
-
-/**
  * Change the payment date of a re-accreditation work item (RA-576).
  *
  * Wraps `POST /work-items/re-accreditation/{id}/change-payment-date`.
  * Body: `{ paymentDate, reason }` — `paymentDate` is a plain `YYYY-MM-DD`
- * string, as for {@link dulyMakeReAccreditation}.
+ * string, as for {@link dulyMakeWorkItem}.
  *
- * Same result shape as {@link dulyMakeReAccreditation}, including
+ * Same result shape as {@link dulyMakeWorkItem}, including
  * `errorCode`: a 400 carries `payment-date-*` (bind to the date input) or
  * `payment-date-reason-*` (bind to the reason) plus a `field` member, while a
  * 409 means the item is closed or has no payment date to change.
@@ -788,9 +766,10 @@ export async function changePaymentDateReAccreditation({
 }
 
 /**
- * Record a re-accreditation decision (RA-410).
+ * Record the determination on a work item (RA-410, RA-495).
  *
- * Wraps `POST /work-items/re-accreditation/{id}/decision`.
+ * Wraps `POST /work-items/[{typeSegment}/]{id}/decision`, type-scoped as for
+ * {@link dulyMakeWorkItem}.
  * Body: `{ outcome }`, where `outcome` is `'approved'` or `'rejected'`.
  *
  * ONE call for both outcomes, and deliberately one call rather than two.
@@ -807,13 +786,14 @@ export async function changePaymentDateReAccreditation({
  * when the requested outcome matches, and 409 when it does not — we do not
  * read the header, we just do not treat a repeat as an error.
  *
- * Same result shape as {@link dulyMakeReAccreditation}, including the
- * `errorCode` extension member, so the controller can bind a 400 to the
- * radio group and treat a 409 as a page-level banner.
+ * Same result shape as {@link dulyMakeWorkItem}, including the `errorCode`
+ * extension member, so the controller can bind a 400 to the radio group and
+ * treat a 409 as a page-level banner.
  */
-export async function recordReAccreditationDecision({
+export async function recordWorkItemDecision({
   workItemId,
   outcome,
+  typeSegment = null,
   user = null,
   baseUrl = config.get(CONFIG_BACKEND_API_URL),
   // NOT the shared backendApi.timeoutMs. The backend gates this atomic
@@ -826,33 +806,7 @@ export async function recordReAccreditationDecision({
   fetchImpl = fetch
 }) {
   return postLifecycleStep({
-    url: lifecycleStepUrl(baseUrl, workItemId, 'decision', 're-accreditation'),
-    body: { outcome },
-    label: 'recordReAccreditationDecision',
-    user,
-    timeoutMs,
-    fetchImpl,
-    withErrorCode: true
-  })
-}
-
-/**
- * Record the determination on a work item of any type that has opted into
- * the Standard lifecycle (RA-495).
- *
- * Wraps the type-less `POST /work-items/{id}/decision`. Same body, timeout
- * budget and result shape as {@link recordReAccreditationDecision}.
- */
-export async function recordWorkItemDecision({
-  workItemId,
-  outcome,
-  user = null,
-  baseUrl = config.get(CONFIG_BACKEND_API_URL),
-  timeoutMs = config.get('backendApi.decisionTimeoutMs'),
-  fetchImpl = fetch
-}) {
-  return postLifecycleStep({
-    url: lifecycleStepUrl(baseUrl, workItemId, 'decision'),
+    url: lifecycleStepUrl(baseUrl, workItemId, 'decision', typeSegment),
     body: { outcome },
     label: 'recordWorkItemDecision',
     user,
@@ -863,62 +817,34 @@ export async function recordWorkItemDecision({
 }
 
 /**
- * Confirm the applicant has been contacted about a re-accreditation
- * determination (RA-527, step 2 of the two-step determination).
+ * Confirm the applicant has been contacted about a work item's
+ * determination (RA-527, RA-495; step 2 of the two-step determination).
  *
- * Wraps `POST /work-items/re-accreditation/{id}/confirm-contact`. No body:
- * the outcome was fixed at step 1. This is what applies it — management-be
- * pushes the final status to the operator journey first, then moves the
- * item to its terminal state, stops the SLA clock, queues publishing and
- * (for an approval) sends the Decision email. A repeat call on an item
- * already applied answers 200 + `x-idempotent-replay: true`; any state other
- * than pending contact is a 409.
+ * Wraps `POST /work-items/[{typeSegment}/]{id}/confirm-contact`, type-scoped
+ * as for {@link dulyMakeWorkItem}. No body: the outcome was fixed at step 1.
+ * This is what applies it — management-be pushes the final status to the
+ * operator journey first, then moves the item to its terminal state, stops
+ * the SLA clock, queues publishing and (for an approval) sends the Decision
+ * email. A repeat call on an item already applied answers 200 +
+ * `x-idempotent-replay: true`; any state other than pending contact is a 409.
  *
  * Same result shape as {@link continueReviewReAccreditation}: there is no
  * field to bind a failure to, so no `errorCode`.
  */
-export async function confirmApplicantContact({
+export async function confirmWorkItemApplicantContact({
   workItemId,
+  typeSegment = null,
   user = null,
   baseUrl = config.get(CONFIG_BACKEND_API_URL),
   // NOT the shared backendApi.timeoutMs, for the same reason as
-  // recordReAccreditationDecision: the backend gates this on an
-  // operator-journey push it retries for up to ~28s before writing anything,
-  // and aborting first would turn its clean 500 into a client cancellation.
+  // recordWorkItemDecision: the backend gates this on an operator-journey
+  // push it retries for up to ~28s before writing anything, and aborting
+  // first would turn its clean 500 into a client cancellation.
   timeoutMs = config.get('backendApi.decisionTimeoutMs'),
   fetchImpl = fetch
 }) {
   return postLifecycleStep({
-    url: lifecycleStepUrl(
-      baseUrl,
-      workItemId,
-      'confirm-contact',
-      're-accreditation'
-    ),
-    label: 'confirmApplicantContact',
-    user,
-    timeoutMs,
-    fetchImpl,
-    withErrorCode: false
-  })
-}
-
-/**
- * Confirm applicant contact on a work item of any type that has opted into
- * the Standard lifecycle (RA-495), which applies its determination.
- *
- * Wraps the type-less `POST /work-items/{id}/confirm-contact`. Same timeout
- * budget and result shape as {@link confirmApplicantContact}.
- */
-export async function confirmWorkItemApplicantContact({
-  workItemId,
-  user = null,
-  baseUrl = config.get(CONFIG_BACKEND_API_URL),
-  timeoutMs = config.get('backendApi.decisionTimeoutMs'),
-  fetchImpl = fetch
-}) {
-  return postLifecycleStep({
-    url: lifecycleStepUrl(baseUrl, workItemId, 'confirm-contact'),
+    url: lifecycleStepUrl(baseUrl, workItemId, 'confirm-contact', typeSegment),
     label: 'confirmWorkItemApplicantContact',
     user,
     timeoutMs,

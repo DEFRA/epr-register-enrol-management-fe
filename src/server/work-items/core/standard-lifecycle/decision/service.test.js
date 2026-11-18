@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 // lazy-import wiring itself, which the constructor-injection tests below
 // never touch.
 vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
-  recordReAccreditationDecision: vi.fn(),
+  recordWorkItemDecision: vi.fn(),
   addWorkItemNote: vi.fn()
 }))
 
@@ -18,7 +18,7 @@ import {
   DECISION_NOTE_MAX_LENGTH
 } from './service.js'
 import {
-  recordReAccreditationDecision,
+  recordWorkItemDecision,
   addWorkItemNote
 } from '#/server/common/helpers/backend-api/backend-api.js'
 
@@ -323,8 +323,8 @@ describe('createDecisionService#recordWorkItemDecision', () => {
 // straight through. Covered separately from the constructor-injection tests
 // above, which never exercise that wiring.
 describe('createDecisionService — default backend-api collaborators', () => {
-  test('recordDecision defaults to recordReAccreditationDecision', async () => {
-    recordReAccreditationDecision.mockResolvedValue({
+  test('recordDecision defaults to recordWorkItemDecision on the type segment', async () => {
+    recordWorkItemDecision.mockResolvedValue({
       ok: true,
       workItem: { id: 'wi-1', stateId: 'approved' }
     })
@@ -336,10 +336,11 @@ describe('createDecisionService — default backend-api collaborators', () => {
       user: { id: 'u-1' }
     })
 
-    expect(recordReAccreditationDecision).toHaveBeenCalledWith({
+    expect(recordWorkItemDecision).toHaveBeenCalledWith({
       workItemId: 'wi-1',
       outcome: 'approved',
-      user: { id: 'u-1' }
+      user: { id: 'u-1' },
+      typeSegment: 're-accreditation'
     })
     expect(result).toEqual({
       ok: true,
@@ -349,7 +350,7 @@ describe('createDecisionService — default backend-api collaborators', () => {
 
   test('addNote defaults to addWorkItemNote and is called before the decision', async () => {
     addWorkItemNote.mockResolvedValue({ ok: true })
-    recordReAccreditationDecision.mockResolvedValue({
+    recordWorkItemDecision.mockResolvedValue({
       ok: true,
       workItem: { id: 'wi-1', stateId: 'approved' }
     })

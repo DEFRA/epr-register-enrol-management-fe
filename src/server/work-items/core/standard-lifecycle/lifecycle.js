@@ -114,16 +114,27 @@ async function backendApi() {
 }
 
 /**
- * The type-less management-be lifecycle endpoints. Loaded lazily so tests can
- * stub the client without mocking `undici`.
+ * A `standardLifecycle.backend` for the management-be lifecycle endpoints
+ * under `/work-items/{typeSegment}/{id}/…`, or the type-less ones when no
+ * segment is given. The client is loaded lazily so tests can stub it without
+ * mocking `undici`.
+ *
+ * @param {string | null} [typeSegment]
+ * @returns {{ dulyMake: Function, recordDecision: Function, confirmContact: Function }}
  */
-const DEFAULT_BACKEND = Object.freeze({
-  dulyMake: async (args) => (await backendApi()).dulyMakeWorkItem(args),
-  recordDecision: async (args) =>
-    (await backendApi()).recordWorkItemDecision(args),
-  confirmContact: async (args) =>
-    (await backendApi()).confirmWorkItemApplicantContact(args)
-})
+export function buildLifecycleBackend(typeSegment = null) {
+  const withSegment = (args) => (typeSegment ? { ...args, typeSegment } : args)
+  return Object.freeze({
+    dulyMake: async (args) =>
+      (await backendApi()).dulyMakeWorkItem(withSegment(args)),
+    recordDecision: async (args) =>
+      (await backendApi()).recordWorkItemDecision(withSegment(args)),
+    confirmContact: async (args) =>
+      (await backendApi()).confirmWorkItemApplicantContact(withSegment(args))
+  })
+}
+
+const DEFAULT_BACKEND = buildLifecycleBackend()
 
 /**
  * The management-be call a type uses for one lifecycle step: its own when it

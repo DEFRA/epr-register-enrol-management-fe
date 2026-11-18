@@ -25,17 +25,17 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   unassignWorkItem: vi.fn(),
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
-  recordReAccreditationDecision: vi.fn(),
-  confirmApplicantContact: vi.fn(),
+  recordWorkItemDecision: vi.fn(),
+  confirmWorkItemApplicantContact: vi.fn(),
   continueReviewReAccreditation: vi.fn(),
-  dulyMakeReAccreditation: vi.fn(),
+  dulyMakeWorkItem: vi.fn(),
   extendWorkItemSla: vi.fn(),
   raiseWorkItemQuery: vi.fn(),
   updateRecyclingOperations: vi.fn(),
   createWorkItem: vi.fn()
 }))
 
-const { getWorkItem, confirmApplicantContact } =
+const { getWorkItem, confirmWorkItemApplicantContact } =
   await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ID = '52700004-0000-4000-8000-000000000527'
@@ -221,20 +221,21 @@ describe('RA-527: confirm applicant contact', () => {
         squash($('[data-testid="confirm-contact-error"]').text())
       ).toContain(ERROR_MESSAGE)
       expect($('title').text().trim()).toMatch(/^Error: /)
-      expect(confirmApplicantContact).not.toHaveBeenCalled()
+      expect(confirmWorkItemApplicantContact).not.toHaveBeenCalled()
     })
 
     test('a ticked box confirms contact, then the detail page shows the "Applicant contacted" banner once', async () => {
-      confirmApplicantContact.mockResolvedValue({
+      confirmWorkItemApplicantContact.mockResolvedValue({
         ok: true,
         workItem: aWorkItem({ stateId: 'approved' })
       })
 
       const posted = await postConfirm()
 
-      expect(confirmApplicantContact).toHaveBeenCalledWith({
+      expect(confirmWorkItemApplicantContact).toHaveBeenCalledWith({
         workItemId: ID,
-        user: expect.objectContaining({ id: TEST_STANDARD_USER.id })
+        user: expect.objectContaining({ id: TEST_STANDARD_USER.id }),
+        typeSegment: 're-accreditation'
       })
       expect(posted.statusCode).toBe(statusCodes.redirect)
       expect(posted.headers.location).toBe(DETAIL_URL)
@@ -283,12 +284,12 @@ describe('RA-527: confirm applicant contact', () => {
 
         expect(response.statusCode).toBe(statusCodes.redirect)
         expect(response.headers.location).toBe(DETAIL_URL)
-        expect(confirmApplicantContact).not.toHaveBeenCalled()
+        expect(confirmWorkItemApplicantContact).not.toHaveBeenCalled()
       }
     )
 
     test('a backend failure shows an error banner on the page and nothing changes', async () => {
-      confirmApplicantContact.mockResolvedValue({
+      confirmWorkItemApplicantContact.mockResolvedValue({
         ok: false,
         reason: 'server',
         status: 500,
@@ -310,7 +311,7 @@ describe('RA-527: confirm applicant contact', () => {
     })
 
     test('a conflict (the application changed) shows a refresh banner', async () => {
-      confirmApplicantContact.mockResolvedValue({
+      confirmWorkItemApplicantContact.mockResolvedValue({
         ok: false,
         reason: 'conflict',
         status: 409,
@@ -331,7 +332,7 @@ describe('RA-527: confirm applicant contact', () => {
       })
 
       expect(response.statusCode).toBe(statusCodes.forbidden)
-      expect(confirmApplicantContact).not.toHaveBeenCalled()
+      expect(confirmWorkItemApplicantContact).not.toHaveBeenCalled()
     })
   })
 })
@@ -395,20 +396,21 @@ describe('RA-527: confirm applicant contact after a refusal', () => {
           .text()
       )
     ).toContain(ERROR_MESSAGE)
-    expect(confirmApplicantContact).not.toHaveBeenCalled()
+    expect(confirmWorkItemApplicantContact).not.toHaveBeenCalled()
   })
 
   test('a ticked box confirms contact, then the detail page shows "accreditation is refused" once', async () => {
-    confirmApplicantContact.mockResolvedValue({
+    confirmWorkItemApplicantContact.mockResolvedValue({
       ok: true,
       workItem: aRefusalItem({ stateId: 'rejected' })
     })
 
     const posted = await postConfirm()
 
-    expect(confirmApplicantContact).toHaveBeenCalledWith({
+    expect(confirmWorkItemApplicantContact).toHaveBeenCalledWith({
       workItemId: ID,
-      user: expect.objectContaining({ id: TEST_STANDARD_USER.id })
+      user: expect.objectContaining({ id: TEST_STANDARD_USER.id }),
+      typeSegment: 're-accreditation'
     })
     expect(posted.statusCode).toBe(statusCodes.redirect)
     expect(posted.headers.location).toBe(DETAIL_URL)
