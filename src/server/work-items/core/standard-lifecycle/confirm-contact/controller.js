@@ -18,7 +18,8 @@
  * An item that is not pending contact (not yet determined, or already
  * applied) is redirected to the detail page by both handlers, which shows
  * where it actually is. The page is the same for approvals and refusals;
- * only the success banner's wording depends on the outcome.
+ * only the success banner's wording depends on the outcome, and on the type
+ * (`standardLifecycle.contactConfirmedBanners`).
  */
 
 import { statusCodes } from '#/server/common/constants/status-codes.js'
@@ -31,7 +32,11 @@ import {
   STATE_REJECTED_PENDING_CONTACT,
   isPendingContact
 } from '../states.js'
-import { CONFIRM_CONTACT_PAGE, lifecyclePageHref } from '../lifecycle.js'
+import {
+  CONFIRM_CONTACT_PAGE,
+  getStandardLifecycle,
+  lifecyclePageHref
+} from '../lifecycle.js'
 import { createConfirmContactService } from './service.js'
 
 const VIEW_PATH = 'standard-lifecycle/confirm-contact/index'
@@ -49,22 +54,50 @@ const MISSING_CONFIRMATION_MESSAGE =
   'Confirm you have contacted the applicant about the decision'
 
 /**
- * One-time success banner, keyed by the pending state the item was confirmed
- * from (the backend decides where it lands; this only picks the wording).
+ * The one-time success banner's default copy, by the outcome being applied.
+ * A type whose approval or refusal is not an accreditation's supplies its own
+ * (`standardLifecycle.contactConfirmedBanners`, same shape, either outcome).
  */
-const SUCCESS_BANNERS = Object.freeze({
-  [STATE_APPROVED_PENDING_CONTACT]: Object.freeze({
-    type: 'success',
+const DEFAULT_CONTACT_CONFIRMED_BANNERS = Object.freeze({
+  approved: Object.freeze({
     title: 'Applicant contacted',
     text: 'The applicant has been contacted and accreditation is granted.'
   }),
   // Provisional refusal copy (extrapolated from Design 3's approval screens).
-  [STATE_REJECTED_PENDING_CONTACT]: Object.freeze({
-    type: 'success',
+  rejected: Object.freeze({
     title: 'Applicant contacted',
     text: 'The applicant has been contacted and accreditation is refused.'
   })
 })
+
+/**
+ * The outcome being applied, keyed by the pending state the item was
+ * confirmed from (the backend decides where it lands; this only picks the
+ * wording).
+ */
+const OUTCOME_BY_PENDING_STATE = Object.freeze({
+  [STATE_APPROVED_PENDING_CONTACT]: 'approved',
+  [STATE_REJECTED_PENDING_CONTACT]: 'rejected'
+})
+
+/**
+ * The success banner for confirming contact on a `typeId` work item in
+ * `pendingStateId`: the type's own copy for that outcome, else the default.
+ *
+ * @param {string} typeId
+ * @param {string} pendingStateId
+ * @returns {{ type: 'success', title: string, text: string } | null}
+ */
+function contactConfirmedBanner(typeId, pendingStateId) {
+  const outcome = OUTCOME_BY_PENDING_STATE[pendingStateId]
+  if (!outcome) {
+    return null
+  }
+  const copy =
+    getStandardLifecycle(typeId)?.contactConfirmedBanners?.[outcome] ??
+    DEFAULT_CONTACT_CONFIRMED_BANNERS[outcome]
+  return { type: 'success', title: copy.title, text: copy.text }
+}
 
 const logger = createLogger()
 
@@ -239,7 +272,7 @@ export function makeSubmitConfirmContactController({
       })
 
       if (result.ok) {
-        const banner = SUCCESS_BANNERS[workItem.stateId]
+        const banner = contactConfirmedBanner(typeId, workItem.stateId)
         if (banner) {
           request.yar?.flash?.('flashBanner', banner)
         }

@@ -63,7 +63,20 @@ export const addOverseasSiteType = {
       paymentReference: workItem?.payload?.paymentReference
     }),
     // The Duly make page lists the other work items from the same submission.
-    relatedWorkItems: true
+    relatedWorkItems: true,
+    // Confirming contact adds the site to an existing accreditation (or
+    // refuses to); it grants no accreditation, so the default copy is wrong.
+    // Provisional copy: not in Figma, pending content design review.
+    contactConfirmedBanners: {
+      approved: {
+        title: 'Applicant contacted',
+        text: 'The applicant has been contacted and the overseas reprocessing site has been added to the accreditation.'
+      },
+      rejected: {
+        title: 'Applicant contacted',
+        text: 'The applicant has been contacted and the overseas reprocessing site has not been added to the accreditation.'
+      }
+    }
   }
 }
 

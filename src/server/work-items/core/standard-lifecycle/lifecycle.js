@@ -16,7 +16,11 @@
  *     // Optional. When true the Duly make page lists the other work items
  *     // from the same submission ("Related change requests"), read from
  *     // management-be's `GET /work-items/{id}/duly-make`.
- *     relatedWorkItems: true
+ *     relatedWorkItems: true,
+ *     // Optional. The "Applicant contacted" success banner's copy by
+ *     // outcome, `{ title, text }` each; an outcome left out keeps the
+ *     // default (accreditation granted / refused).
+ *     contactConfirmedBanners: { approved, rejected }
  *   }
  *
  * The pages live under `/work-items/{typeId}/{id}/…`, so re-accreditation's

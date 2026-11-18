@@ -324,6 +324,44 @@ describe('assertValidWorkItemModule', () => {
     ).toThrow(/`standardLifecycle.backend.dulyMake` must be a function/)
   })
 
+  test('accepts Standard-lifecycle success banners for either outcome', () => {
+    expect(() =>
+      assertValidWorkItemModule(
+        validModule({
+          type: {
+            standardLifecycle: {
+              readPaymentDetails: () => ({}),
+              contactConfirmedBanners: {
+                approved: { title: 'Done', text: 'It is done.' }
+              }
+            }
+          }
+        })
+      )
+    ).not.toThrow()
+  })
+
+  test.each([
+    ['a string', 'Applicant contacted'],
+    ['no text', { title: 'Applicant contacted' }],
+    ['null', null]
+  ])('rejects a Standard-lifecycle success banner that is %s', (_, banner) => {
+    expect(() =>
+      assertValidWorkItemModule(
+        validModule({
+          type: {
+            standardLifecycle: {
+              readPaymentDetails: () => ({}),
+              contactConfirmedBanners: { rejected: banner }
+            }
+          }
+        })
+      )
+    ).toThrow(
+      /`standardLifecycle.contactConfirmedBanners.rejected` must have a string title and text/
+    )
+  })
+
   // RA-410. `getTasksForState` is no longer part of the type contract, so
   // there is nothing left to validate — the two suites that asserted the
   // validator rejected a missing / non-function member went with it.

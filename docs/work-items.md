@@ -210,7 +210,11 @@ export const myType = {
     // Optional: list the other work items from the same submission on the
     // Duly make page ("Related change requests", from management-be's
     // `GET /work-items/{id}/duly-make`).
-    relatedWorkItems: true
+    relatedWorkItems: true,
+    // Optional: the "Applicant contacted" success banner by outcome, each
+    // `{ title, text }`. An outcome left out keeps the default copy
+    // ("…accreditation is granted." / "…accreditation is refused.").
+    contactConfirmedBanners: { approved, rejected }
   }
 }
 
@@ -243,7 +247,9 @@ The shared pages' unit tests live beside them in
 opts in with the type-less endpoints, the site's own charge and
 `relatedWorkItems`, mounts all three pages and hides the generic actions.
 An add-ORS approval mints nothing: the site joins an accreditation that
-already exists, so the approval banner has no accreditation ID.
+already exists, so the approval banner has no accreditation ID. For the
+same reason it supplies its own `contactConfirmedBanners` (the site has, or
+has not, been added to the accreditation; provisional copy).
 
 ## Cross-type list
 

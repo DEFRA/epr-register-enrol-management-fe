@@ -93,4 +93,21 @@ describe('add-overseas-site module (RA-739)', () => {
     expect(standardLifecycle.relatedWorkItems).toBe(true)
     expect(standardLifecycle.backend).toBeUndefined()
   })
+
+  // RA-495. An add-ORS grant adds the site to an existing accreditation, so
+  // the "Applicant contacted" banner must not say an accreditation is granted.
+  test('supplies its own confirm-contact success banners', () => {
+    expect(
+      addOverseasSiteType.standardLifecycle.contactConfirmedBanners
+    ).toEqual({
+      approved: {
+        title: 'Applicant contacted',
+        text: 'The applicant has been contacted and the overseas reprocessing site has been added to the accreditation.'
+      },
+      rejected: {
+        title: 'Applicant contacted',
+        text: 'The applicant has been contacted and the overseas reprocessing site has not been added to the accreditation.'
+      }
+    })
+  })
 })

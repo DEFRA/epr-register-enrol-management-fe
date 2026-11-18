@@ -151,6 +151,8 @@ const STANDARD_LIFECYCLE_BACKEND_STEPS = [
   'confirmContact'
 ]
 
+const STANDARD_LIFECYCLE_BANNER_OUTCOMES = ['approved', 'rejected']
+
 /**
  * RA-495. A type opting into the shared Standard-lifecycle pages
  * (`standardLifecycle`, see `standard-lifecycle/lifecycle.js`) must say where
@@ -173,6 +175,17 @@ function assertValidStandardLifecycle(type) {
     if (call !== undefined && typeof call !== 'function') {
       throw new TypeError(
         `Work item type "${type.id}" \`standardLifecycle.backend.${step}\` must be a function`
+      )
+    }
+  }
+  for (const outcome of STANDARD_LIFECYCLE_BANNER_OUTCOMES) {
+    const banner = lifecycle.contactConfirmedBanners?.[outcome]
+    if (
+      banner !== undefined &&
+      (typeof banner?.title !== 'string' || typeof banner?.text !== 'string')
+    ) {
+      throw new TypeError(
+        `Work item type "${type.id}" \`standardLifecycle.contactConfirmedBanners.${outcome}\` must have a string title and text`
       )
     }
   }
