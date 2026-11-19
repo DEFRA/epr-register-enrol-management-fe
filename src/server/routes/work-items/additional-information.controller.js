@@ -20,7 +20,8 @@ const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
  *
  * Missing values are OMITTED rather than rendered as a placeholder, so a
  * pre-RA-434 work item with none of these fields simply renders a shorter
- * list.
+ * list. The exception is Last year's accreditation number, which shows
+ * "None" so a caseworker can see there isn't one.
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
@@ -76,7 +77,8 @@ export function buildAdditionalInformationRows({ workItem }) {
     [
       'last-years-accreditation-number',
       "Last year's accreditation number",
-      payload.lastYearsAccreditationNumber?.accreditationNumber?.trim()
+      payload.lastYearsAccreditationNumber?.accreditationNumber?.trim() ||
+        'None'
     ],
     [
       'contact-full-name',

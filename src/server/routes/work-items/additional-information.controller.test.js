@@ -73,6 +73,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
       // 'site-name' omitted — no producer field for it today.
       'site-address',
       'permit-numbers',
+      'last-years-accreditation-number',
       'contact-full-name',
       'contact-email',
       'contact-phone',
@@ -231,19 +232,25 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     ['missing its number', { year: 2026 }],
     ['blank', { year: 2026, accreditationNumber: '  ' }]
   ])(
-    "omits last year's accreditation number when it is %s",
+    "shows None for last year's accreditation number when it is %s",
     (_, lastYearsAccreditationNumber) => {
       const payload = realOperatorSubmissionPayload()
       payload.lastYearsAccreditationNumber = lastYearsAccreditationNumber
       const rows = buildAdditionalInformationRows({ workItem: { payload } })
 
-      expect(row(rows, 'last-years-accreditation-number')).toBeUndefined()
+      expect(row(rows, 'last-years-accreditation-number').value).toBe('None')
     }
   )
 
-  test('omits every row for a work item with no payload at all', () => {
+  test("shows only last year's accreditation number, as None, for a work item with no payload at all", () => {
     const rows = buildAdditionalInformationRows({ workItem: {} })
-    expect(rows).toEqual([])
+    expect(rows).toEqual([
+      {
+        key: 'last-years-accreditation-number',
+        label: "Last year's accreditation number",
+        value: 'None'
+      }
+    ])
   })
 })
 
