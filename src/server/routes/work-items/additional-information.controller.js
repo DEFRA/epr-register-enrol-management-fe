@@ -70,11 +70,9 @@ export function buildAdditionalInformationRows({ workItem }) {
       // the fuller permit metadata is not shown, only the numbers.
       permitNumbers.length > 0 ? permitNumbers.join(', ') : null
     ],
-    // RA-763 AC03. The operator's accreditation number for the year before,
-    // kept from ReEx when the application was created and sent by the
-    // operator backend as `{ year, accreditationNumber }`. Omitted for a
-    // first-time accreditation, or an application created before RA-763
-    // that the RA-784 backfill hasn't reached yet.
+    // RA-763 AC03. Last year's accreditation number, kept from ReEx when the
+    // application was created and sent by the operator backend as
+    // `{ year, accreditationNumber }`. Absent for a first-time accreditation.
     [
       'last-years-accreditation-number',
       "Last year's accreditation number",

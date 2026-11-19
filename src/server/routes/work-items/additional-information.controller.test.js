@@ -210,7 +210,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     const payload = realOperatorSubmissionPayload()
     payload.lastYearsAccreditationNumber = {
       year: 2026,
-      accreditationNumber: 'A26ER5003240164PL'
+      accreditationNumber: 'A26ER9999990123PL'
     }
     const rows = buildAdditionalInformationRows({ workItem: { payload } })
 
@@ -221,7 +221,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     expect(row(rows, 'last-years-accreditation-number')).toEqual({
       key: 'last-years-accreditation-number',
       label: "Last year's accreditation number",
-      value: 'A26ER5003240164PL'
+      value: 'A26ER9999990123PL'
     })
   })
 
@@ -306,7 +306,7 @@ describe('GET /work-items/{id}/additional-information (RA-434)', () => {
     const payload = realOperatorSubmissionPayload()
     payload.lastYearsAccreditationNumber = {
       year: 2026,
-      accreditationNumber: 'A26ER5003240164PL'
+      accreditationNumber: 'A26ER9999990123PL'
     }
     getWorkItem.mockResolvedValue({
       ok: true,
@@ -323,7 +323,7 @@ describe('GET /work-items/{id}/additional-information (RA-434)', () => {
     expect(result).toEqual(
       expect.stringContaining('Last year&#39;s accreditation number')
     )
-    expect(result).toEqual(expect.stringContaining('A26ER5003240164PL'))
+    expect(result).toEqual(expect.stringContaining('A26ER9999990123PL'))
   })
 
   test('omits the Site name row from the rendered page', async () => {
