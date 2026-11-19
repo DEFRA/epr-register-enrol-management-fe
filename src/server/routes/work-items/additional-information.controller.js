@@ -15,8 +15,8 @@ const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
 /**
  * RA-434 / RA-480. The "Additional information" tab's row view model, in the
  * fixed order: Registered name, Companies house number, Registered address,
- * Site name, Site address, Permit numbers, Contact full name, Contact email,
- * Contact phone, Contact job title.
+ * Site name, Site address, Permit numbers, Last year's accreditation number,
+ * Contact full name, Contact email, Contact phone, Contact job title.
  *
  * Missing values are OMITTED rather than rendered as a placeholder, so a
  * pre-RA-434 work item with none of these fields simply renders a shorter
@@ -69,6 +69,16 @@ export function buildAdditionalInformationRows({ workItem }) {
       // Comma-joined on one line, matching the mockup's "[xxxx], [xxxx]" —
       // the fuller permit metadata is not shown, only the numbers.
       permitNumbers.length > 0 ? permitNumbers.join(', ') : null
+    ],
+    // RA-763 AC03. The operator's accreditation number for the year before,
+    // kept from ReEx when the application was created and sent by the
+    // operator backend as `{ year, accreditationNumber }`. Omitted for a
+    // first-time accreditation, or an application created before RA-763
+    // that the RA-784 backfill hasn't reached yet.
+    [
+      'last-years-accreditation-number',
+      "Last year's accreditation number",
+      payload.lastYearsAccreditationNumber?.accreditationNumber?.trim()
     ],
     [
       'contact-full-name',
