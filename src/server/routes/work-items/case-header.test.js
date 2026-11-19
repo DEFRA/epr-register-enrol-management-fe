@@ -149,7 +149,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(header, 'payment-amount')).toBe('Not received')
   })
 
-  test('places payment date then payment amount after the registration number (RA-493)', () => {
+  test('has the eleven meta items in the order add-ORS shares, Charge before Payment date (RA-493)', () => {
     const header = buildCaseHeader({
       workItem: {
         ...workItem,
@@ -165,20 +165,78 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
       'Due date'
     )
     expect(header.meta.map((entry) => entry.key)).toEqual([
-      'material',
+      'request-type',
       'status',
       'assigned-to',
       'due-on',
       'registration-number',
+      'material',
+      'payment-amount',
       'payment-date',
-      'payment-amount'
+      'date-added',
+      'submitted-by',
+      'effective-date'
     ])
     expect(
-      header.meta.slice(-2).map(({ label, value }) => ({ label, value }))
+      header.meta.slice(6, 8).map(({ label, value }) => ({ label, value }))
     ).toEqual([
-      { label: 'Payment date', value: '01 Nov 2026' },
-      { label: 'Charge', value: '£2,184.00' }
+      { label: 'Charge', value: '£2,184.00' },
+      { label: 'Payment date', value: '01 Nov 2026' }
     ])
+  })
+
+  test('shows the type, submission date and submitter, falling back to the contact details', () => {
+    const value = (header, key) =>
+      header.meta.find((entry) => entry.key === key).value
+    const item = {
+      ...workItem,
+      typeDisplayName: 'Re-accreditation',
+      submittedAt: '2026-10-05T09:00:00Z',
+      payload: {
+        ...workItem.payload,
+        submittedBy: { fullName: 'Sam Operator' }
+      }
+    }
+
+    const header = buildCaseHeader({ workItem: item })
+    expect(value(header, 'request-type')).toBe('Re-accreditation')
+    expect(value(header, 'date-added')).toBe('05 Oct 2026')
+    expect(value(header, 'submitted-by')).toBe('Sam Operator')
+
+    const older = buildCaseHeader({
+      workItem: {
+        ...item,
+        payload: {
+          ...workItem.payload,
+          submitterContactDetails: { fullName: 'Pat Contact' }
+        }
+      }
+    })
+    expect(value(older, 'submitted-by')).toBe('Pat Contact')
+    expect(
+      value(
+        buildCaseHeader({ workItem: { ...item, payload: workItem.payload } }),
+        'submitted-by'
+      )
+    ).toBe('—')
+  })
+
+  test('shows the accreditation start date as the effective date once Granted', () => {
+    const value = (stateId) =>
+      buildCaseHeader({
+        workItem: {
+          ...workItem,
+          stateId,
+          payload: {
+            ...workItem.payload,
+            accreditationStartDate: '2026-12-01'
+          }
+        }
+      }).meta.find((entry) => entry.key === 'effective-date').value
+
+    expect(value('approved')).toBe('01 Dec 2026')
+    expect(value('approved-pending-contact')).toBe('—')
+    expect(value('duly-made')).toBe('—')
   })
 
   test('appends the glass recycling type suffix to the material meta entry', () => {
@@ -412,8 +470,7 @@ describe("RA-739: a type's own header and tabs", () => {
       backHref: '/work-items',
       backText: 'Applications',
       applicationRef: 'w-1',
-      title: 'Denmark PR',
-      metaLayout: 'in-year-change'
+      title: 'Denmark PR'
     })
   })
 

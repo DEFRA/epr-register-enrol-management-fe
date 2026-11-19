@@ -556,7 +556,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('[data-testid="case-header"]').text()).not.toContain('123001')
     })
 
-    test('shows the thirteen meta items in ticket order with the site charge', async () => {
+    test('shows the eleven meta items in the order re-accreditation shares, with the site charge', async () => {
       const $ = await detailPage(anAddOrsItem())
 
       const meta = $(
@@ -568,24 +568,15 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Change request type: New ORS accreditation',
         'Status: Not started',
         'Assigned to: Unassigned',
-        `Effective date: ${EM_DASH}`,
         `Due date: ${EM_DASH}`,
-        'Location: Copenhagen, Denmark',
-        'Site ID: 007',
-        'Date added: 11 Feb 2027',
-        'Submitted by: Sam Operator',
-        'Material: Plastic',
         'Accreditation number: ACC-REP-PL-0007',
+        'Material: Plastic',
         'Charge: £328.00',
-        'Payment date: Not received'
+        'Payment date: Not received',
+        'Submitted on: 11 Feb 2027',
+        'Submitted by: Sam Operator',
+        `Effective date: ${EM_DASH}`
       ])
-      // Its own column widths (Figma: the second column holds the
-      // accreditation number, too long for re-accreditation's narrow one).
-      expect(
-        $('[data-testid="case-header-meta"]').hasClass(
-          'app-case-header__meta--in-year-change'
-        )
-      ).toBe(true)
       expect(
         $(
           '[data-testid="case-header-status"] [data-testid="work-item-state-tag"]'
@@ -633,8 +624,6 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       const $ = await detailPage(item)
 
       for (const key of [
-        'location',
-        'site-id',
         'date-added',
         'submitted-by',
         'material',
@@ -1974,9 +1963,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(squash($('[data-testid="case-header-title"]').text())).toBe(
         'Denmark PR (007)'
       )
-      expect(squash($('[data-testid="case-header-site-id"]').text())).toBe(
-        '007'
-      )
+      expect($('[data-testid="case-header-site-id"]')).toHaveLength(0)
       expect(tabs($)).toEqual(addOrsTabs(tabKey))
       const panel = $(`[data-testid="${tabKey}-tab"]`)
       expect(panel).toHaveLength(1)

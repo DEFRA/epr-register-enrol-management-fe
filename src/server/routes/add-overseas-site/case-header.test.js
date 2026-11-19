@@ -77,7 +77,6 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     expect(header).toMatchObject(SHARED_HEADER)
     expect(header.caption).toBeUndefined()
     expect(header.title).toBe('Denmark PR (007)')
-    expect(header.metaLayout).toBe('in-year-change')
     expect(header.organisationName).toBeUndefined()
     expect(header.organisationId).toBeUndefined()
   })
@@ -94,22 +93,20 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     expect(headerFor(item).title).toBe(EM_DASH)
   })
 
-  test('has the thirteen meta items in ticket and Figma order', () => {
+  test('has the eleven meta items in the order re-accreditation shares', () => {
     const header = headerFor(addOrs())
     expect(header.meta.map((entry) => [entry.label, entry.value])).toEqual([
       ['Change request type', 'New ORS accreditation'],
       ['Status', 'Not started'],
       ['Assigned to', 'Unassigned'],
-      ['Effective date', EM_DASH],
       ['Due date', EM_DASH],
-      ['Location', 'Copenhagen, Denmark'],
-      ['Site ID', '007'],
-      ['Date added', '12 Feb 2027'],
-      ['Submitted by', 'Sam Operator'],
-      ['Material', 'Plastic'],
       ['Accreditation number', 'ACC-1'],
+      ['Material', 'Plastic'],
       ['Charge', '£328.00'],
-      ['Payment date', NOT_RECEIVED]
+      ['Payment date', NOT_RECEIVED],
+      ['Submitted on', '12 Feb 2027'],
+      ['Submitted by', 'Sam Operator'],
+      ['Effective date', EM_DASH]
     ])
   })
 
@@ -126,12 +123,6 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     expect(metaValue(headerFor(item), 'payment-date')).toBe('20 Feb 2027')
   })
 
-  test('shows the country alone as the location when there is no town', () => {
-    const item = addOrs()
-    item.payload.site = { siteName: 'Denmark PR', country: 'Denmark' }
-    expect(metaValue(headerFor(item), 'location')).toBe('Denmark')
-  })
-
   test('shows the dash for every missing value', () => {
     const item = addOrs({ submittedAt: null })
     item.payload.material = undefined
@@ -140,8 +131,6 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     item.payload.site = { siteName: 'Denmark PR' }
     const header = headerFor(item)
     for (const key of [
-      'location',
-      'site-id',
       'date-added',
       'submitted-by',
       'material',

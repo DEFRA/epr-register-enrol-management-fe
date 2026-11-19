@@ -2,21 +2,20 @@ import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount
 import {
   assignedToEntry,
   dueOnEntry,
-  formatHeaderDate,
+  effectiveDateEntry,
   formatPayment,
   materialEntry,
-  statusEntry
+  requestTypeEntry,
+  statusEntry,
+  submittedByEntry,
+  submittedOnEntry
 } from '#/server/routes/work-items/case-header.js'
-import {
-  EM_DASH,
-  toDisplayLines
-} from '#/server/routes/work-items/application-summary.js'
+import { EM_DASH } from '#/server/routes/work-items/application-summary.js'
 
 /**
  * RA-739 / RA-495. The add-ORS case header: a site title, no organisation
- * name or Org ID, and rows of four meta items. The fields are RA-495's (the
- * ticket plus Figma "Flows 5"); the title and grid are RA-739's Figma frame
- * (node 854:136663). That frame's reference caption is left out: the
+ * name or Org ID, and rows of four meta items. The title is RA-739's Figma
+ * frame (node 854:136663). That frame's reference caption is left out: the
  * breadcrumb already shows the reference (user, 2026-11-19).
  *
  * @param {object} args
@@ -30,7 +29,6 @@ export function buildAddOverseasSiteHeader({ header, workItem, assignment }) {
   return {
     ...header,
     title: siteTitle(payload.site),
-    metaLayout: 'in-year-change',
     meta: meta({ workItem, assignment, payload })
   }
 }
@@ -41,67 +39,32 @@ function siteTitle(site) {
   return site?.orsId ? `${name} (${site.orsId})` : name
 }
 
-/** The first display line of `value`, or the dash. */
-function textOrDash(value) {
-  return toDisplayLines(value)[0] ?? EM_DASH
-}
-
 /**
- * The site's location for the header: its town or city and country
- * ("Copenhagen, Denmark"). The Application summary has the full address.
- */
-function siteLocation(site) {
-  const parts = [site?.townOrCity, site?.country].flatMap(toDisplayLines)
-  return parts.length > 0 ? parts.join(', ') : EM_DASH
-}
-
-/**
- * Rows of four, in the ticket's order (Figma "Flows 5" for the first
- * eight). Status, Assigned to and Due date are built exactly as for
- * re-accreditation. RA-495 AC6: Effective date sits before Due date, as in
- * Figma's "Effective date" section; it is the dash until the determination
- * records one (`payload.effectiveDate`: the date entered on approval, the
- * submission date on refusal). Date added is the work item's submission date. The
- * charge is the site's own (`site.chargePence`), shown whenever it is known
- * (unlike re-accreditation's payment amount, which waits for payment),
- * through the same formatter, always with pence ("£328.00"). The
- * payment date reads "Not received" until the item is duly made, as on
- * re-accreditation. The `request-type` key keeps RA-739's testid.
+ * Rows of four, the same fields in the same places as re-accreditation's
+ * (user, 2026-11-19), with the accreditation number where it has the
+ * registration number. No Site ID (the title has the ORS id) or location
+ * (the Application summary has it).
+ *
+ * RA-495 AC6: Effective date is the dash until the determination records one
+ * (`payload.effectiveDate`: the date entered on approval, the submission date
+ * on refusal). The charge is the site's own (`site.chargePence`), shown
+ * whenever it is known (unlike re-accreditation's, which waits for payment),
+ * always with pence ("£328.00"). The payment date reads "Not received" until
+ * the item is duly made, as on re-accreditation.
  */
 function meta({ workItem, assignment, payload }) {
   const site = payload.site ?? {}
   return [
-    {
-      key: 'request-type',
-      label: 'Change request type',
-      value: workItem.typeDisplayName || EM_DASH
-    },
+    requestTypeEntry(workItem),
     statusEntry(workItem),
     assignedToEntry(workItem, assignment),
-    {
-      key: 'effective-date',
-      label: 'Effective date',
-      value: formatHeaderDate(payload.effectiveDate)
-    },
     dueOnEntry(workItem),
-    { key: 'location', label: 'Location', value: siteLocation(site) },
-    { key: 'site-id', label: 'Site ID', value: textOrDash(site.orsId) },
-    {
-      key: 'date-added',
-      label: 'Date added',
-      value: formatHeaderDate(workItem.submittedAt)
-    },
-    {
-      key: 'submitted-by',
-      label: 'Submitted by',
-      value: textOrDash(payload.submittedBy?.fullName)
-    },
-    materialEntry(payload),
     {
       key: 'accreditation-number',
       label: 'Accreditation number',
       value: payload.accreditationReference || EM_DASH
     },
+    materialEntry(payload),
     {
       key: 'charge',
       label: 'Charge',
@@ -111,6 +74,9 @@ function meta({ workItem, assignment, payload }) {
       key: 'payment-date',
       label: 'Payment date',
       value: formatPayment(payload).date
-    }
+    },
+    submittedOnEntry(workItem),
+    submittedByEntry(payload),
+    effectiveDateEntry(payload.effectiveDate)
   ]
 }

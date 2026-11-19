@@ -22,9 +22,11 @@ import { EM_DASH } from './application-summary.js'
  *   5. material,          6. status,
  *   7. assigned to,       8. due on, and 9. registration number,
  *
- * plus (RA-493) 10. payment date and 11. payment amount.
+ * plus (RA-493) 10. payment date and 11. payment amount, and (RA-495, to
+ * match add-ORS) change request type, submitted on, submitted by and
+ * effective date.
  *
- * (1)-(4) are the breadcrumb + title lines; the rest are the meta line.
+ * (1)-(4) are the breadcrumb + title lines; the rest are the meta grid.
  *
  * RA-739. A type with a header of its own supplies
  * `buildCaseHeader({ header, workItem, assignment })`, given the fields every
@@ -142,6 +144,46 @@ export function buildCaseHeader({ workItem, assignment = null }) {
   }
 }
 
+/** The work item type's display name; the key keeps RA-739's testid. */
+export function requestTypeEntry(workItem) {
+  return {
+    key: 'request-type',
+    label: 'Change request type',
+    value: workItem?.typeDisplayName || EM_DASH
+  }
+}
+
+/** The work item's submission date; the key keeps RA-495's "Date added" testid. */
+export function submittedOnEntry(workItem) {
+  return {
+    key: 'date-added',
+    label: 'Submitted on',
+    value: formatHeaderDate(workItem?.submittedAt)
+  }
+}
+
+/**
+ * The submitter's name. A re-accreditation submitted before the operator
+ * backend sent `submittedBy` has only its contact details.
+ */
+export function submittedByEntry(payload) {
+  const name =
+    payload?.submittedBy?.fullName ?? payload?.submitterContactDetails?.fullName
+  return {
+    key: 'submitted-by',
+    label: 'Submitted by',
+    value: typeof name === 'string' && name.trim() ? name.trim() : EM_DASH
+  }
+}
+
+export function effectiveDateEntry(date) {
+  return {
+    key: 'effective-date',
+    label: 'Effective date',
+    value: formatHeaderDate(date)
+  }
+}
+
 export function materialEntry(payload) {
   return {
     key: 'material',
@@ -194,10 +236,18 @@ export function dueOnEntry(workItem) {
   }
 }
 
+/**
+ * Rows of four, the same fields in the same places as add-ORS's (user,
+ * 2026-11-19); sequence alone controls placement. RA-493: Figma omits the
+ * charge, but AC02/AC04 require it.
+ *
+ * Effective date is the accreditation start date, which management-be stamps
+ * at confirm contact, so it shows once Granted, as in the decision panel.
+ */
 function reAccreditationMeta({ workItem, assignment, payload }) {
   const payment = formatPayment(payload)
   return [
-    materialEntry(payload),
+    requestTypeEntry(workItem),
     statusEntry(workItem),
     assignedToEntry(workItem, assignment),
     dueOnEntry(workItem),
@@ -206,22 +256,28 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
       label: 'Registration number',
       value: payload.registrationNumber || EM_DASH
     },
-    // RA-493. Figma places "Payment date" after "Registration number"
-    // (second row under "Status"); the meta line is an inline flex-wrap,
-    // so sequence alone controls placement. Figma omits the amount, but
-    // AC02/AC04 require it, so it sits immediately after the date.
+    materialEntry(payload),
+    {
+      key: 'payment-amount',
+      label: 'Charge',
+      value: payment.amount
+    },
     {
       key: 'payment-date',
       label: 'Payment date',
       value: payment.date
     },
-    {
-      key: 'payment-amount',
-      label: 'Charge',
-      value: payment.amount
-    }
+    submittedOnEntry(workItem),
+    submittedByEntry(payload),
+    effectiveDateEntry(
+      workItem?.stateId === GRANTED_STATE_ID
+        ? payload.accreditationStartDate
+        : null
+    )
   ]
 }
+
+const GRANTED_STATE_ID = 'approved'
 
 /**
  * A state's display name from its work item type's declaration, or the raw

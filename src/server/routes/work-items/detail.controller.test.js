@@ -4486,18 +4486,22 @@ describe('RA-295 individual work item page', () => {
     expect(header).toContain('24 Aug 2026')
     expect(header).toContain('data-testid="case-header-registration-number"')
     expect(header).toContain('EPR-100999')
-    // RA-493: Figma grid order and labels (bold label above the value).
+    // The grid order add-ORS shares (bold label above the value).
     const labels = [...header.matchAll(/meta-label">([^<]+)<\/dt>/g)].map(
       (match) => match[1]
     )
     expect(labels).toEqual([
-      'Material:',
+      'Change request type:',
       'Status:',
       'Assigned to:',
       'Due date:',
       'Registration number:',
+      'Material:',
+      'Charge:',
       'Payment date:',
-      'Charge:'
+      'Submitted on:',
+      'Submitted by:',
+      'Effective date:'
     ])
   })
 
