@@ -42,31 +42,38 @@ const UNASSIGNED = 'Unassigned'
 export const NOT_RECEIVED = 'Not received'
 
 /**
- * Duly Made payment information for the header (RA-493).
+ * The header's payment date (RA-493). management-be stamps
+ * `payload.paymentDate` (a `yyyy-MM-dd` DateOnly) when the work item is
+ * marked Duly made, and it is null before then, so until it is present (or
+ * if it cannot be parsed) it reads "Not received" (AC04). Duly making records
+ * no amount paid, so the header shows the charge itself (see `chargeEntry`)
+ * and this date alone says whether it has been paid (user, 2026-11-19).
  *
- * management-be stamps `payload.paymentDate` (a `yyyy-MM-dd` DateOnly)
- * when the work item is marked Duly made, and it is null before then. A
- * recorded payment date is therefore the signal that payment has been
- * received: until it is present (or if it cannot be parsed) BOTH the date
- * and the amount read "Not received" (AC04), even when the charge itself
- * is already known from submission.
- *
- * Once duly made, the amount is the charge currently recorded against the
- * application (AC03). `0` is a legitimate charge and formats as "£0.00"; an
- * absent or malformed charge degrades to the em dash rather than claiming
- * payment was not received.
- *
- * @returns {{ date: string, amount: string }}
+ * @returns {string}
  */
-export function formatPayment(payload) {
+export function formatPaymentDate(payload) {
   const iso = unwrapMongoDate(payload?.paymentDate)
   const date = iso ? formatDateShortGds(iso) : ''
-  if (date === '') {
-    return { date: NOT_RECEIVED, amount: NOT_RECEIVED }
-  }
+  return date === '' ? NOT_RECEIVED : date
+}
+
+/**
+ * The amount owed, from submission. `0` is a legitimate charge and formats
+ * as "£0.00"; an absent or malformed one is the em dash.
+ */
+export function chargeEntry(pence) {
   return {
-    date,
-    amount: formatChargeAmount(payload.chargeAmountPence) ?? EM_DASH
+    key: 'charge',
+    label: 'Charge',
+    value: formatChargeAmount(pence) ?? EM_DASH
+  }
+}
+
+export function paymentDateEntry(payload) {
+  return {
+    key: 'payment-date',
+    label: 'Payment date',
+    value: formatPaymentDate(payload)
   }
 }
 
@@ -241,15 +248,14 @@ export function dueOnEntry(workItem) {
 }
 
 /**
- * Rows of four, the same fields in the same places as add-ORS's (user,
- * 2026-11-19); sequence alone controls placement. RA-493: Figma omits the
- * charge, but AC02/AC04 require it.
+ * The same fields in the same places as add-ORS's (user, 2026-11-19), rows
+ * of four with the payment and outcome last; sequence alone controls
+ * placement. The charge is the amount owed, shown from submission.
  *
  * Effective date is the accreditation start date, which management-be stamps
  * at confirm contact, so it shows once Granted, as in the decision panel.
  */
 function reAccreditationMeta({ workItem, assignment, payload }) {
-  const payment = formatPayment(payload)
   return [
     requestTypeEntry(workItem),
     statusEntry(workItem),
@@ -261,18 +267,10 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
       value: payload.registrationNumber || EM_DASH
     },
     materialEntry(payload),
-    {
-      key: 'payment-amount',
-      label: 'Charge',
-      value: payment.amount
-    },
-    {
-      key: 'payment-date',
-      label: 'Payment date',
-      value: payment.date
-    },
-    submittedOnEntry(workItem),
     submittedByEntry(payload),
+    submittedOnEntry(workItem),
+    chargeEntry(payload.chargeAmountPence),
+    paymentDateEntry(payload),
     effectiveDateEntry(
       workItem?.stateId === GRANTED_STATE_ID
         ? payload.accreditationStartDate

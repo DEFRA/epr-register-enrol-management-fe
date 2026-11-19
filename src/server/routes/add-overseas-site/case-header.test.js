@@ -102,10 +102,10 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
       ['Due date', EM_DASH],
       ['Accreditation number', 'ACC-1'],
       ['Material', 'Plastic'],
+      ['Submitted by', 'Sam Operator'],
+      ['Submitted on', '12 Feb 2027'],
       ['Charge', '£328.00'],
       ['Payment date', NOT_RECEIVED],
-      ['Submitted on', '12 Feb 2027'],
-      ['Submitted by', 'Sam Operator'],
       ['Effective date', EM_DASH]
     ])
   })

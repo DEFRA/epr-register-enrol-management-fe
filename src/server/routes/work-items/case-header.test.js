@@ -13,7 +13,8 @@ import {
   caseHasTab,
   decorateForCaseHeader,
   formatHeaderDate,
-  formatPayment,
+  chargeEntry,
+  formatPaymentDate,
   stateDisplayName
 } from './case-header.js'
 
@@ -46,66 +47,49 @@ describe('#formatHeaderDate (RA-295 AC01)', () => {
   })
 })
 
-describe('#formatPayment (RA-493)', () => {
-  test('shows "Not received" for both items before the item is duly made (AC04)', () => {
-    // The charge is already known from submission, but without a recorded
-    // payment date the payment has not been received.
-    expect(formatPayment({ chargeAmountPence: 327600 })).toEqual({
-      date: NOT_RECEIVED,
-      amount: NOT_RECEIVED
-    })
-    expect(
-      formatPayment({ paymentDate: null, chargeAmountPence: 327600 })
-    ).toEqual({ date: NOT_RECEIVED, amount: NOT_RECEIVED })
+describe('#formatPaymentDate (RA-493)', () => {
+  test('shows "Not received" before the item is duly made (AC04)', () => {
+    expect(formatPaymentDate({ chargeAmountPence: 327600 })).toBe(NOT_RECEIVED)
+    expect(formatPaymentDate({ paymentDate: null })).toBe(NOT_RECEIVED)
     expect(NOT_RECEIVED).toBe('Not received')
   })
 
   test('tolerates a missing payload', () => {
-    expect(formatPayment(undefined)).toEqual({
-      date: NOT_RECEIVED,
-      amount: NOT_RECEIVED
-    })
+    expect(formatPaymentDate(undefined)).toBe(NOT_RECEIVED)
   })
 
-  test('formats the recorded date and amount once duly made (AC01, AC02, AC03)', () => {
-    expect(
-      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 327650 })
-    ).toEqual({ date: '01 Nov 2026', amount: '£3,276.50' })
-  })
-
-  test('renders whole-pound charges with pence, matching the duly-making page (user decision 2026-11-18)', () => {
-    expect(
-      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 327600 })
-        .amount
-    ).toBe('£3,276.00')
-  })
-
-  test('treats a £0 charge as a real amount, not a missing one', () => {
-    expect(
-      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 0 }).amount
-    ).toBe('£0.00')
-  })
-
-  test('renders an em dash for the amount when duly made but no charge is recorded', () => {
-    expect(
-      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: null })
-    ).toEqual({ date: '01 Nov 2026', amount: EM_DASH })
-    expect(formatPayment({ paymentDate: '2026-11-01' }).amount).toBe(EM_DASH)
+  test('formats the recorded date once duly made (AC01, AC02)', () => {
+    expect(formatPaymentDate({ paymentDate: '2026-11-01' })).toBe('01 Nov 2026')
   })
 
   test('shows "Not received" rather than throwing on an unparseable payment date', () => {
-    expect(
-      formatPayment({ paymentDate: 'not-a-date', chargeAmountPence: 327600 })
-    ).toEqual({ date: NOT_RECEIVED, amount: NOT_RECEIVED })
+    expect(formatPaymentDate({ paymentDate: 'not-a-date' })).toBe(NOT_RECEIVED)
   })
 
   test('unwraps the Mongo extended-JSON date shape', () => {
     expect(
-      formatPayment({
-        paymentDate: { $date: '2026-11-01T00:00:00Z' },
-        chargeAmountPence: 54600
-      })
-    ).toEqual({ date: '01 Nov 2026', amount: '£546.00' })
+      formatPaymentDate({ paymentDate: { $date: '2026-11-01T00:00:00Z' } })
+    ).toBe('01 Nov 2026')
+  })
+})
+
+describe('#chargeEntry', () => {
+  test('renders whole-pound charges with pence, matching the duly-making page (user decision 2026-11-18)', () => {
+    expect(chargeEntry(327600)).toEqual({
+      key: 'charge',
+      label: 'Charge',
+      value: '£3,276.00'
+    })
+    expect(chargeEntry(327650).value).toBe('£3,276.50')
+  })
+
+  test('treats a £0 charge as a real amount, not a missing one', () => {
+    expect(chargeEntry(0).value).toBe('£0.00')
+  })
+
+  test('renders an em dash when no charge is recorded', () => {
+    expect(chargeEntry(null).value).toBe(EM_DASH)
+    expect(chargeEntry(undefined).value).toBe(EM_DASH)
   })
 })
 
@@ -125,7 +109,8 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
       operatorOrganisationId: '6a74a6a12b7c39b0cc15ca55',
       operatorOrgNumber: 500500,
       material: 'plastic',
-      registrationNumber: 'EPR-100999'
+      registrationNumber: 'EPR-100999',
+      chargeAmountPence: 218400
     }
   }
 
@@ -146,43 +131,37 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(header, 'due-on')).toBe('24 Aug 2026')
     expect(metaValue(header, 'registration-number')).toBe('EPR-100999')
     expect(metaValue(header, 'payment-date')).toBe('Not received')
-    expect(metaValue(header, 'payment-amount')).toBe('Not received')
   })
 
-  test('has the eleven meta items in the order add-ORS shares, Charge before Payment date (RA-493)', () => {
+  // Duly making records no amount paid, so the charge shows from submission
+  // and the payment date alone says whether it has been paid.
+  test('shows the charge before the item is paid', () => {
+    expect(metaValue(buildCaseHeader({ workItem }), 'charge')).toBe('£2,184.00')
+  })
+
+  test('has the eleven meta items in the order add-ORS shares', () => {
     const header = buildCaseHeader({
       workItem: {
         ...workItem,
-        payload: {
-          ...workItem.payload,
-          paymentDate: '2026-11-01',
-          chargeAmountPence: 218400
-        }
+        payload: { ...workItem.payload, paymentDate: '2026-11-01' }
       }
     })
 
-    expect(header.meta.find((entry) => entry.key === 'due-on').label).toBe(
-      'Due date'
-    )
-    expect(header.meta.map((entry) => entry.key)).toEqual([
-      'request-type',
-      'status',
-      'assigned-to',
-      'due-on',
-      'registration-number',
-      'material',
-      'payment-amount',
-      'payment-date',
-      'date-added',
-      'submitted-by',
-      'effective-date'
+    expect(header.meta.map((entry) => [entry.key, entry.label])).toEqual([
+      ['request-type', 'Application type'],
+      ['status', 'Status'],
+      ['assigned-to', 'Assigned to'],
+      ['due-on', 'Due date'],
+      ['registration-number', 'Registration number'],
+      ['material', 'Material'],
+      ['submitted-by', 'Submitted by'],
+      ['date-added', 'Submitted on'],
+      ['charge', 'Charge'],
+      ['payment-date', 'Payment date'],
+      ['effective-date', 'Effective date']
     ])
-    expect(
-      header.meta.slice(6, 8).map(({ label, value }) => ({ label, value }))
-    ).toEqual([
-      { label: 'Charge', value: '£2,184.00' },
-      { label: 'Payment date', value: '01 Nov 2026' }
-    ])
+    expect(metaValue(header, 'charge')).toBe('£2,184.00')
+    expect(metaValue(header, 'payment-date')).toBe('01 Nov 2026')
   })
 
   test('shows the type, submission date and submitter, falling back to the contact details', () => {

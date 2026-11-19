@@ -4497,10 +4497,10 @@ describe('RA-295 individual work item page', () => {
       'Due date:',
       'Registration number:',
       'Material:',
+      'Submitted by:',
+      'Submitted on:',
       'Charge:',
       'Payment date:',
-      'Submitted on:',
-      'Submitted by:',
       'Effective date:'
     ])
   })
@@ -4520,7 +4520,9 @@ describe('RA-295 individual work item page', () => {
   })
 
   // RA-493 -----------------------------------------------------------
-  test('RA-493 AC04: payment date and amount read "Not received" before duly making', async () => {
+  // Duly making records no amount paid, so the header shows the charge from
+  // submission and the payment date alone says whether it has been paid.
+  test('RA-493 AC04: the payment date reads "Not received" before duly making, beside the charge', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: fullPayloadWorkItem({
@@ -4537,11 +4539,11 @@ describe('RA-295 individual work item page', () => {
       /Payment date:<\/dt>\s*<dd[^>]*data-testid="case-header-payment-date">Not received</
     )
     expect(result).toMatch(
-      /Charge:<\/dt>\s*<dd[^>]*data-testid="case-header-payment-amount">Not received</
+      /Charge:<\/dt>\s*<dd[^>]*data-testid="case-header-charge">£3,276.00</
     )
   })
 
-  test('RA-493 AC01-AC03: the header shows the recorded payment date and amount', async () => {
+  test('RA-493 AC01-AC03: the header shows the recorded payment date and the charge', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: fullPayloadWorkItem({
@@ -4557,9 +4559,7 @@ describe('RA-295 individual work item page', () => {
     expect(result).toMatch(
       /data-testid="case-header-payment-date">01 Nov 2026</
     )
-    expect(result).toMatch(
-      /data-testid="case-header-payment-amount">£3,276.50</
-    )
+    expect(result).toMatch(/data-testid="case-header-charge">£3,276.50</)
   })
 
   test('AC01: the RA-98 reference-implementation notification banner is gone', async () => {

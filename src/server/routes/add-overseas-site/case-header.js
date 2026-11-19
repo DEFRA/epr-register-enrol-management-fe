@@ -1,10 +1,10 @@
-import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
 import {
   assignedToEntry,
+  chargeEntry,
   dueOnEntry,
   effectiveDateEntry,
-  formatPayment,
   materialEntry,
+  paymentDateEntry,
   requestTypeEntry,
   statusEntry,
   submittedByEntry,
@@ -40,20 +40,17 @@ function siteTitle(site) {
 }
 
 /**
- * Rows of four, the same fields in the same places as re-accreditation's
- * (user, 2026-11-19), with the accreditation number where it has the
- * registration number. No Site ID (the title has the ORS id) or location
- * (the Application summary has it).
+ * The same fields in the same places as re-accreditation's (user,
+ * 2026-11-19), with the accreditation number where it has the registration
+ * number. No Site ID (the title has the ORS id) or location (the Application
+ * summary has it).
  *
- * RA-495 AC6: Effective date is the dash until the determination records one
- * (`payload.effectiveDate`: the date entered on approval, the submission date
- * on refusal). The charge is the site's own (`site.chargePence`), shown
- * whenever it is known (unlike re-accreditation's, which waits for payment),
- * always with pence ("£328.00"). The payment date reads "Not received" until
- * the item is duly made, as on re-accreditation.
+ * The charge is the site's own (`site.chargePence`), always with pence
+ * ("£328.00"). RA-495 AC6: Effective date is the dash until the
+ * determination records one (`payload.effectiveDate`: the date entered on
+ * approval, the submission date on refusal).
  */
 function meta({ workItem, assignment, payload }) {
-  const site = payload.site ?? {}
   return [
     requestTypeEntry(workItem),
     statusEntry(workItem),
@@ -65,18 +62,10 @@ function meta({ workItem, assignment, payload }) {
       value: payload.accreditationReference || EM_DASH
     },
     materialEntry(payload),
-    {
-      key: 'charge',
-      label: 'Charge',
-      value: formatChargeAmount(site.chargePence) ?? EM_DASH
-    },
-    {
-      key: 'payment-date',
-      label: 'Payment date',
-      value: formatPayment(payload).date
-    },
-    submittedOnEntry(workItem),
     submittedByEntry(payload),
+    submittedOnEntry(workItem),
+    chargeEntry(payload.site?.chargePence),
+    paymentDateEntry(payload),
     effectiveDateEntry(payload.effectiveDate)
   ]
 }
