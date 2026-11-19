@@ -82,8 +82,7 @@
 {% endmacro %}
 
 {# RA-292 AC04. A site's detail fields as a nested summary list,           #}
-{# borderless unless `bordered` (RA-739's add-ORS interim sites, per its    #}
-{# Figma frame).                                                            #}
+{# borderless.                                                              #}
 {#                                                                          #}
 {# `testIdPrefix` ("overseas-site" / "interim-site") plus the view model's   #}
 {# own field key forms the value testid — e.g. `overseas-site-address`,     #}
@@ -95,9 +94,9 @@
 {# `repatriatedLoads` of 0 and a `registeredNowAccredited` of false are      #}
 {# answers a regulator needs, and a `{% if value %}` guard anywhere on this  #}
 {# path would silently drop exactly those.                                   #}
-{% macro siteDetails(details, testIdPrefix, bordered=false) %}
+{% macro siteDetails(details, testIdPrefix) %}
   {% if details.length %}
-    <dl class="govuk-summary-list {% if not bordered %}app-summary-list--borderless {% endif %}govuk-!-margin-bottom-2">
+    <dl class="govuk-summary-list app-summary-list--borderless govuk-!-margin-bottom-2">
       {% for detail in details %}
         <div class="govuk-summary-list__row">
           <dt class="govuk-summary-list__key">{{ detail.label }}</dt>

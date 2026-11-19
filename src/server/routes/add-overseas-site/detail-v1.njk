@@ -70,7 +70,7 @@
           {% if interimSite.shortAddress %}
             <p class="govuk-body-s govuk-!-margin-bottom-2" data-testid="interim-site-summary-address">{{ interimSite.shortAddress }}</p>
           {% endif %}
-          {{ siteDetails(interimSite.details, 'interim-site', bordered=true) }}
+          {{ siteDetails(interimSite.details, 'interim-site') }}
         </div>
       {% endfor %}
     </div>

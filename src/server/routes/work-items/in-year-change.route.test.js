@@ -754,7 +754,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       ])
     })
 
-    test('has no dividing lines between site rows, as re-accreditation', async () => {
+    test('has no dividing lines between site or interim site rows, as re-accreditation', async () => {
       const $ = await summaryPage(anAddOrsItem())
 
       expect(
@@ -762,6 +762,11 @@ describe('RA-739 / RA-495: in-year change applications', () => {
           'app-summary-list--borderless'
         )
       ).toBe(true)
+      const interimLists = $('[data-testid="interim-site"] .govuk-summary-list')
+      expect(interimLists.length).toBeGreaterThan(0)
+      interimLists.each((_, list) => {
+        expect($(list).hasClass('app-summary-list--borderless')).toBe(true)
+      })
     })
 
     test('answers No when the conditions of export are not met', async () => {
