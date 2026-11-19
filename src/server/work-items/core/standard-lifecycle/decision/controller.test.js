@@ -23,6 +23,7 @@ import {
   registerWorkItemType
 } from '#/server/work-items/core/registry.js'
 import { reAccreditationType } from '#/server/work-items/re-accreditation/module.js'
+import { addOverseasSiteType } from '#/server/work-items/add-overseas-site/module.js'
 import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/type-id.js'
 
 import {
@@ -47,6 +48,7 @@ const makeSubmitDecisionController = (options) =>
 beforeEach(() => {
   clearWorkItemRegistry()
   registerWorkItemType(reAccreditationType)
+  registerWorkItemType(addOverseasSiteType)
 })
 
 const DETAIL_HREF = '/work-items/wi-1'
@@ -108,7 +110,13 @@ describe('makeShowDecisionController', () => {
       expect.objectContaining({
         formAction: DECISION_HREF,
         cancelHref: DETAIL_HREF,
-        values: { decision: null, decisionNote: '' },
+        values: {
+          decision: null,
+          decisionNote: '',
+          effectiveDate: { day: '', month: '', year: '' }
+        },
+        // Re-accreditation takes no effective date (RA-495 AC6).
+        showEffectiveDate: false,
         errorSummary: null,
         breadcrumbs: EXPECTED_BREADCRUMBS
       })
@@ -191,6 +199,7 @@ describe('makeSubmitDecisionController', () => {
       workItemId: 'wi-1',
       outcome: 'approved',
       decisionNote: '',
+      effectiveDate: null,
       user: { id: 'u-1', name: 'Alice' }
     })
     expect(request.yar.flash).not.toHaveBeenCalledWith(
@@ -258,7 +267,11 @@ describe('makeSubmitDecisionController', () => {
     expect(h.view).toHaveBeenCalledWith(
       'standard-lifecycle/decision/index',
       expect.objectContaining({
-        values: { decision: null, decisionNote: 'Half-written rationale' }
+        values: {
+          decision: null,
+          decisionNote: 'Half-written rationale',
+          effectiveDate: { day: '', month: '', year: '' }
+        }
       })
     )
   })
@@ -284,7 +297,11 @@ describe('makeSubmitDecisionController', () => {
       'standard-lifecycle/decision/index',
       expect.objectContaining({
         // The note must come back — it is the thing they need to shorten.
-        values: { decision: 'approved', decisionNote: longNote },
+        values: {
+          decision: 'approved',
+          decisionNote: longNote,
+          effectiveDate: { day: '', month: '', year: '' }
+        },
         // RA-505: the re-render is still the same page, so it keeps the same
         // trail — this is the path a regression is most likely to miss.
         breadcrumbs: EXPECTED_BREADCRUMBS,
@@ -425,7 +442,11 @@ describe('makeSubmitDecisionController', () => {
     expect(h.view).toHaveBeenCalledWith(
       'standard-lifecycle/decision/index',
       expect.objectContaining({
-        values: { decision: null, decisionNote: '' }
+        values: {
+          decision: null,
+          decisionNote: '',
+          effectiveDate: { day: '', month: '', year: '' }
+        }
       })
     )
   })
@@ -503,5 +524,161 @@ describe('makeSubmitDecisionController', () => {
       })
     )
     expect(h.redirect).toHaveBeenCalledWith(DETAIL_HREF)
+  })
+})
+
+// RA-495 AC6. Add-ORS takes an effective date: required on Approved, not
+// sent on Refused (the field is hidden then), and never before the date the
+// request was submitted.
+describe('the effective date on add-ORS', () => {
+  const ADD_ORS_DECISION_HREF = '/work-items/add-overseas-site/wi-1/decision'
+
+  function mockAddOrs() {
+    mockDecidable({
+      typeId: 'add-overseas-site',
+      submittedAt: '2027-02-12T10:00:00Z'
+    })
+  }
+
+  const showFor = () =>
+    makeShowStandardDecisionController({ typeId: 'add-overseas-site' })
+  const submitFor = (options) =>
+    makeSubmitStandardDecisionController({
+      typeId: 'add-overseas-site',
+      ...options
+    })
+
+  const dated = (fields, day, month, year) => ({
+    ...fields,
+    'effective-date-day': day,
+    'effective-date-month': month,
+    'effective-date-year': year
+  })
+
+  test('the page asks for it', async () => {
+    mockAddOrs()
+    const h = makeToolkit()
+
+    await showFor().handler(makeRequest(), h)
+
+    expect(h.view).toHaveBeenCalledWith(
+      'standard-lifecycle/decision/index',
+      expect.objectContaining({
+        formAction: ADD_ORS_DECISION_HREF,
+        showEffectiveDate: true,
+        effectiveDateId: 'effective-date'
+      })
+    )
+  })
+
+  test('an approval sends it', async () => {
+    mockAddOrs()
+    const recordWorkItemDecision = vi
+      .fn()
+      .mockResolvedValue({ ok: true, workItem: { id: 'wi-1' } })
+
+    await submitFor({ service: { recordWorkItemDecision } }).handler(
+      makeRequest(dated({ decision: 'approved' }, '1', '3', '2027')),
+      makeToolkit()
+    )
+
+    expect(recordWorkItemDecision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'approved',
+        effectiveDate: '2027-03-01'
+      })
+    )
+  })
+
+  test.each([
+    ['missing', ['', '', ''], 'Enter the effective date'],
+    ['unreal', ['30', '2', '2027'], 'Effective date must be a real date'],
+    [
+      'before the submission date',
+      ['11', '2', '2027'],
+      'Effective date must be on or after the date the request was submitted'
+    ]
+  ])(
+    'an approval with a %s date is shown again with the error, keeping what was typed',
+    async (_, [day, month, year], message) => {
+      mockAddOrs()
+      const recordWorkItemDecision = vi.fn()
+      const h = makeToolkit()
+
+      await submitFor({ service: { recordWorkItemDecision } }).handler(
+        makeRequest(
+          dated(
+            { decision: 'approved', decisionNote: 'Fine' },
+            day,
+            month,
+            year
+          )
+        ),
+        h
+      )
+
+      expect(recordWorkItemDecision).not.toHaveBeenCalled()
+      expect(h.view).toHaveBeenCalledWith(
+        'standard-lifecycle/decision/index',
+        expect.objectContaining({
+          showEffectiveDate: true,
+          values: {
+            decision: 'approved',
+            decisionNote: 'Fine',
+            effectiveDate: { day, month, year }
+          },
+          errorSummary: {
+            titleText: 'There is a problem',
+            items: [{ text: message, href: '#effective-date-day' }]
+          },
+          fieldErrors: { effectiveDate: message }
+        })
+      )
+    }
+  )
+
+  test('a refusal neither checks nor sends it', async () => {
+    mockAddOrs()
+    const recordWorkItemDecision = vi
+      .fn()
+      .mockResolvedValue({ ok: true, workItem: { id: 'wi-1' } })
+
+    await submitFor({ service: { recordWorkItemDecision } }).handler(
+      makeRequest(dated({ decision: 'rejected' }, 'x', '', '')),
+      makeToolkit()
+    )
+
+    expect(recordWorkItemDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'rejected', effectiveDate: null })
+    )
+  })
+
+  test('a backend rejection of the date is bound to the field, not a banner', async () => {
+    mockAddOrs()
+    const recordWorkItemDecision = vi.fn().mockResolvedValue({
+      ok: false,
+      outcome: 'invalid',
+      status: 400,
+      errorCode: 'effective-date-before-submission',
+      message: 'before submission'
+    })
+    const request = makeRequest(
+      dated({ decision: 'approved' }, '1', '3', '2027')
+    )
+    const h = makeToolkit()
+
+    await submitFor({ service: { recordWorkItemDecision } }).handler(request, h)
+
+    expect(h.redirect).not.toHaveBeenCalled()
+    expect(request.yar.flash).not.toHaveBeenCalled()
+    expect(h.view).toHaveBeenCalledWith(
+      'standard-lifecycle/decision/index',
+      expect.objectContaining({
+        fieldErrors: {
+          effectiveDate:
+            'Effective date must be on or after the date the request was submitted'
+        }
+      })
+    )
   })
 })

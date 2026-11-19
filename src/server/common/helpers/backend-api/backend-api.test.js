@@ -1575,6 +1575,36 @@ describe('#raiseWorkItemQuery (RA-291)', () => {
   })
 })
 
+describe('#recordWorkItemDecision with an effective date (RA-495 AC6)', () => {
+  test('adds the effective date to the body', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      effectiveDate: '2027-03-01',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/decision',
+      expect.objectContaining({
+        body: JSON.stringify({
+          outcome: 'approved',
+          effectiveDate: '2027-03-01'
+        })
+      })
+    )
+  })
+})
+
 describe('#recordWorkItemDecision for re-accreditation (RA-410)', () => {
   test('POSTs the outcome to the decision endpoint and returns the work item on 200', async () => {
     const workItem = { id: 'wi-1', stateId: 'approved' }

@@ -14,7 +14,7 @@ import {
 
 /**
  * RA-739 / RA-495. The add-ORS case header: the reference as a caption above
- * a site title, no organisation name or Org ID, and three rows of four meta
+ * a site title, no organisation name or Org ID, and rows of four meta
  * items. The fields are RA-495's (the ticket plus Figma "Flows 5"); the
  * caption, title and grid are RA-739's Figma frame (node 854:136663).
  *
@@ -56,9 +56,12 @@ function siteLocation(site) {
 }
 
 /**
- * Three rows of four, in the ticket's order (Figma "Flows 5" for the first
+ * Rows of four, in the ticket's order (Figma "Flows 5" for the first
  * eight). Status, Assigned to and Due date are built exactly as for
- * re-accreditation. Date added is the work item's submission date. The
+ * re-accreditation. RA-495 AC6: Effective date sits before Due date, as in
+ * Figma's "Effective date" section; it is the dash until the determination
+ * records one (`payload.effectiveDate`: the date entered on approval, the
+ * submission date on refusal). Date added is the work item's submission date. The
  * charge is the site's own (`site.chargePence`), shown whenever it is known
  * (unlike re-accreditation's payment amount, which waits for payment),
  * through the same formatter, always with pence ("£328.00"). The
@@ -75,6 +78,11 @@ function meta({ workItem, assignment, payload }) {
     },
     statusEntry(workItem),
     assignedToEntry(workItem, assignment),
+    {
+      key: 'effective-date',
+      label: 'Effective date',
+      value: formatHeaderDate(payload.effectiveDate)
+    },
     dueOnEntry(workItem),
     { key: 'location', label: 'Location', value: siteLocation(site) },
     { key: 'site-id', label: 'Site ID', value: textOrDash(site.orsId) },

@@ -24,6 +24,8 @@
  * anything to do with the application's submission date.
  */
 
+import { readDateInput } from '../date-input.js'
+
 export const PAYMENT_DATE_FIELD = 'paymentDate'
 
 /** The GOV.UK date-input component ids, and the error-summary anchor. */
@@ -79,10 +81,6 @@ function textOf(value) {
   return value == null ? '' : String(value).trim()
 }
 
-function pad(value, length) {
-  return String(value).padStart(length, '0')
-}
-
 function startOfUtcDay(date) {
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
 }
@@ -100,42 +98,18 @@ function startOfUtcDay(date) {
  *   timestamp, so this must never grow a time component.
  */
 export function validatePaymentDate(values, now = new Date()) {
-  const day = textOf(values?.day)
-  const month = textOf(values?.month)
-  const year = textOf(values?.year)
-
-  if (day === '' && month === '' && year === '') {
-    return { ok: false, errorCode: ERROR_REQUIRED }
-  }
-
   // A PARTIALLY filled date collapses to `invalid` rather than getting its
   // own "must include a month" message. GDS would normally prefer the
   // per-part wording, but the four codes above are a contract shared with
   // the backend and the e2e suite asserts exactly these four strings;
   // inventing a fifth here would mean a message no backend rejection can
   // ever produce. Revisit only alongside management-be.
-  if (
-    !/^\d{1,2}$/.test(day) ||
-    !/^\d{1,2}$/.test(month) ||
-    !/^\d{4}$/.test(year)
-  ) {
-    return { ok: false, errorCode: ERROR_INVALID }
-  }
-
-  const d = Number(day)
-  const m = Number(month)
-  const y = Number(year)
-
-  const asUtc = new Date(Date.UTC(y, m - 1, d))
-  // Round-trip check. `Date.UTC` happily rolls 2026-02-30 forward into
-  // March, so comparing the parts back is what actually rejects an unreal
-  // date — a range check on d/m alone would let it through.
-  if (
-    asUtc.getUTCFullYear() !== y ||
-    asUtc.getUTCMonth() !== m - 1 ||
-    asUtc.getUTCDate() !== d
-  ) {
-    return { ok: false, errorCode: ERROR_INVALID }
+  const read = readDateInput(values)
+  if (!read.ok) {
+    return {
+      ok: false,
+      errorCode: read.error === 'required' ? ERROR_REQUIRED : ERROR_INVALID
+    }
   }
 
   const today = startOfUtcDay(now)
@@ -143,18 +117,18 @@ export function validatePaymentDate(values, now = new Date()) {
   // TODAY IS VALID. The comparison is strictly greater-than for exactly
   // that reason — a payment keyed the same day it landed is the common
   // case, and `>=` here would reject it.
-  if (asUtc.getTime() > today) {
+  if (read.utcTime > today) {
     return { ok: false, errorCode: ERROR_IN_FUTURE }
   }
 
   const floor = new Date(today)
   floor.setUTCMonth(floor.getUTCMonth() - MAX_AGE_MONTHS)
   // The floor date itself is allowed, hence `<` rather than `<=`.
-  if (asUtc.getTime() < floor.getTime()) {
+  if (read.utcTime < floor.getTime()) {
     return { ok: false, errorCode: ERROR_TOO_OLD }
   }
 
-  return { ok: true, value: `${pad(y, 4)}-${pad(m, 2)}-${pad(d, 2)}` }
+  return { ok: true, value: read.value }
 }
 
 /**

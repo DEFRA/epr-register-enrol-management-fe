@@ -558,7 +558,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('[data-testid="case-header"]').text()).not.toContain('123001')
     })
 
-    test('shows the twelve meta items in ticket order with the site charge', async () => {
+    test('shows the thirteen meta items in ticket order with the site charge', async () => {
       const $ = await detailPage(anAddOrsItem())
 
       const meta = $(
@@ -570,6 +570,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Change request type: New ORS accreditation',
         'Status: Not started',
         'Assigned to: Unassigned',
+        `Effective date: ${EM_DASH}`,
         `Due date: ${EM_DASH}`,
         'Location: Copenhagen, Denmark',
         'Site ID: 007',
@@ -1545,6 +1546,37 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('[data-testid="decision-refused"]')).toHaveLength(1)
       // AC5. The caseworker is told the determination is final.
       expect($('[data-testid="log-decision-warning"]')).toHaveLength(1)
+      // AC6. The effective date, inside the group the CSS hides on Refused.
+      const group = $('[data-testid="log-decision-effective-date-group"]')
+      expect(group.hasClass('app-decision-form__effective-date')).toBe(true)
+      expect(
+        $('[data-testid="log-decision-form"]').hasClass('app-decision-form')
+      ).toBe(true)
+      expect(squash(group.find('legend').text())).toBe('Effective date')
+      expect(
+        group.find(
+          '#effective-date-day, #effective-date-month, #effective-date-year'
+        )
+      ).toHaveLength(3)
+    })
+
+    test('an approval without an effective date is shown again with the error', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anItemIn('assessment-started')
+      })
+
+      const { statusCode, result } = await postForm(
+        DECISION_URL,
+        'decision=approved'
+      )
+
+      expect(statusCode).toBe(400)
+      const $ = cheerio.load(result)
+      expect(
+        squash($('[data-testid="effective-date-error"]').text())
+      ).toContain('Enter the effective date')
+      expect(recordWorkItemDecision).not.toHaveBeenCalled()
     })
 
     test.each([
@@ -1584,7 +1616,8 @@ describe('RA-739 / RA-495: in-year change applications', () => {
 
       const { statusCode, headers } = await postForm(
         DECISION_URL,
-        'decision=approved&decisionNote=Site%20meets%20the%20conditions'
+        'decision=approved&decisionNote=Site%20meets%20the%20conditions' +
+          '&effective-date-day=1&effective-date-month=3&effective-date-year=2027'
       )
 
       expect(statusCode).toBe(statusCodes.redirect)
@@ -1602,7 +1635,11 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         })
       )
       expect(recordWorkItemDecision).toHaveBeenCalledWith(
-        expect.objectContaining({ workItemId: ADD_ORS_ID, outcome: 'approved' })
+        expect.objectContaining({
+          workItemId: ADD_ORS_ID,
+          outcome: 'approved',
+          effectiveDate: '2027-03-01'
+        })
       )
     })
 

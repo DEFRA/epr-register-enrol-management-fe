@@ -1,0 +1,8 @@
+// RA-495 AC6: the Make determination page's effective date is shown with no
+// choice made and on Approved, and hidden once Refused is selected (a
+// refusal records the submission date instead). CSS only, so the page needs
+// no JavaScript (RA-94). A browser without `:has()` simply keeps the field
+// visible, and the server ignores it on a refusal anyway.
+.app-decision-form:has(input[name="decision"][value="rejected"]:checked) .app-decision-form__effective-date {
+  display: none;
+}

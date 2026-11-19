@@ -68,6 +68,8 @@ export const addOverseasSiteType = {
     }),
     // The Duly make page lists every work item from the same submission.
     relatedWorkItems: true,
+    // RA-495 AC6: an approval names the date the site is accredited from.
+    effectiveDate: true,
     // Confirming contact adds the site to an existing accreditation (or
     // refuses to); it grants no accreditation, so the default copy is wrong.
     // Provisional copy: not in Figma, pending content design review.

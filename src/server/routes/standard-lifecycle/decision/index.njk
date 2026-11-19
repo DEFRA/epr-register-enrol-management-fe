@@ -2,6 +2,7 @@
 
 {% from "govuk/components/button/macro.njk" import govukButton %}
 {% from "govuk/components/radios/macro.njk" import govukRadios %}
+{% from "govuk/components/date-input/macro.njk" import govukDateInput %}
 {% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
 {% from "govuk/components/warning-text/macro.njk" import govukWarningText %}
 {% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
@@ -54,6 +55,7 @@
 
       <form method="post"
             action="{{ formAction }}"
+            class="app-decision-form"
             novalidate
             data-testid="log-decision-form">
         <input type="hidden" name="crumb" value="{{ crumb }}" />
@@ -89,6 +91,48 @@
           ],
           errorMessage: { text: fieldErrors["decision"], attributes: { "data-testid": "decision-error" } } if fieldErrors["decision"] else null
         }) }}
+
+        {# RA-495 AC6 (Figma "Effective date", frame 1183:31925). Only for a  #}
+        {# type that takes one (add-ORS). Required on Approved; shown before  #}
+        {# a choice is made and hidden by CSS once Refused is selected        #}
+        {# (`_decision-form.scss`), so no JavaScript is needed (RA-94). The    #}
+        {# box ids (`effective-date-day` etc.) are the error summary's anchor #}
+        {# and the mgmt-tests page object's selectors.                       #}
+        {% if showEffectiveDate %}
+          {% set effectiveDateError = fieldErrors["effectiveDate"] %}
+          <div class="app-decision-form__effective-date" data-testid="log-decision-effective-date-group">
+            {{ govukDateInput({
+              id: effectiveDateId,
+              namePrefix: effectiveDateId,
+              fieldset: {
+                legend: {
+                  text: "Effective date",
+                  classes: "govuk-fieldset__legend--m"
+                }
+              },
+              hint: { text: "For example, 27 3 2026" },
+              items: [
+                {
+                  name: "day",
+                  classes: "govuk-input--width-2" + (" govuk-input--error" if effectiveDateError else ""),
+                  value: values.effectiveDate.day
+                },
+                {
+                  name: "month",
+                  classes: "govuk-input--width-2" + (" govuk-input--error" if effectiveDateError else ""),
+                  value: values.effectiveDate.month
+                },
+                {
+                  name: "year",
+                  classes: "govuk-input--width-4" + (" govuk-input--error" if effectiveDateError else ""),
+                  value: values.effectiveDate.year
+                }
+              ],
+              errorMessage: { text: effectiveDateError, attributes: { "data-testid": "effective-date-error" } } if effectiveDateError else null,
+              attributes: { "data-testid": "log-decision-effective-date" }
+            }) }}
+          </div>
+        {% endif %}
 
         {# RA-203. The decision rationale. Optional, but NOT decorative: it   #}
         {# is posted as a work-item note just before the decision, so it is   #}

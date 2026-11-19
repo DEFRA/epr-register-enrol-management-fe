@@ -94,12 +94,13 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     expect(headerFor(item).title).toBe(EM_DASH)
   })
 
-  test('has the twelve meta items in ticket and Figma order', () => {
+  test('has the thirteen meta items in ticket and Figma order', () => {
     const header = headerFor(addOrs())
     expect(header.meta.map((entry) => [entry.label, entry.value])).toEqual([
       ['Change request type', 'New ORS accreditation'],
       ['Status', 'Not started'],
       ['Assigned to', 'Unassigned'],
+      ['Effective date', EM_DASH],
       ['Due date', EM_DASH],
       ['Location', 'Copenhagen, Denmark'],
       ['Site ID', '007'],
@@ -110,6 +111,13 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
       ['Charge', '£328.00'],
       ['Payment date', NOT_RECEIVED]
     ])
+  })
+
+  // RA-495 AC6: the date the determination recorded.
+  test('shows the effective date once the determination records one', () => {
+    const item = addOrs()
+    item.payload.effectiveDate = '2027-03-01'
+    expect(metaValue(headerFor(item), 'effective-date')).toBe('01 Mar 2027')
   })
 
   test('shows the payment date once the item is duly made', () => {

@@ -75,11 +75,15 @@ export function createDecisionService({
      *   unchanged `reject` transition and notification templates key on.
      * @param {string} [args.decisionNote] Optional rationale. Posted to the
      *   notes endpoint BEFORE the decision — see below.
+     * @param {string | null} [args.effectiveDate] RA-495 AC6: an add-ORS
+     *   approval's effective date (`YYYY-MM-DD`), already validated by the
+     *   controller. Not sent when null.
      */
     async recordWorkItemDecision({
       workItemId,
       outcome,
       decisionNote = '',
+      effectiveDate = null,
       user = null
     }) {
       if (typeof workItemId !== 'string' || workItemId.trim() === '') {
@@ -147,7 +151,12 @@ export function createDecisionService({
         }
       }
 
-      const result = await recordDecision({ workItemId, outcome, user })
+      const result = await recordDecision({
+        workItemId,
+        outcome,
+        ...(effectiveDate && { effectiveDate }),
+        user
+      })
 
       if (result.ok) {
         return { ok: true, workItem: result.workItem }

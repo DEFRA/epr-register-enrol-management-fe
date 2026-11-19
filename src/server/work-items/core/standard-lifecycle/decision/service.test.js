@@ -371,3 +371,44 @@ describe('createDecisionService — default backend-api collaborators', () => {
     expect(result.ok).toBe(true)
   })
 })
+
+// RA-495 AC6. The add-ORS approval's effective date goes to the backend
+// call; with none, the call is unchanged.
+describe('createDecisionService — effective date (RA-495 AC6)', () => {
+  test('sends the effective date when given', async () => {
+    const recordDecision = vi.fn().mockResolvedValue(okReply())
+    const service = createDecisionService({ recordDecision })
+
+    await service.recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      effectiveDate: '2027-03-01',
+      user: { id: 'u-1' }
+    })
+
+    expect(recordDecision).toHaveBeenCalledWith({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      effectiveDate: '2027-03-01',
+      user: { id: 'u-1' }
+    })
+  })
+
+  test('sends no effective date when there is none', async () => {
+    const recordDecision = vi.fn().mockResolvedValue(okReply())
+    const service = createDecisionService({ recordDecision })
+
+    await service.recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'rejected',
+      effectiveDate: null,
+      user: { id: 'u-1' }
+    })
+
+    expect(recordDecision).toHaveBeenCalledWith({
+      workItemId: 'wi-1',
+      outcome: 'rejected',
+      user: { id: 'u-1' }
+    })
+  })
+})

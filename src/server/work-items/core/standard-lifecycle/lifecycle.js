@@ -21,7 +21,11 @@
  *     // Optional. The "Applicant contacted" success banner's copy by
  *     // outcome, `{ title, text }` each; an outcome left out keeps the
  *     // default (accreditation granted / refused).
- *     contactConfirmedBanners: { approved, rejected }
+ *     contactConfirmedBanners: { approved, rejected },
+ *     // Optional. RA-495 AC6: when true the Make determination page asks
+ *     // for an effective date, required on approval and hidden on refusal
+ *     // (see `decision/effective-date.js`).
+ *     effectiveDate: true
  *   }
  *
  * The pages live under `/work-items/{typeId}/{id}/…`, so re-accreditation's
@@ -67,6 +71,16 @@ export function lifecycleRoutePath(typeId, page) {
  */
 export function getStandardLifecycle(typeId) {
   return getWorkItemType(typeId)?.standardLifecycle ?? null
+}
+
+/**
+ * RA-495 AC6: does the type's Make determination page take an effective date?
+ *
+ * @param {string | null | undefined} typeId
+ * @returns {boolean}
+ */
+export function takesEffectiveDate(typeId) {
+  return getStandardLifecycle(typeId)?.effectiveDate === true
 }
 
 /**

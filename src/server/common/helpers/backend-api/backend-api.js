@@ -770,7 +770,9 @@ export async function changePaymentDateReAccreditation({
  *
  * Wraps `POST /work-items/[{typeSegment}/]{id}/decision`, type-scoped as for
  * {@link dulyMakeWorkItem}.
- * Body: `{ outcome }`, where `outcome` is `'approved'` or `'rejected'`.
+ * Body: `{ outcome }`, where `outcome` is `'approved'` or `'rejected'`,
+ * plus `effectiveDate` (`YYYY-MM-DD`) when given: RA-495 AC6, an add-ORS
+ * approval's effective date. Omitted from the body when not given.
  *
  * ONE call for both outcomes, and deliberately one call rather than two.
  * The backend applies BOTH hops server-side in a single atomic write —
@@ -793,6 +795,7 @@ export async function changePaymentDateReAccreditation({
 export async function recordWorkItemDecision({
   workItemId,
   outcome,
+  effectiveDate = null,
   typeSegment = null,
   user = null,
   baseUrl = config.get(CONFIG_BACKEND_API_URL),
@@ -807,7 +810,7 @@ export async function recordWorkItemDecision({
 }) {
   return postLifecycleStep({
     url: lifecycleStepUrl(baseUrl, workItemId, 'decision', typeSegment),
-    body: { outcome },
+    body: effectiveDate ? { outcome, effectiveDate } : { outcome },
     label: 'recordWorkItemDecision',
     user,
     timeoutMs,

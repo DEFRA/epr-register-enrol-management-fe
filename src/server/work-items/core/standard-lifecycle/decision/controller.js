@@ -5,7 +5,8 @@
  * taking the `typeId` whose routes it serves:
  *
  *  - GET: render the decision page: an Approved / Refused radio group and a
- *    primary submit. Fetches the work item up front so the page can show its
+ *    primary submit. RA-495 AC6: a type that takes one (add-ORS) also gets
+ *    an effective date, required on approval and hidden on refusal. Fetches the work item up front so the page can show its
  *    reference and so a stale link cannot reach the form.
  *
  *  - POST: validate that a choice was made, re-check eligibility, then ask
@@ -34,8 +35,19 @@ import {
   evaluateLogDecisionEligibility,
   isValidDecisionOutcome
 } from './eligibility.js'
-import { DECISION_PAGE, lifecyclePageHref } from '../lifecycle.js'
+import {
+  DECISION_PAGE,
+  lifecyclePageHref,
+  takesEffectiveDate
+} from '../lifecycle.js'
 import { createDecisionService, DECISION_NOTE_MAX_LENGTH } from './service.js'
+import {
+  EFFECTIVE_DATE_ANCHOR,
+  EFFECTIVE_DATE_ID,
+  effectiveDateMessage,
+  isEffectiveDateErrorCode,
+  validateEffectiveDate
+} from './effective-date.js'
 
 const VIEW_PATH = 'standard-lifecycle/decision/index'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -104,6 +116,17 @@ function breadcrumbs(id, ref) {
   ]
 }
 
+const EMPTY_DATE = Object.freeze({ day: '', month: '', year: '' })
+
+/** The three effective-date boxes as posted, for validation and echoing back. */
+function effectiveDateValues(payload) {
+  const text = (part) => {
+    const value = payload[`${EFFECTIVE_DATE_ID}-${part}`]
+    return typeof value === 'string' ? value : ''
+  }
+  return { day: text('day'), month: text('month'), year: text('year') }
+}
+
 function flashBanner(request, banner) {
   request.yar?.flash?.('flashBanner', banner)
 }
@@ -170,7 +193,9 @@ export function makeShowDecisionController({ typeId }) {
         workItem: { ...workItem, applicationRef },
         formAction: decisionHref(typeId, id),
         cancelHref: detailHref(id),
-        values: { decision: null, decisionNote: '' },
+        values: { decision: null, decisionNote: '', effectiveDate: EMPTY_DATE },
+        showEffectiveDate: takesEffectiveDate(typeId),
+        effectiveDateId: EFFECTIVE_DATE_ID,
         decisionNoteMaxLength: DECISION_NOTE_MAX_LENGTH,
         errorSummary: null,
         fieldErrors: {}
@@ -195,6 +220,7 @@ export function makeSubmitDecisionController({
       const decision = payload.decision
       const decisionNote =
         typeof payload.decisionNote === 'string' ? payload.decisionNote : ''
+      const effectiveDateInput = effectiveDateValues(payload)
 
       // Re-read the work item before doing anything else. Needed for BOTH
       // the validation re-render (the page shows the application reference)
@@ -239,6 +265,23 @@ export function makeSubmitDecisionController({
         })
       }
 
+      // RA-495 AC6. Only an approval takes the date: on a refusal the field
+      // is hidden, and whatever it holds is neither checked nor sent.
+      let effectiveDate = null
+      if (takesEffectiveDate(typeId) && decision === 'approved') {
+        const checked = validateEffectiveDate(
+          effectiveDateInput,
+          workItem.submittedAt
+        )
+        if (checked.ok) {
+          effectiveDate = checked.value
+        } else {
+          const message = effectiveDateMessage(checked.errorCode)
+          fieldErrors.effectiveDate = message
+          errorItems.push({ text: message, href: EFFECTIVE_DATE_ANCHOR })
+        }
+      }
+
       // RA-203. Checked HERE, not left to the service, because this is a form
       // error and needs to render in place against the field. The service
       // keeps its own identical guard as a backstop for non-form callers, but
@@ -265,33 +308,17 @@ export function makeSubmitDecisionController({
       // Render in place — a redirect would lose the form and the user would
       // have to find their way back.
       if (errorItems.length > 0) {
-        return h
-          .view(VIEW_PATH, {
-            pageTitle: `Error: ${PAGE_TITLE}`,
-            heading: PAGE_HEADING,
-            breadcrumbs: breadcrumbs(id, applicationRef),
-            workItem: { ...workItem, applicationRef },
-            formAction: decisionHref(typeId, id),
-            cancelHref: detailHref(id),
-            decisionNoteMaxLength: DECISION_NOTE_MAX_LENGTH,
-            // The decision itself is deliberately NOT echoed back: an invalid
-            // value is either a missing choice (nothing to echo) or a forged
-            // one (must not be reflected into the page), so the radios render
-            // unset. The NOTE is echoed — it is the user's own prose, and
-            // discarding it because they missed a radio, or because it ran
-            // long, would destroy the very thing they need to edit. Nunjucks
-            // auto-escapes it on the way out.
-            values: {
-              decision: isValidDecisionOutcome(decision) ? decision : null,
-              decisionNote
-            },
-            errorSummary: {
-              titleText: 'There is a problem',
-              items: errorItems
-            },
-            fieldErrors
-          })
-          .code(400)
+        return renderWithErrors(h, {
+          typeId,
+          id,
+          workItem,
+          applicationRef,
+          decision,
+          decisionNote,
+          effectiveDateInput,
+          errorItems,
+          fieldErrors
+        })
       }
 
       // Guard the ROUTE. Same reasoning as the GET, but re-evaluated against
@@ -337,6 +364,7 @@ export function makeSubmitDecisionController({
         workItemId: id,
         outcome: decision,
         decisionNote,
+        effectiveDate,
         user
       })
 
@@ -346,6 +374,25 @@ export function makeSubmitDecisionController({
         // refused" banner for as long as the item awaits applicant contact,
         // so a one-time success flash would only repeat it.
         return h.redirect(detailHref(id))
+      }
+
+      // RA-495 AC6. A backstop: the local check above names the same rules,
+      // so this means management-be moved, or the work item carried no
+      // submission date to check against. Bound to the field, like a local
+      // error, rather than a banner.
+      if (isEffectiveDateErrorCode(result.errorCode)) {
+        const message = effectiveDateMessage(result.errorCode)
+        return renderWithErrors(h, {
+          typeId,
+          id,
+          workItem,
+          applicationRef,
+          decision,
+          decisionNote,
+          effectiveDateInput,
+          errorItems: [{ text: message, href: EFFECTIVE_DATE_ANCHOR }],
+          fieldErrors: { effectiveDate: message }
+        })
       }
 
       // Log every non-success outcome so an unexpected 5xx still leaves a
@@ -364,6 +411,56 @@ export function makeSubmitDecisionController({
       return h.redirect(detailHref(id))
     }
   }
+}
+
+/**
+ * Re-render the form in place with its errors (400). A redirect would lose
+ * the form and the user would have to find their way back.
+ */
+function renderWithErrors(
+  h,
+  {
+    typeId,
+    id,
+    workItem,
+    applicationRef,
+    decision,
+    decisionNote,
+    effectiveDateInput,
+    errorItems,
+    fieldErrors
+  }
+) {
+  return h
+    .view(VIEW_PATH, {
+      pageTitle: `Error: ${PAGE_TITLE}`,
+      heading: PAGE_HEADING,
+      breadcrumbs: breadcrumbs(id, applicationRef),
+      workItem: { ...workItem, applicationRef },
+      formAction: decisionHref(typeId, id),
+      cancelHref: detailHref(id),
+      decisionNoteMaxLength: DECISION_NOTE_MAX_LENGTH,
+      showEffectiveDate: takesEffectiveDate(typeId),
+      effectiveDateId: EFFECTIVE_DATE_ID,
+      // The decision itself is deliberately NOT echoed back unless valid: an
+      // invalid value is either a missing choice (nothing to echo) or a
+      // forged one (must not be reflected into the page), so the radios
+      // render unset. The NOTE and the effective date ARE echoed: they are
+      // the user's own input, and discarding them because another field
+      // failed would destroy what they need to edit. Nunjucks auto-escapes
+      // them on the way out.
+      values: {
+        decision: isValidDecisionOutcome(decision) ? decision : null,
+        decisionNote,
+        effectiveDate: effectiveDateInput
+      },
+      errorSummary: {
+        titleText: 'There is a problem',
+        items: errorItems
+      },
+      fieldErrors
+    })
+    .code(400)
 }
 
 function bannerForFailure(result) {
