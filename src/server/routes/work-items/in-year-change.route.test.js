@@ -754,6 +754,16 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       ])
     })
 
+    test('has no dividing lines between site rows, as re-accreditation', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+
+      expect(
+        $('[data-testid="application-details"]').hasClass(
+          'app-summary-list--borderless'
+        )
+      ).toBe(true)
+    })
+
     test('answers No when the conditions of export are not met', async () => {
       const item = anAddOrsItem()
       item.payload.site.conditionsOfExport = false

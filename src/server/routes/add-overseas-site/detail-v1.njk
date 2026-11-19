@@ -34,7 +34,8 @@
   {# and value testids match re-accreditation's application details.   #}
   {# RA-495: a value the operator supplied on this request, rather than #}
   {# one from the site's registration, carries the "NEW: " prefix.      #}
-  <dl class="govuk-summary-list" data-testid="application-details">
+  {# Borderless, as re-accreditation's application details.            #}
+  <dl class="govuk-summary-list app-summary-list--borderless" data-testid="application-details">
     {% for row in applicationSummary.rows %}
       <div class="govuk-summary-list__row"
            data-testid="app-detail-row-{{ row.key }}">
