@@ -4497,10 +4497,10 @@ describe('RA-295 individual work item page', () => {
       'Due date:',
       'Registration number:',
       'Material:',
-      'Submitted by:',
-      'Submitted on:',
       'Charge:',
       'Payment date:',
+      'Submitted by:',
+      'Submitted on:',
       'Effective date:'
     ])
   })

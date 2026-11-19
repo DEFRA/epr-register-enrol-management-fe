@@ -249,8 +249,9 @@ export function dueOnEntry(workItem) {
 
 /**
  * The same fields in the same places as add-ORS's (user, 2026-11-19), rows
- * of four with the payment and outcome last; sequence alone controls
- * placement. The charge is the amount owed, shown from submission.
+ * of four: the case, then what it is for and its payment, then who submitted
+ * it, when, and its outcome. Sequence alone controls placement. The charge
+ * is the amount owed, shown from submission.
  *
  * Effective date is the accreditation start date, which management-be stamps
  * at confirm contact, so it shows once Granted, as in the decision panel.
@@ -267,10 +268,10 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
       value: payload.registrationNumber || EM_DASH
     },
     materialEntry(payload),
-    submittedByEntry(payload),
-    submittedOnEntry(workItem),
     chargeEntry(payload.chargeAmountPence),
     paymentDateEntry(payload),
+    submittedByEntry(payload),
+    submittedOnEntry(workItem),
     effectiveDateEntry(
       workItem?.stateId === GRANTED_STATE_ID
         ? payload.accreditationStartDate

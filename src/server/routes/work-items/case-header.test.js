@@ -154,10 +154,10 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
       ['due-on', 'Due date'],
       ['registration-number', 'Registration number'],
       ['material', 'Material'],
-      ['submitted-by', 'Submitted by'],
-      ['date-added', 'Submitted on'],
       ['charge', 'Charge'],
       ['payment-date', 'Payment date'],
+      ['submitted-by', 'Submitted by'],
+      ['date-added', 'Submitted on'],
       ['effective-date', 'Effective date']
     ])
     expect(metaValue(header, 'charge')).toBe('£2,184.00')

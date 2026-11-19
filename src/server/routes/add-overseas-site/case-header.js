@@ -62,10 +62,10 @@ function meta({ workItem, assignment, payload }) {
       value: payload.accreditationReference || EM_DASH
     },
     materialEntry(payload),
-    submittedByEntry(payload),
-    submittedOnEntry(workItem),
     chargeEntry(payload.site?.chargePence),
     paymentDateEntry(payload),
+    submittedByEntry(payload),
+    submittedOnEntry(workItem),
     effectiveDateEntry(payload.effectiveDate)
   ]
 }

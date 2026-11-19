@@ -571,10 +571,10 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         `Due date: ${EM_DASH}`,
         'Accreditation number: ACC-REP-PL-0007',
         'Material: Plastic',
-        'Submitted by: Sam Operator',
-        'Submitted on: 11 Feb 2027',
         'Charge: £328.00',
         'Payment date: Not received',
+        'Submitted by: Sam Operator',
+        'Submitted on: 11 Feb 2027',
         `Effective date: ${EM_DASH}`
       ])
       expect(
