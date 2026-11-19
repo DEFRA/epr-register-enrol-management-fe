@@ -70,7 +70,8 @@ export function formatPayment(payload) {
 
 /**
  * A date for the case header ("12 Feb 2027"), or the em dash when it is
- * absent or cannot be parsed (RA-495: add-ORS's Date added).
+ * absent or cannot be parsed: add-ORS's Date added (RA-495), and the SLA due
+ * date, which management-be leaves null until the SLA clock starts (RA-295).
  */
 export function formatHeaderDate(value) {
   const iso = unwrapMongoDate(value)
@@ -79,18 +80,6 @@ export function formatHeaderDate(value) {
   }
   const formatted = formatDateShortGds(iso)
   return formatted === '' ? EM_DASH : formatted
-}
-
-/**
- * Format the absolute SLA due date for the header.
- *
- * `slaDueDate` is supplied by management-be once the SLA clock has started
- * and is null before then, so an em dash is the correct rendering for a
- * work item whose assessment has not begun. A value we cannot parse also
- * degrades to the em dash rather than throwing out of the template.
- */
-export function formatDueOn(value) {
-  return formatHeaderDate(value)
 }
 
 // RA-503: operatorOrganisationId means two different things depending on how the work item was
@@ -201,7 +190,7 @@ export function dueOnEntry(workItem) {
     value:
       workItem?.slaState === 'Cancelled'
         ? EM_DASH
-        : formatDueOn(workItem?.slaDueDate)
+        : formatHeaderDate(workItem?.slaDueDate)
   }
 }
 

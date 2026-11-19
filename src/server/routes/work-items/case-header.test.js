@@ -12,7 +12,7 @@ import {
   buildCaseTabs,
   caseHasTab,
   decorateForCaseHeader,
-  formatDueOn,
+  formatHeaderDate,
   formatPayment,
   stateDisplayName
 } from './case-header.js'
@@ -23,24 +23,26 @@ function metaValue(header, key) {
   return header.meta.find((entry) => entry.key === key)?.value
 }
 
-describe('#formatDueOn (RA-295 AC01)', () => {
+describe('#formatHeaderDate (RA-295 AC01)', () => {
   test('formats an ISO-8601 UTC instant as a GDS date in UK local time', () => {
     // June is BST (UTC+1), so 23:30Z is already the 27th locally — proving
     // the conversion happens rather than the UTC date being printed raw.
-    expect(formatDueOn('2026-06-26T23:30:00Z')).toBe('27 Jun 2026')
+    expect(formatHeaderDate('2026-06-26T23:30:00Z')).toBe('27 Jun 2026')
   })
 
   test('unwraps the Mongo extended-JSON shape', () => {
-    expect(formatDueOn({ $date: '2026-08-24T09:00:00Z' })).toBe('24 Aug 2026')
+    expect(formatHeaderDate({ $date: '2026-08-24T09:00:00Z' })).toBe(
+      '24 Aug 2026'
+    )
   })
 
   test('renders an em dash when no SLA clock has started (null)', () => {
-    expect(formatDueOn(null)).toBe(EM_DASH)
-    expect(formatDueOn(undefined)).toBe(EM_DASH)
+    expect(formatHeaderDate(null)).toBe(EM_DASH)
+    expect(formatHeaderDate(undefined)).toBe(EM_DASH)
   })
 
   test('renders an em dash rather than throwing on an unparseable value', () => {
-    expect(formatDueOn('not-a-date')).toBe(EM_DASH)
+    expect(formatHeaderDate('not-a-date')).toBe(EM_DASH)
   })
 })
 
