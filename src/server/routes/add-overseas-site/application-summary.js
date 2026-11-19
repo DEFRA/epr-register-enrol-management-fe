@@ -20,14 +20,13 @@ import {
  * request rather than it coming from the site's registration: the operator
  * backend lists those fields in `site.suppliedFields`, named as in
  * `SITE_FIELDS`, and `besEvidence` when the operator uploaded the BES
- * evidence files on the request (3bb.13).
- *
- * `previousRows` are the same rows for the site as it was before the request
- * (see `beforeRequest`), so the caseworker can see what the request changes.
+ * evidence files on the request (3bb.13). The operator can only fill a field
+ * the ORS lacks and add BES evidence, so those markers are the whole change:
+ * there is no "Previous details" section, as an update would have.
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
- * @returns {{ rows: object[], previousRows: object[], interimSites: object[] }}
+ * @returns {{ rows: object[], interimSites: object[] }}
  */
 export function buildAddOverseasSiteSummary({ workItem }) {
   const site = workItem?.payload?.site ?? {}
@@ -38,11 +37,6 @@ export function buildAddOverseasSiteSummary({ workItem }) {
 
   return {
     rows: siteRows(site, workItemId, supplied),
-    previousRows: siteRows(
-      beforeRequest(site, supplied),
-      workItemId,
-      new Set()
-    ),
     interimSites: withShortAddressOnlyForRepeatedNames(
       buildInterimSites(site, buildAddOrsInterimSite)
     )
@@ -79,23 +73,6 @@ function siteRows(site, workItemId, supplied) {
     }),
     besEvidenceRow(site, workItemId, supplied.has(BES_EVIDENCE_FIELD))
   ]
-}
-
-/**
- * The site before the request. The operator may only supply a field the ORS
- * lacks (the operator backend locks any it holds), so each supplied field
- * had no value, and the payload's BES files are all the request's own.
- * Interim sites cannot change on an add-ORS request, so they are not part
- * of it.
- */
-function beforeRequest(site, supplied) {
-  const previous = { ...site, besEvidence: { files: [] } }
-  for (const [, , , suppliedField] of SITE_FIELDS) {
-    if (suppliedField && supplied.has(suppliedField)) {
-      previous[suppliedField] = null
-    }
-  }
-  return previous
 }
 
 /** One comma-separated line, or nothing when there are no parts. */

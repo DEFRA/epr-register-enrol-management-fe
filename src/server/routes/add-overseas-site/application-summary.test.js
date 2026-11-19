@@ -177,50 +177,6 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
     expect(labels).not.toContain('OECD country')
   })
 
-  describe('RA-495: previous details', () => {
-    test('are the same rows, unchanged, when the operator supplied nothing', () => {
-      const { rows, previousRows } = summaryFor(aSite({ besEvidence: null }))
-
-      expect(previousRows.map((row) => [row.key, row.label])).toEqual(
-        ROW_LABELS
-      )
-      expect(valuesByKey(previousRows)).toEqual(valuesByKey(rows))
-      expect(previousRows.some((row) => row.supplied)).toBe(false)
-    })
-
-    test('show the dash for each field the operator supplied, and no BES files', () => {
-      const { previousRows } = summaryFor(
-        aSite({
-          suppliedFields: [
-            'country',
-            'coordinates',
-            'operationCodes',
-            'conditionsOfExport',
-            'besEvidence'
-          ]
-        })
-      )
-
-      expect(valuesByKey(previousRows)).toEqual({
-        'site-name': ['Denmark PR'],
-        location: ['Ejbyvvej 12, Industrial Park, Copenhagen'],
-        'ors-id': ['007'],
-        coordinates: [EM_DASH],
-        'contact-name': ['John Smith'],
-        'contact-email': ['john.smith@denmarkpr.com'],
-        'contact-phone': ['+23 2489 2862'],
-        'recycling-operation': [EM_DASH],
-        'basel-codes': ['B1030, B3011'],
-        'repatriated-loads': ['Returned to the UK exporter.'],
-        'conditions-of-export': [EM_DASH]
-      })
-      expect(
-        previousRows.find((row) => row.key === 'bes-evidence').files
-      ).toEqual([])
-      expect(previousRows.some((row) => row.supplied)).toBe(false)
-    })
-  })
-
   test.each([
     ['an empty site', {}],
     ['no site', undefined]

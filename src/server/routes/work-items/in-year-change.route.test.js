@@ -762,31 +762,6 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       ).toBe('Application details')
     })
 
-    // RA-495. The fixture's operator supplied the country only.
-    test('ends with the site as it was before the request, under Previous details', async () => {
-      const $ = await summaryPage(anAddOrsItem())
-      const section = $('[data-testid="previous-details-section"]')
-
-      expect(squash(section.find('h2').text())).toBe('Previous details')
-      expect(
-        $('[data-testid="interim-sites"]').nextAll(
-          '[data-testid="previous-details-section"]'
-        )
-      ).toHaveLength(1)
-      expect(
-        squash($('[data-testid="previous-detail-value-location"]').text())
-      ).toBe('Ejbyvvej 12, Industrial Park, Copenhagen')
-      expect(
-        squash($('[data-testid="previous-detail-value-coordinates"]').text())
-      ).toBe('55.6761, 12.5683')
-      expect(section.find('.app-new-flag')).toHaveLength(0)
-      expect(
-        section
-          .find('[data-testid="previous-details"]')
-          .hasClass('app-summary-list--borderless')
-      ).toBe(true)
-    })
-
     test('has no dividing lines between site or interim site rows, as re-accreditation', async () => {
       const $ = await summaryPage(anAddOrsItem())
 
