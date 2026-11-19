@@ -532,13 +532,11 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       return cheerio.load(result)
     }
 
-    test('captions the header with the reference and titles it with the site and ORS id', async () => {
+    test('titles the header with the site and ORS id, with no reference caption', async () => {
       const $ = await detailPage(anAddOrsItem())
 
       expect($('[data-testid="add-overseas-site-detail"]')).toHaveLength(1)
-      expect(squash($('[data-testid="case-header-caption"]').text())).toBe(
-        'IYC-ORS-2026-00001'
-      )
+      expect($('[data-testid="case-header-caption"]')).toHaveLength(0)
       expect(squash($('[data-testid="case-header-title"]').text())).toBe(
         'Denmark PR (007)'
       )
@@ -728,20 +726,22 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(rows.map((row) => row.label)).toEqual([
         'Site name',
         'Location',
+        'ORS ID',
         'Coordinates',
         'Contact name',
         'Contact email',
         'Contact phone',
-        'Recycling operation',
-        'Basel convention codes',
+        'Operation code',
+        'Basel/OECD codes',
         'Arrangements for rejected or returned loads',
         'Conditions of export',
         'Evidence of broadly equivalent standards'
       ])
-      expect(rows.slice(0, 10).map((row) => row.value)).toEqual([
+      expect(rows.slice(0, 11).map((row) => row.value)).toEqual([
         'Denmark PR',
         // The fixture's operator supplied the country (RA-495).
         'NEW: Ejbyvvej 12, Industrial Park, Copenhagen, Denmark',
+        '007',
         '55.6761, 12.5683',
         'John Smith',
         'john.smith@denmarkpr.com',
@@ -752,6 +752,39 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Returned to the UK exporter.',
         'Yes'
       ])
+    })
+
+    test('heads the site rows Application details, as re-accreditation', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+
+      expect(
+        squash($('[data-testid="application-details-heading"]').text())
+      ).toBe('Application details')
+    })
+
+    // RA-495. The fixture's operator supplied the country only.
+    test('ends with the site as it was before the request, under Previous details', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+      const section = $('[data-testid="previous-details-section"]')
+
+      expect(squash(section.find('h2').text())).toBe('Previous details')
+      expect(
+        $('[data-testid="interim-sites"]').nextAll(
+          '[data-testid="previous-details-section"]'
+        )
+      ).toHaveLength(1)
+      expect(
+        squash($('[data-testid="previous-detail-value-location"]').text())
+      ).toBe('Ejbyvvej 12, Industrial Park, Copenhagen')
+      expect(
+        squash($('[data-testid="previous-detail-value-coordinates"]').text())
+      ).toBe('55.6761, 12.5683')
+      expect(section.find('.app-new-flag')).toHaveLength(0)
+      expect(
+        section
+          .find('[data-testid="previous-details"]')
+          .hasClass('app-summary-list--borderless')
+      ).toBe(true)
     })
 
     test('has no dividing lines between site or interim site rows, as re-accreditation', async () => {
@@ -779,11 +812,11 @@ describe('RA-739 / RA-495: in-year change applications', () => {
 
     test('shows a dash for each missing value, and no documents for missing BES evidence', async () => {
       const item = anAddOrsItem()
-      item.payload.site = { orsId: '007', siteName: 'Denmark PR' }
+      item.payload.site = { siteName: 'Denmark PR' }
       const $ = await summaryPage(item)
 
       const rows = summaryRows($)
-      expect(rows).toHaveLength(11)
+      expect(rows).toHaveLength(12)
       expect(rows[0].value).toBe('Denmark PR')
       for (const row of rows.slice(1, -1)) {
         expect(row.value, row.label).toBe(EM_DASH)
@@ -863,9 +896,13 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(
         squash(site.find('[data-testid="interim-site-name"]').text())
       ).toBe('Bharat Recycling')
+      // Collapsed, as re-accreditation's overseas sites; the only interim site
+      // has a unique name, so no short address.
+      expect(site.is('details.govuk-details')).toBe(true)
+      expect(site.attr('open')).toBeUndefined()
       expect(
-        squash(site.find('[data-testid="interim-site-summary-address"]').text())
-      ).toBe('Havnegade 1, Denmark')
+        site.find('[data-testid="interim-site-summary-address"]')
+      ).toHaveLength(0)
       const fields = site
         .find('.govuk-summary-list__row')
         .map((_, el) => [
@@ -880,8 +917,29 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         ['Location', 'Havnegade 1, Aarhus, Denmark'],
         ['Contact name', 'Asha Patel'],
         ['Contact email', 'asha@bharat.example'],
+        ['Contact phone', '0123456789'],
         ['Operation code', 'R13']
       ])
+    })
+
+    test('shows the short address only for interim sites that share a name', async () => {
+      const item = anAddOrsItem()
+      const [bharat] = item.payload.site.interimSites
+      item.payload.site.interimSites = [
+        bharat,
+        { ...bharat, siteId: 102, addressLine1: 'Kajen 2', country: 'Sweden' },
+        { ...bharat, siteId: 103, siteName: 'Oslo Hub', country: 'Norway' }
+      ]
+      const $ = await summaryPage(item)
+
+      const addresses = $('[data-testid="interim-site"]')
+        .map((_, el) =>
+          squash(
+            $(el).find('[data-testid="interim-site-summary-address"]').text()
+          )
+        )
+        .get()
+      expect(addresses).toEqual(['Havnegade 1, Denmark', 'Kajen 2, Sweden', ''])
     })
 
     test('has no Interim sites section when every interim site is withdrawn', async () => {
@@ -954,11 +1012,10 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(applyWorkItemAction).not.toHaveBeenCalled()
     })
 
-    test('does not show ORS ID, EU or OECD rows', async () => {
+    test('does not show EU or OECD rows', async () => {
       const $ = await summaryPage(anAddOrsItem())
       const summary = $('[data-testid="application-details"]').text()
 
-      expect(summary).not.toContain('ORS ID')
       expect(summary).not.toContain('EU country')
       expect(summary).not.toContain('OECD country')
     })
@@ -1903,7 +1960,8 @@ describe('RA-739 / RA-495: in-year change applications', () => {
 
       expect(statusCode).toBe(statusCodes.ok)
       const $ = cheerio.load(result)
-      expect(squash($('[data-testid="case-header-caption"]').text())).toBe(
+      expect($('[data-testid="case-header-caption"]')).toHaveLength(0)
+      expect($('[data-testid="case-header-accreditation-ref"]').text()).toBe(
         'IYC-ORS-2026-00001'
       )
       expect(squash($('[data-testid="case-header-title"]').text())).toBe(

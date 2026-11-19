@@ -7,12 +7,13 @@ const EM_DASH = '—'
 const ROW_LABELS = [
   ['site-name', 'Site name'],
   ['location', 'Location'],
+  ['ors-id', 'ORS ID'],
   ['coordinates', 'Coordinates'],
   ['contact-name', 'Contact name'],
   ['contact-email', 'Contact email'],
   ['contact-phone', 'Contact phone'],
-  ['recycling-operation', 'Recycling operation'],
-  ['basel-codes', 'Basel convention codes'],
+  ['recycling-operation', 'Operation code'],
+  ['basel-codes', 'Basel/OECD codes'],
   ['repatriated-loads', 'Arrangements for rejected or returned loads'],
   ['conditions-of-export', 'Conditions of export'],
   ['bes-evidence', 'Evidence of broadly equivalent standards']
@@ -28,6 +29,7 @@ function anInterimSite(overrides = {}) {
     country: 'Denmark',
     contactName: 'Asha Patel',
     contactEmail: 'asha@bharat.example',
+    contactPhone: '+45 1234 5678',
     operationCodes: ['R13'],
     ...overrides
   }
@@ -91,6 +93,7 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
     expect(valuesByKey(rows)).toEqual({
       'site-name': ['Denmark PR'],
       location: ['Ejbyvvej 12, Industrial Park, Copenhagen, Denmark'],
+      'ors-id': ['007'],
       coordinates: ['55.6761, 12.5683'],
       'contact-name': ['John Smith'],
       'contact-email': ['john.smith@denmarkpr.com'],
@@ -168,10 +171,54 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
     })
   })
 
-  test('does not show ORS ID, EU or OECD', () => {
+  test('does not show EU or OECD', () => {
     const labels = summaryFor(aSite()).rows.map((row) => row.label)
-    expect(labels).not.toContain('ORS ID')
-    expect(labels.join(' ')).not.toMatch(/EU|OECD/)
+    expect(labels).not.toContain('EU country')
+    expect(labels).not.toContain('OECD country')
+  })
+
+  describe('RA-495: previous details', () => {
+    test('are the same rows, unchanged, when the operator supplied nothing', () => {
+      const { rows, previousRows } = summaryFor(aSite({ besEvidence: null }))
+
+      expect(previousRows.map((row) => [row.key, row.label])).toEqual(
+        ROW_LABELS
+      )
+      expect(valuesByKey(previousRows)).toEqual(valuesByKey(rows))
+      expect(previousRows.some((row) => row.supplied)).toBe(false)
+    })
+
+    test('show the dash for each field the operator supplied, and no BES files', () => {
+      const { previousRows } = summaryFor(
+        aSite({
+          suppliedFields: [
+            'country',
+            'coordinates',
+            'operationCodes',
+            'conditionsOfExport',
+            'besEvidence'
+          ]
+        })
+      )
+
+      expect(valuesByKey(previousRows)).toEqual({
+        'site-name': ['Denmark PR'],
+        location: ['Ejbyvvej 12, Industrial Park, Copenhagen'],
+        'ors-id': ['007'],
+        coordinates: [EM_DASH],
+        'contact-name': ['John Smith'],
+        'contact-email': ['john.smith@denmarkpr.com'],
+        'contact-phone': ['+23 2489 2862'],
+        'recycling-operation': [EM_DASH],
+        'basel-codes': ['B1030, B3011'],
+        'repatriated-loads': ['Returned to the UK exporter.'],
+        'conditions-of-export': [EM_DASH]
+      })
+      expect(
+        previousRows.find((row) => row.key === 'bes-evidence').files
+      ).toEqual([])
+      expect(previousRows.some((row) => row.supplied)).toBe(false)
+    })
   })
 
   test.each([
@@ -223,7 +270,8 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
       expect(summaryFor(aSite()).interimSites).toEqual([
         {
           siteName: 'Bharat Recycling',
-          shortAddress: 'Havnegade 1, Denmark',
+          // The only interim site, so its name alone tells it apart.
+          shortAddress: '',
           details: [
             {
               key: 'site-number',
@@ -244,6 +292,11 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
               key: 'contact-email',
               label: 'Contact email',
               values: ['asha@bharat.example']
+            },
+            {
+              key: 'contact-phone',
+              label: 'Contact phone',
+              values: ['+45 1234 5678']
             },
             {
               key: 'operation-code',

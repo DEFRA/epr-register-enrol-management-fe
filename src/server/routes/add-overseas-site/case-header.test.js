@@ -72,10 +72,10 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     expect(item.stateTagClass).toEqual(expect.any(String))
   })
 
-  test('captions with the reference and titles with the site, without the organisation', () => {
+  test('titles with the site, with no caption (the breadcrumb has the reference) and no organisation', () => {
     const header = headerFor(addOrs())
     expect(header).toMatchObject(SHARED_HEADER)
-    expect(header.caption).toBe('IYC-ORS-2026-00001')
+    expect(header.caption).toBeUndefined()
     expect(header.title).toBe('Denmark PR (007)')
     expect(header.metaLayout).toBe('in-year-change')
     expect(header.organisationName).toBeUndefined()

@@ -20,7 +20,7 @@
 
 {% set lifecycleHidesGenericActions = true %}
 
-{% from "work-items/summary-macros.njk" import documentItem, newPrefix, siteDetails %}
+{% from "work-items/summary-macros.njk" import siteDetails, addOrsSiteRows %}
 
 {% block content %}
   <div data-testid="add-overseas-site-detail"
@@ -30,51 +30,45 @@
 {% endblock %}
 
 {% block applicationSummary %}
-  {# The site. Every row renders; a missing value is the dash. The row  #}
-  {# and value testids match re-accreditation's application details.   #}
-  {# RA-495: a value the operator supplied on this request, rather than #}
-  {# one from the site's registration, carries the "NEW: " prefix.      #}
-  {# Borderless, as re-accreditation's application details.            #}
-  <dl class="govuk-summary-list app-summary-list--borderless" data-testid="application-details">
-    {% for row in applicationSummary.rows %}
-      <div class="govuk-summary-list__row"
-           data-testid="app-detail-row-{{ row.key }}">
-        <dt class="govuk-summary-list__key">{{ row.label }}</dt>
-        <dd class="govuk-summary-list__value"
-            data-testid="app-detail-value-{{ row.key }}">
-          {% if row.kind == 'files' %}
-            {% if row.files.length %}
-              <ul class="govuk-list govuk-!-margin-bottom-0">
-                {% for file in row.files %}{{ documentItem(file, showDates=true, newTestId=('app-detail-supplied-' + row.key) if (row.supplied and loop.first) else '') }}{% endfor %}
-              </ul>
-            {% else %}
-              <span data-testid="app-detail-documents-none">No documents uploaded.</span>
-            {% endif %}
-          {% else %}
-            {% for line in row.values %}
-              <p class="govuk-body govuk-!-margin-bottom-0">{% if row.supplied and loop.first %}{{ newPrefix('app-detail-supplied-' + row.key) }}{% endif %}{{ line }}</p>
-            {% endfor %}
-          {% endif %}
-        </dd>
-      </div>
-    {% endfor %}
-  </dl>
+  {# The site, under re-accreditation's heading. The row and value      #}
+  {# testids match re-accreditation's application details. RA-495: a    #}
+  {# value the operator supplied on this request, rather than one from  #}
+  {# the site's registration, carries the "NEW: " prefix.               #}
+  <h2 class="govuk-heading-m" data-testid="application-details-heading">Application details</h2>
+  {{ addOrsSiteRows(applicationSummary.rows, 'application-details', 'app-detail') }}
 
   {# Interim sites the operator has not withdrawn; no section without any. #}
   {% if applicationSummary.interimSites.length %}
     <div class="govuk-!-margin-top-8" data-testid="interim-sites">
       <h2 class="govuk-heading-m" data-testid="interim-sites-heading">Interim sites ({{ applicationSummary.interimSites.length }})</h2>
+      {# Collapsed by default, as re-accreditation's overseas sites: the    #}
+      {# heading is the name, plus the short address only when two interim #}
+      {# sites share a name.                                               #}
       {% for interimSite in applicationSummary.interimSites %}
-        <div class="govuk-!-margin-bottom-6" data-testid="interim-site">
-          <h3 class="govuk-heading-s govuk-!-margin-bottom-1" data-testid="interim-site-name">{{ interimSite.siteName }}</h3>
-          {% if interimSite.shortAddress %}
-            <p class="govuk-body-s govuk-!-margin-bottom-2" data-testid="interim-site-summary-address">{{ interimSite.shortAddress }}</p>
-          {% endif %}
-          {{ siteDetails(interimSite.details, 'interim-site') }}
-        </div>
+        <details class="govuk-details govuk-!-margin-bottom-2" data-testid="interim-site">
+          <summary class="govuk-details__summary">
+            <span class="govuk-details__summary-text">
+              <strong data-testid="interim-site-name">{{ interimSite.siteName }}</strong>
+              {% if interimSite.shortAddress %}
+                <br>
+                <span data-testid="interim-site-summary-address">{{ interimSite.shortAddress }}</span>
+              {% endif %}
+            </span>
+          </summary>
+          <div class="govuk-details__text">
+            {{ siteDetails(interimSite.details, 'interim-site') }}
+          </div>
+        </details>
       {% endfor %}
     </div>
   {% endif %}
+
+  {# RA-495. The same site rows as they were before the request, so the #}
+  {# caseworker can see what it changes.                                #}
+  <div class="govuk-!-margin-top-8" data-testid="previous-details-section">
+    <h2 class="govuk-heading-m" data-testid="previous-details-heading">Previous details</h2>
+    {{ addOrsSiteRows(applicationSummary.previousRows, 'previous-details', 'previous-detail') }}
+  </div>
 {% endblock %}
 
 {# RA-495. With the generic actions hidden, the card would be empty in a  #}

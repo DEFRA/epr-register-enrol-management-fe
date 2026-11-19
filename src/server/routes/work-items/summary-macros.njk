@@ -81,6 +81,38 @@
   </li>
 {% endmacro %}
 
+{# RA-739 / RA-495. The add-ORS site rows (`buildAddOverseasSiteSummary`), #}
+{# borderless as re-accreditation's application details. Every row        #}
+{# renders; a missing value is the dash. `prefix` forms the testids:      #}
+{# `{prefix}-row-{key}`, `{prefix}-value-{key}`, `{prefix}-supplied-{key}` #}
+{# on a supplied value's "NEW: " prefix, and `{prefix}-documents-none`.    #}
+{% macro addOrsSiteRows(rows, testId, prefix) %}
+  <dl class="govuk-summary-list app-summary-list--borderless" data-testid="{{ testId }}">
+    {% for row in rows %}
+      <div class="govuk-summary-list__row"
+           data-testid="{{ prefix }}-row-{{ row.key }}">
+        <dt class="govuk-summary-list__key">{{ row.label }}</dt>
+        <dd class="govuk-summary-list__value"
+            data-testid="{{ prefix }}-value-{{ row.key }}">
+          {% if row.kind == 'files' %}
+            {% if row.files.length %}
+              <ul class="govuk-list govuk-!-margin-bottom-0">
+                {% for file in row.files %}{{ documentItem(file, showDates=true, newTestId=(prefix + '-supplied-' + row.key) if (row.supplied and loop.first) else '') }}{% endfor %}
+              </ul>
+            {% else %}
+              <span data-testid="{{ prefix }}-documents-none">No documents uploaded.</span>
+            {% endif %}
+          {% else %}
+            {% for line in row.values %}
+              <p class="govuk-body govuk-!-margin-bottom-0">{% if row.supplied and loop.first %}{{ newPrefix(prefix + '-supplied-' + row.key) }}{% endif %}{{ line }}</p>
+            {% endfor %}
+          {% endif %}
+        </dd>
+      </div>
+    {% endfor %}
+  </dl>
+{% endmacro %}
+
 {# RA-292 AC04. A site's detail fields as a nested summary list,           #}
 {# borderless.                                                              #}
 {#                                                                          #}

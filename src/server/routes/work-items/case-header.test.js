@@ -412,7 +412,6 @@ describe("RA-739: a type's own header and tabs", () => {
       backHref: '/work-items',
       backText: 'Applications',
       applicationRef: 'w-1',
-      caption: 'w-1',
       title: 'Denmark PR',
       metaLayout: 'in-year-change'
     })

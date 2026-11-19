@@ -13,10 +13,11 @@ import {
 } from '#/server/routes/work-items/application-summary.js'
 
 /**
- * RA-739 / RA-495. The add-ORS case header: the reference as a caption above
- * a site title, no organisation name or Org ID, and rows of four meta
- * items. The fields are RA-495's (the ticket plus Figma "Flows 5"); the
- * caption, title and grid are RA-739's Figma frame (node 854:136663).
+ * RA-739 / RA-495. The add-ORS case header: a site title, no organisation
+ * name or Org ID, and rows of four meta items. The fields are RA-495's (the
+ * ticket plus Figma "Flows 5"); the title and grid are RA-739's Figma frame
+ * (node 854:136663). That frame's reference caption is left out: the
+ * breadcrumb already shows the reference (user, 2026-11-19).
  *
  * @param {object} args
  * @param {object} args.header the header fields every type shares
@@ -28,7 +29,6 @@ export function buildAddOverseasSiteHeader({ header, workItem, assignment }) {
   const payload = workItem?.payload ?? {}
   return {
     ...header,
-    caption: header.applicationRef,
     title: siteTitle(payload.site),
     metaLayout: 'in-year-change',
     meta: meta({ workItem, assignment, payload })

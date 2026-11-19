@@ -14,7 +14,7 @@ import {
  * overseas site shape) and its interim sites.
  *
  * Every row always renders, so a missing value shows the dash rather than a
- * gap. ORS ID, EU and OECD are not shown (the design has no rows for them).
+ * gap. EU and OECD are not shown (the design has no rows for them).
  *
  * RA-495. A row is `supplied` when the operator gave its value on this
  * request rather than it coming from the site's registration: the operator
@@ -22,9 +22,12 @@ import {
  * `SITE_FIELDS`, and `besEvidence` when the operator uploaded the BES
  * evidence files on the request (3bb.13).
  *
+ * `previousRows` are the same rows for the site as it was before the request
+ * (see `beforeRequest`), so the caseworker can see what the request changes.
+ *
  * @param {object} args
  * @param {object} args.workItem decorated work item
- * @returns {{ rows: object[], interimSites: object[] }}
+ * @returns {{ rows: object[], previousRows: object[], interimSites: object[] }}
  */
 export function buildAddOverseasSiteSummary({ workItem }) {
   const site = workItem?.payload?.site ?? {}
@@ -34,21 +37,65 @@ export function buildAddOverseasSiteSummary({ workItem }) {
   )
 
   return {
-    rows: [
-      ...SITE_FIELDS.map(([key, label, read, suppliedField]) => {
-        const lines = read(site)
-        return {
-          key,
-          label,
-          kind: 'lines',
-          values: orDash(lines),
-          supplied: lines.length > 0 && supplied.has(suppliedField)
-        }
-      }),
-      besEvidenceRow(site, workItemId, supplied.has(BES_EVIDENCE_FIELD))
-    ],
-    interimSites: buildInterimSites(site, buildAddOrsInterimSite)
+    rows: siteRows(site, workItemId, supplied),
+    previousRows: siteRows(
+      beforeRequest(site, supplied),
+      workItemId,
+      new Set()
+    ),
+    interimSites: withShortAddressOnlyForRepeatedNames(
+      buildInterimSites(site, buildAddOrsInterimSite)
+    )
   }
+}
+
+/**
+ * As re-accreditation's overseas sites: the collapsed heading shows the short
+ * address only to tell apart interim sites that share a name.
+ */
+function withShortAddressOnlyForRepeatedNames(interimSites) {
+  const nameCounts = new Map()
+  for (const { siteName } of interimSites) {
+    nameCounts.set(siteName, (nameCounts.get(siteName) ?? 0) + 1)
+  }
+  return interimSites.map((interimSite) =>
+    nameCounts.get(interimSite.siteName) > 1
+      ? interimSite
+      : { ...interimSite, shortAddress: '' }
+  )
+}
+
+function siteRows(site, workItemId, supplied) {
+  return [
+    ...SITE_FIELDS.map(([key, label, read, suppliedField]) => {
+      const lines = read(site)
+      return {
+        key,
+        label,
+        kind: 'lines',
+        values: orDash(lines),
+        supplied: lines.length > 0 && supplied.has(suppliedField)
+      }
+    }),
+    besEvidenceRow(site, workItemId, supplied.has(BES_EVIDENCE_FIELD))
+  ]
+}
+
+/**
+ * The site before the request. The operator may only supply a field the ORS
+ * lacks (the operator backend locks any it holds), so each supplied field
+ * had no value, and the payload's BES files are all the request's own.
+ * Interim sites cannot change on an add-ORS request, so they are not part
+ * of it.
+ */
+function beforeRequest(site, supplied) {
+  const previous = { ...site, besEvidence: { files: [] } }
+  for (const [, , , suppliedField] of SITE_FIELDS) {
+    if (suppliedField && supplied.has(suppliedField)) {
+      previous[suppliedField] = null
+    }
+  }
+  return previous
 }
 
 /** One comma-separated line, or nothing when there are no parts. */
@@ -75,7 +122,8 @@ const SITE_FIELDS = [
     (site) => joined(overseasSiteAddressLines(site, false)),
     'country'
   ],
-  // Not in the Figma frame: re-accreditation's site view wording.
+  // Not in the Figma frame: re-accreditation's site view wording and order.
+  ['ors-id', 'ORS ID', (site) => toDisplayLines(site.orsId)],
   [
     'coordinates',
     'Coordinates',
@@ -93,15 +141,16 @@ const SITE_FIELDS = [
     'Contact phone',
     (site) => toDisplayLines(site.contactPhone)
   ],
+  // Re-accreditation's labels for these two.
   [
     'recycling-operation',
-    'Recycling operation',
+    'Operation code',
     (site) => joined(toDisplayLines(site.operationCodes)),
     'operationCodes'
   ],
   [
     'basel-codes',
-    'Basel convention codes',
+    'Basel/OECD codes',
     (site) =>
       joined([site.code1, site.code2, site.code3].flatMap(toDisplayLines))
   ],
@@ -148,7 +197,7 @@ function besFileViewModel(file, workItemId) {
   }
 }
 
-/** Figma's interim site fields, in order. */
+/** Figma's interim site fields, in order, plus re-accreditation's contact phone. */
 const INTERIM_FIELDS = [
   ['site-number', 'Site number', (site) => toDisplayLines(site.siteNumber)],
   ['location', 'Location', (site) => joined(interimSiteAddressLines(site))],
@@ -157,6 +206,11 @@ const INTERIM_FIELDS = [
     'contact-email',
     'Contact email',
     (site) => toDisplayLines(site.contactEmail)
+  ],
+  [
+    'contact-phone',
+    'Contact phone',
+    (site) => toDisplayLines(site.contactPhone)
   ],
   [
     'operation-code',
