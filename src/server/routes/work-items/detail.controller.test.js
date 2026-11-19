@@ -4491,7 +4491,7 @@ describe('RA-295 individual work item page', () => {
       (match) => match[1]
     )
     expect(labels).toEqual([
-      'Change request type:',
+      'Application type:',
       'Status:',
       'Assigned to:',
       'Due date:',
@@ -4601,7 +4601,6 @@ describe('RA-295 individual work item page', () => {
 
     const order = [
       'site-address',
-      'type',
       'material',
       'prn-tonnage',
       'prn-authorisers',
@@ -4747,11 +4746,20 @@ describe('RA-295 individual work item page', () => {
     expect(result).not.toContain('data-testid="app-detail-row-ors"')
     expect(result).not.toContain('Broadly Equivalent Standards')
     expect(result).not.toContain('Overseas Reprocessing Site')
-    // ...and the Type row names the applicant kind.
-    // ...and the Type row states only the registry display name — it must
-    // NOT claim an applicant kind the backend never sends.
-    expect(detailRow(result, 'type')).toContain('Re-accreditation')
-    expect(detailRow(result, 'type')).not.toContain('Reprocessor')
+  })
+
+  test('AC02: has no Type row, as the case header shows the application type', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).not.toContain('data-testid="app-detail-row-type"')
+    expect(result).toMatch(
+      /data-testid="case-header-request-type">\s*Re-accreditation\s*</
+    )
   })
 
   test('AC02: shows BES then ORS, last and in that order, for an exporter', async () => {
@@ -4801,12 +4809,6 @@ describe('RA-295 individual work item page', () => {
       'data-testid="overseas-site-address"'
     )
     expect(result).toContain('1 Overseas Lane, Rotterdam')
-    // Even on an exporter the Type row must not claim "Exporter" — AC02 never
-    // asked for that prefix on this row (see the comment on it in
-    // application-summary.js). Positive assertion first, so the negative
-    // below is scoped to a row that demonstrably exists.
-    expect(detailRow(result, 'type')).toContain('Re-accreditation')
-    expect(detailRow(result, 'type')).not.toContain('Exporter')
   })
 
   test('AC02: an unscanned BES evidence file is named but not linked', async () => {

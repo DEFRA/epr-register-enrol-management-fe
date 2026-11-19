@@ -96,7 +96,7 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
   test('has the eleven meta items in the order re-accreditation shares', () => {
     const header = headerFor(addOrs())
     expect(header.meta.map((entry) => [entry.label, entry.value])).toEqual([
-      ['Change request type', 'New ORS accreditation'],
+      ['Application type', 'New ORS accreditation'],
       ['Status', 'Not started'],
       ['Assigned to', 'Unassigned'],
       ['Due date', EM_DASH],

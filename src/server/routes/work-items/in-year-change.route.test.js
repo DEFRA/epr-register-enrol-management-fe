@@ -565,7 +565,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         .map((_, el) => squash($(el).text()))
         .get()
       expect(meta).toEqual([
-        'Change request type: New ORS accreditation',
+        'Application type: New ORS accreditation',
         'Status: Not started',
         'Assigned to: Unassigned',
         `Due date: ${EM_DASH}`,

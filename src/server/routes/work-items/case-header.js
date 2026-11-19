@@ -144,11 +144,15 @@ export function buildCaseHeader({ workItem, assignment = null }) {
   }
 }
 
-/** The work item type's display name; the key keeps RA-739's testid. */
+/**
+ * The work item type's display name, under a label that fits a
+ * re-accreditation as well as a change request (user, 2026-11-19). The key
+ * keeps RA-739's testid.
+ */
 export function requestTypeEntry(workItem) {
   return {
     key: 'request-type',
-    label: 'Change request type',
+    label: 'Application type',
     value: workItem?.typeDisplayName || EM_DASH
   }
 }

@@ -696,7 +696,6 @@ export function buildAuthorityToIssueContacts(prns) {
  * @returns {object[]}
  */
 function buildCoreSummaryRows({
-  workItem,
   payload,
   workItemId,
   prns,
@@ -719,20 +718,8 @@ function buildCoreSummaryRows({
       // dash — see `deriveSiteAddressLines`.
       values: deriveSiteAddressLines(payload, registeredAddress)
     },
-    {
-      key: 'type',
-      label: 'Type',
-      kind: 'text',
-      // Sourced from the registry, so no type-specific wording is hard-coded
-      // into this generic route.
-      //
-      // Deliberately NOT prefixed with an applicant kind ("Reprocessor" /
-      // "Exporter"). RA-412 added a real `payload.wasteProcessingType` field
-      // (see `isExporterApplication` above, and the work-items list card,
-      // which now reads it) — but AC02 never asked for that prefix on this
-      // row, so it stays as the registry's plain display name.
-      value: workItem?.typeDisplayName || workItem?.typeId || EM_DASH
-    },
+    // No Type row: the case header's Application type shows it (user,
+    // 2026-11-19).
     {
       key: 'material',
       label: 'Material',
@@ -836,7 +823,6 @@ export function buildApplicationSummary({
   })
 
   const rows = buildCoreSummaryRows({
-    workItem,
     payload,
     workItemId,
     prns,
