@@ -139,7 +139,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(buildCaseHeader({ workItem }), 'charge')).toBe('£2,184.00')
   })
 
-  test('has the eleven meta items in the order add-ORS shares', () => {
+  test('has the ten meta items in the order add-ORS shares', () => {
     const header = buildCaseHeader({
       workItem: {
         ...workItem,
@@ -157,8 +157,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
       ['charge', 'Charge'],
       ['payment-date', 'Payment date'],
       ['submitted-by', 'Submitted by'],
-      ['date-added', 'Submitted on'],
-      ['effective-date', 'Effective date']
+      ['date-added', 'Submitted on']
     ])
     expect(metaValue(header, 'charge')).toBe('£2,184.00')
     expect(metaValue(header, 'payment-date')).toBe('01 Nov 2026')
@@ -200,22 +199,19 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     ).toBe('—')
   })
 
-  test('shows the accreditation start date as the effective date once Granted', () => {
-    const value = (stateId) =>
-      buildCaseHeader({
-        workItem: {
-          ...workItem,
-          stateId,
-          payload: {
-            ...workItem.payload,
-            accreditationStartDate: '2026-12-01'
-          }
-        }
-      }).meta.find((entry) => entry.key === 'effective-date').value
-
-    expect(value('approved')).toBe('01 Dec 2026')
-    expect(value('approved-pending-contact')).toBe('—')
-    expect(value('duly-made')).toBe('—')
+  // The accreditation start date is always 1 January of the accreditation
+  // year and the decision panel shows it, so the header leaves it out.
+  test('has no Effective date, even once Granted', () => {
+    const header = buildCaseHeader({
+      workItem: {
+        ...workItem,
+        stateId: 'approved',
+        payload: { ...workItem.payload, accreditationStartDate: '2027-01-01' }
+      }
+    })
+    expect(header.meta.map((entry) => entry.key)).not.toContain(
+      'effective-date'
+    )
   })
 
   test('appends the glass recycling type suffix to the material meta entry', () => {

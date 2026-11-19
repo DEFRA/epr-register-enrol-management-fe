@@ -22,9 +22,8 @@ import { EM_DASH } from './application-summary.js'
  *   5. material,          6. status,
  *   7. assigned to,       8. due on, and 9. registration number,
  *
- * plus (RA-493) 10. payment date and 11. payment amount, and (RA-495, to
- * match add-ORS) change request type, submitted on, submitted by and
- * effective date.
+ * plus (RA-493) 10. payment date and 11. the charge, and (RA-495, to match
+ * add-ORS) application type, submitted by and submitted on.
  *
  * (1)-(4) are the breadcrumb + title lines; the rest are the meta grid.
  *
@@ -250,11 +249,12 @@ export function dueOnEntry(workItem) {
 /**
  * The same fields in the same places as add-ORS's (user, 2026-11-19), rows
  * of four: the case, then what it is for and its payment, then who submitted
- * it, when, and its outcome. Sequence alone controls placement. The charge
- * is the amount owed, shown from submission.
+ * it and when. Sequence alone controls placement. The charge is the amount
+ * owed, shown from submission.
  *
- * Effective date is the accreditation start date, which management-be stamps
- * at confirm contact, so it shows once Granted, as in the decision panel.
+ * Unlike add-ORS, no Effective date: the accreditation start date is always
+ * 1 January of the accreditation year, set at confirm contact, and the
+ * decision panel already shows it once Granted (user, 2026-11-19).
  */
 function reAccreditationMeta({ workItem, assignment, payload }) {
   return [
@@ -271,16 +271,9 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
     chargeEntry(payload.chargeAmountPence),
     paymentDateEntry(payload),
     submittedByEntry(payload),
-    submittedOnEntry(workItem),
-    effectiveDateEntry(
-      workItem?.stateId === GRANTED_STATE_ID
-        ? payload.accreditationStartDate
-        : null
-    )
+    submittedOnEntry(workItem)
   ]
 }
-
-const GRANTED_STATE_ID = 'approved'
 
 /**
  * A state's display name from its work item type's declaration, or the raw
