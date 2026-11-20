@@ -1773,8 +1773,8 @@ describe('accreditation-number-corrected audit entries (RA-691)', () => {
   })
 })
 
-describe('last-years-accreditation-number-added audit entries (RA-763)', () => {
-  // The one-off RA-763 migration stamps this exact shape when it gives a 2027
+describe('last-years-accreditation-number-added audit entries (RA-784)', () => {
+  // The one-off RA-784 migration stamps this exact shape when it gives a 2027
   // case its 2026 accreditation number from the public register. It changes
   // no state.
   const action = 'last-years-accreditation-number-added'
@@ -1782,7 +1782,7 @@ describe('last-years-accreditation-number-added audit entries (RA-763)', () => {
     year: '2026',
     accreditationNumber: 'A26ER5000270063WO',
     source: 'Public register of reprocessors and exporters, 5 November 2026',
-    reason: 'RA-763'
+    reason: 'RA-784'
   }
 
   test('falls back to "Last year\'s accreditation number added" when the backend supplies no display name', () => {
@@ -1819,7 +1819,7 @@ describe('last-years-accreditation-number-added audit entries (RA-763)', () => {
         key: 'Source',
         value: 'Public register of reprocessors and exporters, 5 November 2026'
       },
-      { key: 'Reason', value: 'RA-763', multiline: true }
+      { key: 'Reason', value: 'RA-784', multiline: true }
     ])
   })
 

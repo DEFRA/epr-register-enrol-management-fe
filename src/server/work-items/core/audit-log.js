@@ -204,7 +204,7 @@ const STATE_BEARING_ACTIONS = new Set([
  * Submitted at, Submitted by, Last modified, Assigned to) — unlike every
  * other action, for which that context is exactly what a caseworker needs
  * alongside the entry. RA-526's routing/correction entries and RA-691's
- * accreditation-number correction, and RA-763's last year's accreditation
+ * accreditation-number correction, and RA-784's last year's accreditation
  * number added, are system-written (by a submission hook or a one-off data
  * migration) rather than a workflow action against the item, so none of that context — including who the item happens to be
  * assigned to — has anything to do with why a nation was chosen or a value

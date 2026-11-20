@@ -661,7 +661,7 @@ describe('#workItemAuditLogController', () => {
     )
   })
 
-  // RA-763: the Application history tab shows a "Last year's accreditation
+  // RA-784: the Application history tab shows a "Last year's accreditation
   // number added" entry with the number and where it came from.
   test('Shows the number and source for a last-years-accreditation-number-added entry', async () => {
     registerReaccreditation()
@@ -673,18 +673,18 @@ describe('#workItemAuditLogController', () => {
             id: 'ffff6666-ffff-ffff-ffff-ffffffffffff',
             action: 'last-years-accreditation-number-added',
             actionDisplayName: "Last year's accreditation number added",
-            // The shape the RA-763 migration writes: no stateId (no state
+            // The shape the RA-784 migration writes: no stateId (no state
             // change) and a system actor.
             details: {
               year: '2026',
               accreditationNumber: 'A26ER5000270063WO',
               source:
                 'Public register of reprocessors and exporters, 5 November 2026',
-              reason: 'RA-763'
+              reason: 'RA-784'
             },
             createdAt: '2026-11-13T09:00:00Z',
             createdBy: 'migration',
-            createdByName: "Migration: RA-763 last year's accreditation number"
+            createdByName: "Migration: RA-784 last year's accreditation number"
           }
         ]
       })
@@ -708,7 +708,7 @@ describe('#workItemAuditLogController', () => {
         'Public register of reprocessors and exporters, 5 November 2026'
       )
     )
-    expect(result).toEqual(expect.stringContaining('RA-763'))
+    expect(result).toEqual(expect.stringContaining('RA-784'))
     expect(result).not.toEqual(
       expect.stringContaining(
         '<dt class="govuk-summary-list__key">Assigned to</dt>'

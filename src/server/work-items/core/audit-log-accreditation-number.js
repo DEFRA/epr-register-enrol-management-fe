@@ -27,9 +27,9 @@ export function accreditationNumberCorrectedRows(details) {
 }
 
 /**
- * Audit log rendering for last year's accreditation number added (RA-763).
+ * Audit log rendering for last year's accreditation number added (RA-784).
  *
- * management-be's one-off RA-763 migration appends a
+ * management-be's one-off RA-784 migration appends a
  * `last-years-accreditation-number-added` entry (no state change) when it
  * gives a 2027 case its 2026 accreditation number from the public register.
  * The case's own 2027 number is derived from it. Details carry the `year`,
