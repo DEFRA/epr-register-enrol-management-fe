@@ -702,13 +702,19 @@ describe('#workItemAuditLogController', () => {
       )
     )
     expect(result).toEqual(expect.stringContaining('2026: A26ER5000270063WO'))
-    expect(result).toEqual(expect.stringContaining('Accreditation number'))
+    // Each detail row's key and value together: the actor's name already
+    // puts "RA-784" and "accreditation number" on the page.
+    expect(result).toMatch(
+      /<dt class="govuk-summary-list__key">Accreditation number<\/dt>\s*<dd class="govuk-summary-list__value">\s*A26ER5000270063WO\s*<\/dd>/
+    )
     expect(result).toEqual(
       expect.stringContaining(
         'Public register of reprocessors and exporters, 5 November 2026'
       )
     )
-    expect(result).toEqual(expect.stringContaining('RA-784'))
+    expect(result).toMatch(
+      /<dt class="govuk-summary-list__key">Reason<\/dt>\s*<dd class="govuk-summary-list__value">\s*<p class="govuk-body govuk-!-margin-bottom-1">RA-784<\/p>\s*<\/dd>/
+    )
     expect(result).not.toEqual(
       expect.stringContaining(
         '<dt class="govuk-summary-list__key">Assigned to</dt>'
