@@ -254,56 +254,13 @@ export function makeSubmitDecisionController({
       // Summary items are pushed in the order the fields appear on the page,
       // because the summary's links are a navigation aid: listing them out of
       // visual order sends the user backwards up the form.
-      const fieldErrors = {}
-      const errorItems = []
-
-      if (!isValidDecisionOutcome(decision)) {
-        fieldErrors.decision = MISSING_DECISION_MESSAGE
-        errorItems.push({
-          text: MISSING_DECISION_MESSAGE,
-          href: DECISION_FIELD_ANCHOR
-        })
-      }
-
-      // RA-495 AC6. Only an approval takes the date: on a refusal the field
-      // is hidden, and whatever it holds is neither checked nor sent.
-      let effectiveDate = null
-      if (takesEffectiveDate(typeId) && decision === 'approved') {
-        const checked = validateEffectiveDate(
-          effectiveDateInput,
-          workItem.submittedAt
-        )
-        if (checked.ok) {
-          effectiveDate = checked.value
-        } else {
-          const message = effectiveDateMessage(checked.errorCode)
-          fieldErrors.effectiveDate = message
-          errorItems.push({ text: message, href: EFFECTIVE_DATE_ANCHOR })
-        }
-      }
-
-      // RA-203. Checked HERE, not left to the service, because this is a form
-      // error and needs to render in place against the field. The service
-      // keeps its own identical guard as a backstop for non-form callers, but
-      // its failure result is a banner-and-redirect — which for an over-long
-      // note would bounce the user to the detail page and discard the
-      // rationale they had just written.
-      //
-      // ⚠ This is the ONLY thing enforcing the limit, in every browser — not
-      // just the no-JS case RA-94 mandates. `govukCharacterCount` passes
-      // `maxlength` to `data-maxlength` and deliberately never sets the HTML
-      // `maxlength` attribute (see govuk-frontend's own
-      // `character-count/template.njk`), so the textarea accepts unlimited
-      // input regardless. With JS the counter turns red and says how far over
-      // you are; it does not block submission. Verified against the installed
-      // govuk-frontend by mgmt-tests, which asserts this path end-to-end.
-      if (decisionNote.trim().length > DECISION_NOTE_MAX_LENGTH) {
-        fieldErrors.decisionNote = NOTE_TOO_LONG_MESSAGE
-        errorItems.push({
-          text: NOTE_TOO_LONG_MESSAGE,
-          href: NOTE_FIELD_ANCHOR
-        })
-      }
+      const { fieldErrors, errorItems, effectiveDate } = validateDecisionForm({
+        typeId,
+        decision,
+        decisionNote,
+        effectiveDateInput,
+        submittedAt: workItem.submittedAt
+      })
 
       // Render in place — a redirect would lose the form and the user would
       // have to find their way back.
@@ -411,6 +368,70 @@ export function makeSubmitDecisionController({
       return h.redirect(detailHref(id))
     }
   }
+}
+
+/**
+ * Validate every field of the decision form at once (see the notes in the
+ * submit handler on why no field short-circuits the others). Pure: returns
+ * the field errors, the error-summary items in page order, and the parsed
+ * effective date (null unless an approval supplied a valid one).
+ */
+function validateDecisionForm({
+  typeId,
+  decision,
+  decisionNote,
+  effectiveDateInput,
+  submittedAt
+}) {
+  const fieldErrors = {}
+  const errorItems = []
+
+  if (!isValidDecisionOutcome(decision)) {
+    fieldErrors.decision = MISSING_DECISION_MESSAGE
+    errorItems.push({
+      text: MISSING_DECISION_MESSAGE,
+      href: DECISION_FIELD_ANCHOR
+    })
+  }
+
+  // RA-495 AC6. Only an approval takes the date: on a refusal the field
+  // is hidden, and whatever it holds is neither checked nor sent.
+  let effectiveDate = null
+  if (takesEffectiveDate(typeId) && decision === 'approved') {
+    const checked = validateEffectiveDate(effectiveDateInput, submittedAt)
+    if (checked.ok) {
+      effectiveDate = checked.value
+    } else {
+      const message = effectiveDateMessage(checked.errorCode)
+      fieldErrors.effectiveDate = message
+      errorItems.push({ text: message, href: EFFECTIVE_DATE_ANCHOR })
+    }
+  }
+
+  // RA-203. Checked HERE, not left to the service, because this is a form
+  // error and needs to render in place against the field. The service
+  // keeps its own identical guard as a backstop for non-form callers, but
+  // its failure result is a banner-and-redirect — which for an over-long
+  // note would bounce the user to the detail page and discard the
+  // rationale they had just written.
+  //
+  // ⚠ This is the ONLY thing enforcing the limit, in every browser — not
+  // just the no-JS case RA-94 mandates. `govukCharacterCount` passes
+  // `maxlength` to `data-maxlength` and deliberately never sets the HTML
+  // `maxlength` attribute (see govuk-frontend's own
+  // `character-count/template.njk`), so the textarea accepts unlimited
+  // input regardless. With JS the counter turns red and says how far over
+  // you are; it does not block submission. Verified against the installed
+  // govuk-frontend by mgmt-tests, which asserts this path end-to-end.
+  if (decisionNote.trim().length > DECISION_NOTE_MAX_LENGTH) {
+    fieldErrors.decisionNote = NOTE_TOO_LONG_MESSAGE
+    errorItems.push({
+      text: NOTE_TOO_LONG_MESSAGE,
+      href: NOTE_FIELD_ANCHOR
+    })
+  }
+
+  return { fieldErrors, errorItems, effectiveDate }
 }
 
 /**
