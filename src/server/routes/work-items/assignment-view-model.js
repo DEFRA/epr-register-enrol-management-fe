@@ -1,4 +1,4 @@
-import { PENDING_CONTACT_STATE_IDS } from '#/server/work-items/re-accreditation/states.js'
+import { PENDING_CONTACT_STATE_IDS } from '#/server/work-items/core/standard-lifecycle/states.js'
 
 // The states in which a case is closed. Drives BOTH the re-accreditation
 // read-only Outcome panel (`isReadOnlyState`) and, since RA-358, the

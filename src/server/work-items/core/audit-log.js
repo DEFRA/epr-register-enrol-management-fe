@@ -184,7 +184,7 @@ function queriedSectionLabels(sections) {
 const DERIVED_FROM_DISPLAY_NAMES = {
   submitted: "Registration's regulator",
   'default-england': 'No nation provided (defaulted to England)',
-  'site-address': 'Site address'
+  'site-address': 'Location'
 }
 
 function derivedFromDisplayName(derivedFrom) {

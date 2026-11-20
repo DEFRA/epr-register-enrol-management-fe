@@ -22,9 +22,10 @@ import { EM_DASH } from './application-summary.js'
  *   5. material,          6. status,
  *   7. assigned to,       8. due on, and 9. registration number,
  *
- * plus (RA-493) 10. payment date and 11. payment amount.
+ * plus (RA-493) 10. payment date and 11. the charge, and (RA-495, to match
+ * add-ORS) application type, submitted by and submitted on.
  *
- * (1)-(4) are the breadcrumb + title lines; the rest are the meta line.
+ * (1)-(4) are the breadcrumb + title lines; the rest are the meta grid.
  *
  * RA-739. A type with a header of its own supplies
  * `buildCaseHeader({ header, workItem, assignment })`, given the fields every
@@ -40,43 +41,47 @@ const UNASSIGNED = 'Unassigned'
 export const NOT_RECEIVED = 'Not received'
 
 /**
- * Duly Made payment information for the header (RA-493).
+ * The header's payment date (RA-493). management-be stamps
+ * `payload.paymentDate` (a `yyyy-MM-dd` DateOnly) when the work item is
+ * marked Duly made, and it is null before then, so until it is present (or
+ * if it cannot be parsed) it reads "Not received" (AC04). Duly making records
+ * no amount paid, so the header shows the charge itself (see `chargeEntry`)
+ * and this date alone says whether it has been paid (user, 2026-11-19).
  *
- * management-be stamps `payload.paymentDate` (a `yyyy-MM-dd` DateOnly)
- * when the work item is marked Duly made, and it is null before then. A
- * recorded payment date is therefore the signal that payment has been
- * received: until it is present (or if it cannot be parsed) BOTH the date
- * and the amount read "Not received" (AC04), even when the charge itself
- * is already known from submission.
- *
- * Once duly made, the amount is the charge currently recorded against the
- * application (AC03). `0` is a legitimate charge and formats as "£0"; an
- * absent or malformed charge degrades to the em dash rather than claiming
- * payment was not received.
- *
- * @returns {{ date: string, amount: string }}
+ * @returns {string}
  */
-export function formatPayment(payload) {
+export function formatPaymentDate(payload) {
   const iso = unwrapMongoDate(payload?.paymentDate)
   const date = iso ? formatDateShortGds(iso) : ''
-  if (date === '') {
-    return { date: NOT_RECEIVED, amount: NOT_RECEIVED }
-  }
+  return date === '' ? NOT_RECEIVED : date
+}
+
+/**
+ * The amount owed, from submission. `0` is a legitimate charge and formats
+ * as "£0.00"; an absent or malformed one is the em dash.
+ */
+export function chargeEntry(pence) {
   return {
-    date,
-    amount: formatChargeAmount(payload.chargeAmountPence) ?? EM_DASH
+    key: 'charge',
+    label: 'Charge',
+    value: formatChargeAmount(pence) ?? EM_DASH
+  }
+}
+
+export function paymentDateEntry(payload) {
+  return {
+    key: 'payment-date',
+    label: 'Payment date',
+    value: formatPaymentDate(payload)
   }
 }
 
 /**
- * Format the absolute SLA due date for the header.
- *
- * `slaDueDate` is supplied by management-be once the SLA clock has started
- * and is null before then, so an em dash is the correct rendering for a
- * work item whose assessment has not begun. A value we cannot parse also
- * degrades to the em dash rather than throwing out of the template.
+ * A date for the case header ("12 Feb 2027"), or the em dash when it is
+ * absent or cannot be parsed: add-ORS's Date added (RA-495), and the SLA due
+ * date, which management-be leaves null until the SLA clock starts (RA-295).
  */
-export function formatDueOn(value) {
+export function formatHeaderDate(value) {
   const iso = unwrapMongoDate(value)
   if (!iso) {
     return EM_DASH
@@ -145,6 +150,50 @@ export function buildCaseHeader({ workItem, assignment = null }) {
   }
 }
 
+/**
+ * The work item type's display name, under a label that fits a
+ * re-accreditation as well as a change request (user, 2026-11-19). The key
+ * keeps RA-739's testid.
+ */
+export function requestTypeEntry(workItem) {
+  return {
+    key: 'request-type',
+    label: 'Application type',
+    value: workItem?.typeDisplayName || EM_DASH
+  }
+}
+
+/** The work item's submission date; the key keeps RA-495's "Date added" testid. */
+export function submittedOnEntry(workItem) {
+  return {
+    key: 'date-added',
+    label: 'Submitted on',
+    value: formatHeaderDate(workItem?.submittedAt)
+  }
+}
+
+/**
+ * The submitter's name. A re-accreditation submitted before the operator
+ * backend sent `submittedBy` has only its contact details.
+ */
+export function submittedByEntry(payload) {
+  const name =
+    payload?.submittedBy?.fullName ?? payload?.submitterContactDetails?.fullName
+  return {
+    key: 'submitted-by',
+    label: 'Submitted by',
+    value: typeof name === 'string' && name.trim() ? name.trim() : EM_DASH
+  }
+}
+
+export function effectiveDateEntry(date) {
+  return {
+    key: 'effective-date',
+    label: 'Valid from date',
+    value: formatHeaderDate(date)
+  }
+}
+
 export function materialEntry(payload) {
   return {
     key: 'material',
@@ -193,14 +242,23 @@ export function dueOnEntry(workItem) {
     value:
       workItem?.slaState === 'Cancelled'
         ? EM_DASH
-        : formatDueOn(workItem?.slaDueDate)
+        : formatHeaderDate(workItem?.slaDueDate)
   }
 }
 
+/**
+ * The same fields in the same places as add-ORS's (user, 2026-11-19), rows
+ * of four: the case, then what it is for and its payment, then who submitted
+ * it and when. Sequence alone controls placement. The charge is the amount
+ * owed, shown from submission.
+ *
+ * Unlike add-ORS, no Valid from date: the accreditation start date is always
+ * 1 January of the accreditation year, set at confirm contact, and the
+ * decision panel already shows it once Granted (user, 2026-11-19).
+ */
 function reAccreditationMeta({ workItem, assignment, payload }) {
-  const payment = formatPayment(payload)
   return [
-    materialEntry(payload),
+    requestTypeEntry(workItem),
     statusEntry(workItem),
     assignedToEntry(workItem, assignment),
     dueOnEntry(workItem),
@@ -209,20 +267,11 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
       label: 'Registration number',
       value: payload.registrationNumber || EM_DASH
     },
-    // RA-493. Figma places "Payment date" after "Registration number"
-    // (second row under "Status"); the meta line is an inline flex-wrap,
-    // so sequence alone controls placement. Figma omits the amount, but
-    // AC02/AC04 require it, so it sits immediately after the date.
-    {
-      key: 'payment-date',
-      label: 'Payment date',
-      value: payment.date
-    },
-    {
-      key: 'payment-amount',
-      label: 'Payment amount',
-      value: payment.amount
-    }
+    materialEntry(payload),
+    chargeEntry(payload.chargeAmountPence),
+    paymentDateEntry(payload),
+    submittedByEntry(payload),
+    submittedOnEntry(workItem)
   ]
 }
 
@@ -267,6 +316,10 @@ export const RECYCLING_OPERATIONS_TAB_KEY = 'recycling-operations'
 export const APPLICATION_SUMMARY_TAB_KEY = 'application-summary'
 export const APPLICATION_HISTORY_TAB_KEY = 'application-history'
 export const ADDITIONAL_INFORMATION_TAB_KEY = 'additional-information'
+// RA-495. Add-ORS tabs whose content arrives later: Accreditation summary
+// (RA-769) and Related applications (RA-770).
+export const ACCREDITATION_SUMMARY_TAB_KEY = 'accreditation-summary'
+export const RELATED_APPLICATIONS_TAB_KEY = 'related-applications'
 
 // RA-469 follow-up. Product asked for the "Recycling operations" tab to be
 // hidden for now — the copy may be reworded before it's shown again. This
@@ -283,8 +336,9 @@ export const ADDITIONAL_INFORMATION_TAB_KEY = 'additional-information'
 // and "included" outcomes across the four tabs in every existing test.
 const HIDDEN_TAB_KEYS = new Set([RECYCLING_OPERATIONS_TAB_KEY])
 
-// The tabs a type's case has unless it declares its own `caseTabs` (RA-739:
-// add-ORS has only Application summary and Application history).
+// The tabs a type's case has unless it declares its own `caseTabs` (RA-739,
+// RA-495: add-ORS has Application summary, Accreditation summary, Related
+// applications and Application history).
 const DEFAULT_CASE_TAB_KEYS = [
   APPLICATION_SUMMARY_TAB_KEY,
   RECYCLING_OPERATIONS_TAB_KEY,
@@ -322,9 +376,13 @@ export function caseHasTab(type, tabKey) {
  * "Additional information" both keep their existing order relative to each
  * other; only the new tab is inserted.
  *
+ * RA-495. "Accreditation summary" and "Related applications" sit between
+ * "Application summary" and "Application history" (Figma "Flows 5"); only
+ * types that declare them in `caseTabs` (add-ORS) have them.
+ *
  * @param {object} args
  * @param {string} args.workItemId
- * @param {'summary'|'recycling-operations'|'history'|'additional-information'} args.active
+ * @param {'summary'|'recycling-operations'|'history'|'additional-information'|'accreditation-summary'|'related-applications'} args.active
  * @param {string|null} [args.typeId] the work item's type
  */
 export function buildCaseTabs({ workItemId, active, typeId = null }) {
@@ -335,6 +393,18 @@ export function buildCaseTabs({ workItemId, active, typeId = null }) {
       text: 'Application summary',
       href: base,
       active: active === 'summary'
+    },
+    {
+      key: ACCREDITATION_SUMMARY_TAB_KEY,
+      text: 'Accreditation summary',
+      href: `${base}/${ACCREDITATION_SUMMARY_TAB_KEY}`,
+      active: active === ACCREDITATION_SUMMARY_TAB_KEY
+    },
+    {
+      key: RELATED_APPLICATIONS_TAB_KEY,
+      text: 'Related applications',
+      href: `${base}/${RELATED_APPLICATIONS_TAB_KEY}`,
+      active: active === RELATED_APPLICATIONS_TAB_KEY
     },
     {
       key: RECYCLING_OPERATIONS_TAB_KEY,

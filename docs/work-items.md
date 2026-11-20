@@ -85,7 +85,7 @@ export const myTypeModule = {
     // frontend never RENDERS an affordance the backend would refuse.
     //
     // The declared `approve` transition is read by
-    // `re-accreditation/decision/eligibility.js` to gate the decision CTA.
+    // `core/standard-lifecycle/decision/eligibility.js` to gate the decision CTA.
     // That does not make the BFF authoritative either: management-be only
     // approves via its `/decision` endpoint, which applies the same rule
     // server-side and rejects a forged POST regardless. Frontend gate for
@@ -159,13 +159,17 @@ from its own hooks, never from a check on its category:
 - `buildCaseHeader({ header, workItem, assignment })` builds the case header
   from the fields every header shares. Add-ORS's
   (`routes/add-overseas-site/case-header.js`) has the reference as a
-  caption, the site name and ORS id as the title, and two rows of four meta
-  items. Every work item page builds its header from a work item passed
+  caption, the site name and ORS id as the title, and three rows of four
+  meta items (RA-495). Every work item page builds its header from a work item passed
   through `decorateForCaseHeader` (`routes/work-items/case-header.js`), so
   the type's header shows on every tab.
 - `caseTabs` lists the tab keys the type's case has (by default all four).
-  Add-ORS has only Application summary and Application history, and its
-  Additional information and Recycling operations pages are not found.
+  Add-ORS has Application summary, Accreditation summary, Related
+  applications and Application history (RA-495; the middle two are empty
+  until RA-769 and RA-770, rendered by `empty-tab.controller.js`). Its
+  Additional information and Recycling operations pages are not found, and a
+  type without the Accreditation summary or Related applications tab gets
+  not found for those.
 - `describeCardSite(payload)` gives the card a site line in place of the
   registration number, and `cardAlwaysShowsSubmittedOn` keeps "Submitted on"
   on the card in every state.
@@ -175,13 +179,79 @@ model for its Application summary; the detail controller uses it in place of
 re-accreditation's `buildApplicationSummary` and passes it to the template as
 `applicationSummary`. Add-ORS builds its summary from `payload.site`
 (`routes/add-overseas-site/application-summary.js`). Its detail template
-extends `work-items/detail.njk`, overrides the `applicationSummary` block
-with the site summary and interim sites, and empties the `actionsCard`
-block, so it keeps the tabs, banners and assignment panel but has no actions
-panel. Both templates import the document and site-detail macros from
+extends `standard-lifecycle/detail.njk` (see below) and overrides the
+`applicationSummary` block with the site summary and interim sites, so it
+keeps the tabs, banners, assignment panel and lifecycle CTAs; it draws the
+actions card only when there is a lifecycle step or an outcome to show. Both
+templates import the document and site-detail macros from
 `work-items/summary-macros.njk`. The file download route also finds BES
 files under `payload.site.besEvidence.files`.
 `add-overseas-site/module.js` is the example.
+
+### Standard lifecycle pages (RA-495)
+
+The Duly make, Make determination and Confirm applicant contact pages, their
+eligibility checks, the detail page's lifecycle CTAs and the pending-contact
+banner are shared by every type on the Standard workflow
+(`src/server/work-items/core/standard-lifecycle/`). A type opts in by declaring
+`standardLifecycle` on its type and mounting the routes from its module:
+
+```js
+export const myType = {
+  // …the Standard workflow's states and transitions…
+  standardLifecycle: {
+    // Required: the raw charge (pence) and payment reference the Duly make
+    // page shows. The page formats them and says "Not provided" for a gap.
+    readPaymentDetails: (workItem) => ({ chargePence, paymentReference }),
+    // Optional: the management-be calls. Each defaults to the type-less
+    // Standard-lifecycle endpoint (`POST /work-items/{id}/duly-make`,
+    // `/decision`, `/confirm-contact`).
+    backend: { dulyMake, recordDecision, confirmContact },
+    // Optional: list every work item from the same submission, this one
+    // included, on the Duly make page ("Related change requests", from
+    // management-be's `GET /work-items/{id}/duly-make`). No section for a
+    // one-site submission.
+    relatedWorkItems: true,
+    // Optional: the "Applicant contacted" success banner by outcome, each
+    // `{ title, text }`. An outcome left out keeps the default copy
+    // ("…accreditation is granted." / "…accreditation is refused.").
+    contactConfirmedBanners: { approved, rejected }
+  }
+}
+
+export const myTypeModule = {
+  type: myType,
+  async register(server) {
+    registerModuleDetailTemplates(myType.id, {
+      v1: STANDARD_LIFECYCLE_DETAIL_TEMPLATE // or a template extending it
+    })
+    server.route(buildStandardLifecycleRoutes(myType.id))
+  }
+}
+```
+
+The pages live at `/work-items/{typeId}/{id}/duly-make|decision|confirm-contact`
+and refuse a work item of any other type. Their copy, status labels and badges
+are the same for every type. The detail controller layers the CTA flags on
+through `routes/work-items/standard-lifecycle-view-model.js`, and the
+`standard-lifecycle/detail.njk` template renders them; a type's own detail
+template extends it (re-accreditation's adds Continue review in the
+`lifecycleActionsExtra` block). A type with no generic actions sets
+`{% set lifecycleHidesGenericActions = true %}` at its template's top level,
+so the generic actions list and its "No actions" line never render under the
+lifecycle CTAs. Re-accreditation opts in with its own type-scoped
+management-be endpoints (`re-accreditation/lifecycle-backend.js`, built with
+`buildLifecycleBackend(typeSegment)` from `core/standard-lifecycle/lifecycle.js`)
+and keeps its existing URLs, mounting the pages with
+`buildStandardLifecycleRoutes(RE_ACCREDITATION_TYPE_ID)` like any other type.
+The shared pages' unit tests live beside them in
+`core/standard-lifecycle/` and run against re-accreditation. Add-ORS
+opts in with the type-less endpoints, the site's own charge and
+`relatedWorkItems`, mounts all three pages and hides the generic actions.
+An add-ORS approval mints nothing: the site joins an accreditation that
+already exists, so the approval banner has no accreditation ID. For the
+same reason it supplies its own `contactConfirmedBanners` (the site has, or
+has not, been added to the accreditation; provisional copy).
 
 ## Cross-type list
 

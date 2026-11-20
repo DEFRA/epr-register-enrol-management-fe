@@ -129,6 +129,9 @@ src/
     work-items/
       core/               Framework: registry, module, plugin, engine,
                           service, templates, audit-log, assignees
+        standard-lifecycle/  Shared Standard-workflow pages (RA-495): Duly
+                          make, Make determination, Confirm applicant
+                          contact; a type opts in via `standardLifecycle`
       modules.js          The list of registered modules — ONE LINE per type
       re-accreditation/   Reference module (RA-98): one folder + one line
 test-helpers/             component-helpers.js (Nunjucks macro renderer)

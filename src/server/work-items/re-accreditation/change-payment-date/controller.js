@@ -27,7 +27,7 @@ import {
   isPaymentDateErrorCode,
   messageForErrorCode,
   validatePaymentDate
-} from '../duly-making/payment-date.js'
+} from '../../core/standard-lifecycle/duly-making/payment-date.js'
 import {
   REASON_ANCHOR,
   REASON_ID,

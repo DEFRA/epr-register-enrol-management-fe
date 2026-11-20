@@ -12,8 +12,9 @@ import {
   buildCaseTabs,
   caseHasTab,
   decorateForCaseHeader,
-  formatDueOn,
-  formatPayment,
+  formatHeaderDate,
+  chargeEntry,
+  formatPaymentDate,
   stateDisplayName
 } from './case-header.js'
 
@@ -23,87 +24,72 @@ function metaValue(header, key) {
   return header.meta.find((entry) => entry.key === key)?.value
 }
 
-describe('#formatDueOn (RA-295 AC01)', () => {
+describe('#formatHeaderDate (RA-295 AC01)', () => {
   test('formats an ISO-8601 UTC instant as a GDS date in UK local time', () => {
     // June is BST (UTC+1), so 23:30Z is already the 27th locally — proving
     // the conversion happens rather than the UTC date being printed raw.
-    expect(formatDueOn('2026-06-26T23:30:00Z')).toBe('27 Jun 2026')
+    expect(formatHeaderDate('2026-06-26T23:30:00Z')).toBe('27 Jun 2026')
   })
 
   test('unwraps the Mongo extended-JSON shape', () => {
-    expect(formatDueOn({ $date: '2026-08-24T09:00:00Z' })).toBe('24 Aug 2026')
+    expect(formatHeaderDate({ $date: '2026-08-24T09:00:00Z' })).toBe(
+      '24 Aug 2026'
+    )
   })
 
   test('renders an em dash when no SLA clock has started (null)', () => {
-    expect(formatDueOn(null)).toBe(EM_DASH)
-    expect(formatDueOn(undefined)).toBe(EM_DASH)
+    expect(formatHeaderDate(null)).toBe(EM_DASH)
+    expect(formatHeaderDate(undefined)).toBe(EM_DASH)
   })
 
   test('renders an em dash rather than throwing on an unparseable value', () => {
-    expect(formatDueOn('not-a-date')).toBe(EM_DASH)
+    expect(formatHeaderDate('not-a-date')).toBe(EM_DASH)
   })
 })
 
-describe('#formatPayment (RA-493)', () => {
-  test('shows "Not received" for both items before the item is duly made (AC04)', () => {
-    // The charge is already known from submission, but without a recorded
-    // payment date the payment has not been received.
-    expect(formatPayment({ chargeAmountPence: 327600 })).toEqual({
-      date: NOT_RECEIVED,
-      amount: NOT_RECEIVED
-    })
-    expect(
-      formatPayment({ paymentDate: null, chargeAmountPence: 327600 })
-    ).toEqual({ date: NOT_RECEIVED, amount: NOT_RECEIVED })
+describe('#formatPaymentDate (RA-493)', () => {
+  test('shows "Not received" before the item is duly made (AC04)', () => {
+    expect(formatPaymentDate({ chargeAmountPence: 327600 })).toBe(NOT_RECEIVED)
+    expect(formatPaymentDate({ paymentDate: null })).toBe(NOT_RECEIVED)
     expect(NOT_RECEIVED).toBe('Not received')
   })
 
   test('tolerates a missing payload', () => {
-    expect(formatPayment(undefined)).toEqual({
-      date: NOT_RECEIVED,
-      amount: NOT_RECEIVED
-    })
+    expect(formatPaymentDate(undefined)).toBe(NOT_RECEIVED)
   })
 
-  test('formats the recorded date and amount once duly made (AC01, AC02, AC03)', () => {
-    expect(
-      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 327650 })
-    ).toEqual({ date: '01 Nov 2026', amount: '£3,276.50' })
-  })
-
-  test('renders whole-pound charges without pence, matching the duly-making page', () => {
-    expect(
-      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 327600 })
-        .amount
-    ).toBe('£3,276')
-  })
-
-  test('treats a £0 charge as a real amount, not a missing one', () => {
-    expect(
-      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: 0 }).amount
-    ).toBe('£0')
-  })
-
-  test('renders an em dash for the amount when duly made but no charge is recorded', () => {
-    expect(
-      formatPayment({ paymentDate: '2026-11-01', chargeAmountPence: null })
-    ).toEqual({ date: '01 Nov 2026', amount: EM_DASH })
-    expect(formatPayment({ paymentDate: '2026-11-01' }).amount).toBe(EM_DASH)
+  test('formats the recorded date once duly made (AC01, AC02)', () => {
+    expect(formatPaymentDate({ paymentDate: '2026-11-01' })).toBe('01 Nov 2026')
   })
 
   test('shows "Not received" rather than throwing on an unparseable payment date', () => {
-    expect(
-      formatPayment({ paymentDate: 'not-a-date', chargeAmountPence: 327600 })
-    ).toEqual({ date: NOT_RECEIVED, amount: NOT_RECEIVED })
+    expect(formatPaymentDate({ paymentDate: 'not-a-date' })).toBe(NOT_RECEIVED)
   })
 
   test('unwraps the Mongo extended-JSON date shape', () => {
     expect(
-      formatPayment({
-        paymentDate: { $date: '2026-11-01T00:00:00Z' },
-        chargeAmountPence: 54600
-      })
-    ).toEqual({ date: '01 Nov 2026', amount: '£546' })
+      formatPaymentDate({ paymentDate: { $date: '2026-11-01T00:00:00Z' } })
+    ).toBe('01 Nov 2026')
+  })
+})
+
+describe('#chargeEntry', () => {
+  test('renders whole-pound charges with pence, matching the duly-making page (user decision 2026-11-18)', () => {
+    expect(chargeEntry(327600)).toEqual({
+      key: 'charge',
+      label: 'Charge',
+      value: '£3,276.00'
+    })
+    expect(chargeEntry(327650).value).toBe('£3,276.50')
+  })
+
+  test('treats a £0 charge as a real amount, not a missing one', () => {
+    expect(chargeEntry(0).value).toBe('£0.00')
+  })
+
+  test('renders an em dash when no charge is recorded', () => {
+    expect(chargeEntry(null).value).toBe(EM_DASH)
+    expect(chargeEntry(undefined).value).toBe(EM_DASH)
   })
 })
 
@@ -123,7 +109,8 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
       operatorOrganisationId: '6a74a6a12b7c39b0cc15ca55',
       operatorOrgNumber: 500500,
       material: 'plastic',
-      registrationNumber: 'EPR-100999'
+      registrationNumber: 'EPR-100999',
+      chargeAmountPence: 218400
     }
   }
 
@@ -144,39 +131,87 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(header, 'due-on')).toBe('24 Aug 2026')
     expect(metaValue(header, 'registration-number')).toBe('EPR-100999')
     expect(metaValue(header, 'payment-date')).toBe('Not received')
-    expect(metaValue(header, 'payment-amount')).toBe('Not received')
   })
 
-  test('places payment date then payment amount after the registration number (RA-493)', () => {
+  // Duly making records no amount paid, so the charge shows from submission
+  // and the payment date alone says whether it has been paid.
+  test('shows the charge before the item is paid', () => {
+    expect(metaValue(buildCaseHeader({ workItem }), 'charge')).toBe('£2,184.00')
+  })
+
+  test('has the ten meta items in the order add-ORS shares', () => {
     const header = buildCaseHeader({
       workItem: {
         ...workItem,
-        payload: {
-          ...workItem.payload,
-          paymentDate: '2026-11-01',
-          chargeAmountPence: 218400
-        }
+        payload: { ...workItem.payload, paymentDate: '2026-11-01' }
       }
     })
 
-    expect(header.meta.find((entry) => entry.key === 'due-on').label).toBe(
-      'Due date'
-    )
-    expect(header.meta.map((entry) => entry.key)).toEqual([
-      'material',
-      'status',
-      'assigned-to',
-      'due-on',
-      'registration-number',
-      'payment-date',
-      'payment-amount'
+    expect(header.meta.map((entry) => [entry.key, entry.label])).toEqual([
+      ['request-type', 'Application type'],
+      ['status', 'Status'],
+      ['assigned-to', 'Assigned to'],
+      ['due-on', 'Due date'],
+      ['registration-number', 'Registration number'],
+      ['material', 'Material'],
+      ['charge', 'Charge'],
+      ['payment-date', 'Payment date'],
+      ['submitted-by', 'Submitted by'],
+      ['date-added', 'Submitted on']
     ])
+    expect(metaValue(header, 'charge')).toBe('£2,184.00')
+    expect(metaValue(header, 'payment-date')).toBe('01 Nov 2026')
+  })
+
+  test('shows the type, submission date and submitter, falling back to the contact details', () => {
+    const value = (header, key) =>
+      header.meta.find((entry) => entry.key === key).value
+    const item = {
+      ...workItem,
+      typeDisplayName: 'Re-accreditation',
+      submittedAt: '2026-10-05T09:00:00Z',
+      payload: {
+        ...workItem.payload,
+        submittedBy: { fullName: 'Sam Operator' }
+      }
+    }
+
+    const header = buildCaseHeader({ workItem: item })
+    expect(value(header, 'request-type')).toBe('Re-accreditation')
+    expect(value(header, 'date-added')).toBe('05 Oct 2026')
+    expect(value(header, 'submitted-by')).toBe('Sam Operator')
+
+    const older = buildCaseHeader({
+      workItem: {
+        ...item,
+        payload: {
+          ...workItem.payload,
+          submitterContactDetails: { fullName: 'Pat Contact' }
+        }
+      }
+    })
+    expect(value(older, 'submitted-by')).toBe('Pat Contact')
     expect(
-      header.meta.slice(-2).map(({ label, value }) => ({ label, value }))
-    ).toEqual([
-      { label: 'Payment date', value: '01 Nov 2026' },
-      { label: 'Payment amount', value: '£2,184' }
-    ])
+      value(
+        buildCaseHeader({ workItem: { ...item, payload: workItem.payload } }),
+        'submitted-by'
+      )
+    ).toBe('—')
+  })
+
+  // The accreditation start date is always 1 January of the accreditation
+  // year and the decision panel shows it, so the header leaves it out.
+  test('has no Valid from date, even once Granted', () => {
+    const header = buildCaseHeader({
+      workItem: {
+        ...workItem,
+        stateId: 'approved',
+        payload: { ...workItem.payload, accreditationStartDate: '2027-01-01' }
+      }
+    })
+    expect(header.meta.map((entry) => entry.key)).not.toContain(
+      'effective-date'
+    )
   })
 
   test('appends the glass recycling type suffix to the material meta entry', () => {
@@ -410,9 +445,7 @@ describe("RA-739: a type's own header and tabs", () => {
       backHref: '/work-items',
       backText: 'Applications',
       applicationRef: 'w-1',
-      caption: 'w-1',
-      title: 'Denmark PR',
-      metaLayout: 'in-year-change'
+      title: 'Denmark PR'
     })
   })
 
@@ -424,17 +457,24 @@ describe("RA-739: a type's own header and tabs", () => {
     expect(caseHasTab(addOverseasSiteType, 'recycling-operations')).toBe(false)
     expect(caseHasTab(null, 'recycling-operations')).toBe(true)
     expect(caseHasTab({ id: 'other' }, 'additional-information')).toBe(true)
+    // RA-495. Only add-ORS has the Accreditation summary and Related
+    // applications tabs.
+    expect(caseHasTab(addOverseasSiteType, 'accreditation-summary')).toBe(true)
+    expect(caseHasTab(null, 'accreditation-summary')).toBe(false)
+    expect(caseHasTab(null, 'related-applications')).toBe(false)
   })
 
-  test('has only the Application summary and Application history tabs for add-ORS', () => {
+  test('has the four RA-495 tabs for add-ORS, in Figma order', () => {
     const tabs = buildCaseTabs({
       workItemId: 'w-1',
-      active: 'history',
+      active: 'related-applications',
       typeId: 'add-overseas-site'
     })
-    expect(tabs.map((tab) => [tab.key, tab.active])).toEqual([
-      ['application-summary', false],
-      ['application-history', true]
+    expect(tabs.map((tab) => [tab.key, tab.text, tab.active])).toEqual([
+      ['application-summary', 'Application summary', false],
+      ['accreditation-summary', 'Accreditation summary', false],
+      ['related-applications', 'Related applications', true],
+      ['application-history', 'Application history', false]
     ])
   })
 })

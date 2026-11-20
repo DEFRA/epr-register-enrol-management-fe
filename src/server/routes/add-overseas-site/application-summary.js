@@ -14,8 +14,15 @@ import {
  * overseas site shape) and its interim sites.
  *
  * Every row always renders, so a missing value shows the dash rather than a
- * gap. ORS ID, EU and OECD are not shown (the design has no rows for them),
- * and neither is which values the operator supplied (RA-495).
+ * gap. EU and OECD are not shown (the design has no rows for them).
+ *
+ * RA-495. A row is `supplied` when the operator gave its value on this
+ * request rather than it coming from the site's registration: the operator
+ * backend lists those fields in `site.suppliedFields`, named as in
+ * `SITE_FIELDS`, and `besEvidence` when the operator uploaded the BES
+ * evidence files on the request (3bb.13). The operator can only fill a field
+ * the ORS lacks and add BES evidence, so those markers are the whole change:
+ * there is no "Previous details" section, as an update would have.
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
@@ -24,26 +31,48 @@ import {
 export function buildAddOverseasSiteSummary({ workItem }) {
   const site = workItem?.payload?.site ?? {}
   const workItemId = workItem?.id ?? ''
+  const supplied = new Set(
+    Array.isArray(site.suppliedFields) ? site.suppliedFields : []
+  )
 
   return {
-    rows: [
-      ...SITE_FIELDS.map(([key, label, read]) => ({
+    rows: siteRows(site, workItemId, supplied),
+    interimSites: withShortAddressOnlyForRepeatedNames(
+      buildInterimSites(site, buildAddOrsInterimSite)
+    )
+  }
+}
+
+/**
+ * As re-accreditation's overseas sites: the collapsed heading shows the short
+ * address only to tell apart interim sites that share a name.
+ */
+function withShortAddressOnlyForRepeatedNames(interimSites) {
+  const nameCounts = new Map()
+  for (const { siteName } of interimSites) {
+    nameCounts.set(siteName, (nameCounts.get(siteName) ?? 0) + 1)
+  }
+  return interimSites.map((interimSite) =>
+    nameCounts.get(interimSite.siteName) > 1
+      ? interimSite
+      : { ...interimSite, shortAddress: '' }
+  )
+}
+
+function siteRows(site, workItemId, supplied) {
+  return [
+    ...SITE_FIELDS.map(([key, label, read, suppliedField]) => {
+      const lines = read(site)
+      return {
         key,
         label,
         kind: 'lines',
-        values: orDash(read(site))
-      })),
-      {
-        key: 'bes-evidence',
-        label: 'Evidence of broadly equivalent standards',
-        kind: 'files',
-        files: besFilesOf(site).map((file) =>
-          besFileViewModel(file, workItemId)
-        )
+        values: orDash(lines),
+        supplied: lines.length > 0 && supplied.has(suppliedField)
       }
-    ],
-    interimSites: buildInterimSites(site, buildAddOrsInterimSite)
-  }
+    }),
+    besEvidenceRow(site, workItemId, supplied.has(BES_EVIDENCE_FIELD))
+  ]
 }
 
 /** One comma-separated line, or nothing when there are no parts. */
@@ -55,16 +84,29 @@ function orDash(lines) {
   return lines.length > 0 ? lines : [EM_DASH]
 }
 
-/** Figma's labels and order. Keys form the `app-detail-*` testids. */
+/**
+ * Figma's labels and order. Keys form the `app-detail-*` testids. The fourth
+ * entry, where there is one, is the operator backend's name for the field
+ * when the operator supplied it (`ChangeRequestRules`: the four fields an
+ * ORS may lack and the operator then answers on the request). The location
+ * row is marked when the operator supplied the country.
+ */
 const SITE_FIELDS = [
   ['site-name', 'Site name', (site) => toDisplayLines(site.siteName)],
   [
     'location',
     'Location',
-    (site) => joined(overseasSiteAddressLines(site, false))
+    (site) => joined(overseasSiteAddressLines(site, false)),
+    'country'
   ],
-  // Not in the Figma frame: re-accreditation's site view wording.
-  ['coordinates', 'Coordinates', (site) => toDisplayLines(site.coordinates)],
+  // Not in the Figma frame: re-accreditation's site view wording and order.
+  ['ors-id', 'ORS ID', (site) => toDisplayLines(site.orsId)],
+  [
+    'coordinates',
+    'Coordinates',
+    (site) => toDisplayLines(site.coordinates),
+    'coordinates'
+  ],
   ['contact-name', 'Contact name', (site) => toDisplayLines(site.contactName)],
   [
     'contact-email',
@@ -76,14 +118,16 @@ const SITE_FIELDS = [
     'Contact phone number',
     (site) => toDisplayLines(site.contactPhone)
   ],
+  // Re-accreditation's labels for these two.
   [
     'recycling-operation',
-    'Recycling operation',
-    (site) => joined(toDisplayLines(site.operationCodes))
+    'Operation code',
+    (site) => joined(toDisplayLines(site.operationCodes)),
+    'operationCodes'
   ],
   [
     'basel-codes',
-    'Basel convention codes',
+    'Basel/OECD codes',
     (site) =>
       joined([site.code1, site.code2, site.code3].flatMap(toDisplayLines))
   ],
@@ -95,9 +139,26 @@ const SITE_FIELDS = [
   [
     'conditions-of-export',
     'Conditions of export',
-    (site) => toDisplayLines(site.conditionsOfExport)
+    (site) => toDisplayLines(site.conditionsOfExport),
+    'conditionsOfExport'
   ]
 ]
+
+/** 3bb.13: the operator backend's name for BES evidence uploaded on the request. */
+const BES_EVIDENCE_FIELD = 'besEvidence'
+
+function besEvidenceRow(site, workItemId, isSupplied) {
+  const files = besFilesOf(site).map((file) =>
+    besFileViewModel(file, workItemId)
+  )
+  return {
+    key: 'bes-evidence',
+    label: 'Evidence of broadly equivalent standards',
+    kind: 'files',
+    files,
+    supplied: files.length > 0 && isSupplied
+  }
+}
 
 function besFilesOf(site) {
   const files = site.besEvidence?.files
@@ -113,7 +174,7 @@ function besFileViewModel(file, workItemId) {
   }
 }
 
-/** Figma's interim site fields, in order. */
+/** Figma's interim site fields, in order, plus re-accreditation's contact phone. */
 const INTERIM_FIELDS = [
   ['site-number', 'Site number', (site) => toDisplayLines(site.siteNumber)],
   ['location', 'Location', (site) => joined(interimSiteAddressLines(site))],
@@ -122,6 +183,11 @@ const INTERIM_FIELDS = [
     'contact-email',
     'Contact email',
     (site) => toDisplayLines(site.contactEmail)
+  ],
+  [
+    'contact-phone',
+    'Contact phone number',
+    (site) => toDisplayLines(site.contactPhone)
   ],
   [
     'operation-code',

@@ -32,7 +32,7 @@ function headerFor(workItem, assignment = null) {
   })
 }
 
-describe('RA-739: add-ORS case header', () => {
+describe('RA-739 / RA-495: add-ORS case header', () => {
   beforeAll(() => registerWorkItemType(addOverseasSiteType))
   afterAll(() => clearWorkItemRegistry())
 
@@ -41,13 +41,26 @@ describe('RA-739: add-ORS case header', () => {
       id: 'w-1',
       typeId: 'add-overseas-site',
       stateId: 'submitted',
+      submittedAt: '2027-02-12T10:00:00Z',
       payload: {
         applicationReference: 'IYC-ORS-2026-00001',
         organisationName: 'GreenLoop Recovery',
         operatorOrgNumber: 123001,
         material: 'Plastic',
         accreditationReference: 'ACC-1',
-        site: { orsId: '007', siteName: 'Denmark PR', chargePence: 32800 }
+        submittedBy: {
+          fullName: 'Sam Operator',
+          jobTitle: 'Director',
+          email: 'sam@greenloop.example'
+        },
+        site: {
+          orsId: '007',
+          siteName: 'Denmark PR',
+          addressLine1: 'Ejbyvvej 12',
+          townOrCity: 'Copenhagen',
+          country: 'Denmark',
+          chargePence: 32800
+        }
       },
       ...overrides
     })
@@ -59,12 +72,11 @@ describe('RA-739: add-ORS case header', () => {
     expect(item.stateTagClass).toEqual(expect.any(String))
   })
 
-  test('captions with the reference and titles with the site, without the organisation', () => {
+  test('titles with the site, with no caption (the breadcrumb has the reference) and no organisation', () => {
     const header = headerFor(addOrs())
     expect(header).toMatchObject(SHARED_HEADER)
-    expect(header.caption).toBe('IYC-ORS-2026-00001')
+    expect(header.caption).toBeUndefined()
     expect(header.title).toBe('Denmark PR (007)')
-    expect(header.metaLayout).toBe('in-year-change')
     expect(header.organisationName).toBeUndefined()
     expect(header.organisationId).toBeUndefined()
   })
@@ -81,27 +93,52 @@ describe('RA-739: add-ORS case header', () => {
     expect(headerFor(item).title).toBe(EM_DASH)
   })
 
-  test('has the eight meta items in Figma order', () => {
+  test('has the eleven meta items in the order re-accreditation shares', () => {
     const header = headerFor(addOrs())
     expect(header.meta.map((entry) => [entry.label, entry.value])).toEqual([
-      ['Request type', 'New ORS accreditation'],
+      ['Application type', 'New ORS accreditation'],
       ['Status', 'Not started'],
       ['Assigned to', 'Unassigned'],
       ['Due date', EM_DASH],
-      ['Material', 'Plastic'],
       ['Accreditation number', 'ACC-1'],
-      ['Charge', '£328'],
-      ['Payment date', NOT_RECEIVED]
+      ['Material', 'Plastic'],
+      ['Charge', '£328.00'],
+      ['Payment date', NOT_RECEIVED],
+      ['Submitted by', 'Sam Operator'],
+      ['Submitted on', '12 Feb 2027'],
+      ['Valid from date', EM_DASH]
     ])
   })
 
-  test('shows the dash for a missing accreditation number and charge', () => {
+  // RA-495 AC6: the date the determination recorded.
+  test('shows the effective date once the determination records one', () => {
     const item = addOrs()
+    item.payload.effectiveDate = '2027-03-01'
+    expect(metaValue(headerFor(item), 'effective-date')).toBe('01 Mar 2027')
+  })
+
+  test('shows the payment date once the item is duly made', () => {
+    const item = addOrs()
+    item.payload.paymentDate = '2027-02-20'
+    expect(metaValue(headerFor(item), 'payment-date')).toBe('20 Feb 2027')
+  })
+
+  test('shows the dash for every missing value', () => {
+    const item = addOrs({ submittedAt: null })
+    item.payload.material = undefined
     item.payload.accreditationReference = undefined
+    item.payload.submittedBy = undefined
     item.payload.site = { siteName: 'Denmark PR' }
     const header = headerFor(item)
-    expect(metaValue(header, 'accreditation-number')).toBe(EM_DASH)
-    expect(metaValue(header, 'charge')).toBe(EM_DASH)
+    for (const key of [
+      'date-added',
+      'submitted-by',
+      'material',
+      'accreditation-number',
+      'charge'
+    ]) {
+      expect(metaValue(header, key), key).toBe(EM_DASH)
+    }
   })
 
   test('shows the assignment panel name in Assigned to when there is one', () => {

@@ -514,8 +514,10 @@ describe('reAccreditationModule', () => {
       // only mounted when the flag is on. RA-523 removed the bespoke
       // payment-received route, dropping the always-on count from four
       // to three; RA-527's confirm-contact routes brought it back to four.
-      // RA-576 adds the change-payment-date routes.
-      expect(server.route).toHaveBeenCalledTimes(6)
+      // RA-576 adds the change-payment-date routes. RA-495 mounts duly-making,
+      // decision and confirm-contact in one call, as the shared Standard
+      // lifecycle routes.
+      expect(server.route).toHaveBeenCalledTimes(4)
       const createCall = server.route.mock.calls.find(([routes]) =>
         routes.some((r) => r.path === '/work-items/re-accreditation/new')
       )
@@ -568,10 +570,11 @@ describe('reAccreditationModule', () => {
       config.set(flagKey, false)
       const server = { route: vi.fn() }
       await reAccreditationModule.register(server)
-      // Only the always-on decision (RA-410), confirm-contact (RA-527),
-      // continue-review (RA-372), duly-making (RA-316) and change-payment-date
-      // (RA-576) routes are mounted.
-      expect(server.route).toHaveBeenCalledTimes(5)
+      // Only the always-on Standard-lifecycle (duly-making RA-316, decision
+      // RA-410 and confirm-contact RA-527, one call since RA-495),
+      // continue-review (RA-372) and change-payment-date (RA-576) routes are
+      // mounted.
+      expect(server.route).toHaveBeenCalledTimes(3)
       expect(
         server.route.mock.calls.every(([routes]) =>
           routes.every((r) => r.path !== '/work-items/re-accreditation/new')

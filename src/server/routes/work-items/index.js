@@ -18,6 +18,10 @@ import { workItemAuditLogController } from './audit-log.controller.js'
 import { workItemRecyclingOperationsController } from './recycling-operations.controller.js'
 import { workItemAdditionalInformationController } from './additional-information.controller.js'
 import {
+  workItemAccreditationSummaryController,
+  workItemRelatedApplicationsController
+} from './empty-tab.controller.js'
+import {
   makeShowExtendController,
   makeSubmitExtendController
 } from './sla.controller.js'
@@ -173,6 +177,19 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}/additional-information',
           ...workItemAdditionalInformationController
+        },
+        {
+          // RA-495. The add-ORS "Accreditation summary" and "Related
+          // applications" tabs, empty until RA-769 and RA-770. Not found
+          // for a type whose case lacks them.
+          method: 'GET',
+          path: '/work-items/{id}/accreditation-summary',
+          ...workItemAccreditationSummaryController
+        },
+        {
+          method: 'GET',
+          path: '/work-items/{id}/related-applications',
+          ...workItemRelatedApplicationsController
         },
         // RA-410. The tasks page and the two task-mutation POSTs
         // (`/tasks/{taskId}/complete`, `/tasks/{taskId}/status`) used to sit

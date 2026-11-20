@@ -7,12 +7,13 @@ const EM_DASH = '—'
 const ROW_LABELS = [
   ['site-name', 'Site name'],
   ['location', 'Location'],
+  ['ors-id', 'ORS ID'],
   ['coordinates', 'Coordinates'],
   ['contact-name', 'Contact name'],
   ['contact-email', 'Contact email'],
   ['contact-phone', 'Contact phone number'],
-  ['recycling-operation', 'Recycling operation'],
-  ['basel-codes', 'Basel convention codes'],
+  ['recycling-operation', 'Operation code'],
+  ['basel-codes', 'Basel/OECD codes'],
   ['repatriated-loads', 'Arrangements for rejected or returned loads'],
   ['conditions-of-export', 'Conditions of export'],
   ['bes-evidence', 'Evidence of broadly equivalent standards']
@@ -28,6 +29,7 @@ function anInterimSite(overrides = {}) {
     country: 'Denmark',
     contactName: 'Asha Patel',
     contactEmail: 'asha@bharat.example',
+    contactPhone: '+45 1234 5678',
     operationCodes: ['R13'],
     ...overrides
   }
@@ -91,6 +93,7 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
     expect(valuesByKey(rows)).toEqual({
       'site-name': ['Denmark PR'],
       location: ['Ejbyvvej 12, Industrial Park, Copenhagen, Denmark'],
+      'ors-id': ['007'],
       coordinates: ['55.6761, 12.5683'],
       'contact-name': ['John Smith'],
       'contact-email': ['john.smith@denmarkpr.com'],
@@ -102,10 +105,76 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
     })
   })
 
-  test('does not show ORS ID, EU or OECD', () => {
+  describe('RA-495: operator-supplied values', () => {
+    function suppliedKeys(site) {
+      return summaryFor(site)
+        .rows.filter((row) => row.supplied)
+        .map((row) => row.key)
+    }
+
+    test('marks the row of each field the operator supplied', () => {
+      expect(
+        suppliedKeys(
+          aSite({
+            suppliedFields: [
+              'country',
+              'coordinates',
+              'operationCodes',
+              'conditionsOfExport'
+            ]
+          })
+        )
+      ).toEqual([
+        'location',
+        'coordinates',
+        'recycling-operation',
+        'conditions-of-export'
+      ])
+    })
+
+    test('marks only the supplied fields', () => {
+      expect(suppliedKeys(aSite({ suppliedFields: ['coordinates'] }))).toEqual([
+        'coordinates'
+      ])
+    })
+
+    test.each([
+      ['an empty list', []],
+      ['no list', undefined],
+      ['a list of unknown fields', ['siteName', 'contactName']]
+    ])('marks nothing for %s', (_, suppliedFields) => {
+      expect(suppliedKeys(aSite({ suppliedFields }))).toEqual([])
+    })
+
+    test('does not mark a supplied field with no value', () => {
+      expect(
+        suppliedKeys(
+          aSite({ suppliedFields: ['coordinates'], coordinates: '' })
+        )
+      ).toEqual([])
+    })
+
+    // 3bb.13: the operator backend lists besEvidence when the operator
+    // uploaded the site's evidence on the request.
+    test('marks the BES evidence row when the operator uploaded the files', () => {
+      expect(suppliedKeys(aSite({ suppliedFields: ['besEvidence'] }))).toEqual([
+        'bes-evidence'
+      ])
+    })
+
+    test('does not mark the BES evidence row with no files', () => {
+      expect(
+        suppliedKeys(
+          aSite({ suppliedFields: ['besEvidence'], besEvidence: { files: [] } })
+        )
+      ).toEqual([])
+    })
+  })
+
+  test('does not show EU or OECD', () => {
     const labels = summaryFor(aSite()).rows.map((row) => row.label)
-    expect(labels).not.toContain('ORS ID')
-    expect(labels.join(' ')).not.toMatch(/EU|OECD/)
+    expect(labels).not.toContain('EU country')
+    expect(labels).not.toContain('OECD country')
   })
 
   test.each([
@@ -157,7 +226,8 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
       expect(summaryFor(aSite()).interimSites).toEqual([
         {
           siteName: 'Bharat Recycling',
-          shortAddress: 'Havnegade 1, Denmark',
+          // The only interim site, so its name alone tells it apart.
+          shortAddress: '',
           details: [
             {
               key: 'site-number',
@@ -178,6 +248,11 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
               key: 'contact-email',
               label: 'Contact email',
               values: ['asha@bharat.example']
+            },
+            {
+              key: 'contact-phone',
+              label: 'Contact phone number',
+              values: ['+45 1234 5678']
             },
             {
               key: 'operation-code',

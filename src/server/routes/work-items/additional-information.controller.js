@@ -15,7 +15,7 @@ const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
 /**
  * RA-434 / RA-480. The "Additional information" tab's row view model, in the
  * fixed order: Registered name, Companies house number, Registered address,
- * Site name, Site address, Permit numbers, Last year's accreditation number,
+ * Site name, Location, Permit numbers, Last year's accreditation number,
  * Contact full name, Contact email, Contact phone, Contact job title.
  *
  * Missing values are OMITTED rather than rendered as a placeholder, so a
@@ -33,7 +33,7 @@ export function buildAdditionalInformationRows({ workItem }) {
   // The full registered address is already computed and single-lined by
   // the operator backend (`AccreditationApplicationModel.CompanyRegisteredAddress`).
   // Run it through `formatSiteAddress` only for the trimming/blank handling
-  // that helper already gives the Site address row, for visual consistency
+  // that helper already gives the Location row, for visual consistency
   // between the two.
   const registeredAddress = formatSiteAddress({
     siteAddress: payload.companyRegisteredAddress
@@ -59,11 +59,7 @@ export function buildAdditionalInformationRows({ workItem }) {
     // moment re-ex (or a manual Case Management service work item) can
     // supply one.
     ['site-name', 'Site name', null],
-    [
-      'site-address',
-      'Site address',
-      deriveSiteAddress(payload, registeredAddress)
-    ],
+    ['site-address', 'Location', deriveSiteAddress(payload, registeredAddress)],
     [
       'permit-numbers',
       'Permit numbers',
@@ -86,7 +82,11 @@ export function buildAdditionalInformationRows({ workItem }) {
       payload.submitterContactDetails?.fullName
     ],
     ['contact-email', 'Contact email', payload.submitterContactDetails?.email],
-    ['contact-phone', 'Contact phone', payload.submitterContactDetails?.phone],
+    [
+      'contact-phone',
+      'Contact phone number',
+      payload.submitterContactDetails?.phone
+    ],
     [
       'contact-job-title',
       'Contact job title',

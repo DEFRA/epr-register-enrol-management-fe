@@ -109,8 +109,8 @@ export const createReAccreditationSchema = Joi.object({
   }),
   siteAddress: Joi.object({
     line1: Joi.string().trim().required().max(100).messages({
-      'any.required': 'Enter the site address line 1',
-      'string.empty': 'Enter the site address line 1',
+      'any.required': 'Enter the location line 1',
+      'string.empty': 'Enter the location line 1',
       'string.max': 'Address line 1 must be 100 characters or fewer'
     }),
     line2: Joi.string().trim().allow('').max(100).messages({
@@ -134,7 +134,7 @@ export const createReAccreditationSchema = Joi.object({
       })
   })
     .required()
-    .messages({ 'any.required': 'Enter the site address' }),
+    .messages({ 'any.required': 'Enter the location' }),
   material: Joi.string()
     .trim()
     .required()

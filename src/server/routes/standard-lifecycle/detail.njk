@@ -1,0 +1,144 @@
+{# ------------------------------------------------------------------- #}
+{# Standard-lifecycle detail template — RA-495.                         #}
+{#                                                                      #}
+{# The generic detail page plus the shared Standard-lifecycle affordances #}
+{# that used to be re-accreditation's own (RA-316, RA-410, RA-527):      #}
+{#                                                                      #}
+{#  - the pending-contact banner (`typeBanners`);                       #}
+{#  - in `actionsPanel`: the read-only Outcome panel once the case is   #}
+{#    closed, "Confirm applicant contact" while a determination awaits  #}
+{#    applicant contact, otherwise the "Duly make" and "Make            #}
+{#    Determination" CTAs above the generic actions.                    #}
+{#                                                                      #}
+{# Every flag comes from                                                 #}
+{# `routes/work-items/standard-lifecycle-view-model.js`. A type's        #}
+{# own template extends this one (re-accreditation's does) and can put  #}
+{# extra CTAs between Duly make and Make Determination with the         #}
+{# `lifecycleActionsExtra` block.                                        #}
+{#                                                                      #}
+{# The `data-testid` hooks are an EXTERNAL CONTRACT consumed by the      #}
+{# mgmt-tests and fe-tests journey suites. Every type renders them, so  #}
+{# they carry the type-neutral `standard-lifecycle-` prefix.            #}
+{# ------------------------------------------------------------------- #}
+
+{% extends 'work-items/detail.njk' %}
+
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+{% from "govuk/components/notification-banner/macro.njk" import govukNotificationBanner %}
+{% from "action-link/macro.njk" import appActionLink %}
+
+{# RA-527. Step 1 of a determination is done but the applicant has not  #}
+{# been contacted. Shown on EVERY visit while the item sits in a         #}
+{# pending-contact state (it replaces the one-time "Decision logged"    #}
+{# flash), so the outstanding action is never lost. disableAutoFocus and  #}
+{# role "region" because it persists: it must not steal focus or be       #}
+{# announced as an alert on each load. The accreditation ID is escaped by #}
+{# autoescaping inside the block capture.                                 #}
+{% block typeBanners %}
+  {% if workItem.pendingContactBanner %}
+    {% set pendingContactHtml %}
+      <p class="govuk-notification-banner__heading">{{ workItem.pendingContactBanner.text }}</p>
+      {% if workItem.pendingContactBanner.accreditationId %}
+        <p class="govuk-body">Accreditation ID: <strong data-testid="standard-lifecycle-pending-contact-accreditation-id">{{ workItem.pendingContactBanner.accreditationId }}</strong></p>
+      {% endif %}
+    {% endset %}
+    {{ govukNotificationBanner({
+      type: 'success',
+      titleText: workItem.pendingContactBanner.title,
+      html: pendingContactHtml,
+      disableAutoFocus: true,
+      role: 'region',
+      attributes: { "data-testid": "standard-lifecycle-pending-contact-banner" }
+    }) }}
+  {% endif %}
+{% endblock %}
+
+{# RA-156. The lifecycle CTAs live in the actionsPanel button group so   #}
+{# they render alongside the generic actions.                            #}
+{% block primaryActions %}{% endblock %}
+
+{# RA-132. Once the work item reaches a terminal state, suppress the     #}
+{# generic action panel — those would be either no-op or rejected by     #}
+{# the backend, which is confusing. Show the status as a govuk tag so    #}
+{# the read-only nature is obvious.                                      #}
+{% block actionsPanel %}
+  {% if workItem.isReadOnlyState %}
+    <h2 class="govuk-heading-m">Outcome</h2>
+    <p class="govuk-body" data-testid="standard-lifecycle-readonly-actions">
+      This work item is in a final state. No further decision actions are available.
+    </p>
+    <p class="govuk-body govuk-!-margin-bottom-0">
+      {{ govukTag({
+        text: workItem.stateDisplayName,
+        classes: workItem.stateTagClasses,
+        attributes: { "data-testid": "standard-lifecycle-state-tag" }
+      }) }}
+    </p>
+  {% elif workItem.isPendingContact %}
+    {# RA-527. Step 2 of the two-step determination. The ONLY forward      #}
+    {# action while a determination awaits applicant contact: no Make      #}
+    {# determination, Query or generic actions (`super()` is not called).  #}
+    {# A LINK to the confirm page, so clicking it changes nothing.          #}
+    <div data-testid="standard-lifecycle-confirm-contact">
+      {{ appActionLink({
+        text: "Confirm applicant contact",
+        href: workItem.confirmContactHref,
+        variant: "button",
+        classes: "app-case-panel__primary-action govuk-!-margin-bottom-0",
+        disabled: user.isReadOnly,
+        testId: "confirm-applicant-contact-cta"
+      }) }}
+    </div>
+  {% else %}
+    {# RA-316. "Duly make" — the first step of the lifecycle.             #}
+    {# It cannot ride on the generic action loop in `super()`: the backend #}
+    {# declares `duly-make` non-caller-invocable so it never appears in    #}
+    {# `availableActions`, and it carries a payment date the generic       #}
+    {# `/actions/{actionId}` route has nowhere to put. That loop is also   #}
+    {# wrapped in an `availableActions.length > 0` check, so a state       #}
+    {# projecting no generic actions would swallow the CTA entirely.       #}
+    {#                                                                     #}
+    {# A LINK, not a posting button — it opens the payment-date page, so   #}
+    {# clicking it changes nothing. Gated by `workItem.canDulyMake`, which #}
+    {# goes through the same helper that guards the route itself.          #}
+    {% if workItem.canDulyMake %}
+      <div data-testid="standard-lifecycle-duly-make-cta">
+        {{ appActionLink({
+          text: "Duly make",
+          href: workItem.dulyMakeHref,
+          variant: "button",
+          classes: "app-case-panel__primary-action",
+          disabled: user.isReadOnly,
+          testId: "duly-make-cta"
+        }) }}
+      </div>
+    {% endif %}
+    {% block lifecycleActionsExtra %}{% endblock %}
+    {# RA-410. "Make Determination" — the final step. ONE green button for #}
+    {# BOTH outcomes: it opens a page carrying an Approved / Refused radio #}
+    {# which posts a single call. There is deliberately no Reject button  #}
+    {# beside it. Rendered here rather than in the generic loop for the    #}
+    {# same reason as Duly make above. A LINK, not a posting button.       #}
+    {# Gated by `workItem.canLogDecision`, which goes through the same     #}
+    {# helper that guards the route itself.                                #}
+    {% if workItem.canLogDecision %}
+      <div data-testid="standard-lifecycle-log-decision-cta">
+        {{ appActionLink({
+          text: "Make Determination",
+          href: workItem.logDecisionHref,
+          variant: "button",
+          classes: "app-case-panel__primary-action",
+          disabled: user.isReadOnly,
+          testId: "log-decision-cta"
+        }) }}
+      </div>
+    {% endif %}
+    {# RA-495. A type with no generic actions (add-ORS) sets              #}
+    {# `lifecycleHidesGenericActions` at its template's top level, so    #}
+    {# the generic list and its "No actions" line never render under the #}
+    {# lifecycle CTAs.                                                   #}
+    {% if not lifecycleHidesGenericActions %}
+      {{ super() }}
+    {% endif %}
+  {% endif %}
+{% endblock %}

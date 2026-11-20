@@ -1,6 +1,6 @@
-// RA-245. Site address formatting helpers.
+// RA-245. Location formatting helpers.
 //
-// A re-accreditation work item's site address arrives in one of two shapes
+// A re-accreditation work item's location arrives in one of two shapes
 // depending on how the item was created:
 //
 //   - Form-created items store a nested object
@@ -23,7 +23,7 @@ function toTrimmedString(value) {
   return null
 }
 
-// Build the single-line site address for display, excluding the postcode
+// Build the single-line location for display, excluding the postcode
 // (which has its own summary row). Returns null when nothing is present.
 export function formatSiteAddress(payload) {
   const siteAddress = payload?.siteAddress

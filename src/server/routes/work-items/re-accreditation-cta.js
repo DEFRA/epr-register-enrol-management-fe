@@ -2,8 +2,8 @@ import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { resolveActionEntryStates } from '#/server/work-items/core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { isQueryActionId } from './generic-route-action-ids.js'
-import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/decision/eligibility.js'
-import { DULY_MAKE_ACTION_ID } from '#/server/work-items/re-accreditation/duly-making/eligibility.js'
+import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/type-id.js'
+import { DULY_MAKE_ACTION_ID } from '#/server/work-items/core/standard-lifecycle/duly-making/eligibility.js'
 
 const logger = createLogger()
 

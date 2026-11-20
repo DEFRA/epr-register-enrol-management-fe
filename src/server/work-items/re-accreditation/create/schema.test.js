@@ -160,7 +160,7 @@ describe('#createReAccreditationSchema (RA-127, RA-219)', () => {
     )
     expect(errors.material).toBe('Select a material')
     expect(errors.tonnageBand).toBe('Select a tonnage band')
-    expect(errors.siteAddress).toBe('Enter the site address')
+    expect(errors.siteAddress).toBe('Enter the location')
   })
 
   describe('RA-448 operatorOrganisationId / operatorApplicationId / operatorRegistrationId', () => {
@@ -246,7 +246,7 @@ describe('#createReAccreditationSchema (RA-127, RA-219)', () => {
   })
 
   test.each([
-    ['line1', '', 'Enter the site address line 1'],
+    ['line1', '', 'Enter the location line 1'],
     [
       'line1',
       'x'.repeat(101),
