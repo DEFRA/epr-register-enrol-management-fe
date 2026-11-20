@@ -73,6 +73,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
       // 'site-name' omitted — no producer field for it today.
       'site-address',
       'permit-numbers',
+      'last-years-accreditation-number',
       'contact-full-name',
       'contact-email',
       'contact-phone',
@@ -206,9 +207,50 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     expect(row(rows, 'permit-numbers').value).toBe('WML123456, PPC456789')
   })
 
-  test('omits every row for a work item with no payload at all', () => {
+  test("shows last year's accreditation number after the permit numbers (RA-763 AC03)", () => {
+    const payload = realOperatorSubmissionPayload()
+    payload.lastYearsAccreditationNumber = {
+      year: 2026,
+      accreditationNumber: 'A26ER9999990123PL'
+    }
+    const rows = buildAdditionalInformationRows({ workItem: { payload } })
+
+    const keys = rows.map((r) => r.key)
+    expect(keys.indexOf('last-years-accreditation-number')).toBe(
+      keys.indexOf('permit-numbers') + 1
+    )
+    expect(row(rows, 'last-years-accreditation-number')).toEqual({
+      key: 'last-years-accreditation-number',
+      label: "Last year's accreditation number",
+      value: 'A26ER9999990123PL'
+    })
+  })
+
+  test.each([
+    ['absent', undefined],
+    ['null', null],
+    ['missing its number', { year: 2026 }],
+    ['blank', { year: 2026, accreditationNumber: '  ' }]
+  ])(
+    "shows None for last year's accreditation number when it is %s",
+    (_, lastYearsAccreditationNumber) => {
+      const payload = realOperatorSubmissionPayload()
+      payload.lastYearsAccreditationNumber = lastYearsAccreditationNumber
+      const rows = buildAdditionalInformationRows({ workItem: { payload } })
+
+      expect(row(rows, 'last-years-accreditation-number').value).toBe('None')
+    }
+  )
+
+  test("shows only last year's accreditation number, as None, for a work item with no payload at all", () => {
     const rows = buildAdditionalInformationRows({ workItem: {} })
-    expect(rows).toEqual([])
+    expect(rows).toEqual([
+      {
+        key: 'last-years-accreditation-number',
+        label: "Last year's accreditation number",
+        value: 'None'
+      }
+    ])
   })
 })
 
@@ -264,6 +306,31 @@ describe('GET /work-items/{id}/additional-information (RA-434)', () => {
     )
     // Provides a way back to the detail page.
     expect(result).toEqual(expect.stringContaining(`/work-items/${ID}`))
+  })
+
+  test("renders last year's accreditation number (RA-763 AC03)", async () => {
+    registerReaccreditation()
+    const payload = realOperatorSubmissionPayload()
+    payload.lastYearsAccreditationNumber = {
+      year: 2026,
+      accreditationNumber: 'A26ER9999990123PL'
+    }
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({ payload })
+    })
+
+    const { result } = await server.inject({ method: 'GET', url: HREF })
+
+    expect(result).toEqual(
+      expect.stringContaining(
+        'data-testid="additional-information-row-last-years-accreditation-number"'
+      )
+    )
+    expect(result).toEqual(
+      expect.stringContaining('Last year&#39;s accreditation number')
+    )
+    expect(result).toEqual(expect.stringContaining('A26ER9999990123PL'))
   })
 
   test('omits the Site name row from the rendered page', async () => {
