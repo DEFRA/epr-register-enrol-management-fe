@@ -115,7 +115,7 @@ const SITE_FIELDS = [
   ],
   [
     'contact-phone',
-    'Contact phone',
+    'Contact phone number',
     (site) => toDisplayLines(site.contactPhone)
   ],
   // Re-accreditation's labels for these two.
@@ -186,7 +186,7 @@ const INTERIM_FIELDS = [
   ],
   [
     'contact-phone',
-    'Contact phone',
+    'Contact phone number',
     (site) => toDisplayLines(site.contactPhone)
   ],
   [

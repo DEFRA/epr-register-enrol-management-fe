@@ -596,7 +596,7 @@ describe('the effective date on add-ORS', () => {
     [
       'before the submission date',
       ['11', '2', '2027'],
-      'Valid from date must be on or after the date the request was submitted'
+      'Valid from date must be on or after the date the change application was submitted'
     ]
   ])(
     'an approval with a %s date is shown again with the error, keeping what was typed',
@@ -676,7 +676,7 @@ describe('the effective date on add-ORS', () => {
       expect.objectContaining({
         fieldErrors: {
           effectiveDate:
-            'Valid from date must be on or after the date the request was submitted'
+            'Valid from date must be on or after the date the change application was submitted'
         }
       })
     )

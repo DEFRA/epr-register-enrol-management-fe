@@ -58,11 +58,7 @@ export function buildAdditionalInformationRows({ workItem }) {
     // moment re-ex (or a manual Case Management service work item) can
     // supply one.
     ['site-name', 'Site name', null],
-    [
-      'site-address',
-      'Site address',
-      deriveSiteAddress(payload, registeredAddress)
-    ],
+    ['site-address', 'Location', deriveSiteAddress(payload, registeredAddress)],
     [
       'permit-numbers',
       'Permit numbers',
@@ -76,7 +72,11 @@ export function buildAdditionalInformationRows({ workItem }) {
       payload.submitterContactDetails?.fullName
     ],
     ['contact-email', 'Contact email', payload.submitterContactDetails?.email],
-    ['contact-phone', 'Contact phone', payload.submitterContactDetails?.phone],
+    [
+      'contact-phone',
+      'Contact phone number',
+      payload.submitterContactDetails?.phone
+    ],
     [
       'contact-job-title',
       'Contact job title',

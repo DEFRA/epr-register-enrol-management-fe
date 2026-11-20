@@ -417,7 +417,7 @@ describe('detailRowsForAuditEntry', () => {
       })
     ).toEqual([
       { key: 'Nation', value: 'England' },
-      { key: 'Derived from', value: 'Site address' }
+      { key: 'Derived from', value: 'Location' }
     ])
   })
 

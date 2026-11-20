@@ -11,7 +11,7 @@ const ROW_LABELS = [
   ['coordinates', 'Coordinates'],
   ['contact-name', 'Contact name'],
   ['contact-email', 'Contact email'],
-  ['contact-phone', 'Contact phone'],
+  ['contact-phone', 'Contact phone number'],
   ['recycling-operation', 'Operation code'],
   ['basel-codes', 'Basel/OECD codes'],
   ['repatriated-loads', 'Arrangements for rejected or returned loads'],
@@ -251,7 +251,7 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
             },
             {
               key: 'contact-phone',
-              label: 'Contact phone',
+              label: 'Contact phone number',
               values: ['+45 1234 5678']
             },
             {

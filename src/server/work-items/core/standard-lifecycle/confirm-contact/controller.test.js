@@ -80,12 +80,12 @@ describe('makeSubmitConfirmContactController success banner', () => {
     [
       'add-overseas-site',
       'approved-pending-contact',
-      'The applicant has been contacted and the overseas reprocessing site has been added to the accreditation.'
+      'The applicant has been contacted and the overseas reprocessing site has been added to their accreditation.'
     ],
     [
       'add-overseas-site',
       'rejected-pending-contact',
-      'The applicant has been contacted and the overseas reprocessing site has not been added to the accreditation.'
+      'The applicant has been contacted and the overseas reprocessing site has not been added to their accreditation.'
     ]
   ])('%s from %s flashes "%s"', async (typeId, stateId, text) => {
     const flash = await confirmContact(typeId, stateId)

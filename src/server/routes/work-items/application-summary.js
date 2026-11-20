@@ -487,7 +487,7 @@ const ORS_DETAIL_FIELDS = [
   ],
   [
     'contact-phone',
-    'Contact phone',
+    'Contact phone number',
     (site) => toDisplayLines(site.contactPhone)
   ],
   [
@@ -538,7 +538,7 @@ const INTERIM_DETAIL_FIELDS = [
   ],
   [
     'contact-phone',
-    'Contact phone',
+    'Contact phone number',
     (site) => toDisplayLines(site.contactPhone)
   ],
   [
@@ -706,7 +706,7 @@ function buildCoreSummaryRows({
   return [
     {
       key: 'site-address',
-      label: 'Site address',
+      label: 'Location',
       kind: 'lines',
       // RA-245. The address arrives either nested (postcode inside the
       // object, excluded from `formatSiteAddress`) or as a legacy flat

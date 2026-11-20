@@ -76,11 +76,11 @@ export const addOverseasSiteType = {
     contactConfirmedBanners: {
       approved: {
         title: 'Applicant contacted',
-        text: 'The applicant has been contacted and the overseas reprocessing site has been added to the accreditation.'
+        text: 'The applicant has been contacted and the overseas reprocessing site has been added to their accreditation.'
       },
       rejected: {
         title: 'Applicant contacted',
-        text: 'The applicant has been contacted and the overseas reprocessing site has not been added to the accreditation.'
+        text: 'The applicant has been contacted and the overseas reprocessing site has not been added to their accreditation.'
       }
     }
   }

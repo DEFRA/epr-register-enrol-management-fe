@@ -81,9 +81,9 @@
       {# could not be read.                                                #}
       {% if relatedWorkItems and (relatedWorkItems.unavailable or relatedWorkItems.rows.length) %}
         <div data-testid="duly-making-related">
-          <h2 class="govuk-heading-m" data-testid="duly-making-related-heading">Related change requests</h2>
+          <h2 class="govuk-heading-m" data-testid="duly-making-related-heading">Related change applications</h2>
           {% if relatedWorkItems.unavailable %}
-            <p class="govuk-body" data-testid="duly-making-related-unavailable">The related change requests could not be loaded.</p>
+            <p class="govuk-body" data-testid="duly-making-related-unavailable">Related change applications are not available at the moment.</p>
           {% else %}
             <table class="govuk-table">
               <thead class="govuk-table__head">

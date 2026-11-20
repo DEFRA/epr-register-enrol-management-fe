@@ -5,7 +5,7 @@
  *
  * An approval must name it: the date the operator's accreditation shows the
  * site as accredited from. It may be in the past or the future, but not
- * before the UK calendar date the request was submitted. A refusal is not
+ * before the UK calendar date the change application was submitted. A refusal is not
  * asked for one (the field is hidden when Refused is selected, and nothing is
  * sent); management-be records the submission date for it.
  *
@@ -36,7 +36,7 @@ export const EFFECTIVE_DATE_MESSAGES = {
   [ERROR_REQUIRED]: 'Enter the valid from date',
   [ERROR_INVALID]: 'Valid from date must be a real date',
   [ERROR_BEFORE_SUBMISSION]:
-    'Valid from date must be on or after the date the request was submitted'
+    'Valid from date must be on or after the date the change application was submitted'
 }
 
 /**

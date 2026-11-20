@@ -719,7 +719,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Coordinates',
         'Contact name',
         'Contact email',
-        'Contact phone',
+        'Contact phone number',
         'Operation code',
         'Basel/OECD codes',
         'Arrangements for rejected or returned loads',
@@ -881,7 +881,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         ['Location', 'Havnegade 1, Aarhus, Denmark'],
         ['Contact name', 'Asha Patel'],
         ['Contact email', 'asha@bharat.example'],
-        ['Contact phone', '0123456789'],
+        ['Contact phone number', '0123456789'],
         ['Operation code', 'R13']
       ])
     })
@@ -1354,7 +1354,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       )
       expect(
         squash($('[data-testid="duly-making-related-heading"]').text())
-      ).toBe('Related change requests')
+      ).toBe('Related change applications')
       expect(relatedRows($)).toEqual([
         {
           reference: 'IYC-ORS-2026-00001',
@@ -1431,7 +1431,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
 
       expect(
         squash($('[data-testid="duly-making-related-unavailable"]').text())
-      ).toBe('The related change requests could not be loaded.')
+      ).toBe('Related change applications are not available at the moment.')
       expect($('[data-testid="duly-making-related-row"]')).toHaveLength(0)
       expect($('[data-testid="duly-making-payment-date"]')).toHaveLength(1)
     })
