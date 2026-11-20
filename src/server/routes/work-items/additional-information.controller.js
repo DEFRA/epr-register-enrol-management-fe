@@ -1,23 +1,27 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
-import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { formatSiteAddress } from '#/server/common/helpers/format/site-address.js'
-import { buildCaseHeader, buildCaseTabs } from './case-header.js'
+import {
+  buildCaseHeader,
+  buildCaseTabs,
+  decorateForCaseHeader,
+  ADDITIONAL_INFORMATION_TAB_KEY
+} from './case-header.js'
 import { deriveSiteAddress } from './application-summary.js'
-import { renderWorkItemFetchError } from './work-item-fetch-errors.js'
+import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
 
 const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
 
 /**
  * RA-434 / RA-480. The "Additional information" tab's row view model, in the
  * fixed order: Registered name, Companies house number, Registered address,
- * Site name, Site address, Permit numbers, Contact full name, Contact email,
- * Contact phone, Contact job title.
+ * Site name, Site address, Permit numbers, Last year's accreditation number,
+ * Contact full name, Contact email, Contact phone, Contact job title.
  *
  * Missing values are OMITTED rather than rendered as a placeholder, so a
  * pre-RA-434 work item with none of these fields simply renders a shorter
- * list.
+ * list. The exception is Last year's accreditation number, which shows
+ * "None" so a caseworker can see there isn't one.
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
@@ -67,6 +71,15 @@ export function buildAdditionalInformationRows({ workItem }) {
       // the fuller permit metadata is not shown, only the numbers.
       permitNumbers.length > 0 ? permitNumbers.join(', ') : null
     ],
+    // RA-763 AC03. Last year's accreditation number, kept from ReEx when the
+    // application was created and sent by the operator backend as
+    // `{ year, accreditationNumber }`. Absent for a first-time accreditation.
+    [
+      'last-years-accreditation-number',
+      "Last year's accreditation number",
+      payload.lastYearsAccreditationNumber?.accreditationNumber?.trim() ||
+        'None'
+    ],
     [
       'contact-full-name',
       'Contact full name',
@@ -100,32 +113,29 @@ export const workItemAdditionalInformationController = {
     const user = getUser(request)
     const result = await getWorkItem({ workItemId: id, user })
 
-    const errorResponse = renderWorkItemFetchError({ h, result, id })
+    const errorResponse = renderFetchErrorUnlessCaseHasTab({
+      h,
+      result,
+      id,
+      tab: ADDITIONAL_INFORMATION_TAB_KEY
+    })
     if (errorResponse) {
       return errorResponse
     }
 
     const workItem = result.workItem
     const applicationRef = workItem.payload?.applicationReference
-    const type = getWorkItemType(workItem.typeId)
-    const stateDisplayName =
-      type?.states?.find((s) => s.id === workItem.stateId)?.displayName ??
-      workItem.stateId
+    const forHeader = decorateForCaseHeader(workItem)
 
     return h.view(ADDITIONAL_INFORMATION_VIEW, {
       pageTitle: `Additional information — ${applicationRef}`,
       // RA-295 / RA-434. Same case header and tab strip as the other two
       // tabs.
-      caseHeader: buildCaseHeader({
-        workItem: {
-          ...workItem,
-          stateDisplayName,
-          stateTagClass: stateTagClass(workItem.stateId)
-        }
-      }),
+      caseHeader: buildCaseHeader({ workItem: forHeader }),
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
-        active: 'additional-information'
+        active: 'additional-information',
+        typeId: forHeader.typeId
       }),
       workItem: {
         id: workItem.id,

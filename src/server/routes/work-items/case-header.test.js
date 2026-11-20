@@ -1,11 +1,20 @@
-import { describe, expect, test } from 'vitest'
+import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+
+import {
+  clearWorkItemRegistry,
+  registerWorkItemType
+} from '#/server/work-items/core/registry.js'
+import { addOverseasSiteType } from '#/server/work-items/add-overseas-site/module.js'
 
 import {
   NOT_RECEIVED,
   buildCaseHeader,
   buildCaseTabs,
+  caseHasTab,
+  decorateForCaseHeader,
   formatDueOn,
-  formatPayment
+  formatPayment,
+  stateDisplayName
 } from './case-header.js'
 
 const EM_DASH = '—'
@@ -368,5 +377,64 @@ describe('#buildCaseTabs (RA-295, RA-434, RA-469)', () => {
       active: 'additional-information'
     })
     expect(tabs.map((t) => t.active)).toEqual([false, false, true])
+  })
+})
+
+describe('#stateDisplayName', () => {
+  test("reads the state's display name from the type", () => {
+    expect(stateDisplayName(addOverseasSiteType, 'submitted')).toBe(
+      'Not started'
+    )
+  })
+
+  test('falls back to the raw state id when the type does not declare it', () => {
+    expect(stateDisplayName(addOverseasSiteType, 'mystery')).toBe('mystery')
+    expect(stateDisplayName(null, 'submitted')).toBe('submitted')
+  })
+})
+
+describe("RA-739: a type's own header and tabs", () => {
+  beforeAll(() => registerWorkItemType(addOverseasSiteType))
+  afterAll(() => clearWorkItemRegistry())
+
+  test("builds the header with the type's own buildCaseHeader, given the shared fields", () => {
+    const header = buildCaseHeader({
+      workItem: decorateForCaseHeader({
+        id: 'w-1',
+        typeId: 'add-overseas-site',
+        stateId: 'submitted',
+        payload: { site: { siteName: 'Denmark PR' } }
+      })
+    })
+    expect(header).toMatchObject({
+      backHref: '/work-items',
+      backText: 'Applications',
+      applicationRef: 'w-1',
+      caption: 'w-1',
+      title: 'Denmark PR',
+      metaLayout: 'in-year-change'
+    })
+  })
+
+  test("a type's case has its own tabs, and a type without caseTabs has all four", () => {
+    expect(caseHasTab(addOverseasSiteType, 'application-history')).toBe(true)
+    expect(caseHasTab(addOverseasSiteType, 'additional-information')).toBe(
+      false
+    )
+    expect(caseHasTab(addOverseasSiteType, 'recycling-operations')).toBe(false)
+    expect(caseHasTab(null, 'recycling-operations')).toBe(true)
+    expect(caseHasTab({ id: 'other' }, 'additional-information')).toBe(true)
+  })
+
+  test('has only the Application summary and Application history tabs for add-ORS', () => {
+    const tabs = buildCaseTabs({
+      workItemId: 'w-1',
+      active: 'history',
+      typeId: 'add-overseas-site'
+    })
+    expect(tabs.map((tab) => [tab.key, tab.active])).toEqual([
+      ['application-summary', false],
+      ['application-history', true]
+    ])
   })
 })

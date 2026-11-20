@@ -6,37 +6,9 @@
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 {% from "action-link/macro.njk" import appActionLink %}
 
-{# Shared row fragments — defined once and reused by both the AC02          #}
-{# application-details rows and the previous-year section, which render the #}
-{# same shapes.                                                             #}
-
-{# One supporting document: a link when the file has passed the virus scan, #}
-{# otherwise its name plus the scan-status tag. The `app-detail-document`   #}
-{# testid is repeated (not indexed) so the e2e suite can count them and     #}
-{# prove EVERY document renders, not just files[0] (AC02 item 7).           #}
-{# `showUpdated` is opt-in: the upload hint carries the                     #}
-{# `app-detail-sampling-updated-by` testid, which is the "S&I updated by"   #}
-{# hook the e2e suite reads with a single-element lookup. BES-evidence      #}
-{# files also carry `uploadedAt`, so rendering it for them too would        #}
-{# duplicate that testid and let a BES occurrence satisfy an assertion      #}
-{# about the sampling row. Only the sampling row opts in.                   #}
-{% macro documentItem(file, showUpdated=false) %}
-  <li>
-    {% if file.href %}
-      <a class="govuk-link"
-         href="{{ file.href }}"
-         data-testid="app-detail-document">{{ file.filename }}</a>
-    {% else %}
-      <span data-testid="app-detail-document">{{ file.filename }}</span>
-      {{ govukTag({ text: file.scanStatus, classes: file.scanTagClass }) }}
-    {% endif %}
-    {% if showUpdated and (file.uploadedAt or file.uploadedBy) %}
-      {# "S&I updated by" — retained per RA-295's Jira notes. #}
-      <span class="govuk-hint govuk-!-margin-bottom-0"
-            data-testid="app-detail-sampling-updated-by">Updated{% if file.uploadedAt %} {{ file.uploadedAt }}{% endif %}{% if file.uploadedBy %} by {{ file.uploadedBy }}{% endif %}</span>
-    {% endif %}
-  </li>
-{% endmacro %}
+{# The document and site-detail fragments are shared with the add-ORS     #}
+{# detail template (RA-739), so they live in a partial both import.        #}
+{% from "work-items/summary-macros.njk" import documentItem, siteDetails %}
 
 {# RA-292. The "NEW: " prefix.                                              #}
 {#                                                                          #}
@@ -70,35 +42,6 @@
 {# that, not this macro), so a caller's `{% if %}` guard is the whole story: #}
 {# absent means absent from the DOM, never merely hidden.                    #}
 {% macro newPrefix(testId) %}<span class="app-new-flag" data-testid="{{ testId }}">NEW:</span> {% endmacro %}
-
-{# RA-292 AC04. A site's detail fields as a nested borderless summary list. #}
-{#                                                                          #}
-{# `testIdPrefix` ("overseas-site" / "interim-site") plus the view model's   #}
-{# own field key forms the value testid — e.g. `overseas-site-address`,     #}
-{# which is also how the pre-RA-292 address hook keeps its exact name.      #}
-{#                                                                          #}
-{# Rows are omitted upstream when the field is absent, so there is no        #}
-{# emptiness test here — and critically no truthiness test either: a         #}
-{# `repatriatedLoads` of 0 and a `registeredNowAccredited` of false are      #}
-{# answers a regulator needs, and a `{% if value %}` guard anywhere on this  #}
-{# path would silently drop exactly those.                                   #}
-{% macro siteDetails(details, testIdPrefix) %}
-  {% if details.length %}
-    <dl class="govuk-summary-list app-summary-list--borderless govuk-!-margin-bottom-2">
-      {% for detail in details %}
-        <div class="govuk-summary-list__row">
-          <dt class="govuk-summary-list__key">{{ detail.label }}</dt>
-          <dd class="govuk-summary-list__value"
-              data-testid="{{ testIdPrefix }}-{{ detail.key }}">
-            {% for line in detail.values %}
-              <p class="govuk-body govuk-!-margin-bottom-0">{{ line }}</p>
-            {% endfor %}
-          </dd>
-        </div>
-      {% endfor %}
-    </dl>
-  {% endif %}
-{% endmacro %}
 
 {# One business-plan category: bold label, PRN-income share, narrative.     #}
 {# `testId` is a parameter because the AC02 business-plan row and the       #}
@@ -277,6 +220,9 @@
       {# approving.                                                        #}
       {% block summaryListBefore %}{% endblock %}
 
+      {# RA-739. The application data itself, overridden whole by a type   #}
+      {# whose summary has a different shape (add-ORS).                    #}
+      {% block applicationSummary %}
       <h2 class="govuk-heading-m">Application details</h2>
 
       {# RA-295 AC02. One ordered container; every row is a direct sibling #}
@@ -517,6 +463,7 @@
           </div>
         </dl>
       {% endif %}
+      {% endblock %}
 
       {# Block for type-specific content rendered immediately below the     #}
       {# application details.                                               #}
@@ -643,6 +590,9 @@
       {# Wrapped in an override-able block so type-specific templates can   #}
       {# replace the generic action list — used by RA-132 to suppress       #}
       {# decision actions once a re-accreditation reaches a terminal state. #}
+      {# `actionsCard` wraps the whole panel so a type with no actions yet   #}
+      {# (RA-739 add-ORS) can drop it, border and all.                       #}
+      {% block actionsCard %}
       <div class="app-case-panel" data-testid="actions-panel">
         {% block actionsPanel %}
         {# RA-295. The prototype's action card carries no "Actions" heading:  #}
@@ -716,6 +666,7 @@
         {% endif %}
         {% endblock %}
       </div>
+      {% endblock %}
 
     </div>
   </div>

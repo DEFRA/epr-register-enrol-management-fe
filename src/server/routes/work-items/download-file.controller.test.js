@@ -214,4 +214,69 @@ describe('#workItemDownloadFileController', () => {
 
     expect(statusCode).toBe(statusCodes.notFound)
   })
+
+  // RA-739. An add-ORS work item carries its site, and that site's BES
+  // evidence, under `payload.site`.
+  describe('add-ORS BES evidence', () => {
+    function anAddOrsItem(file) {
+      return {
+        id: ID,
+        typeId: 'add-overseas-site',
+        stateId: 'submitted',
+        payload: {
+          applicationReference: 'IYC-ORS-2026-00001',
+          site: { orsId: '007', besEvidence: { files: [file] } }
+        }
+      }
+    }
+
+    const BES_FILE = {
+      fileId: 'bes-001',
+      filename: 'bes-evidence.pdf',
+      contentType: 'application/pdf',
+      scanStatus: 'Clean',
+      s3Key: 'bes-evidence/bes-001',
+      s3Bucket: 'bes-evidence'
+    }
+
+    test("streams a Clean file from the site's BES evidence", async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anAddOrsItem(BES_FILE)
+      })
+      s3Client.send.mockResolvedValue({
+        Body: 'pdf-bytes',
+        ContentType: 'application/pdf'
+      })
+
+      const { statusCode, result, headers } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/files/bes-001/download`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toBe('pdf-bytes')
+      expect(headers['content-disposition']).toContain('bes-evidence.pdf')
+      const [command] = s3Client.send.mock.calls[0]
+      expect(command.input).toEqual({
+        Bucket: 'bes-evidence',
+        Key: 'bes-evidence/bes-001'
+      })
+    })
+
+    test('refuses a file that is not Clean', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anAddOrsItem({ ...BES_FILE, scanStatus: 'Pending' })
+      })
+
+      const { statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/files/bes-001/download`
+      })
+
+      expect(statusCode).toBe(422)
+      expect(s3Client.send).not.toHaveBeenCalled()
+    })
+  })
 })

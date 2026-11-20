@@ -309,6 +309,50 @@ describe('#getWorkItems', () => {
     expect(calledUrl).toContain('wasteProcessingType=Exporter')
   })
 
+  // RA-739.
+  test('Appends category as a repeated query string param', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      typeIds: ['re-accreditation'],
+      categories: ['in-year-change'],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const calledUrl = new URL(fetchImpl.mock.calls[0][0])
+    expect(calledUrl.searchParams.getAll('typeId')).toEqual([
+      're-accreditation'
+    ])
+    expect(calledUrl.searchParams.getAll('category')).toEqual([
+      'in-year-change'
+    ])
+  })
+
+  test('Omits the category param when categories is empty', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 20 })
+    })
+
+    await getWorkItems({
+      categories: [],
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl.mock.calls[0][0]).not.toContain('category=')
+  })
+
   test('Omits the wasteProcessingType param when wasteProcessingTypes is empty', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
