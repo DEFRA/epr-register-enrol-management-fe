@@ -575,7 +575,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Payment date: Not received',
         'Submitted by: Sam Operator',
         'Submitted on: 11 Feb 2027',
-        `Effective date: ${EM_DASH}`
+        `Valid from date: ${EM_DASH}`
       ])
       expect(
         $(
@@ -1588,7 +1588,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(
         $('[data-testid="log-decision-form"]').hasClass('app-decision-form')
       ).toBe(true)
-      expect(squash(group.find('legend').text())).toBe('Effective date')
+      expect(squash(group.find('legend').text())).toBe('Valid from date')
       expect(
         group.find(
           '#effective-date-day, #effective-date-month, #effective-date-year'
@@ -1611,7 +1611,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       const $ = cheerio.load(result)
       expect(
         squash($('[data-testid="effective-date-error"]').text())
-      ).toContain('Enter the effective date')
+      ).toContain('Enter the valid from date')
       expect(recordWorkItemDecision).not.toHaveBeenCalled()
     })
 

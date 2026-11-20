@@ -189,7 +189,7 @@ export function submittedByEntry(payload) {
 export function effectiveDateEntry(date) {
   return {
     key: 'effective-date',
-    label: 'Effective date',
+    label: 'Valid from date',
     value: formatHeaderDate(date)
   }
 }
@@ -252,7 +252,7 @@ export function dueOnEntry(workItem) {
  * it and when. Sequence alone controls placement. The charge is the amount
  * owed, shown from submission.
  *
- * Unlike add-ORS, no Effective date: the accreditation start date is always
+ * Unlike add-ORS, no Valid from date: the accreditation start date is always
  * 1 January of the accreditation year, set at confirm contact, and the
  * decision panel already shows it once Granted (user, 2026-11-19).
  */

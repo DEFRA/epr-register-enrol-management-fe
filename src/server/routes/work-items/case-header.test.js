@@ -201,7 +201,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
 
   // The accreditation start date is always 1 January of the accreditation
   // year and the decision panel shows it, so the header leaves it out.
-  test('has no Effective date, even once Granted', () => {
+  test('has no Valid from date, even once Granted', () => {
     const header = buildCaseHeader({
       workItem: {
         ...workItem,

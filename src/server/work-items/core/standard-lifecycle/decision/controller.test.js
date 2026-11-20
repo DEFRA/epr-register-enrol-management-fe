@@ -591,12 +591,12 @@ describe('the effective date on add-ORS', () => {
   })
 
   test.each([
-    ['missing', ['', '', ''], 'Enter the effective date'],
-    ['unreal', ['30', '2', '2027'], 'Effective date must be a real date'],
+    ['missing', ['', '', ''], 'Enter the valid from date'],
+    ['unreal', ['30', '2', '2027'], 'Valid from date must be a real date'],
     [
       'before the submission date',
       ['11', '2', '2027'],
-      'Effective date must be on or after the date the request was submitted'
+      'Valid from date must be on or after the date the request was submitted'
     ]
   ])(
     'an approval with a %s date is shown again with the error, keeping what was typed',
@@ -676,7 +676,7 @@ describe('the effective date on add-ORS', () => {
       expect.objectContaining({
         fieldErrors: {
           effectiveDate:
-            'Effective date must be on or after the date the request was submitted'
+            'Valid from date must be on or after the date the request was submitted'
         }
       })
     )

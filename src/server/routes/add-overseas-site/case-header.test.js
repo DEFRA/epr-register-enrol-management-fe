@@ -106,7 +106,7 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
       ['Payment date', NOT_RECEIVED],
       ['Submitted by', 'Sam Operator'],
       ['Submitted on', '12 Feb 2027'],
-      ['Effective date', EM_DASH]
+      ['Valid from date', EM_DASH]
     ])
   })
 

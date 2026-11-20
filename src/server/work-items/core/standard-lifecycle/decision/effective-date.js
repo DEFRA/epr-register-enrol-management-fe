@@ -33,10 +33,10 @@ export const ERROR_INVALID = 'effective-date-invalid'
 export const ERROR_BEFORE_SUBMISSION = 'effective-date-before-submission'
 
 export const EFFECTIVE_DATE_MESSAGES = {
-  [ERROR_REQUIRED]: 'Enter the effective date',
-  [ERROR_INVALID]: 'Effective date must be a real date',
+  [ERROR_REQUIRED]: 'Enter the valid from date',
+  [ERROR_INVALID]: 'Valid from date must be a real date',
   [ERROR_BEFORE_SUBMISSION]:
-    'Effective date must be on or after the date the request was submitted'
+    'Valid from date must be on or after the date the request was submitted'
 }
 
 /**
