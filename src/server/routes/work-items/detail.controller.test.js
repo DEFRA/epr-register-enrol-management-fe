@@ -49,7 +49,7 @@ const ID = '11111111-1111-1111-1111-111111111111'
 
 /**
  * Extract the rendered HTML of a single AC02 application-details row, so an
- * assertion about (say) the site address cannot accidentally pass against
+ * assertion about (say) the location cannot accidentally pass against
  * text that happens to appear elsewhere on the page.
  */
 function detailRow(html, key) {
@@ -477,7 +477,7 @@ describe('#workItemDetailController', () => {
   // { line1, line2, town, postcode } object which stringified to
   // "[object Object]". The controller now decorates the work item with
   // `siteAddressFormatted` / `sitePostcode` which the template renders.
-  test('RA-245: renders a nested-object site address and nested postcode', async () => {
+  test('RA-245: renders a nested-object location and nested postcode', async () => {
     registerReaccreditation()
     registerDetailTemplate(
       're-accreditation',
@@ -507,14 +507,14 @@ describe('#workItemDetailController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).not.toEqual(expect.stringContaining('[object Object]'))
-    // RA-295: the site address is the first AC02 row; the nested shape keeps
+    // RA-295: the location is the first AC02 row; the nested shape keeps
     // the postcode out of the formatted line, so it renders as a second line.
     const row = siteAddressRow(result)
     expect(row).toContain('1 Details Lane, Leeds')
     expect(row).toContain('LS1 1AB')
   })
 
-  test('RA-245: renders a legacy flat-string site address and flat postcode', async () => {
+  test('RA-245: renders a legacy flat-string location and flat postcode', async () => {
     registerReaccreditation()
     registerDetailTemplate(
       're-accreditation',

@@ -292,7 +292,7 @@ describe('#isExporterApplication (RA-412: real wasteProcessingType field)', () =
 })
 
 describe('#deriveSiteAddressLines / #deriveSiteAddress (RA-447 CM2)', () => {
-  test('a reprocessor uses its own site address, unaffected by a registered address', () => {
+  test('a reprocessor uses its own location, unaffected by a registered address', () => {
     const payload = {
       siteAddress: { line1: '2 Wyld Court', town: 'Addingrove' }
     }

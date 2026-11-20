@@ -96,7 +96,7 @@
 
         <fieldset class="govuk-fieldset">
           <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
-            <h2 class="govuk-fieldset__heading">Site address</h2>
+            <h2 class="govuk-fieldset__heading">Location</h2>
           </legend>
 
           {{ govukInput({
@@ -155,7 +155,7 @@
         }) }}
 
         {# RA-526: management-be's ReAccreditationNationRoutingHook no longer #}
-        {# derives Nation from the site address postcode above - it routes   #}
+        {# derives Nation from the location postcode above - it routes   #}
         {# on this field directly, defaulting to England if it's ever        #}
         {# missing. #}
         {{ govukSelect({

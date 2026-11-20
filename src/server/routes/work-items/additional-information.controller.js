@@ -15,7 +15,7 @@ const ADDITIONAL_INFORMATION_VIEW = 'work-items/additional-information'
 /**
  * RA-434 / RA-480. The "Additional information" tab's row view model, in the
  * fixed order: Registered name, Companies house number, Registered address,
- * Site name, Site address, Permit numbers, Contact full name, Contact email,
+ * Site name, Location, Permit numbers, Contact full name, Contact email,
  * Contact phone, Contact job title.
  *
  * Missing values are OMITTED rather than rendered as a placeholder, so a
@@ -32,7 +32,7 @@ export function buildAdditionalInformationRows({ workItem }) {
   // The full registered address is already computed and single-lined by
   // the operator backend (`AccreditationApplicationModel.CompanyRegisteredAddress`).
   // Run it through `formatSiteAddress` only for the trimming/blank handling
-  // that helper already gives the Site address row, for visual consistency
+  // that helper already gives the Location row, for visual consistency
   // between the two.
   const registeredAddress = formatSiteAddress({
     siteAddress: payload.companyRegisteredAddress

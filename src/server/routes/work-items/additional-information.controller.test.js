@@ -112,7 +112,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     expect(row(rows, 'site-name')).toBeUndefined()
   })
 
-  test("uses the reprocessor Site address for the fixture's default wasteProcessingType", () => {
+  test("uses the reprocessor Location for the fixture's default wasteProcessingType", () => {
     const rows = buildAdditionalInformationRows({
       workItem: { payload: realOperatorSubmissionPayload() }
     })
@@ -148,7 +148,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
   // RA-447 CM2. Standardised on `isExporterApplication`'s case-insensitive
   // match — pre-RA-447 this row's local check was exact-case only, so a
   // mixed-case value would have wrongly taken the reprocessor branch.
-  test('uses the registered address as the Site address for a mixed-case wasteProcessingType', () => {
+  test('uses the registered address as the Location for a mixed-case wasteProcessingType', () => {
     const rows = buildAdditionalInformationRows({
       workItem: {
         payload: {
@@ -162,7 +162,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
     )
   })
 
-  test('uses the registered address as the Site address for an exporter', () => {
+  test('uses the registered address as the Location for an exporter', () => {
     const rows = buildAdditionalInformationRows({
       workItem: {
         payload: {
@@ -171,7 +171,7 @@ describe('#buildAdditionalInformationRows (RA-434)', () => {
         }
       }
     })
-    // Intentional per RA-434: for an exporter, Site address == Registered
+    // Intentional per RA-434: for an exporter, Location == Registered
     // address, matching the Registration & Accreditation service's own
     // header.
     expect(row(rows, 'site-address').value).toBe(
