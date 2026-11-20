@@ -860,10 +860,10 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(
         squash(site.find('[data-testid="interim-site-name"]').text())
       ).toBe('Bharat Recycling')
-      // Collapsed, as re-accreditation's overseas sites; the only interim site
-      // has a unique name, so no short address.
-      expect(site.is('details.govuk-details')).toBe(true)
-      expect(site.attr('open')).toBeUndefined()
+      // Always open, not a disclosure (user, 2026-11-20); the only interim
+      // site has a unique name, so no short address.
+      expect(site.is('details')).toBe(false)
+      expect(site.find('details, .govuk-details__text')).toHaveLength(0)
       expect(
         site.find('[data-testid="interim-site-summary-address"]')
       ).toHaveLength(0)

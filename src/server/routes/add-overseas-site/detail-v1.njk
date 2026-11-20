@@ -65,24 +65,20 @@
   {% if applicationSummary.interimSites.length %}
     <div class="govuk-!-margin-top-8" data-testid="interim-sites">
       <h2 class="govuk-heading-m" data-testid="interim-sites-heading">Interim sites ({{ applicationSummary.interimSites.length }})</h2>
-      {# Collapsed by default, as re-accreditation's overseas sites: the    #}
-      {# heading is the name, plus the short address only when two interim #}
-      {# sites share a name.                                               #}
+      {# Always open, with no left border (user, 2026-11-20): the name    #}
+      {# is the heading, plus the short address only when two interim    #}
+      {# sites share a name, then the site's rows as borderless.         #}
       {% for interimSite in applicationSummary.interimSites %}
-        <details class="govuk-details govuk-!-margin-bottom-2" data-testid="interim-site">
-          <summary class="govuk-details__summary">
-            <span class="govuk-details__summary-text">
-              <strong data-testid="interim-site-name">{{ interimSite.siteName }}</strong>
-              {% if interimSite.shortAddress %}
-                <br>
-                <span data-testid="interim-site-summary-address">{{ interimSite.shortAddress }}</span>
-              {% endif %}
-            </span>
-          </summary>
-          <div class="govuk-details__text">
-            {{ siteDetails(interimSite.details, 'interim-site') }}
-          </div>
-        </details>
+        <div class="govuk-!-margin-bottom-4" data-testid="interim-site">
+          <h3 class="govuk-heading-s govuk-!-margin-bottom-2">
+            <span data-testid="interim-site-name">{{ interimSite.siteName }}</span>
+            {% if interimSite.shortAddress %}
+              <br>
+              <span class="govuk-!-font-weight-regular" data-testid="interim-site-summary-address">{{ interimSite.shortAddress }}</span>
+            {% endif %}
+          </h3>
+          {{ siteDetails(interimSite.details, 'interim-site') }}
+        </div>
       {% endfor %}
     </div>
   {% endif %}
