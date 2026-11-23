@@ -168,7 +168,10 @@ from its own hooks, never from a check on its category:
   applications and Application history (RA-495). Accreditation summary
   (RA-769) shows the accreditation as it stands today, read live through
   management-be's `GET /work-items/{id}/accreditation-summary`
-  (`accreditation-summary.controller.js`); when there is no accreditation to
+  (`accreditation-summary.controller.js`): the accreditation details, then PRN
+  tonnage, PRN authorisers (`Name (email)`), Authority to issue (names only,
+  from the same list) and the business plan, with no `NEW:` marker; when there
+  is no accreditation to
   show, or it cannot be read, the tab says so under the heading and keeps the
   case header and tabs. Related applications is empty until RA-770
   (`empty-tab.controller.js`). Its

@@ -4,8 +4,11 @@ import { materialLabel } from '#/server/work-items/core/materials.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import {
   EM_DASH,
+  buildAuthorityToIssueContacts,
+  buildBusinessPlanPairs,
   deriveSiteAddressLines,
-  isExporterApplication
+  isExporterApplication,
+  tonnageBandLabel
 } from './application-summary.js'
 
 /**
@@ -21,7 +24,12 @@ import {
  * Rows are one ordered array of siblings, each with a stable `key` (its
  * `data-testid` suffix) and a `kind` the template switches on:
  * Organisation, Accreditation number, Status, Accreditation year,
- * Accreditation start date, Registration number, Location, Type, Material.
+ * Accreditation start date, Registration number, Location, Type, Material,
+ * PRN tonnage, PRN authorisers, Authority to issue, Business plan.
+ *
+ * The authorisers are the one list the operator backend holds. PRN authorisers
+ * shows each as `Name (email)`, Authority to issue shows the names only. The
+ * operator backend never says which contacts are new, and no row marks one.
  */
 
 /** Wording of the tab (confirmed by the user, RA-769 spec). */
@@ -64,6 +72,17 @@ function typeText(accreditation) {
   return isExporterApplication({ payload: accreditation })
     ? 'Exporter accreditation'
     : 'Reprocessor accreditation'
+}
+
+/** `Name (email)`; the email alone for an authoriser without a name. */
+function authoriserLines(prns) {
+  return buildAuthorityToIssueContacts(prns).map(({ name, email }) =>
+    email ? `${name} (${email})` : name
+  )
+}
+
+function authorityToIssueLines(prns) {
+  return buildAuthorityToIssueContacts(prns).map(({ name }) => name)
 }
 
 function startDateText(accreditationStartDate) {
@@ -142,6 +161,30 @@ export function buildAccreditationSummary({
               accreditation.glassRecyclingProcess
             )
           : EM_DASH
+      },
+      {
+        key: 'prn-tonnage',
+        label: 'PRN tonnage',
+        kind: 'text',
+        value: tonnageBandLabel(accreditation.prns?.plannedTonnageBand)
+      },
+      {
+        key: 'prn-authorisers',
+        label: 'PRN authorisers',
+        kind: 'lines',
+        values: authoriserLines(accreditation.prns)
+      },
+      {
+        key: 'authority-to-issue',
+        label: 'Authority to issue',
+        kind: 'lines',
+        values: authorityToIssueLines(accreditation.prns)
+      },
+      {
+        key: 'business-plan',
+        label: 'Business plan',
+        kind: 'pairs',
+        pairs: buildBusinessPlanPairs(accreditation.businessPlan)
       }
     ]
   }

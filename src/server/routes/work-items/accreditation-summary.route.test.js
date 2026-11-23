@@ -78,6 +78,19 @@ function anAccreditation(overrides = {}) {
     glassRecyclingProcess: 'glass_re_melt',
     siteAddress: '1 High Street, Leeds, LS1 1AA',
     companyRegisteredAddress: '2 Registered Road, York, YO1 1AA',
+    prns: {
+      plannedTonnageBand: 'UpTo5000',
+      authorisers: [
+        { fullName: 'Ada Authoriser', email: 'ada@example.com' },
+        { fullName: 'Bob Signer', email: 'bob@example.com' }
+      ]
+    },
+    businessPlan: {
+      newInfrastructurePercent: 60,
+      newInfrastructureDetail: 'A new sorting line',
+      priceSupportPercent: 40,
+      priceSupportDetail: null
+    },
     ...overrides
   }
 }
@@ -197,8 +210,162 @@ describe('RA-769: Accreditation summary tab', () => {
           value: '2 Registered Road, York, YO1 1AA'
         },
         { key: 'type', label: 'Type', value: 'Exporter accreditation' },
-        { key: 'material', label: 'Material', value: 'Glass - Remelt' }
+        { key: 'material', label: 'Material', value: 'Glass - Remelt' },
+        {
+          key: 'prn-tonnage',
+          label: 'PRN tonnage',
+          value: 'Up to 5,000 tonnes'
+        },
+        {
+          key: 'prn-authorisers',
+          label: 'PRN authorisers',
+          value: 'Ada Authoriser (ada@example.com) Bob Signer (bob@example.com)'
+        },
+        {
+          key: 'authority-to-issue',
+          label: 'Authority to issue',
+          value: 'Ada Authoriser Bob Signer'
+        },
+        {
+          key: 'business-plan',
+          label: 'Business plan',
+          value:
+            'New infrastructure — 60% of PRN incomeA new sorting line Price support — 40% of PRN income'
+        }
       ])
+    })
+
+    describe('PRN details and business plan', () => {
+      const lines = ($, key) =>
+        $(
+          `[data-testid="acc-summary-value-${key}"] [data-testid="acc-summary-line"]`
+        )
+          .map((_, el) => squash($(el).text()))
+          .get()
+
+      test('shows each PRN authoriser as Name (email), and Authority to issue as names only', async () => {
+        const { $ } = await get()
+
+        expect(lines($, 'prn-authorisers')).toEqual([
+          'Ada Authoriser (ada@example.com)',
+          'Bob Signer (bob@example.com)'
+        ])
+        expect(lines($, 'authority-to-issue')).toEqual([
+          'Ada Authoriser',
+          'Bob Signer'
+        ])
+        expect(
+          $('[data-testid="acc-summary-value-authority-to-issue"]').text()
+        ).not.toContain('@')
+      })
+
+      test('shows an authoriser without a name by their email alone', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              prns: {
+                plannedTonnageBand: 'Over10000',
+                authorisers: [{ fullName: '', email: 'solo@example.com' }]
+              }
+            })
+          })
+        )
+
+        const { $ } = await get()
+
+        expect(lines($, 'prn-authorisers')).toEqual(['solo@example.com'])
+        expect(lines($, 'authority-to-issue')).toEqual(['solo@example.com'])
+      })
+
+      test('shows the tonnage band label', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              prns: { plannedTonnageBand: 'Over10000', authorisers: [] }
+            })
+          })
+        )
+
+        const { $ } = await get()
+
+        expect(
+          squash($('[data-testid="acc-summary-value-prn-tonnage"]').text())
+        ).toBe('More than 10,000 tonnes')
+      })
+
+      test('shows each business plan category with its share of PRN income, in the existing rendering', async () => {
+        const { $ } = await get()
+
+        const pairs = $(
+          '[data-testid="acc-summary-value-business-plan"] [data-testid="acc-summary-pair"]'
+        )
+          .map((_, el) => squash($(el).text()))
+          .get()
+        expect(pairs).toEqual([
+          'New infrastructure — 60% of PRN incomeA new sorting line',
+          'Price support — 40% of PRN income'
+        ])
+      })
+
+      test('never shows a NEW marker, even for an authoriser the backend flagged as new', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              prns: {
+                plannedTonnageBand: 'UpTo500',
+                authorisers: [
+                  { fullName: 'Ada', email: 'ada@example.com', isNew: true }
+                ]
+              }
+            })
+          })
+        )
+
+        const { $, result } = await get()
+
+        expect(result).not.toContain('NEW:')
+        expect($('.app-new-flag')).toHaveLength(0)
+      })
+
+      test('an accreditation with no authorisers and no business plan entries shows the empty value', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              prns: { plannedTonnageBand: null, authorisers: [] },
+              businessPlan: {}
+            })
+          })
+        )
+
+        const { $ } = await get()
+
+        const byKey = Object.fromEntries(rows($).map((r) => [r.key, r.value]))
+        expect(byKey['prn-tonnage']).toBe('—')
+        expect(byKey['prn-authorisers']).toBe('—')
+        expect(byKey['authority-to-issue']).toBe('—')
+        expect(byKey['business-plan']).toBe('—')
+        expect($('body').text()).not.toContain('undefined')
+      })
+
+      test('an accreditation without a prns section or business plan shows the empty value', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              prns: undefined,
+              businessPlan: undefined
+            })
+          })
+        )
+
+        const { statusCode, $ } = await get()
+
+        expect(statusCode).toBe(statusCodes.ok)
+        const byKey = Object.fromEntries(rows($).map((r) => [r.key, r.value]))
+        expect(byKey['prn-tonnage']).toBe('—')
+        expect(byKey['prn-authorisers']).toBe('—')
+        expect(byKey['authority-to-issue']).toBe('—')
+        expect(byKey['business-plan']).toBe('—')
+      })
     })
 
     test('shows Granted as a green tag, as the state badge does', async () => {

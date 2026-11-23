@@ -8,18 +8,7 @@
 
 {# The document and site-detail fragments are shared with the add-ORS     #}
 {# detail template (RA-739), so they live in a partial both import.        #}
-{% from "work-items/summary-macros.njk" import documentItem, newPrefix, overseasSiteList %}
-
-{# One business-plan category: bold label, PRN-income share, narrative.     #}
-{# `testId` is a parameter because the AC02 business-plan row and the       #}
-{# previous-year section render the same shape but are counted separately — #}
-{# stamping `app-detail-pair` on both would make an AC02 pair count also    #}
-{# pick up prior-year pairs.                                                #}
-{% macro businessPlanPair(pair, testId='app-detail-pair') %}
-  <p class="govuk-body govuk-!-margin-bottom-1" data-testid="{{ testId }}">
-    <strong>{{ pair.label }}</strong>{% if pair.percent %} — {{ pair.percent }}{% endif %}{% if pair.detail %}<br>{{ pair.detail }}{% endif %}
-  </p>
-{% endmacro %}
+{% from "work-items/summary-macros.njk" import documentItem, newPrefix, overseasSiteList, businessPlanPair %}
 
 {# ---------------------------------------------------------------- #}
 {# Generic work item detail template — "Application summary" tab.     #}
