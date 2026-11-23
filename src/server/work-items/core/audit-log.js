@@ -16,7 +16,7 @@ import {
 } from './audit-log-accreditation-number.js'
 import {
   OVERSEAS_SITES_CORRECTED_ACTION,
-  readOverseasSitesCorrected,
+  logMalformedOverseasSitesCorrected,
   overseasSitesCorrectedRows,
   summariseOverseasSitesCorrected
 } from './audit-log-overseas-sites.js'
@@ -76,7 +76,9 @@ export function decorateAuditLog(
   if (!Array.isArray(entries)) {
     return []
   }
-  entries.forEach((entry) => logMalformedEntry(entry, { logger, workItemId }))
+  entries.forEach((entry) =>
+    logMalformedOverseasSitesCorrected(entry, { logger, workItemId })
+  )
   return entries.map((entry) => ({
     ...entry,
     actionDisplayName: actionDisplayNameFor(entry),
@@ -87,37 +89,6 @@ export function decorateAuditLog(
       ...buildSnapshotRows(workItemSnapshot, entry, resolveStateDisplayName)
     ]
   }))
-}
-
-/**
- * Log, at Error, an audit entry whose required `details` are missing or
- * malformed. Only ids and field paths are logged, never the details
- * themselves. A malformed entry with no logger to report it to is a wiring
- * bug, so it throws rather than going unnoticed.
- */
-function logMalformedEntry(entry, { logger, workItemId }) {
-  if (entry?.action !== OVERSEAS_SITES_CORRECTED_ACTION) {
-    return
-  }
-  const invalidFields = readOverseasSitesCorrected(entry.details).problems
-  if (invalidFields.length === 0) {
-    return
-  }
-  if (typeof logger?.error !== 'function') {
-    throw new TypeError(
-      'decorateAuditLog needs a logger to report a malformed audit entry'
-    )
-  }
-  logger.error(
-    {
-      workItemId,
-      auditEntryId: entry.id,
-      auditAction: entry.action,
-      auditEntryCreatedAt: entry.createdAt,
-      invalidFields
-    },
-    'Audit entry has missing or malformed details; showing it without them'
-  )
 }
 
 /**

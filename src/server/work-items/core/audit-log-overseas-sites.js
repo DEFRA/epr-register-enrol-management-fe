@@ -65,7 +65,7 @@ function parseRemovedSites(raw) {
  * paths of any required fields that are missing or malformed (`problems` is
  * empty when the entry has the shape management-be writes).
  */
-export function readOverseasSitesCorrected(details) {
+function readOverseasSitesCorrected(details) {
   if (!isPlainObject(details)) {
     return { sites: null, reason: null, problems: ['details'] }
   }
@@ -120,4 +120,39 @@ export function overseasSitesCorrectedRows(details) {
     })
   }
   return rows
+}
+
+/**
+ * Log, at Error, an `overseas-sites-corrected` entry whose required
+ * `details` are missing or malformed (`decorateAuditLog` calls this for
+ * every entry). Only ids and field paths are logged, never the details
+ * themselves. A malformed entry with no logger to report it to is a wiring
+ * bug, so it throws rather than going unnoticed.
+ */
+export function logMalformedOverseasSitesCorrected(
+  entry,
+  { logger, workItemId }
+) {
+  if (entry?.action !== OVERSEAS_SITES_CORRECTED_ACTION) {
+    return
+  }
+  const invalidFields = readOverseasSitesCorrected(entry.details).problems
+  if (invalidFields.length === 0) {
+    return
+  }
+  if (typeof logger?.error !== 'function') {
+    throw new TypeError(
+      'decorateAuditLog needs a logger to report a malformed audit entry'
+    )
+  }
+  logger.error(
+    {
+      workItemId,
+      auditEntryId: entry.id,
+      auditAction: entry.action,
+      auditEntryCreatedAt: entry.createdAt,
+      invalidFields
+    },
+    'Audit entry has missing or malformed details; showing it without them'
+  )
 }
