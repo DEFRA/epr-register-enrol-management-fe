@@ -9,6 +9,7 @@ import {
   buildInterimSite,
   buildInterimSites,
   buildOverseasSite,
+  buildOverseasSites,
   buildSiteAddressLines,
   deriveSiteAddress,
   deriveSiteAddressLines,
@@ -750,6 +751,47 @@ describe('#toDisplayLines (RA-292: wire value -> display lines)', () => {
   // looks like real data and hides that a field was never mapped.
   test('contributes nothing for an unmapped object shape', () => {
     expect(toDisplayLines({ unexpected: 'shape' })).toEqual([])
+  })
+})
+
+describe('#buildOverseasSites (RA-769)', () => {
+  const SITES = [
+    { siteName: 'Alpha', addressLine1: '1 Quay', country: 'Spain' },
+    { siteName: 'Beta', addressLine1: '2 Quay', country: 'France' },
+    { siteName: 'Beta', addressLine1: '3 Quay', country: 'Italy' }
+  ]
+
+  test('by default keeps the condensed address only for repeated names', () => {
+    const sites = buildOverseasSites(SITES)
+
+    expect(sites.map((site) => site.summaryAddress)).toEqual([
+      '',
+      '2 Quay, France',
+      '3 Quay, Italy'
+    ])
+  })
+
+  test('alwaysShowSummaryAddress keeps it for every site', () => {
+    const sites = buildOverseasSites(SITES, {
+      alwaysShowSummaryAddress: true
+    })
+
+    expect(sites.map((site) => site.summaryAddress)).toEqual([
+      '1 Quay, Spain',
+      '2 Quay, France',
+      '3 Quay, Italy'
+    ])
+  })
+
+  test('passes the interim flag through to each site', () => {
+    const interimSites = [{ siteName: 'Depot' }, { siteName: 'Yard' }]
+    const source = [{ siteName: 'Alpha', interimSites }]
+
+    expect(buildOverseasSites(source)[0].interimSites).toHaveLength(1)
+    expect(
+      buildOverseasSites(source, { multipleInterimSitesEnabled: true })[0]
+        .interimSites
+    ).toHaveLength(2)
   })
 })
 

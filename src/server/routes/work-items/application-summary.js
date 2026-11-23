@@ -766,17 +766,28 @@ function buildCoreSummaryRows({
 }
 
 /**
- * Build overseas-site view models and show condensed addresses only when site
- * names repeat in the visible list.
+ * Build overseas-site view models. By default the condensed address shows only
+ * when site names repeat in the visible list.
  *
  * @param {object[]} overseasSites
- * @param {boolean} multipleInterimSitesEnabled
+ * @param {object} [options]
+ * @param {boolean} [options.multipleInterimSitesEnabled]
+ * @param {boolean} [options.alwaysShowSummaryAddress] - keep the condensed
+ *   address on every site, even when its name is unique (RA-769).
  * @returns {object[]}
  */
-function buildOverseasSites(overseasSites, multipleInterimSitesEnabled) {
+export function buildOverseasSites(
+  overseasSites,
+  { multipleInterimSitesEnabled = false, alwaysShowSummaryAddress = false } = {}
+) {
   const sites = overseasSites.map((site) =>
     buildOverseasSite(site, { multipleInterimSitesEnabled })
   )
+
+  if (alwaysShowSummaryAddress) {
+    return sites
+  }
+
   const siteNameCounts = new Map()
 
   for (const { siteName } of sites) {
@@ -857,7 +868,9 @@ export function buildApplicationSummary({
         // RA-292 AC01/AC02/AC04. Carries the new-site flag, the full site
         // detail and the nested interim site.
         kind: 'overseas-sites',
-        sites: buildOverseasSites(overseasSites, multipleInterimSitesEnabled)
+        sites: buildOverseasSites(overseasSites, {
+          multipleInterimSitesEnabled
+        })
       }
     )
   }

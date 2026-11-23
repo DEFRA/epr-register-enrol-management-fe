@@ -183,7 +183,7 @@ extends `standard-lifecycle/detail.njk` (see below) and overrides the
 `applicationSummary` block with the site summary and interim sites, so it
 keeps the tabs, banners, assignment panel and lifecycle CTAs; it draws the
 actions card only when there is a lifecycle step or an outcome to show. Both
-templates import the document and site-detail macros from
+templates import their summary macros from
 `work-items/summary-macros.njk`. The file download route also finds BES
 files under `payload.site.besEvidence.files`.
 `add-overseas-site/module.js` is the example.
