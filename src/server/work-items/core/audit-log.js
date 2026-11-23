@@ -15,6 +15,12 @@ import {
   summariseLastYearsAccreditationNumberAdded
 } from './audit-log-accreditation-number.js'
 import {
+  OVERSEAS_SITES_CORRECTED_ACTION,
+  readOverseasSitesCorrected,
+  overseasSitesCorrectedRows,
+  summariseOverseasSitesCorrected
+} from './audit-log-overseas-sites.js'
+import {
   notificationDetailRows,
   statusPushDetailRows
 } from './audit-log-delivery.js'
@@ -51,14 +57,26 @@ import {
  * optional `resolveStateDisplayName(stateId)` callback, NOT from the live
  * work-item state on the snapshot. Passing the live state onto every entry
  * was the historical-state bug this contract fixes.
+ *
+ * `logger` and `workItemId` are used to log, at Error, any entry whose
+ * required `details` are missing or malformed (RA-768). Such an entry still
+ * renders, with a row saying its details could not be shown, so one bad
+ * entry does not hide the rest of the case history.
  */
 export function decorateAuditLog(
   entries,
-  { payload, workItemSnapshot, resolveStateDisplayName } = {}
+  {
+    payload,
+    workItemSnapshot,
+    resolveStateDisplayName,
+    logger,
+    workItemId
+  } = {}
 ) {
   if (!Array.isArray(entries)) {
     return []
   }
+  entries.forEach((entry) => logMalformedEntry(entry, { logger, workItemId }))
   return entries.map((entry) => ({
     ...entry,
     actionDisplayName: actionDisplayNameFor(entry),
@@ -69,6 +87,37 @@ export function decorateAuditLog(
       ...buildSnapshotRows(workItemSnapshot, entry, resolveStateDisplayName)
     ]
   }))
+}
+
+/**
+ * Log, at Error, an audit entry whose required `details` are missing or
+ * malformed. Only ids and field paths are logged, never the details
+ * themselves. A malformed entry with no logger to report it to is a wiring
+ * bug, so it throws rather than going unnoticed.
+ */
+function logMalformedEntry(entry, { logger, workItemId }) {
+  if (entry?.action !== OVERSEAS_SITES_CORRECTED_ACTION) {
+    return
+  }
+  const invalidFields = readOverseasSitesCorrected(entry.details).problems
+  if (invalidFields.length === 0) {
+    return
+  }
+  if (typeof logger?.error !== 'function') {
+    throw new TypeError(
+      'decorateAuditLog needs a logger to report a malformed audit entry'
+    )
+  }
+  logger.error(
+    {
+      workItemId,
+      auditEntryId: entry.id,
+      auditAction: entry.action,
+      auditEntryCreatedAt: entry.createdAt,
+      invalidFields
+    },
+    'Audit entry has missing or malformed details; showing it without them'
+  )
 }
 
 /**
@@ -205,7 +254,7 @@ const STATE_BEARING_ACTIONS = new Set([
  * other action, for which that context is exactly what a caseworker needs
  * alongside the entry. RA-526's routing/correction entries and RA-691's
  * accreditation-number correction, and RA-784's last year's accreditation
- * number added, are system-written (by a submission hook or a one-off data
+ * number added, and RA-768's overseas sites correction, are system-written (by a submission hook or a one-off data
  * migration) rather than a workflow action against the item, so none of that context — including who the item happens to be
  * assigned to — has anything to do with why a nation was chosen or a value
  * was corrected.
@@ -214,7 +263,8 @@ const NO_SNAPSHOT_CONTEXT_ACTIONS = new Set([
   ACTION_ROUTED_TO_NATION,
   ACTION_NATION_CORRECTED,
   ACCREDITATION_NUMBER_CORRECTED_ACTION,
-  LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION
+  LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION,
+  OVERSEAS_SITES_CORRECTED_ACTION
 ])
 
 /**
@@ -340,6 +390,7 @@ const ACTION_DISPLAY_NAMES = {
   [ACCREDITATION_NUMBER_CORRECTED_ACTION]: 'Accreditation number corrected',
   [LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION]:
     "Last year's accreditation number added",
+  [OVERSEAS_SITES_CORRECTED_ACTION]: 'Overseas sites corrected',
   [ACTION_APPLICATION_QUERIED]: 'Application queried'
 }
 
@@ -470,6 +521,8 @@ export function summariseAuditEntry(entry) {
       return summariseAccreditationNumberCorrected(details)
     case LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION:
       return summariseLastYearsAccreditationNumberAdded(details)
+    case OVERSEAS_SITES_CORRECTED_ACTION:
+      return summariseOverseasSitesCorrected(entry.details)
     default:
       return ''
   }
@@ -689,6 +742,8 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       return accreditationNumberCorrectedRows(details)
     case LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION:
       return lastYearsAccreditationNumberAddedRows(details)
+    case OVERSEAS_SITES_CORRECTED_ACTION:
+      return overseasSitesCorrectedRows(entry.details)
     default:
       return []
   }

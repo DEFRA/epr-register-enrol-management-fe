@@ -61,9 +61,20 @@ function registerReaccreditation() {
 
 describe('#workItemAuditLogController', () => {
   let server
+  let loggedErrors = []
 
   beforeAll(async () => {
     server = await createServer()
+    // Capture request.logger.error calls (hapi-pino sets request.logger
+    // before onPreHandler) so tests can assert what was logged at Error.
+    server.ext('onPreHandler', (request, h) => {
+      const original = request.logger.error.bind(request.logger)
+      request.logger.error = (...args) => {
+        loggedErrors.push(args)
+        return original(...args)
+      }
+      return h.continue
+    })
     await server.initialize()
   })
 
@@ -72,6 +83,7 @@ describe('#workItemAuditLogController', () => {
   })
 
   beforeEach(() => {
+    loggedErrors = []
     getWorkItem.mockReset()
     clearWorkItemRegistry()
   })
@@ -659,6 +671,101 @@ describe('#workItemAuditLogController', () => {
         '<dt class="govuk-summary-list__key">Assigned to</dt>'
       )
     )
+  })
+
+  // RA-768: the Application history tab shows an "Overseas sites corrected"
+  // entry with the removed sites and the reason, and nothing else.
+  function anOverseasSitesCorrectedEntry(details) {
+    return {
+      id: 'ffff6666-ffff-ffff-ffff-ffffffffffff',
+      action: 'overseas-sites-corrected',
+      actionDisplayName: 'Overseas sites corrected',
+      stateId: 'submitted',
+      details,
+      createdAt: '2026-11-23T09:00:00Z',
+      createdBy: 'registration-accreditation-backend',
+      createdByName: 'Registration & Accreditation service'
+    }
+  }
+
+  test('Shows the removed sites and reason for an overseas-sites-corrected entry', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        auditLog: [
+          anOverseasSitesCorrectedEntry({
+            removedSites: JSON.stringify([
+              { orsId: 'ORS-123', siteId: '1' },
+              { orsId: null, siteId: '3' }
+            ]),
+            reason: 'RA-768: sites deselected'
+          })
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('data-action="overseas-sites-corrected"')
+    expect(result).toContain('<strong>Overseas sites corrected</strong>')
+    expect(result).toContain('— ORS ID: ORS-123, Site ID: 3')
+    expect(result).toContain(
+      '<dt class="govuk-summary-list__key">Removed sites</dt>'
+    )
+    expect(result).toContain('<dt class="govuk-summary-list__key">Reason</dt>')
+    expect(result).toContain('RA-768: sites deselected')
+    // A correction, not a workflow action: no work-item context block.
+    expect(result).not.toContain(
+      '<dt class="govuk-summary-list__key">Assigned to</dt>'
+    )
+    expect(result).not.toContain(
+      '<dt class="govuk-summary-list__key">State</dt>'
+    )
+    expect(loggedErrors).toEqual([])
+  })
+
+  test('Keeps the page up, shows a Details row and logs at Error for an overseas-sites-corrected entry with unreadable sites', async () => {
+    registerReaccreditation()
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: aWorkItem({
+        auditLog: [
+          anOverseasSitesCorrectedEntry({
+            removedSites: 'not json',
+            reason: 'RA-768: sites deselected'
+          })
+        ]
+      })
+    })
+
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}/audit-log`
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toContain('<strong>Overseas sites corrected</strong>')
+    expect(result).toContain('<dt class="govuk-summary-list__key">Details</dt>')
+    expect(result).toContain(
+      'The removed sites could not be shown because this entry&#39;s details are missing or unreadable.'
+    )
+    expect(loggedErrors).toEqual([
+      [
+        {
+          workItemId: ID,
+          auditEntryId: 'ffff6666-ffff-ffff-ffff-ffffffffffff',
+          auditAction: 'overseas-sites-corrected',
+          auditEntryCreatedAt: '2026-11-23T09:00:00Z',
+          invalidFields: ['details.removedSites (not valid JSON)']
+        },
+        'Audit entry has missing or malformed details; showing it without them'
+      ]
+    ])
   })
 
   // RA-784: the Application history tab shows a "Last year's accreditation

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import {
   decorateAuditLog,
   detailRowsForAuditEntry,
@@ -1886,5 +1886,202 @@ describe('change-payment-date audit entries (RA-576)', () => {
       }
     })
     expect(rows.map((r) => r.key)).toEqual(['Changed by'])
+  })
+})
+
+describe('overseas-sites-corrected audit entries (RA-768)', () => {
+  // The shape management-be writes: audit details are a flat string map, so
+  // the removed sites arrive JSON-encoded. Both ids are always present;
+  // orsId is null when the stored site has none.
+  const ACTION = 'overseas-sites-corrected'
+  const oneSite = {
+    removedSites: JSON.stringify([{ orsId: 'ORS-123', siteId: '1' }]),
+    reason: 'RA-768: site deselected in a pre-RA-557 query resubmission'
+  }
+  const severalSites = {
+    removedSites: JSON.stringify([
+      { orsId: 'ORS-123', siteId: '1' },
+      { orsId: 'ORS-456', siteId: '2' },
+      { orsId: null, siteId: '3' }
+    ]),
+    reason: 'RA-768: sites deselected'
+  }
+  const entryWith = (details) => ({
+    id: 'entry-1',
+    action: ACTION,
+    stateId: 'submitted',
+    createdAt: '2026-11-23T09:00:00Z',
+    details
+  })
+  const aLogger = () => ({ error: vi.fn() })
+
+  test('falls back to "Overseas sites corrected" when the backend supplies no display name', () => {
+    const [decorated] = decorateAuditLog([entryWith(oneSite)], {
+      logger: aLogger()
+    })
+    expect(decorated.actionDisplayName).toBe('Overseas sites corrected')
+  })
+
+  test('projects the removed site as its ORS ID and the reason', () => {
+    expect(detailRowsForAuditEntry(entryWith(oneSite))).toEqual([
+      { key: 'Removed sites', value: 'ORS ID: ORS-123', multiline: true },
+      {
+        key: 'Reason',
+        value: 'RA-768: site deselected in a pre-RA-557 query resubmission',
+        multiline: true
+      }
+    ])
+  })
+
+  test('lists several removed sites one per line, using the Site ID only for a site without an ORS ID', () => {
+    expect(detailRowsForAuditEntry(entryWith(severalSites))).toEqual([
+      {
+        key: 'Removed sites',
+        value: 'ORS ID: ORS-123\nORS ID: ORS-456\nSite ID: 3',
+        multiline: true
+      },
+      { key: 'Reason', value: 'RA-768: sites deselected', multiline: true }
+    ])
+  })
+
+  test('shows a site matched by siteId alone as its Site ID', () => {
+    const details = {
+      removedSites: JSON.stringify([{ orsId: null, siteId: 'abc' }]),
+      reason: 'RA-768'
+    }
+    expect(detailRowsForAuditEntry(entryWith(details))[0]).toEqual({
+      key: 'Removed sites',
+      value: 'Site ID: abc',
+      multiline: true
+    })
+    expect(summariseAuditEntry(entryWith(details))).toBe('Site ID: abc')
+  })
+
+  test('summarises the entry as the removed sites, comma separated', () => {
+    expect(summariseAuditEntry(entryWith(severalSites))).toBe(
+      'ORS ID: ORS-123, ORS ID: ORS-456, Site ID: 3'
+    )
+  })
+
+  test('adds no snapshot context rows and logs nothing for a well-formed entry', () => {
+    const logger = aLogger()
+    const [decorated] = decorateAuditLog([entryWith(oneSite)], {
+      logger,
+      workItemId: 'wi-1',
+      workItemSnapshot: { orgId: 'APP-001', assignedToName: 'Alice' },
+      resolveStateDisplayName: (id) => id
+    })
+    expect(decorated.detailRows.map((row) => row.key)).toEqual([
+      'Removed sites',
+      'Reason'
+    ])
+    expect(decorated.isFailure).toBe(false)
+    expect(logger.error).not.toHaveBeenCalled()
+  })
+
+  const unreadableSites =
+    "The removed sites could not be shown because this entry's details are missing or unreadable."
+  const unreadableReason =
+    "The reason could not be shown because this entry's details are missing or unreadable."
+  const unreadableBoth =
+    "The removed sites and the reason could not be shown because this entry's details are missing or unreadable."
+
+  test.each([
+    ['no details', undefined, unreadableBoth, ['details']],
+    ['details that are not an object', 'oops', unreadableBoth, ['details']],
+    [
+      'no removedSites',
+      { reason: 'RA-768' },
+      unreadableSites,
+      ['details.removedSites']
+    ],
+    [
+      'removedSites that is not valid JSON',
+      { removedSites: '[{"orsId":', reason: 'RA-768' },
+      unreadableSites,
+      ['details.removedSites (not valid JSON)']
+    ],
+    [
+      'removedSites that is not a list',
+      { removedSites: '{"orsId":"ORS-123"}', reason: 'RA-768' },
+      unreadableSites,
+      ['details.removedSites (not a non-empty list)']
+    ],
+    [
+      'an empty removedSites list',
+      { removedSites: '[]', reason: 'RA-768' },
+      unreadableSites,
+      ['details.removedSites (not a non-empty list)']
+    ],
+    [
+      'a removed site with neither id',
+      {
+        removedSites: JSON.stringify([
+          { orsId: 'ORS-123', siteId: '1' },
+          { orsId: null, siteId: '' }
+        ]),
+        reason: 'RA-768'
+      },
+      unreadableSites,
+      ['details.removedSites[1]']
+    ],
+    [
+      'no reason',
+      { removedSites: oneSite.removedSites },
+      unreadableReason,
+      ['details.reason']
+    ],
+    [
+      'a blank reason',
+      { removedSites: oneSite.removedSites, reason: '  ' },
+      unreadableReason,
+      ['details.reason']
+    ]
+  ])(
+    'shows a Details row and logs at Error for an entry with %s',
+    (_label, details, message, invalidFields) => {
+      const logger = aLogger()
+      const [decorated] = decorateAuditLog([entryWith(details)], {
+        logger,
+        workItemId: 'wi-1'
+      })
+
+      expect(decorated.detailRows).toContainEqual({
+        key: 'Details',
+        value: message
+      })
+      expect(logger.error).toHaveBeenCalledTimes(1)
+      expect(logger.error).toHaveBeenCalledWith(
+        {
+          workItemId: 'wi-1',
+          auditEntryId: 'entry-1',
+          auditAction: ACTION,
+          auditEntryCreatedAt: '2026-11-23T09:00:00Z',
+          invalidFields
+        },
+        'Audit entry has missing or malformed details; showing it without them'
+      )
+    }
+  )
+
+  test('keeps the readable part when only the reason is missing', () => {
+    expect(
+      detailRowsForAuditEntry(entryWith({ removedSites: oneSite.removedSites }))
+    ).toEqual([
+      { key: 'Removed sites', value: 'ORS ID: ORS-123', multiline: true },
+      { key: 'Details', value: unreadableReason }
+    ])
+  })
+
+  test('has no summary when the removed sites are unreadable', () => {
+    expect(
+      summariseAuditEntry(entryWith({ removedSites: 'nope', reason: 'x' }))
+    ).toBe('')
+  })
+
+  test('throws rather than hiding a malformed entry when no logger is supplied', () => {
+    expect(() => decorateAuditLog([entryWith(undefined)])).toThrow(
+      'decorateAuditLog needs a logger to report a malformed audit entry'
+    )
   })
 })
