@@ -96,7 +96,7 @@
 
         <fieldset class="govuk-fieldset">
           <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
-            <h2 class="govuk-fieldset__heading">Site address</h2>
+            <h2 class="govuk-fieldset__heading">Location</h2>
           </legend>
 
           {{ govukInput({
@@ -155,7 +155,7 @@
         }) }}
 
         {# RA-526: management-be's ReAccreditationNationRoutingHook no longer #}
-        {# derives Nation from the site address postcode above - it routes   #}
+        {# derives Nation from the location postcode above - it routes   #}
         {# on this field directly, defaulting to England if it's ever        #}
         {# missing. #}
         {{ govukSelect({
@@ -192,7 +192,7 @@
           spellcheck: false,
           classes: "govuk-input--width-10",
           label: { text: "Charge amount (pence, optional)", classes: "govuk-label--s" },
-          hint: { text: "Whole pence — 327600 renders as £3,276. Leave blank for an application with no charge." },
+          hint: { text: "Whole pence — 327600 renders as £3,276.00. Leave blank for an application with no charge." },
           errorMessage: { text: fieldErrors["chargeAmountPence"] } if fieldErrors["chargeAmountPence"] else null,
           attributes: { "data-testid": "create-work-item-charge-amount" }
         }) }}

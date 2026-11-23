@@ -1,0 +1,151 @@
+/**
+ * Single gate for the Standard-lifecycle "Duly make" flow (RA-316; shared by
+ * every type that opts into the Standard lifecycle since RA-495).
+ *
+ * Used by BOTH the CTA visibility check (`work-items/detail.controller.js`)
+ * and the duly-making routes' own guard (`./controller.js`), so the button
+ * and the URL can never disagree — the same discipline
+ * `approve-eligibility.js` established for RA-346.
+ *
+ * ⚠ WHY THIS DOES NOT CALL `canApplyAction`, unlike `approve-eligibility.js`.
+ *
+ * The backend registers `duly-make` with `CallerInvocable: false` (the same
+ * shape as the `continue-review-during-*` transitions), because duly making
+ * runs through its own endpoint — `POST /work-items/{id}/duly-make`, or
+ * re-accreditation's `POST /work-items/re-accreditation/{id}/duly-make` —
+ * and takes a payment date the generic action route has nowhere to put.
+ * `core/engine.js#canApplyAction` deliberately refuses ANY transition
+ * declared that way, returning `'not-caller-invocable'`, so routing this
+ * gate through it would answer "never allowed" for every work item and the
+ * CTA would never render.
+ *
+ * The fix is NOT to drop `callerInvocable: false` from the declaration —
+ * that flag is a truthful mirror of the backend and it is what keeps
+ * `projectWorkItem` from offering `duly-make` as a generic action button
+ * that would post to a route incapable of carrying the payment date.
+ * Instead this helper reads the SAME declared transition and applies the
+ * state rules only, so the `submitted` literal still lives exactly once —
+ * in `core/standard-workflow.js` — and a change to `fromStateId` there moves the CTA with
+ * it rather than silently desynchronising.
+ *
+ * The backend remains authoritative: it applies its own server-side gate
+ * and answers 409 to a forged POST regardless of what this says.
+ */
+
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
+
+import { resolveScopedType } from '../lifecycle.js'
+
+export const DULY_MAKE_ACTION_ID = 'duly-make'
+
+const logger = createLogger()
+
+/**
+ * Can this work item be duly made right now, on its type's Duly make page?
+ *
+ * @param {object} workItem A work item as returned by the backend — the RAW
+ *   DTO, never a decorated view model.
+ * @param {{ typeId: string }} scope The type whose page or CTA is asking. Its
+ *   declaration supplies the states and the `duly-make` transition.
+ * @returns {{ allowed: boolean, reason?: string }} `reason` is one of
+ *   `'wrong-type'`, `'type-not-registered'`, `'unknown-action'`,
+ *   `'invalid-work-item'`, `'terminal-state'` or `'invalid-transition'`.
+ */
+export function evaluateDulyMakeEligibility(workItem, { typeId }) {
+  const scoped = resolveScopedType(workItem, typeId, logger, 'duly making')
+  if (!scoped.type) {
+    return { allowed: false, reason: scoped.reason }
+  }
+  const type = scoped.type
+
+  const transition = (type.transitions ?? []).find(
+    (t) => t.actionId === DULY_MAKE_ACTION_ID
+  )
+  if (!transition) {
+    return { allowed: false, reason: 'unknown-action' }
+  }
+
+  const stateId = workItem?.stateId
+  if (!stateId) {
+    return { allowed: false, reason: 'invalid-work-item' }
+  }
+
+  const currentState = type.states?.find((s) => s.id === stateId)
+  if (currentState?.isTerminal) {
+    return { allowed: false, reason: 'terminal-state' }
+  }
+
+  if (transition.fromStateId === stateId) {
+    return { allowed: true }
+  }
+
+  // RA-316. The SECOND entry point into duly making. An application
+  // queried while it was being duly made, and then resubmitted by the
+  // operator, sits in the `updated` waypoint rather than in `submitted`.
+  // The backend's endpoint accepts it — it discharges the waypoint and
+  // duly-makes in a single write — so without this branch such an
+  // application would have NO route to `duly-made` at all and would
+  // strand, which is the regression the task-driven flow's removal would
+  // otherwise introduce.
+  //
+  // The discriminator is `originStateId`: the state this work item will
+  // return to when its waypoint discharges. For a waypoint item the backend
+  // resolves it from the work item's own audit history using the SAME
+  // helper its duly-make endpoint uses to decide whether to accept the
+  // item, so this gate and the backend's acceptance rule are one rule
+  // rather than two that can drift.
+  //
+  // RA-410 renamed this field from `taskStateId`. Only the NAME changed —
+  // same value, same resolution rule, same guarantees below. It was renamed
+  // rather than deleted with the rest of the tasks feature because the
+  // waypoint-origin meaning is not a task concept: it is audit-history
+  // knowledge only the backend has, and this branch is the only thing
+  // standing between a queried-during-duly-making application and a dead
+  // end. Confirmed with management-be.
+  //
+  // Comparing against the transition's own `fromStateId` keeps the
+  // `submitted` literal in `core/standard-workflow.js`, and never naming `updated` keeps
+  // that literal there too — the same discipline `canContinueReview`
+  // follows.
+  //
+  // An item queried from assessment or decision reports a different
+  // `originStateId` and is correctly refused: offering Duly make there
+  // would invite a caseworker to send an application backwards past
+  // assessment.
+  //
+  // `originStateId` is ALWAYS PRESENT AND NON-NULL on the wire — verified
+  // by management-be against real serialised responses, not inferred from
+  // the DTO's nullability. When no redirect applies it falls back to the
+  // item's own `stateId`. So an `updated` item with no resume history
+  // reports `originStateId: 'updated'`, NOT null, and is refused here
+  // because it fails the equality — which is the correct outcome (the
+  // backend answers 409 for those), just by a different route than a
+  // null-check would take.
+  //
+  // Do NOT add a null-guard or a `?? stateId` fallback: both would be
+  // dead code implying a wire shape that cannot occur. The strict
+  // equality already handles null, absent and self-referential values
+  // correctly without asserting anything about which of them happen.
+  //
+  // ⚠ DELIBERATELY KEYED ON `originStateId` ALONE — do NOT reintroduce a
+  // derived waypoint flag here, however naturally it would read. RA-410
+  // deleted the old `isTaskWaypoint`, but the lesson that flag taught is
+  // worth keeping: it was NOT a wire field, it was derived by
+  // `work-items/detail.controller.js#decorate` when building the view
+  // model. This helper is called with the RAW backend DTO — by the detail
+  // controller against `source`, and by the duly-making controller against
+  // the `getWorkItem` result — so any view-model-only field is `undefined`
+  // in both, and gating on one silently refused every waypoint item while
+  // the unit tests passed against fixtures that set it by hand. That is
+  // precisely the class of bug the raw-DTO test below exists to catch.
+  //
+  // No behaviour is lost: this branch is only reached when
+  // `fromStateId !== stateId`, so `originStateId === fromStateId` already
+  // implies `originStateId !== stateId` — i.e. it IS a waypoint. The
+  // equality is strictly the stronger check.
+  if (workItem?.originStateId === transition.fromStateId) {
+    return { allowed: true }
+  }
+
+  return { allowed: false, reason: 'invalid-transition' }
+}

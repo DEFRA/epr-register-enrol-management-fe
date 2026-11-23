@@ -1,17 +1,22 @@
-import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
 import {
   assignedToEntry,
+  chargeEntry,
   dueOnEntry,
-  formatPayment,
+  effectiveDateEntry,
   materialEntry,
-  statusEntry
+  paymentDateEntry,
+  requestTypeEntry,
+  statusEntry,
+  submittedByEntry,
+  submittedOnEntry
 } from '#/server/routes/work-items/case-header.js'
 import { EM_DASH } from '#/server/routes/work-items/application-summary.js'
 
 /**
- * RA-739. The add-ORS case header, from its own Figma frame (node
- * 854:136663): the reference as a caption above a site title, no
- * organisation name or Org ID, and two rows of four meta items.
+ * RA-739 / RA-495. The add-ORS case header: a site title, no organisation
+ * name or Org ID, and rows of four meta items. The title is RA-739's Figma
+ * frame (node 854:136663). That frame's reference caption is left out: the
+ * breadcrumb already shows the reference (user, 2026-11-19).
  *
  * @param {object} args
  * @param {object} args.header the header fields every type shares
@@ -23,9 +28,7 @@ export function buildAddOverseasSiteHeader({ header, workItem, assignment }) {
   const payload = workItem?.payload ?? {}
   return {
     ...header,
-    caption: header.applicationRef,
     title: siteTitle(payload.site),
-    metaLayout: 'in-year-change',
     meta: meta({ workItem, assignment, payload })
   }
 }
@@ -37,37 +40,32 @@ function siteTitle(site) {
 }
 
 /**
- * Two rows of four in Figma order. Status, Assigned to and Due date are
- * built exactly as for re-accreditation. The charge is the site's own
- * (`site.chargePence`), shown whenever it is known (unlike re-accreditation's
- * payment amount, which waits for payment), through the same formatter:
- * whole pounds without pence ("£328").
+ * The same fields in the same places as re-accreditation's (user,
+ * 2026-11-19), with the accreditation number where it has the registration
+ * number. No Site ID (the title has the ORS id) or location (the Application
+ * summary has it).
+ *
+ * The charge is the site's own (`site.chargePence`), always with pence
+ * ("£328.00"). RA-495 AC6: Effective date is the dash until the
+ * determination records one (`payload.effectiveDate`: the date entered on
+ * approval, the submission date on refusal).
  */
 function meta({ workItem, assignment, payload }) {
   return [
-    {
-      key: 'request-type',
-      label: 'Request type',
-      value: workItem.typeDisplayName || EM_DASH
-    },
+    requestTypeEntry(workItem),
     statusEntry(workItem),
     assignedToEntry(workItem, assignment),
     dueOnEntry(workItem),
-    materialEntry(payload),
     {
       key: 'accreditation-number',
       label: 'Accreditation number',
       value: payload.accreditationReference || EM_DASH
     },
-    {
-      key: 'charge',
-      label: 'Charge',
-      value: formatChargeAmount(payload.site?.chargePence) ?? EM_DASH
-    },
-    {
-      key: 'payment-date',
-      label: 'Payment date',
-      value: formatPayment(payload).date
-    }
+    materialEntry(payload),
+    chargeEntry(payload.site?.chargePence),
+    paymentDateEntry(payload),
+    submittedByEntry(payload),
+    submittedOnEntry(workItem),
+    effectiveDateEntry(payload.effectiveDate)
   ]
 }

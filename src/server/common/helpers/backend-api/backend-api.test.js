@@ -7,15 +7,17 @@ import {
   assertSafeHeaderValue,
   assignWorkItem,
   changePaymentDateReAccreditation,
-  confirmApplicantContact,
+  confirmWorkItemApplicantContact,
   continueReviewReAccreditation,
   createWorkItem,
+  dulyMakeWorkItem,
+  getDulyMakeDetails,
   extendWorkItemSla,
   getBackendHealth,
   getWorkItem,
   getWorkItems,
   raiseWorkItemQuery,
-  recordReAccreditationDecision,
+  recordWorkItemDecision,
   unassignWorkItem,
   updateRecyclingOperations
 } from './backend-api.js'
@@ -1573,7 +1575,37 @@ describe('#raiseWorkItemQuery (RA-291)', () => {
   })
 })
 
-describe('#recordReAccreditationDecision (RA-410)', () => {
+describe('#recordWorkItemDecision with an effective date (RA-495 AC6)', () => {
+  test('adds the effective date to the body', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ id: 'wi-1' })
+    })
+
+    await recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      effectiveDate: '2027-03-01',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/decision',
+      expect.objectContaining({
+        body: JSON.stringify({
+          outcome: 'approved',
+          effectiveDate: '2027-03-01'
+        })
+      })
+    )
+  })
+})
+
+describe('#recordWorkItemDecision for re-accreditation (RA-410)', () => {
   test('POSTs the outcome to the decision endpoint and returns the work item on 200', async () => {
     const workItem = { id: 'wi-1', stateId: 'approved' }
     const fetchImpl = vi.fn().mockResolvedValue({
@@ -1582,7 +1614,8 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
       json: () => Promise.resolve(workItem)
     })
 
-    const result = await recordReAccreditationDecision({
+    const result = await recordWorkItemDecision({
+      typeSegment: 're-accreditation',
       workItemId: 'wi-1',
       outcome: 'approved',
       baseUrl: 'http://backend:8085/',
@@ -1623,7 +1656,8 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
         })
     })
 
-    const result = await recordReAccreditationDecision({
+    const result = await recordWorkItemDecision({
+      typeSegment: 're-accreditation',
       workItemId: 'wi-1',
       outcome: 'approved',
       baseUrl: 'http://backend:8085',
@@ -1647,7 +1681,8 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
       json: () => Promise.resolve({ detail: 'Already decided' })
     })
 
-    const result = await recordReAccreditationDecision({
+    const result = await recordWorkItemDecision({
+      typeSegment: 're-accreditation',
       workItemId: 'wi-1',
       outcome: 'approved',
       baseUrl: 'http://backend:8085',
@@ -1670,7 +1705,8 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
     })
     const fetchImpl = vi.fn().mockRejectedValue(abortError)
 
-    const result = await recordReAccreditationDecision({
+    const result = await recordWorkItemDecision({
+      typeSegment: 're-accreditation',
       workItemId: 'wi-1',
       outcome: 'approved',
       baseUrl: 'http://backend:8085',
@@ -1702,7 +1738,8 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
         })
       })
 
-      const promise = recordReAccreditationDecision({
+      const promise = recordWorkItemDecision({
+        typeSegment: 're-accreditation',
         workItemId: 'wi-1',
         outcome: 'approved',
         baseUrl: 'http://backend:8085',
@@ -1732,7 +1769,7 @@ describe('#recordReAccreditationDecision (RA-410)', () => {
   })
 })
 
-describe('#confirmApplicantContact (RA-527)', () => {
+describe('#confirmWorkItemApplicantContact for re-accreditation (RA-527)', () => {
   test('POSTs to the confirm-contact endpoint and returns the work item on 200', async () => {
     const workItem = { id: 'wi-1', stateId: 'approved' }
     const fetchImpl = vi.fn().mockResolvedValue({
@@ -1741,7 +1778,8 @@ describe('#confirmApplicantContact (RA-527)', () => {
       json: () => Promise.resolve(workItem)
     })
 
-    const result = await confirmApplicantContact({
+    const result = await confirmWorkItemApplicantContact({
+      typeSegment: 're-accreditation',
       workItemId: 'wi-1',
       baseUrl: 'http://backend:8085/',
       timeoutMs: 1000,
@@ -1776,7 +1814,8 @@ describe('#confirmApplicantContact (RA-527)', () => {
         })
     })
 
-    const result = await confirmApplicantContact({
+    const result = await confirmWorkItemApplicantContact({
+      typeSegment: 're-accreditation',
       workItemId: 'wi-1',
       baseUrl: 'http://backend:8085',
       timeoutMs: 1000,
@@ -1798,7 +1837,8 @@ describe('#confirmApplicantContact (RA-527)', () => {
       json: () => Promise.resolve({ detail: 'Not pending contact' })
     })
 
-    const result = await confirmApplicantContact({
+    const result = await confirmWorkItemApplicantContact({
+      typeSegment: 're-accreditation',
       workItemId: 'wi-1',
       baseUrl: 'http://backend:8085',
       timeoutMs: 1000,
@@ -1816,7 +1856,8 @@ describe('#confirmApplicantContact (RA-527)', () => {
   test('reports a network reason on a transport failure', async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
 
-    const result = await confirmApplicantContact({
+    const result = await confirmWorkItemApplicantContact({
+      typeSegment: 're-accreditation',
       workItemId: 'wi-1',
       baseUrl: 'http://backend:8085',
       timeoutMs: 1000,
@@ -1844,7 +1885,8 @@ describe('#confirmApplicantContact (RA-527)', () => {
         })
       })
 
-      const promise = confirmApplicantContact({
+      const promise = confirmWorkItemApplicantContact({
+        typeSegment: 're-accreditation',
         workItemId: 'wi-1',
         baseUrl: 'http://backend:8085',
         fetchImpl
@@ -2337,5 +2379,250 @@ describe('#changePaymentDateReAccreditation (RA-576)', () => {
     expect(result.ok).toBe(false)
     expect(result.reason).toBe('network')
     expect(result.status).toBeUndefined()
+  })
+})
+
+// RA-495. The type-less Standard-lifecycle endpoints, for any type that has
+// opted in management-be side. Same bodies and failure vocabulary as
+// re-accreditation's own routes.
+describe('Standard-lifecycle endpoints (RA-495)', () => {
+  function okFetch(workItem) {
+    return vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+  }
+
+  test('#dulyMakeWorkItem POSTs the payment date to /work-items/{id}/duly-make', async () => {
+    const workItem = { id: 'wi-1', stateId: 'duly-made' }
+    const fetchImpl = okFetch(workItem)
+
+    const result = await dulyMakeWorkItem({
+      workItemId: 'wi-1',
+      paymentDate: '2026-10-01',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/duly-make',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ paymentDate: '2026-10-01' }),
+        headers: expect.objectContaining({ 'x-cdp-user-id': 'u-1' })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('#dulyMakeWorkItem with a typeSegment POSTs to /work-items/{typeSegment}/{id}/duly-make', async () => {
+    const fetchImpl = okFetch({ id: 'wi-1', stateId: 'duly-made' })
+
+    await dulyMakeWorkItem({
+      workItemId: 'wi-1',
+      paymentDate: '2026-10-01',
+      typeSegment: 're-accreditation',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/re-accreditation/wi-1/duly-make',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ paymentDate: '2026-10-01' })
+      })
+    )
+  })
+
+  test('#dulyMakeWorkItem surfaces the payment-date errorCode on a 400', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () =>
+        Promise.resolve({
+          detail: 'Payment date is in the future',
+          errorCode: 'payment-date-in-future',
+          field: 'paymentDate'
+        })
+    })
+
+    const result = await dulyMakeWorkItem({
+      workItemId: 'wi-1',
+      paymentDate: '2099-01-01',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid',
+      status: 400,
+      errorCode: 'payment-date-in-future',
+      message: 'Payment date is in the future'
+    })
+  })
+
+  test('#recordWorkItemDecision POSTs the outcome to /work-items/{id}/decision', async () => {
+    const workItem = { id: 'wi-1', stateId: 'approved-pending-contact' }
+    const fetchImpl = okFetch(workItem)
+
+    const result = await recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'approved',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/decision',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ outcome: 'approved' })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('#recordWorkItemDecision maps a 409 to a conflict', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ detail: 'Already decided' })
+    })
+
+    const result = await recordWorkItemDecision({
+      workItemId: 'wi-1',
+      outcome: 'rejected',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      errorCode: null,
+      message: 'Already decided'
+    })
+  })
+
+  test('#confirmWorkItemApplicantContact POSTs to /work-items/{id}/confirm-contact', async () => {
+    const workItem = { id: 'wi-1', stateId: 'approved' }
+    const fetchImpl = okFetch(workItem)
+
+    const result = await confirmWorkItemApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/confirm-contact',
+      expect.objectContaining({ method: 'POST' })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('#confirmWorkItemApplicantContact maps a generic 500 to reason server', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () =>
+        Promise.resolve({
+          detail: 'The operator journey could not be notified.'
+        })
+    })
+
+    const result = await confirmWorkItemApplicantContact({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'server',
+      status: 500,
+      message: 'The operator journey could not be notified.'
+    })
+  })
+})
+
+describe('#getDulyMakeDetails (RA-495)', () => {
+  test('GETs /work-items/{id}/duly-make and returns the details', async () => {
+    const details = {
+      workItemId: 'wi-1',
+      chargePence: 32800,
+      relatedWorkItems: [{ id: 'wi-2', stateId: 'submitted' }]
+    }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(details)
+    })
+
+    const result = await getDulyMakeDetails({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/duly-make',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        headers: expect.objectContaining({
+          accept: 'application/json',
+          'x-cdp-user-id': 'u-1'
+        })
+      })
+    )
+    expect(result).toEqual({ ok: true, details })
+  })
+
+  test('returns ok=false with the status on a failure', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({})
+    })
+
+    const result = await getDulyMakeDetails({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      status: 400,
+      error: 'Backend returned 400'
+    })
+  })
+
+  test('returns the transport error when fetch throws', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+
+    const result = await getDulyMakeDetails({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
   })
 })

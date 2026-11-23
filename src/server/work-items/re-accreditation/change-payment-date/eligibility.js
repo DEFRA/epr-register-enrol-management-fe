@@ -18,7 +18,7 @@
 
 import { getWorkItemType } from '../../core/registry.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
-import { RE_ACCREDITATION_TYPE_ID } from '../duly-making/eligibility.js'
+import { RE_ACCREDITATION_TYPE_ID } from '../type-id.js'
 
 const logger = createLogger()
 

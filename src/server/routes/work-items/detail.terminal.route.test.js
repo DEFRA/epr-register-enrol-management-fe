@@ -23,10 +23,10 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   unassignWorkItem: vi.fn(),
   applyWorkItemAction: vi.fn(),
   addWorkItemNote: vi.fn(),
-  recordReAccreditationDecision: vi.fn(),
-  confirmApplicantContact: vi.fn(),
+  recordWorkItemDecision: vi.fn(),
+  confirmWorkItemApplicantContact: vi.fn(),
   continueReviewReAccreditation: vi.fn(),
-  dulyMakeReAccreditation: vi.fn(),
+  dulyMakeWorkItem: vi.fn(),
   extendWorkItemSla: vi.fn(),
   raiseWorkItemQuery: vi.fn(),
   updateRecyclingOperations: vi.fn(),
@@ -104,12 +104,12 @@ describe('RA-527: detail page once the determination is applied', () => {
         'This application is closed and can no longer be assigned or reassigned.'
       )
       expect(
-        squash($('[data-testid="re-accreditation-readonly-actions"]').text())
+        squash($('[data-testid="standard-lifecycle-readonly-actions"]').text())
       ).toBe(
         'This work item is in a final state. No further decision actions are available.'
       )
       expect(
-        squash($('[data-testid="re-accreditation-state-tag"]').text())
+        squash($('[data-testid="standard-lifecycle-state-tag"]').text())
       ).toBe(tagText)
       // Nothing left to confirm.
       expect($('[data-testid="confirm-applicant-contact-cta"]').length).toBe(0)

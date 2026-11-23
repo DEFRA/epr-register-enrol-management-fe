@@ -292,7 +292,7 @@ describe('#isExporterApplication (RA-412: real wasteProcessingType field)', () =
 })
 
 describe('#deriveSiteAddressLines / #deriveSiteAddress (RA-447 CM2)', () => {
-  test('a reprocessor uses its own site address, unaffected by a registered address', () => {
+  test('a reprocessor uses its own location, unaffected by a registered address', () => {
     const payload = {
       siteAddress: { line1: '2 Wyld Court', town: 'Addingrove' }
     }
@@ -342,7 +342,9 @@ describe('#deriveSiteAddressLines / #deriveSiteAddress (RA-447 CM2)', () => {
 })
 
 describe('#buildApplicationSummary (RA-295 AC02)', () => {
-  test('emits the eight reprocessor rows in the literal AC02 order', () => {
+  // AC02's order, without its Type row: the case header's Application type
+  // shows it (user, 2026-11-19).
+  test('emits the seven reprocessor rows in the AC02 order', () => {
     const { rows, isExporter } = buildApplicationSummary({
       workItem: REPROCESSOR
     })
@@ -350,7 +352,6 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     expect(isExporter).toBe(false)
     expect(rows.map((r) => r.key)).toEqual([
       'site-address',
-      'type',
       'material',
       'prn-tonnage',
       'prn-authorisers',
@@ -400,37 +401,12 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
     ])
   })
 
-  test('describes the type using the registry display name alone', () => {
-    expect(
-      row(buildApplicationSummary({ workItem: REPROCESSOR }).rows, 'type').value
-    ).toBe('Re-accreditation')
-  })
-
-  // RA-434-processortype: the "Type" row deliberately still carries no
-  // applicant-kind prefix — see the comment on that row in
-  // application-summary.js. Restoring one is a product/BA decision, not
-  // made here.
-  test('never claims an applicant kind the backend does not send', () => {
+  test('has no Type row, as the case header shows the application type', () => {
     for (const workItem of [REPROCESSOR, EXPORTER]) {
-      const typeRow = row(buildApplicationSummary({ workItem }).rows, 'type')
-      expect(typeRow.value).not.toContain('Reprocessor')
-      expect(typeRow.value).not.toContain('Exporter')
+      expect(
+        buildApplicationSummary({ workItem }).rows.map((r) => r.key)
+      ).not.toContain('type')
     }
-  })
-
-  test('falls back to the type id, then an em dash, when there is no display name', () => {
-    expect(
-      row(
-        buildApplicationSummary({
-          workItem: { typeId: 'mystery', payload: {} }
-        }).rows,
-        'type'
-      ).value
-    ).toBe('mystery')
-    expect(
-      row(buildApplicationSummary({ workItem: { payload: {} } }).rows, 'type')
-        .value
-    ).toBe(EM_DASH)
   })
 
   test('shows the material display label, not the raw token', () => {
@@ -625,7 +601,6 @@ describe('real operator submission payload contract', () => {
     expect(row(rows, 'site-address').values).toEqual([
       '123 High Street, London, SW1A 1AA'
     ])
-    expect(row(rows, 'type').value).toBe('Re-accreditation')
     expect(row(rows, 'material').value).toBe('Plastic')
     expect(row(rows, 'prn-tonnage').value).toBe('Up to 5,000 tonnes')
     expect(row(rows, 'prn-authorisers').values).toEqual(['Bob Jones'])

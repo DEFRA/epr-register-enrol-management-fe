@@ -15,7 +15,7 @@ import { overseasSitesOf } from './overseas-sites.js'
  * page's controller (tonnage-band labels, business-plan categories, sampling
  * plan files, overseas sites) and re-ordered to the literal AC02 sequence:
  *
- *   1. Site address                    6. Authority to issue
+ *   1. Location                    6. Authority to issue
  *   2. Type                            7. Sampling and inspection plan
  *   3. Material                        8. Business plan
  *   4. PRN tonnage                     9. Broadly Equivalent Standards *
@@ -100,17 +100,17 @@ export function buildSiteAddressLines(payload) {
 }
 
 /**
- * RA-434 / RA-447 (CM2). re-ex's site address exists only for reprocessors
+ * RA-434 / RA-447 (CM2). re-ex's location exists only for reprocessors
  * (`SiteDto.Address` lives on `ReprocessorRegistrationDto.Site`) — exporters
  * carry none. Mirrors the fallback the Registration & Accreditation
  * service frontend's `applicationHeader.js` already applies to its own
  * "Site" header row: the registered address stands in for an exporter's
- * site address, and an absent `wasteProcessingType` (e.g. a work item
+ * location, and an absent `wasteProcessingType` (e.g. a work item
  * created manually through the Case Management service's "create work
  * item" form) defaults to the reprocessor branch rather than the exporter
  * one.
  *
- * For an exporter this deliberately makes Site address equal Registered
+ * For an exporter this deliberately makes Location equal Registered
  * address — matches the Registration & Accreditation service's own header,
  * not a bug.
  *
@@ -487,7 +487,7 @@ const ORS_DETAIL_FIELDS = [
   ],
   [
     'contact-phone',
-    'Contact phone',
+    'Contact phone number',
     (site) => toDisplayLines(site.contactPhone)
   ],
   [
@@ -538,7 +538,7 @@ const INTERIM_DETAIL_FIELDS = [
   ],
   [
     'contact-phone',
-    'Contact phone',
+    'Contact phone number',
     (site) => toDisplayLines(site.contactPhone)
   ],
   [
@@ -696,7 +696,6 @@ export function buildAuthorityToIssueContacts(prns) {
  * @returns {object[]}
  */
 function buildCoreSummaryRows({
-  workItem,
   payload,
   workItemId,
   prns,
@@ -707,32 +706,20 @@ function buildCoreSummaryRows({
   return [
     {
       key: 'site-address',
-      label: 'Site address',
+      label: 'Location',
       kind: 'lines',
       // RA-245. The address arrives either nested (postcode inside the
       // object, excluded from `formatSiteAddress`) or as a legacy flat
       // string that already contains the postcode — so the postcode is added
       // as a second line only when it is not already part of the first.
       //
-      // CM2. For an exporter, re-ex carries no site address at all, so this
+      // CM2. For an exporter, re-ex carries no location at all, so this
       // falls back to the registered address instead of rendering an em
       // dash — see `deriveSiteAddressLines`.
       values: deriveSiteAddressLines(payload, registeredAddress)
     },
-    {
-      key: 'type',
-      label: 'Type',
-      kind: 'text',
-      // Sourced from the registry, so no type-specific wording is hard-coded
-      // into this generic route.
-      //
-      // Deliberately NOT prefixed with an applicant kind ("Reprocessor" /
-      // "Exporter"). RA-412 added a real `payload.wasteProcessingType` field
-      // (see `isExporterApplication` above, and the work-items list card,
-      // which now reads it) — but AC02 never asked for that prefix on this
-      // row, so it stays as the registry's plain display name.
-      value: workItem?.typeDisplayName || workItem?.typeId || EM_DASH
-    },
+    // No Type row: the case header's Application type shows it (user,
+    // 2026-11-19).
     {
       key: 'material',
       label: 'Material',
@@ -836,7 +823,6 @@ export function buildApplicationSummary({
   })
 
   const rows = buildCoreSummaryRows({
-    workItem,
     payload,
     workItemId,
     prns,

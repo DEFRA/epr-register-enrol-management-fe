@@ -9,7 +9,7 @@ import { buildWithdrawnNotice } from '#/server/work-items/core/withdrawn-notice.
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import { findAssignableUser } from '#/server/work-items/core/assignees.js'
-import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/decision/eligibility.js'
+import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/type-id.js'
 import {
   isGenericRouteRejectedActionId,
   isWithdrawActionId
@@ -22,6 +22,7 @@ import {
 } from '#/server/work-items/core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { applyReAccreditationViewModel } from './re-accreditation-view-model.js'
+import { applyStandardLifecycleViewModel } from './standard-lifecycle-view-model.js'
 import {
   buildCaseHeader,
   buildCaseTabs,
@@ -447,11 +448,20 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   // is not: `decorate` still rewrites and drops fields, and
   // `duly-making/eligibility.js` reads `originStateId`, which only exists on
   // the raw DTO.
-  const enriched = applyReAccreditationViewModel({
-    workItem: decorated,
-    source: result.workItem,
-    route: request.route.path
-  })
+  //
+  // RA-495. Any other type that has opted into the Standard lifecycle gets
+  // the shared lifecycle CTAs and pending-contact banner the same way.
+  const enriched =
+    decorated.typeId === RE_ACCREDITATION_TYPE_ID
+      ? applyReAccreditationViewModel({
+          workItem: decorated,
+          source: result.workItem,
+          route: request.route.path
+        })
+      : applyStandardLifecycleViewModel({
+          workItem: decorated,
+          source: result.workItem
+        })
   const templatePath = resolveDetailTemplate(
     enriched.typeId,
     enriched.templateVersion

@@ -357,7 +357,7 @@ describe('config production hardening', () => {
 // retries up to 5 times (~28s worst case) before committing anything. fe
 // must not abort before be finishes and returns its clean HTTP 500 — a
 // premature abort re-opens the stranding bug. See
-// `backendApi.decisionTimeoutMs` and `recordReAccreditationDecision`.
+// `backendApi.decisionTimeoutMs` and `recordWorkItemDecision`.
 describe('config backend API decision timeout (RA-410)', () => {
   const originalEnv = process.env
 

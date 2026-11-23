@@ -1,5 +1,8 @@
+import { vi } from 'vitest'
+
 import { assertValidWorkItemModule } from '../core/module.js'
 import {
+  assertCurrentTemplateVersionIsRegistered,
   clearDetailTemplateRegistry,
   resolveDetailTemplate
 } from '../core/templates.js'
@@ -16,7 +19,7 @@ describe('add-overseas-site module (RA-739)', () => {
       id: 'add-overseas-site',
       displayName: 'New ORS accreditation',
       category: 'in-year-change',
-      templateVersion: 'v1'
+      templateVersion: 'v2'
     })
     expect(addOverseasSiteType.initialState).toEqual({
       id: 'submitted',
@@ -50,13 +53,73 @@ describe('add-overseas-site module (RA-739)', () => {
     })
   })
 
-  test('is a valid module that registers its detail template', async () => {
+  test('is a valid module that registers its detail template and its Standard-lifecycle pages', async () => {
     expect(() => assertValidWorkItemModule(addOverseasSiteModule)).not.toThrow()
+    const server = { route: vi.fn() }
 
-    await addOverseasSiteModule.register({})
+    await addOverseasSiteModule.register(server)
 
-    expect(resolveDetailTemplate('add-overseas-site', 'v1')).toBe(
-      'add-overseas-site/detail-v1'
-    )
+    // The current version (what management-be stamps) and every older one
+    // render with the add-ORS template, never the generic fallback.
+    expect(addOverseasSiteType.templateVersion).toBe('v2')
+    for (const version of ['v1', 'v2']) {
+      expect(resolveDetailTemplate('add-overseas-site', version)).toBe(
+        'add-overseas-site/detail-v1'
+      )
+    }
+    expect(() =>
+      assertCurrentTemplateVersionIsRegistered(
+        addOverseasSiteType.id,
+        addOverseasSiteType.templateVersion
+      )
+    ).not.toThrow()
+    // RA-495. Duly make, Make determination and Confirm applicant contact.
+    const routes = server.route.mock.calls.flatMap(([mounted]) => mounted)
+    expect(routes.map((r) => `${r.method} ${r.path}`)).toEqual([
+      'GET /work-items/add-overseas-site/{id}/duly-make',
+      'POST /work-items/add-overseas-site/{id}/duly-make',
+      'GET /work-items/add-overseas-site/{id}/decision',
+      'POST /work-items/add-overseas-site/{id}/decision',
+      'GET /work-items/add-overseas-site/{id}/confirm-contact',
+      'POST /work-items/add-overseas-site/{id}/confirm-contact'
+    ])
+  })
+
+  // RA-495. The Duly make page shows the site's own charge and the request's
+  // payment reference, and the related change requests.
+  test('opts into the Standard lifecycle with the site charge as the payment details', () => {
+    const { standardLifecycle } = addOverseasSiteType
+    expect(
+      standardLifecycle.readPaymentDetails({
+        payload: {
+          chargePence: 98400,
+          paymentReference: 'PR/PK/REP/123001',
+          site: { chargePence: 32800 }
+        }
+      })
+    ).toEqual({ chargePence: 32800, paymentReference: 'PR/PK/REP/123001' })
+    expect(standardLifecycle.readPaymentDetails({})).toEqual({
+      chargePence: undefined,
+      paymentReference: undefined
+    })
+    expect(standardLifecycle.relatedWorkItems).toBe(true)
+    expect(standardLifecycle.backend).toBeUndefined()
+  })
+
+  // RA-495. An add-ORS grant adds the site to an existing accreditation, so
+  // the "Applicant contacted" banner must not say an accreditation is granted.
+  test('supplies its own confirm-contact success banners', () => {
+    expect(
+      addOverseasSiteType.standardLifecycle.contactConfirmedBanners
+    ).toEqual({
+      approved: {
+        title: 'Applicant contacted',
+        text: 'The applicant has been contacted and the overseas reprocessing site has been added to their accreditation.'
+      },
+      rejected: {
+        title: 'Applicant contacted',
+        text: 'The applicant has been contacted and the overseas reprocessing site has not been added to their accreditation.'
+      }
+    })
   })
 })

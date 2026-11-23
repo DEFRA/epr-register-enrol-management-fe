@@ -222,34 +222,14 @@ export async function getWorkItems({
     page,
     pageSize
   })
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const response = await fetchImpl(url, {
-      signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' }, user)
-    })
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        status: response.status,
-        error: `Backend returned ${response.status}`
-      }
-    }
-
-    const body = await response.json()
-    return parseWorkItemsBody(body)
-  } catch (error) {
-    logger.warn({ err: error, url }, 'Backend API getWorkItems failed')
-    return {
-      ok: false,
-      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
-    }
-  } finally {
-    clearTimeout(timer)
-  }
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getWorkItems',
+    read: parseWorkItemsBody
+  })
 }
 
 // buildWorkItemsUrl's own repeated-value params (typeId, stateId, nation,
@@ -396,37 +376,15 @@ export async function getWorkItem({
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}`
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const response = await fetchImpl(url, {
-      signal: controller.signal,
-      headers: buildHeaders({ accept: 'application/json' }, user)
-    })
-
-    if (response.status === statusCodes.notFound) {
-      return { ok: false, status: statusCodes.notFound }
-    }
-    if (!response.ok) {
-      return {
-        ok: false,
-        status: response.status,
-        error: `Backend returned ${response.status}`
-      }
-    }
-
-    const workItem = await response.json()
-    return { ok: true, workItem }
-  } catch (error) {
-    logger.warn({ err: error, url }, 'Backend API getWorkItem failed')
-    return {
-      ok: false,
-      error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
-    }
-  } finally {
-    clearTimeout(timer)
-  }
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getWorkItem',
+    notFoundIsDistinct: true,
+    read: (workItem) => ({ ok: true, workItem })
+  })
 }
 
 /**
@@ -608,44 +566,27 @@ export async function continueReviewReAccreditation({
 }
 
 /**
- * Duly make a re-accreditation work item (RA-316).
- *
- * Wraps `POST /work-items/re-accreditation/{id}/duly-make`.
- * Body: `{ paymentDate }` — a plain `YYYY-MM-DD` string and nothing else.
- * The backend parses with an exact `yyyy-MM-dd` invariant-culture format
- * and REJECTS a full ISO timestamp, so never widen this to a Date or an
- * `toISOString()`. Charge amount and payment reference are display-only
- * and are ignored if sent.
- *
- * ⚠ UNLIKE THE OTHER CLIENTS HERE, this one surfaces `errorCode` from the
- * ProblemDetails body. The backend distinguishes a user's bad payment date
- * (400 + `errorCode: 'payment-date-*'` + `field: 'paymentDate'`) from a
- * structural failure (404 / 409 / a wrong work item type), and the UI has
- * to tell them apart: the first renders as a GOV.UK error summary bound to
- * the date input, the second as a page-level banner. Collapsing both to
- * `message` — which is what `continueReviewReAccreditation` does, because
- * it has no field to bind to — would make that impossible.
- *
- * `message` still carries the backend's developer-facing `detail` for
- * LOGGING. It is never rendered to the user; the frontend owns the copy.
+ * RA-495. The POST behind every Standard-lifecycle step (duly make,
+ * decision, confirm contact), whichever URL a type uses for it. Surfaces the
+ * ProblemDetails `errorCode` when `withErrorCode` is set, for the steps
+ * whose 400s bind to a form field.
  */
-export async function dulyMakeReAccreditation({
-  workItemId,
-  paymentDate,
-  user = null,
-  baseUrl = config.get(CONFIG_BACKEND_API_URL),
-  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
-  fetchImpl = fetch
+async function postLifecycleStep({
+  url,
+  body,
+  label,
+  user,
+  timeoutMs,
+  fetchImpl,
+  withErrorCode
 }) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/duly-make`
-
   const result = await postJson({
     url,
     timeoutMs,
     fetchImpl,
     user,
-    body: { paymentDate },
-    label: 'dulyMakeReAccreditation'
+    body,
+    label
   })
 
   if (result.ok) {
@@ -665,10 +606,12 @@ export async function dulyMakeReAccreditation({
     ok: false,
     reason: REASON_BY_STATUS[result.status] ?? 'server',
     status: result.status,
-    errorCode:
-      typeof result.problem?.errorCode === 'string'
-        ? result.problem.errorCode
-        : null,
+    ...(withErrorCode && {
+      errorCode:
+        typeof result.problem?.errorCode === 'string'
+          ? result.problem.errorCode
+          : null
+    }),
     message:
       result.problem?.detail ??
       result.problem?.title ??
@@ -677,13 +620,99 @@ export async function dulyMakeReAccreditation({
 }
 
 /**
+ * `{baseUrl}/work-items/[{typeSegment}/]{id}/{step}` for a lifecycle step.
+ * Re-accreditation's own endpoints carry its type segment; the type-less
+ * Standard-lifecycle ones do not.
+ */
+function lifecycleStepUrl(baseUrl, workItemId, step, typeSegment = null) {
+  const root = `${baseUrl.replace(/\/$/, '')}/work-items`
+  const prefix = typeSegment ? `${root}/${typeSegment}` : root
+  return `${prefix}/${encodeURIComponent(workItemId)}/${step}`
+}
+
+/**
+ * Duly make a work item (RA-316, RA-495).
+ *
+ * Wraps `POST /work-items/[{typeSegment}/]{id}/duly-make`: re-accreditation
+ * passes its `typeSegment` for its own endpoint, which refuses any other
+ * type; without one this is the type-less Standard-lifecycle endpoint, and a
+ * type that has not opted in management-be side gets a 400
+ * `wrong-work-item-type`.
+ *
+ * Body: `{ paymentDate }` — a plain `YYYY-MM-DD` string and nothing else.
+ * The backend parses with an exact `yyyy-MM-dd` invariant-culture format
+ * and REJECTS a full ISO timestamp, so never widen this to a Date or an
+ * `toISOString()`. Charge amount and payment reference are display-only
+ * and are ignored if sent.
+ *
+ * ⚠ UNLIKE THE OTHER CLIENTS HERE, this one surfaces `errorCode` from the
+ * ProblemDetails body. The backend distinguishes a user's bad payment date
+ * (400 + `errorCode: 'payment-date-*'` + `field: 'paymentDate'`) from a
+ * structural failure (404 / 409 / a wrong work item type), and the UI has
+ * to tell them apart: the first renders as a GOV.UK error summary bound to
+ * the date input, the second as a page-level banner. Collapsing both to
+ * `message` — which is what `continueReviewReAccreditation` does, because
+ * it has no field to bind to — would make that impossible.
+ *
+ * `message` still carries the backend's developer-facing `detail` for
+ * LOGGING. It is never rendered to the user; the frontend owns the copy.
+ */
+export async function dulyMakeWorkItem({
+  workItemId,
+  paymentDate,
+  typeSegment = null,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  return postLifecycleStep({
+    url: lifecycleStepUrl(baseUrl, workItemId, 'duly-make', typeSegment),
+    body: { paymentDate },
+    label: 'dulyMakeWorkItem',
+    user,
+    timeoutMs,
+    fetchImpl,
+    withErrorCode: true
+  })
+}
+
+/**
+ * RA-495. What the Duly make page needs that management-be works out: the
+ * work item's charge and every work item from the same submission, this one
+ * included, by application reference (`relatedWorkItems`, each `{ id, typeId, stateId, applicationReference,
+ * siteName, orsId, chargePence }`).
+ *
+ * Wraps the type-less `GET /work-items/{id}/duly-make`.
+ *
+ * @returns {Promise<{ ok: true, details: object } | { ok: false, status?: number, error: string }>}
+ */
+export async function getDulyMakeDetails({
+  workItemId,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  const url = lifecycleStepUrl(baseUrl, workItemId, 'duly-make')
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getDulyMakeDetails',
+    read: (details) => ({ ok: true, details })
+  })
+}
+
+/**
  * Change the payment date of a re-accreditation work item (RA-576).
  *
  * Wraps `POST /work-items/re-accreditation/{id}/change-payment-date`.
  * Body: `{ paymentDate, reason }` — `paymentDate` is a plain `YYYY-MM-DD`
- * string, as for {@link dulyMakeReAccreditation}.
+ * string, as for {@link dulyMakeWorkItem}.
  *
- * Same result shape as {@link dulyMakeReAccreditation}, including
+ * Same result shape as {@link dulyMakeWorkItem}, including
  * `errorCode`: a 400 carries `payment-date-*` (bind to the date input) or
  * `payment-date-reason-*` (bind to the reason) plus a `field` member, while a
  * 409 means the item is closed or has no payment date to change.
@@ -737,10 +766,13 @@ export async function changePaymentDateReAccreditation({
 }
 
 /**
- * Record a re-accreditation decision (RA-410).
+ * Record the determination on a work item (RA-410, RA-495).
  *
- * Wraps `POST /work-items/re-accreditation/{id}/decision`.
- * Body: `{ outcome }`, where `outcome` is `'approved'` or `'rejected'`.
+ * Wraps `POST /work-items/[{typeSegment}/]{id}/decision`, type-scoped as for
+ * {@link dulyMakeWorkItem}.
+ * Body: `{ outcome }`, where `outcome` is `'approved'` or `'rejected'`,
+ * plus `effectiveDate` (`YYYY-MM-DD`) when given: RA-495 AC6, an add-ORS
+ * approval's effective date. Omitted from the body when not given.
  *
  * ONE call for both outcomes, and deliberately one call rather than two.
  * The backend applies BOTH hops server-side in a single atomic write —
@@ -756,13 +788,15 @@ export async function changePaymentDateReAccreditation({
  * when the requested outcome matches, and 409 when it does not — we do not
  * read the header, we just do not treat a repeat as an error.
  *
- * Same result shape as {@link dulyMakeReAccreditation}, including the
- * `errorCode` extension member, so the controller can bind a 400 to the
- * radio group and treat a 409 as a page-level banner.
+ * Same result shape as {@link dulyMakeWorkItem}, including the `errorCode`
+ * extension member, so the controller can bind a 400 to the radio group and
+ * treat a 409 as a page-level banner.
  */
-export async function recordReAccreditationDecision({
+export async function recordWorkItemDecision({
   workItemId,
   outcome,
+  effectiveDate = null,
+  typeSegment = null,
   user = null,
   baseUrl = config.get(CONFIG_BACKEND_API_URL),
   // NOT the shared backendApi.timeoutMs. The backend gates this atomic
@@ -774,103 +808,52 @@ export async function recordReAccreditationDecision({
   timeoutMs = config.get('backendApi.decisionTimeoutMs'),
   fetchImpl = fetch
 }) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/decision`
-
-  const result = await postJson({
-    url,
+  return postLifecycleStep({
+    url: lifecycleStepUrl(baseUrl, workItemId, 'decision', typeSegment),
+    body: effectiveDate ? { outcome, effectiveDate } : { outcome },
+    label: 'recordWorkItemDecision',
+    user,
     timeoutMs,
     fetchImpl,
-    user,
-    body: { outcome },
-    label: 'recordReAccreditationDecision'
+    withErrorCode: true
   })
-
-  if (result.ok) {
-    return { ok: true, workItem: result.workItem }
-  }
-
-  // `postJson` reports transport failures without a status.
-  if (result.status == null) {
-    return {
-      ok: false,
-      reason: 'network',
-      message: result.error ?? REQUEST_FAILED
-    }
-  }
-
-  return {
-    ok: false,
-    reason: REASON_BY_STATUS[result.status] ?? 'server',
-    status: result.status,
-    errorCode:
-      typeof result.problem?.errorCode === 'string'
-        ? result.problem.errorCode
-        : null,
-    message:
-      result.problem?.detail ??
-      result.problem?.title ??
-      `Backend returned ${result.status}`
-  }
 }
 
 /**
- * Confirm the applicant has been contacted about a re-accreditation
- * determination (RA-527, step 2 of the two-step determination).
+ * Confirm the applicant has been contacted about a work item's
+ * determination (RA-527, RA-495; step 2 of the two-step determination).
  *
- * Wraps `POST /work-items/re-accreditation/{id}/confirm-contact`. No body:
- * the outcome was fixed at step 1. This is what applies it — management-be
- * pushes the final status to the operator journey first, then moves the
- * item to its terminal state, stops the SLA clock, queues publishing and
- * (for an approval) sends the Decision email. A repeat call on an item
- * already applied answers 200 + `x-idempotent-replay: true`; any state other
- * than pending contact is a 409.
+ * Wraps `POST /work-items/[{typeSegment}/]{id}/confirm-contact`, type-scoped
+ * as for {@link dulyMakeWorkItem}. No body: the outcome was fixed at step 1.
+ * This is what applies it — management-be pushes the final status to the
+ * operator journey first, then moves the item to its terminal state, stops
+ * the SLA clock, queues publishing and (for an approval) sends the Decision
+ * email. A repeat call on an item already applied answers 200 +
+ * `x-idempotent-replay: true`; any state other than pending contact is a 409.
  *
  * Same result shape as {@link continueReviewReAccreditation}: there is no
  * field to bind a failure to, so no `errorCode`.
  */
-export async function confirmApplicantContact({
+export async function confirmWorkItemApplicantContact({
   workItemId,
+  typeSegment = null,
   user = null,
   baseUrl = config.get(CONFIG_BACKEND_API_URL),
   // NOT the shared backendApi.timeoutMs, for the same reason as
-  // recordReAccreditationDecision: the backend gates this on an
-  // operator-journey push it retries for up to ~28s before writing anything,
-  // and aborting first would turn its clean 500 into a client cancellation.
+  // recordWorkItemDecision: the backend gates this on an operator-journey
+  // push it retries for up to ~28s before writing anything, and aborting
+  // first would turn its clean 500 into a client cancellation.
   timeoutMs = config.get('backendApi.decisionTimeoutMs'),
   fetchImpl = fetch
 }) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/confirm-contact`
-
-  const result = await postJson({
-    url,
+  return postLifecycleStep({
+    url: lifecycleStepUrl(baseUrl, workItemId, 'confirm-contact', typeSegment),
+    label: 'confirmWorkItemApplicantContact',
+    user,
     timeoutMs,
     fetchImpl,
-    user,
-    label: 'confirmApplicantContact'
+    withErrorCode: false
   })
-
-  if (result.ok) {
-    return { ok: true, workItem: result.workItem }
-  }
-
-  // `postJson` reports transport failures without a status.
-  if (result.status == null) {
-    return {
-      ok: false,
-      reason: 'network',
-      message: result.error ?? REQUEST_FAILED
-    }
-  }
-
-  return {
-    ok: false,
-    reason: REASON_BY_STATUS[result.status] ?? 'server',
-    status: result.status,
-    message:
-      result.problem?.detail ??
-      result.problem?.title ??
-      `Backend returned ${result.status}`
-  }
 }
 
 /**
@@ -1227,6 +1210,49 @@ export async function getReAccreditationPriorYear({
   fetchImpl = fetch
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/prior-year`
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getReAccreditationPriorYear',
+    notFoundIsDistinct: true,
+    read: (priorYear) => ({ ok: true, priorYear })
+  })
+}
+
+async function safeReadJson(response) {
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * GET a JSON resource from management-be, with the request timeout every
+ * call here shares.
+ *
+ * Result shape:
+ *  - whatever `read` returns for the parsed body, on success
+ *  - { ok: false, status: 404 }   when `notFoundIsDistinct` and nothing exists
+ *  - { ok: false, status, error } on other 4xx/5xx
+ *  - { ok: false, error }         on transport errors and timeouts (logged)
+ *
+ * @param {object} options
+ * @param {string} options.label the caller's name, for the log
+ * @param {(body: any) => object} options.read builds the success result
+ * @param {boolean} [options.notFoundIsDistinct] answer a bare 404 result
+ */
+async function getJson({
+  url,
+  timeoutMs,
+  fetchImpl,
+  user,
+  label,
+  read,
+  notFoundIsDistinct = false
+}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -1236,7 +1262,7 @@ export async function getReAccreditationPriorYear({
       headers: buildHeaders({ accept: 'application/json' }, user)
     })
 
-    if (response.status === statusCodes.notFound) {
+    if (notFoundIsDistinct && response.status === statusCodes.notFound) {
       return { ok: false, status: statusCodes.notFound }
     }
     if (!response.ok) {
@@ -1247,27 +1273,15 @@ export async function getReAccreditationPriorYear({
       }
     }
 
-    const priorYear = await response.json()
-    return { ok: true, priorYear }
+    return read(await response.json())
   } catch (error) {
-    logger.warn(
-      { err: error, url },
-      'Backend API getReAccreditationPriorYear failed'
-    )
+    logger.warn({ err: error, url }, `Backend API ${label} failed`)
     return {
       ok: false,
       error: error.name === 'AbortError' ? REQUEST_TIMED_OUT : error.message
     }
   } finally {
     clearTimeout(timer)
-  }
-}
-
-async function safeReadJson(response) {
-  try {
-    return await response.json()
-  } catch {
-    return null
   }
 }
 

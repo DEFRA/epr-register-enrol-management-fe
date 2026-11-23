@@ -1,0 +1,512 @@
+/**
+ * Standard-lifecycle log-decision controllers (RA-410; shared since RA-495).
+ *
+ * Two handlers — both at `/work-items/{typeId}/{id}/decision`, each factory
+ * taking the `typeId` whose routes it serves:
+ *
+ *  - GET: render the decision page: an Approved / Refused radio group and a
+ *    primary submit. RA-495 AC6: a type that takes one (add-ORS) also gets
+ *    an effective date, required on approval and hidden on refusal. Fetches the work item up front so the page can show its
+ *    reference and so a stale link cannot reach the form.
+ *
+ *  - POST: validate that a choice was made, re-check eligibility, then ask
+ *    the service to record it. PRG-redirects back to the detail page with a
+ *    flash banner in every terminating branch. A missing choice renders the
+ *    page again in place with a GOV.UK error summary, which is the one case
+ *    that does NOT redirect — the user needs the radio back with their
+ *    context intact.
+ *
+ * Replaces the RA-132 approve interstitial: one page now covers both
+ * outcomes, which is the point of the story. The backend's bespoke
+ * `/approve` endpoint was removed in RA-527; `/decision` is the only route
+ * to approval.
+ */
+
+import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
+import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import {
+  describeStartFailure,
+  ensureAssessmentStarted,
+  withStartSuccess
+} from '#/server/work-items/core/ensure-assessment-started.js'
+
+import {
+  evaluateLogDecisionEligibility,
+  isValidDecisionOutcome
+} from './eligibility.js'
+import {
+  DECISION_PAGE,
+  lifecyclePageHref,
+  takesEffectiveDate
+} from '../lifecycle.js'
+import { createDecisionService, DECISION_NOTE_MAX_LENGTH } from './service.js'
+import {
+  EFFECTIVE_DATE_ANCHOR,
+  EFFECTIVE_DATE_ID,
+  effectiveDateMessage,
+  isEffectiveDateErrorCode,
+  validateEffectiveDate
+} from './effective-date.js'
+
+const VIEW_PATH = 'standard-lifecycle/decision/index'
+const NOT_FOUND_VIEW = 'work-items/not-found'
+const UNAVAILABLE_VIEW = 'work-items/detail-error'
+const WORK_ITEMS_HREF = '/work-items'
+
+const PAGE_TITLE = 'Make determination for this application'
+// RA-527: the H1 is the shorter Figma Design 3 copy; the <title> keeps the
+// longer, more descriptive PAGE_TITLE.
+const PAGE_HEADING = 'Make determination'
+const DECISION_FAILED_TITLE = 'Could not log a decision'
+
+// The GOV.UK error-summary link must target the FIRST radio in the group,
+// which is the id govuk-frontend generates for the first item — not the
+// fieldset. Kept as a constant so the template and the summary cannot drift.
+const DECISION_FIELD_ANCHOR = '#decision-approved'
+const MISSING_DECISION_MESSAGE = 'Select the decision for this application'
+
+// RA-203. The note's own anchor. `govukCharacterCount` renders its textarea
+// with this id, and mgmt-tests selects on it too — treat it as contract.
+const NOTE_FIELD_ANCHOR = '#field-decisionNote'
+const NOTE_TOO_LONG_MESSAGE = `Decision note must be ${DECISION_NOTE_MAX_LENGTH} characters or fewer`
+
+const logger = createLogger()
+
+/**
+ * Banner for a decision that is not (or is no longer) permitted.
+ *
+ * `reason` is the code from `evaluateLogDecisionEligibility`. `terminal-state`
+ * gets its own copy because "already decided" is a genuinely different thing
+ * from "not at that stage yet", and the user's next step differs: one means
+ * look at the outcome, the other means finish the assessment.
+ */
+function ineligibleBanner(reason) {
+  if (reason === 'terminal-state') {
+    return {
+      type: 'error',
+      title: DECISION_FAILED_TITLE,
+      text: 'A decision has already been recorded for this application.'
+    }
+  }
+  return {
+    type: 'error',
+    title: DECISION_FAILED_TITLE,
+    text: 'A decision cannot be logged for this application from its current state.'
+  }
+}
+
+function detailHref(id) {
+  return `/work-items/${encodeURIComponent(id)}`
+}
+
+function decisionHref(typeId, id) {
+  return lifecyclePageHref(typeId, id, DECISION_PAGE)
+}
+
+function breadcrumbs(id, ref) {
+  return [
+    { text: 'Work items', href: WORK_ITEMS_HREF },
+    { text: ref ?? 'Work item', href: detailHref(id) },
+    // RA-505: the current-page crumb mirrors the page's H1 ("Make
+    // determination", PAGE_HEADING), NOT the "Log decision" CTA on the
+    // detail page that navigates here. Both renders of this page — the initial
+    // GET and the validation-error re-render — share this single helper.
+    { text: 'Make determination' }
+  ]
+}
+
+const EMPTY_DATE = Object.freeze({ day: '', month: '', year: '' })
+
+/** The three effective-date boxes as posted, for validation and echoing back. */
+function effectiveDateValues(payload) {
+  const text = (part) => {
+    const value = payload[`${EFFECTIVE_DATE_ID}-${part}`]
+    return typeof value === 'string' ? value : ''
+  }
+  return { day: text('day'), month: text('month'), year: text('year') }
+}
+
+function flashBanner(request, banner) {
+  request.yar?.flash?.('flashBanner', banner)
+}
+
+function renderNotFound(h, id) {
+  return h
+    .view(NOT_FOUND_VIEW, {
+      pageTitle: 'Application not found',
+      heading: 'Application not found',
+      workItemId: id,
+      breadcrumbs: [
+        { text: 'Applications', href: WORK_ITEMS_HREF },
+        { text: 'Not found' }
+      ]
+    })
+    .code(404)
+}
+
+function renderUnavailable(h, id, result) {
+  return h
+    .view(UNAVAILABLE_VIEW, {
+      pageTitle: 'Work item unavailable',
+      heading: 'Work item unavailable',
+      workItemId: id,
+      error: result.error ?? `Backend returned ${result.status}`,
+      breadcrumbs: [{ text: 'Work items', href: WORK_ITEMS_HREF }, { text: id }]
+    })
+    .code(502)
+}
+
+/**
+ * GET — render the Approved / Refused radio page.
+ */
+export function makeShowDecisionController({ typeId }) {
+  return {
+    async handler(request, h) {
+      const id = request.params.id
+      const user = getUser(request)
+      const result = await getWorkItem({ workItemId: id, user })
+
+      if (result.ok === false && result.status === 404) {
+        return renderNotFound(h, id)
+      }
+      if (!result.ok) {
+        return renderUnavailable(h, id, result)
+      }
+
+      const workItem = result.workItem
+      const applicationRef = workItem.payload?.applicationReference
+
+      // Guard the ROUTE, not just the CTA. Hiding the button is a UX
+      // affordance, not a control — this URL is guessable and bookmarkable,
+      // and the state may have moved on since the detail page was rendered.
+      const eligibility = evaluateLogDecisionEligibility(workItem, { typeId })
+      if (!eligibility.allowed) {
+        flashBanner(request, ineligibleBanner(eligibility.reason))
+        return h.redirect(detailHref(id))
+      }
+
+      return h.view(VIEW_PATH, {
+        pageTitle: PAGE_TITLE,
+        heading: PAGE_HEADING,
+        breadcrumbs: breadcrumbs(id, applicationRef),
+        workItem: { ...workItem, applicationRef },
+        formAction: decisionHref(typeId, id),
+        cancelHref: detailHref(id),
+        values: { decision: null, decisionNote: '', effectiveDate: EMPTY_DATE },
+        showEffectiveDate: takesEffectiveDate(typeId),
+        effectiveDateId: EFFECTIVE_DATE_ID,
+        decisionNoteMaxLength: DECISION_NOTE_MAX_LENGTH,
+        errorSummary: null,
+        fieldErrors: {}
+      })
+    }
+  }
+}
+
+/**
+ * POST — record the decision. PRG-redirects in every branch except a
+ * missing/invalid choice, which re-renders the form with an error summary.
+ */
+export function makeSubmitDecisionController({
+  typeId,
+  service = createDecisionService({ typeId })
+}) {
+  return {
+    async handler(request, h) {
+      const id = request.params.id
+      const user = getUser(request)
+      const payload = request.payload ?? {}
+      const decision = payload.decision
+      const decisionNote =
+        typeof payload.decisionNote === 'string' ? payload.decisionNote : ''
+      const effectiveDateInput = effectiveDateValues(payload)
+
+      // Re-read the work item before doing anything else. Needed for BOTH
+      // the validation re-render (the page shows the application reference)
+      // and the eligibility re-check, so it is fetched once up front rather
+      // than twice down two branches. Fails CLOSED.
+      const current = await getWorkItem({ workItemId: id, user })
+      if (current.ok === false && current.status === 404) {
+        return renderNotFound(h, id)
+      }
+      if (!current.ok) {
+        logger.warn(
+          { workItemId: id, status: current.status },
+          'Could not verify decision eligibility'
+        )
+        flashBanner(request, {
+          type: 'error',
+          title: DECISION_FAILED_TITLE,
+          text: 'There was a problem recording this decision. Try again.'
+        })
+        return h.redirect(detailHref(id))
+      }
+
+      const workItem = current.workItem
+      const applicationRef = workItem.payload?.applicationReference
+
+      // Validate EVERY field before rendering, then show all the errors at
+      // once. Returning on the first failure would make a user who missed the
+      // radio AND over-ran the note fix one, resubmit, and be told about the
+      // other — the pattern GDS error summaries exist to avoid.
+      //
+      // Summary items are pushed in the order the fields appear on the page,
+      // because the summary's links are a navigation aid: listing them out of
+      // visual order sends the user backwards up the form.
+      const { fieldErrors, errorItems, effectiveDate } = validateDecisionForm({
+        typeId,
+        decision,
+        decisionNote,
+        effectiveDateInput,
+        submittedAt: workItem.submittedAt
+      })
+
+      // Render in place — a redirect would lose the form and the user would
+      // have to find their way back.
+      if (errorItems.length > 0) {
+        return renderWithErrors(h, {
+          typeId,
+          id,
+          workItem,
+          applicationRef,
+          decision,
+          decisionNote,
+          effectiveDateInput,
+          errorItems,
+          fieldErrors
+        })
+      }
+
+      // Guard the ROUTE. Same reasoning as the GET, but re-evaluated against
+      // the state we just read rather than whatever was true when the page
+      // was rendered — a replayed form must not decide an application twice.
+      const eligibility = evaluateLogDecisionEligibility(workItem, { typeId })
+      if (!eligibility.allowed) {
+        logger.warn(
+          { workItemId: id, reason: eligibility.reason },
+          'Blocked decision: work item is not eligible'
+        )
+        flashBanner(request, ineligibleBanner(eligibility.reason))
+        return h.redirect(detailHref(id))
+      }
+
+      // RA-595. A Duly made case is decidable here but not at the backend,
+      // which still refuses `/decision` from `duly-made`. Start assessment
+      // first (assigning the caller only if nobody holds it). A no-op with no
+      // backend call in any other state — including on a resubmit after the
+      // start landed and the decision did not.
+      const started = await ensureAssessmentStarted({ workItem, user })
+      if (!started.ok) {
+        logger.warn(
+          {
+            workItemId: id,
+            failedStep: started.failedStep,
+            assigned: started.assigned,
+            reason: started.result?.reason,
+            status: started.result?.status,
+            message: started.result?.message
+          },
+          'Could not start assessment before logging a decision'
+        )
+        flashBanner(request, {
+          type: 'error',
+          title: DECISION_FAILED_TITLE,
+          text: `${describeStartFailure(started)}, so the decision was not recorded. Try again.`
+        })
+        return h.redirect(detailHref(id))
+      }
+
+      const result = await service.recordWorkItemDecision({
+        workItemId: id,
+        outcome: decision,
+        decisionNote,
+        effectiveDate,
+        user
+      })
+
+      if (result.ok) {
+        // RA-527. A determination is step 1 of two, for either outcome: the
+        // detail page shows a persistent "Application approved" / "Application
+        // refused" banner for as long as the item awaits applicant contact,
+        // so a one-time success flash would only repeat it.
+        return h.redirect(detailHref(id))
+      }
+
+      // RA-495 AC6. A backstop: the local check above names the same rules,
+      // so this means management-be moved, or the work item carried no
+      // submission date to check against. Bound to the field, like a local
+      // error, rather than a banner.
+      if (isEffectiveDateErrorCode(result.errorCode)) {
+        const message = effectiveDateMessage(result.errorCode)
+        return renderWithErrors(h, {
+          typeId,
+          id,
+          workItem,
+          applicationRef,
+          decision,
+          decisionNote,
+          effectiveDateInput,
+          errorItems: [{ text: message, href: EFFECTIVE_DATE_ANCHOR }],
+          fieldErrors: { effectiveDate: message }
+        })
+      }
+
+      // Log every non-success outcome so an unexpected 5xx still leaves a
+      // breadcrumb even though the user only sees a generic banner.
+      logger.warn(
+        {
+          workItemId: id,
+          decision,
+          outcome: result.outcome,
+          status: result.status,
+          message: result.message
+        },
+        'Decision failed'
+      )
+      flashBanner(request, withStartSuccess(bannerForFailure(result), started))
+      return h.redirect(detailHref(id))
+    }
+  }
+}
+
+/**
+ * Validate every field of the decision form at once (see the notes in the
+ * submit handler on why no field short-circuits the others). Pure: returns
+ * the field errors, the error-summary items in page order, and the parsed
+ * effective date (null unless an approval supplied a valid one).
+ */
+function validateDecisionForm({
+  typeId,
+  decision,
+  decisionNote,
+  effectiveDateInput,
+  submittedAt
+}) {
+  const fieldErrors = {}
+  const errorItems = []
+
+  if (!isValidDecisionOutcome(decision)) {
+    fieldErrors.decision = MISSING_DECISION_MESSAGE
+    errorItems.push({
+      text: MISSING_DECISION_MESSAGE,
+      href: DECISION_FIELD_ANCHOR
+    })
+  }
+
+  // RA-495 AC6. Only an approval takes the date: on a refusal the field
+  // is hidden, and whatever it holds is neither checked nor sent.
+  let effectiveDate = null
+  if (takesEffectiveDate(typeId) && decision === 'approved') {
+    const checked = validateEffectiveDate(effectiveDateInput, submittedAt)
+    if (checked.ok) {
+      effectiveDate = checked.value
+    } else {
+      const message = effectiveDateMessage(checked.errorCode)
+      fieldErrors.effectiveDate = message
+      errorItems.push({ text: message, href: EFFECTIVE_DATE_ANCHOR })
+    }
+  }
+
+  // RA-203. Checked HERE, not left to the service, because this is a form
+  // error and needs to render in place against the field. The service
+  // keeps its own identical guard as a backstop for non-form callers, but
+  // its failure result is a banner-and-redirect — which for an over-long
+  // note would bounce the user to the detail page and discard the
+  // rationale they had just written.
+  //
+  // ⚠ This is the ONLY thing enforcing the limit, in every browser — not
+  // just the no-JS case RA-94 mandates. `govukCharacterCount` passes
+  // `maxlength` to `data-maxlength` and deliberately never sets the HTML
+  // `maxlength` attribute (see govuk-frontend's own
+  // `character-count/template.njk`), so the textarea accepts unlimited
+  // input regardless. With JS the counter turns red and says how far over
+  // you are; it does not block submission. Verified against the installed
+  // govuk-frontend by mgmt-tests, which asserts this path end-to-end.
+  if (decisionNote.trim().length > DECISION_NOTE_MAX_LENGTH) {
+    fieldErrors.decisionNote = NOTE_TOO_LONG_MESSAGE
+    errorItems.push({
+      text: NOTE_TOO_LONG_MESSAGE,
+      href: NOTE_FIELD_ANCHOR
+    })
+  }
+
+  return { fieldErrors, errorItems, effectiveDate }
+}
+
+/**
+ * Re-render the form in place with its errors (400). A redirect would lose
+ * the form and the user would have to find their way back.
+ */
+function renderWithErrors(
+  h,
+  {
+    typeId,
+    id,
+    workItem,
+    applicationRef,
+    decision,
+    decisionNote,
+    effectiveDateInput,
+    errorItems,
+    fieldErrors
+  }
+) {
+  return h
+    .view(VIEW_PATH, {
+      pageTitle: `Error: ${PAGE_TITLE}`,
+      heading: PAGE_HEADING,
+      breadcrumbs: breadcrumbs(id, applicationRef),
+      workItem: { ...workItem, applicationRef },
+      formAction: decisionHref(typeId, id),
+      cancelHref: detailHref(id),
+      decisionNoteMaxLength: DECISION_NOTE_MAX_LENGTH,
+      showEffectiveDate: takesEffectiveDate(typeId),
+      effectiveDateId: EFFECTIVE_DATE_ID,
+      // The decision itself is deliberately NOT echoed back unless valid: an
+      // invalid value is either a missing choice (nothing to echo) or a
+      // forged one (must not be reflected into the page), so the radios
+      // render unset. The NOTE and the effective date ARE echoed: they are
+      // the user's own input, and discarding them because another field
+      // failed would destroy what they need to edit. Nunjucks auto-escapes
+      // them on the way out.
+      values: {
+        decision: isValidDecisionOutcome(decision) ? decision : null,
+        decisionNote,
+        effectiveDate: effectiveDateInput
+      },
+      errorSummary: {
+        titleText: 'There is a problem',
+        items: errorItems
+      },
+      fieldErrors
+    })
+    .code(400)
+}
+
+function bannerForFailure(result) {
+  // RA-203. Distinct copy because the user's next step differs: nothing was
+  // decided, and the reason is their note rather than the case. Saying "try
+  // again" alone would leave them unsure whether the decision landed.
+  if (result.outcome === 'note-failed') {
+    return {
+      type: 'error',
+      title: 'Could not save the decision note',
+      text:
+        result.message ??
+        'Your decision note could not be saved, so the decision was not recorded. Try again.'
+    }
+  }
+  if (result.outcome === 'conflict') {
+    return {
+      type: 'error',
+      title: DECISION_FAILED_TITLE,
+      text: 'This application has changed since you opened it. Refresh and try again.'
+    }
+  }
+  return {
+    type: 'error',
+    title: DECISION_FAILED_TITLE,
+    text: 'There was a problem recording this decision. Try again.'
+  }
+}

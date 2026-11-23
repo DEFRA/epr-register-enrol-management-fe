@@ -49,7 +49,7 @@ const ID = '11111111-1111-1111-1111-111111111111'
 
 /**
  * Extract the rendered HTML of a single AC02 application-details row, so an
- * assertion about (say) the site address cannot accidentally pass against
+ * assertion about (say) the location cannot accidentally pass against
  * text that happens to appear elsewhere on the page.
  */
 function detailRow(html, key) {
@@ -477,7 +477,7 @@ describe('#workItemDetailController', () => {
   // { line1, line2, town, postcode } object which stringified to
   // "[object Object]". The controller now decorates the work item with
   // `siteAddressFormatted` / `sitePostcode` which the template renders.
-  test('RA-245: renders a nested-object site address and nested postcode', async () => {
+  test('RA-245: renders a nested-object location and nested postcode', async () => {
     registerReaccreditation()
     registerDetailTemplate(
       're-accreditation',
@@ -507,14 +507,14 @@ describe('#workItemDetailController', () => {
 
     expect(statusCode).toBe(statusCodes.ok)
     expect(result).not.toEqual(expect.stringContaining('[object Object]'))
-    // RA-295: the site address is the first AC02 row; the nested shape keeps
+    // RA-295: the location is the first AC02 row; the nested shape keeps
     // the postcode out of the formatted line, so it renders as a second line.
     const row = siteAddressRow(result)
     expect(row).toContain('1 Details Lane, Leeds')
     expect(row).toContain('LS1 1AB')
   })
 
-  test('RA-245: renders a legacy flat-string site address and flat postcode', async () => {
+  test('RA-245: renders a legacy flat-string location and flat postcode', async () => {
     registerReaccreditation()
     registerDetailTemplate(
       're-accreditation',
@@ -2637,11 +2637,11 @@ describe('#workItemDetailController', () => {
       )
       expect(result).toEqual(
         expect.stringContaining(
-          'data-testid="re-accreditation-readonly-actions"'
+          'data-testid="standard-lifecycle-readonly-actions"'
         )
       )
       expect(result).toEqual(
-        expect.stringContaining('data-testid="re-accreditation-state-tag"')
+        expect.stringContaining('data-testid="standard-lifecycle-state-tag"')
       )
     })
   })
@@ -3167,7 +3167,7 @@ describe('#workItemDetailController', () => {
         // a closed case never offers approval by either route.
         expect(result).not.toContain('data-testid="log-decision-cta"')
         expect(result).toContain(
-          'data-testid="re-accreditation-readonly-actions"'
+          'data-testid="standard-lifecycle-readonly-actions"'
         )
       }
     )
@@ -3236,7 +3236,7 @@ describe('#workItemDetailController', () => {
       )
       expect(result).toEqual(
         expect.stringContaining(
-          'data-testid="re-accreditation-log-decision-cta"'
+          'data-testid="standard-lifecycle-log-decision-cta"'
         )
       )
       // The Approve CTA is a govukButton styled as a link (href-based),
@@ -3709,7 +3709,7 @@ describe('#workItemDetailController', () => {
     const REMOVED_PAYMENT_BUTTON =
       'data-testid="action-payment-received-during-duly-made"'
     const CONTINUE_CTA = 'data-testid="re-accreditation-continue-review-cta"'
-    const DULY_MAKE_CTA = 'data-testid="re-accreditation-duly-make-cta"'
+    const DULY_MAKE_CTA = 'data-testid="standard-lifecycle-duly-make-cta"'
 
     async function renderUpdated(originStateId) {
       registerReaccreditation()
@@ -4116,7 +4116,9 @@ describe('#workItemDetailController', () => {
       )
       // canDulyMake === true: Duly make is the only onward CTA.
       expect(result).toEqual(
-        expect.stringContaining('data-testid="re-accreditation-duly-make-cta"')
+        expect.stringContaining(
+          'data-testid="standard-lifecycle-duly-make-cta"'
+        )
       )
     })
 
@@ -4144,7 +4146,9 @@ describe('#workItemDetailController', () => {
       )
       // canDulyMake === false: no Duly make CTA for a post-duly-made query.
       expect(result).not.toEqual(
-        expect.stringContaining('data-testid="re-accreditation-duly-make-cta"')
+        expect.stringContaining(
+          'data-testid="standard-lifecycle-duly-make-cta"'
+        )
       )
     })
 
@@ -4482,18 +4486,21 @@ describe('RA-295 individual work item page', () => {
     expect(header).toContain('24 Aug 2026')
     expect(header).toContain('data-testid="case-header-registration-number"')
     expect(header).toContain('EPR-100999')
-    // RA-493: Figma grid order and labels (bold label above the value).
+    // The grid order add-ORS shares (bold label above the value).
     const labels = [...header.matchAll(/meta-label">([^<]+)<\/dt>/g)].map(
       (match) => match[1]
     )
     expect(labels).toEqual([
-      'Material:',
+      'Application type:',
       'Status:',
       'Assigned to:',
       'Due date:',
       'Registration number:',
+      'Material:',
+      'Charge:',
       'Payment date:',
-      'Payment amount:'
+      'Submitted by:',
+      'Submitted on:'
     ])
   })
 
@@ -4512,7 +4519,9 @@ describe('RA-295 individual work item page', () => {
   })
 
   // RA-493 -----------------------------------------------------------
-  test('RA-493 AC04: payment date and amount read "Not received" before duly making', async () => {
+  // Duly making records no amount paid, so the header shows the charge from
+  // submission and the payment date alone says whether it has been paid.
+  test('RA-493 AC04: the payment date reads "Not received" before duly making, beside the charge', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: fullPayloadWorkItem({
@@ -4529,11 +4538,11 @@ describe('RA-295 individual work item page', () => {
       /Payment date:<\/dt>\s*<dd[^>]*data-testid="case-header-payment-date">Not received</
     )
     expect(result).toMatch(
-      /Payment amount:<\/dt>\s*<dd[^>]*data-testid="case-header-payment-amount">Not received</
+      /Charge:<\/dt>\s*<dd[^>]*data-testid="case-header-charge">£3,276.00</
     )
   })
 
-  test('RA-493 AC01-AC03: the header shows the recorded payment date and amount', async () => {
+  test('RA-493 AC01-AC03: the header shows the recorded payment date and the charge', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: fullPayloadWorkItem({
@@ -4549,9 +4558,7 @@ describe('RA-295 individual work item page', () => {
     expect(result).toMatch(
       /data-testid="case-header-payment-date">01 Nov 2026</
     )
-    expect(result).toMatch(
-      /data-testid="case-header-payment-amount">£3,276.50</
-    )
+    expect(result).toMatch(/data-testid="case-header-charge">£3,276.50</)
   })
 
   test('AC01: the RA-98 reference-implementation notification banner is gone', async () => {
@@ -4593,7 +4600,6 @@ describe('RA-295 individual work item page', () => {
 
     const order = [
       'site-address',
-      'type',
       'material',
       'prn-tonnage',
       'prn-authorisers',
@@ -4739,11 +4745,20 @@ describe('RA-295 individual work item page', () => {
     expect(result).not.toContain('data-testid="app-detail-row-ors"')
     expect(result).not.toContain('Broadly Equivalent Standards')
     expect(result).not.toContain('Overseas Reprocessing Site')
-    // ...and the Type row names the applicant kind.
-    // ...and the Type row states only the registry display name — it must
-    // NOT claim an applicant kind the backend never sends.
-    expect(detailRow(result, 'type')).toContain('Re-accreditation')
-    expect(detailRow(result, 'type')).not.toContain('Reprocessor')
+  })
+
+  test('AC02: has no Type row, as the case header shows the application type', async () => {
+    getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
+
+    const { result } = await server.inject({
+      method: 'GET',
+      url: `/work-items/${ID}`
+    })
+
+    expect(result).not.toContain('data-testid="app-detail-row-type"')
+    expect(result).toMatch(
+      /data-testid="case-header-request-type">\s*Re-accreditation\s*</
+    )
   })
 
   test('AC02: shows BES then ORS, last and in that order, for an exporter', async () => {
@@ -4793,12 +4808,6 @@ describe('RA-295 individual work item page', () => {
       'data-testid="overseas-site-address"'
     )
     expect(result).toContain('1 Overseas Lane, Rotterdam')
-    // Even on an exporter the Type row must not claim "Exporter" — AC02 never
-    // asked for that prefix on this row (see the comment on it in
-    // application-summary.js). Positive assertion first, so the negative
-    // below is scoped to a row that demonstrably exists.
-    expect(detailRow(result, 'type')).toContain('Re-accreditation')
-    expect(detailRow(result, 'type')).not.toContain('Exporter')
   })
 
   test('AC02: an unscanned BES evidence file is named but not linked', async () => {

@@ -1,0 +1,174 @@
+/**
+ * Standard-lifecycle decision service (RA-410; shared since RA-495).
+ *
+ * Owns the "log the outcome" flow that replaced RA-132's approve
+ * interstitial. One method, one backend call, both outcomes.
+ *
+ * ⚠ ONE CALL, NOT TWO. The underlying lifecycle is two hops
+ * (`assessment-in-progress` -> `awaiting-decision` -> `approved`/`rejected`)
+ * but management-be applies both inside the type's decision endpoint
+ * (`POST /work-items/{id}/decision`, or re-accreditation's own) as a single
+ * atomic write. Do not reintroduce a `submit-for-decision` call
+ * here: a failure between the two would leave a terminal decision unrecorded
+ * with the item parked in a state the UI no longer offers a button for.
+ * Neither hop is caller-invocable any more in any case (see
+ * `core/standard-workflow.js`).
+ *
+ * What approval does beyond the state change (re-accreditation mints its
+ * accreditation id, stamps its start date and sends its decision
+ * notification) is the backend's per-type strategy, not this service's.
+ *
+ * Result shape — controllers branch on `outcome` rather than parsing HTTP
+ * status codes:
+ *  - { ok: true, workItem }
+ *  - { ok: false, outcome, status?, errorCode?, message }
+ *
+ * ⚠ Two different things are called "outcome" in this file and they are not
+ * the same. The `outcome` ARGUMENT is the decision the case worker made
+ * (`'approved'` | `'rejected'`). The `outcome` FIELD on a failure result is
+ * the framework's error classification (`'conflict'`, `'invalid'`, …), the
+ * same vocabulary every other module service returns. Renaming either would
+ * break a convention; they simply collide.
+ *
+ * `errorCode` mirrors the `/duly-make` vocabulary so the controller can bind
+ * a 400 straight to the radio group instead of a page-level banner.
+ *
+ * Constructor takes a lazy backend-client getter so tests can stub the call
+ * without mocking `undici`.
+ */
+
+import { toOutcome } from '../../backend-outcome.js'
+import { lifecycleBackendCall } from '../lifecycle.js'
+import { isValidDecisionOutcome } from './eligibility.js'
+
+const NOTE_MAX_LENGTH = 2000
+
+export const DECISION_NOTE_MAX_LENGTH = NOTE_MAX_LENGTH
+
+async function defaultAddNote(args) {
+  const mod = await import('#/server/common/helpers/backend-api/backend-api.js')
+  return mod.addWorkItemNote(args)
+}
+
+/**
+ * @param {object} options
+ * @param {string} [options.typeId] the type whose backend call to use
+ *   (`standardLifecycle.backend.recordDecision`, else the type-less endpoint)
+ * @param {Function} [options.recordDecision] overrides the type's call
+ * @param {Function} [options.addNote]
+ */
+export function createDecisionService({
+  typeId,
+  recordDecision = (args) =>
+    lifecycleBackendCall(typeId, 'recordDecision')(args),
+  addNote = defaultAddNote
+} = {}) {
+  return {
+    /**
+     * Record a decision against a work item.
+     *
+     * @param {object} args
+     * @param {string} args.workItemId
+     * @param {string} args.outcome `'approved'` or `'rejected'`. The WIRE
+     *   value — never the display label. "Refused" is what the radio says;
+     *   `rejected` is what goes over the wire and what the backend's
+     *   unchanged `reject` transition and notification templates key on.
+     * @param {string} [args.decisionNote] Optional rationale. Posted to the
+     *   notes endpoint BEFORE the decision — see below.
+     * @param {string | null} [args.effectiveDate] RA-495 AC6: an add-ORS
+     *   approval's effective date (`YYYY-MM-DD`), already validated by the
+     *   controller. Not sent when null.
+     */
+    async recordWorkItemDecision({
+      workItemId,
+      outcome,
+      decisionNote = '',
+      effectiveDate = null,
+      user = null
+    }) {
+      if (typeof workItemId !== 'string' || workItemId.trim() === '') {
+        throw new Error('workItemId must be a non-empty string')
+      }
+
+      // Validated here as well as in the controller because this is a public
+      // service method: a future caller that skips the form must not be able
+      // to post an arbitrary string to the backend. Returns a result rather
+      // than throwing, so the controller renders a field error either way.
+      if (!isValidDecisionOutcome(outcome)) {
+        return {
+          ok: false,
+          outcome: 'invalid',
+          errorCode: 'invalid-outcome',
+          message: 'Select the decision for this application.'
+        }
+      }
+
+      const trimmedNote =
+        typeof decisionNote === 'string' ? decisionNote.trim() : ''
+
+      if (trimmedNote.length > NOTE_MAX_LENGTH) {
+        return {
+          ok: false,
+          outcome: 'invalid',
+          errorCode: 'decision-note-too-long',
+          message: `Decision note must be ${NOTE_MAX_LENGTH} characters or fewer.`
+        }
+      }
+
+      // RA-203. The note is posted FIRST: it is the determination's audit
+      // note, the regulator's rationale in the application history, and
+      // posting it before the decision means a decision is never recorded
+      // with its stated reason missing (see the note-failed branch below).
+      //
+      // It no longer reaches the operator's email. RA-581 removed the
+      // `decision_notes` personalisation from management-be's Decision
+      // template, so nothing reads the latest note at notification time.
+      //
+      // Do not "simplify" by folding the note into the `/decision` payload:
+      // that endpoint has no note field, and adding one would duplicate a
+      // notes API that already exists and already audits.
+      if (trimmedNote !== '') {
+        const noteResult = await addNote({
+          workItemId,
+          text: trimmedNote,
+          user
+        })
+        if (!noteResult.ok) {
+          // Deliberately do NOT proceed to the decision. The note is part of
+          // the auditable rationale for a regulatory decision; recording the
+          // outcome without it would produce a decision whose stated reason
+          // silently went missing, and the decision cannot be un-made.
+          return {
+            ok: false,
+            outcome: 'note-failed',
+            status: noteResult.status,
+            errorCode: null,
+            message:
+              noteResult.problem?.detail ??
+              noteResult.error ??
+              'Could not save the decision note. The decision was not recorded.'
+          }
+        }
+      }
+
+      const result = await recordDecision({
+        workItemId,
+        outcome,
+        ...(effectiveDate && { effectiveDate }),
+        user
+      })
+
+      if (result.ok) {
+        return { ok: true, workItem: result.workItem }
+      }
+
+      return {
+        ok: false,
+        outcome: toOutcome(result.reason),
+        status: result.status,
+        errorCode: result.errorCode ?? null,
+        message: result.message ?? 'Recording the decision failed'
+      }
+    }
+  }
+}
