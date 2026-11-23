@@ -1,8 +1,8 @@
 /**
- * RA-495. The empty case tab pages (Accreditation summary, Related
- * applications). Their add-ORS rendering and not-found cases are in
- * `in-year-change.route.test.js`; this covers the page title and a backend
- * failure.
+ * RA-495. The empty case tab page (Related applications; RA-769 filled
+ * Accreditation summary, see `accreditation-summary.route.test.js`). Its
+ * add-ORS rendering and not-found cases are in `in-year-change.route.test.js`;
+ * this covers the page title and a backend failure.
  */
 import { vi } from 'vitest'
 import * as cheerio from 'cheerio'
@@ -53,32 +53,32 @@ describe('RA-495: empty case tab pages', () => {
     getWorkItem.mockReset()
   })
 
-  test.each([
-    ['accreditation-summary', 'Accreditation summary'],
-    ['related-applications', 'Related applications']
-  ])('/%s is titled with the tab and the reference', async (path, title) => {
-    getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+  test.each([['related-applications', 'Related applications']])(
+    '/%s is titled with the tab and the reference',
+    async (path, title) => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
 
-    const { statusCode, result } = await server.inject({
-      method: 'GET',
-      url: `/work-items/${ID}/${path}`
-    })
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/${path}`
+      })
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(cheerio.load(result)('title').text()).toContain(
-      `${title} — IYC-ORS-2027-00001`
-    )
-    expect(getWorkItem).toHaveBeenCalledWith(
-      expect.objectContaining({ workItemId: ID })
-    )
-  })
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(cheerio.load(result)('title').text()).toContain(
+        `${title} — IYC-ORS-2027-00001`
+      )
+      expect(getWorkItem).toHaveBeenCalledWith(
+        expect.objectContaining({ workItemId: ID })
+      )
+    }
+  )
 
   test('shows the work item unavailable page when the backend fails', async () => {
     getWorkItem.mockResolvedValue({ ok: false, status: 500, error: 'boom' })
 
     const { statusCode, result } = await server.inject({
       method: 'GET',
-      url: `/work-items/${ID}/accreditation-summary`
+      url: `/work-items/${ID}/related-applications`
     })
 
     expect(statusCode).toBe(502)

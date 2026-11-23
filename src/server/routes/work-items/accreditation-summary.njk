@@ -1,0 +1,52 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+
+{# ---------------------------------------------------------------- #}
+{# RA-769. The Accreditation summary tab of an In-Year Change case:  #}
+{# the accreditation as it stands today, read live. Information      #}
+{# only, so no assignment panel and no case actions. When there is   #}
+{# nothing to show, or it cannot be read, the heading stays and the  #}
+{# message replaces the intro and the rows. The data-testid hooks    #}
+{# are a contract with mgmt-tests.                                   #}
+{# ---------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appCaseTabs({ tabs: caseTabs }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds" data-testid="accreditation-summary-tab">
+      <h2 class="govuk-heading-m" data-testid="accreditation-summary-heading">{{ heading }}</h2>
+
+      {% if accreditationSummary %}
+        <p class="govuk-body" data-testid="accreditation-summary-intro">{{ intro }}</p>
+
+        <dl class="govuk-summary-list app-summary-list--borderless"
+            data-testid="accreditation-summary-details">
+          {% for row in accreditationSummary.rows %}
+            <div class="govuk-summary-list__row"
+                 data-testid="acc-summary-row-{{ row.key }}">
+              <dt class="govuk-summary-list__key">{{ row.label }}</dt>
+              <dd class="govuk-summary-list__value"
+                  data-testid="acc-summary-value-{{ row.key }}">
+                {% if row.kind == 'tag' %}
+                  {{ govukTag({ text: row.value, classes: row.tagClass }) }}
+                {% elif row.kind == 'lines' %}
+                  {% for line in row.values %}
+                    <p class="govuk-body govuk-!-margin-bottom-1">{{ line }}</p>
+                  {% else %}
+                    —
+                  {% endfor %}
+                {% else %}
+                  {{ row.value }}
+                {% endif %}
+              </dd>
+            </div>
+          {% endfor %}
+        </dl>
+      {% else %}
+        <p class="govuk-body" data-testid="accreditation-summary-unavailable">{{ unavailableMessage }}</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

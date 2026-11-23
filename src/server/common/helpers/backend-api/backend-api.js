@@ -1221,6 +1221,46 @@ export async function getReAccreditationPriorYear({
   })
 }
 
+/**
+ * Fetch the accreditation an In-Year Change case is about, as it stands today
+ * (RA-769). management-be reads it live from the operator backend; nothing is
+ * stored on the case.
+ *
+ * Result shape:
+ *  - { ok: true, accreditation, accreditationStartDate } when there is one
+ *  - { ok: false, status: 404 }   when there is no accreditation to show
+ *                                  (registration-only case, unknown or not
+ *                                  Approved)
+ *  - { ok: false, status, error } on other 4xx/5xx, including a failed read
+ *  - { ok: false, error }         on transport errors, timeouts and a body
+ *                                  that is not a usable summary
+ */
+export async function getAccreditationSummary({
+  workItemId,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/accreditation-summary`
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getAccreditationSummary',
+    notFoundIsDistinct: true,
+    read: (body) =>
+      body?.accreditation && typeof body.accreditation === 'object'
+        ? {
+            ok: true,
+            accreditation: body.accreditation,
+            accreditationStartDate: body.accreditationStartDate ?? null
+          }
+        : { ok: false, error: 'Backend returned an unusable summary' }
+  })
+}
+
 async function safeReadJson(response) {
   try {
     return await response.json()

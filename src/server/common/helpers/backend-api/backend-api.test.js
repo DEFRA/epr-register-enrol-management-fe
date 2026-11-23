@@ -14,6 +14,7 @@ import {
   getDulyMakeDetails,
   extendWorkItemSla,
   getBackendHealth,
+  getAccreditationSummary,
   getWorkItem,
   getWorkItems,
   raiseWorkItemQuery,
@@ -574,6 +575,85 @@ describe('#getWorkItem', () => {
     expect(fetchImpl.mock.calls[0][0]).toBe(
       'http://backend:8085/work-items/a%2Fb%20c'
     )
+  })
+})
+
+describe('#getAccreditationSummary (RA-769)', () => {
+  const options = {
+    workItemId: 'a/b c',
+    baseUrl: 'http://backend:8085/',
+    timeoutMs: 1000
+  }
+
+  function respond(status, body = {}) {
+    return vi.fn().mockResolvedValue({
+      ok: status >= 200 && status < 300,
+      status,
+      json: () => Promise.resolve(body)
+    })
+  }
+
+  test('GETs the work item accreditation-summary endpoint and returns the accreditation and its start date', async () => {
+    const accreditation = { accreditationNumber: 'A26ER5003240164GR' }
+    const fetchImpl = respond(200, {
+      accreditation,
+      accreditationStartDate: '2026-01-01'
+    })
+
+    const result = await getAccreditationSummary({ ...options, fetchImpl })
+
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      'http://backend:8085/work-items/a%2Fb%20c/accreditation-summary'
+    )
+    expect(result).toEqual({
+      ok: true,
+      accreditation,
+      accreditationStartDate: '2026-01-01'
+    })
+  })
+
+  test('answers a bare 404 when there is no accreditation to show', async () => {
+    const result = await getAccreditationSummary({
+      ...options,
+      fetchImpl: respond(404)
+    })
+
+    expect(result).toEqual({ ok: false, status: 404 })
+  })
+
+  test('answers the status and an error on a failed read', async () => {
+    const result = await getAccreditationSummary({
+      ...options,
+      fetchImpl: respond(503)
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      status: 503,
+      error: 'Backend returned 503'
+    })
+  })
+
+  test.each([[{}], [null], [{ accreditation: 'nope' }]])(
+    'treats %j as an unusable summary',
+    async (body) => {
+      const result = await getAccreditationSummary({
+        ...options,
+        fetchImpl: respond(200, body)
+      })
+
+      expect(result.ok).toBe(false)
+      expect(result.error).toBeDefined()
+    }
+  )
+
+  test('answers a transport error when fetch throws', async () => {
+    const result = await getAccreditationSummary({
+      ...options,
+      fetchImpl: vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+    })
+
+    expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
   })
 })
 
