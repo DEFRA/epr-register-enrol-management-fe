@@ -92,8 +92,18 @@ function anAccreditation(overrides = {}) {
       priceSupportPercent: 40,
       priceSupportDetail: null
     },
+    samplingPlan: {
+      files: [
+        aFile('sp-clean', 'sampling-plan.pdf'),
+        aFile('sp-pending', 'plan-awaiting-scan.pdf', 'Pending')
+      ]
+    },
     overseasSites: [
-      aSite(),
+      aSite({
+        besEvidence: {
+          files: [aFile('bes-clean', 'bes-speira.pdf')]
+        }
+      }),
       aSite({
         siteId: 8,
         orsId: '002',
@@ -105,6 +115,18 @@ function anAccreditation(overrides = {}) {
       })
     ],
     ...overrides
+  }
+}
+
+/** A file as management-be answers it, with the S3 location that must never reach the browser. */
+function aFile(fileId, filename, scanStatus = 'Clean') {
+  return {
+    fileId,
+    filename,
+    contentType: 'application/pdf',
+    scanStatus,
+    s3Key: `SECRET-KEY/${fileId}.pdf`,
+    s3Bucket: 'SECRET-BUCKET'
   }
 }
 
@@ -266,10 +288,21 @@ describe('RA-769: Accreditation summary tab', () => {
           value: 'Ada Authoriser Bob Signer'
         },
         {
+          key: 'sampling-inspection-plan',
+          label: 'Sampling and inspection plan',
+          value: 'sampling-plan.pdf plan-awaiting-scan.pdf Pending'
+        },
+        {
           key: 'business-plan',
           label: 'Business plan',
           value:
             'New infrastructure — 60% of PRN incomeA new sorting line Price support — 40% of PRN income'
+        },
+        {
+          key: 'bes',
+          label: 'Broadly Equivalent Standards (BES)',
+          value:
+            'Speira GmbH (Germany) bes-speira.pdf Excel Recycling BV (Netherlands)'
         },
         {
           key: 'ors',
@@ -277,6 +310,145 @@ describe('RA-769: Accreditation summary tab', () => {
           value: expect.stringMatching(/^001 Speira GmbH /)
         }
       ])
+    })
+
+    describe('sampling and inspection plan and BES evidence', () => {
+      const linksIn = ($, key) =>
+        $(`[data-testid="acc-summary-value-${key}"] a`)
+          .map((_, el) => ({
+            text: squash($(el).text()),
+            href: $(el).attr('href')
+          }))
+          .get()
+
+      test('puts the sampling plan between Authority to issue and Business plan, and BES before the ORS row', async () => {
+        const { $ } = await get()
+
+        const keys = rows($).map((r) => r.key)
+        expect(keys.slice(keys.indexOf('authority-to-issue'))).toEqual([
+          'authority-to-issue',
+          'sampling-inspection-plan',
+          'business-plan',
+          'bes',
+          'ors'
+        ])
+      })
+
+      test("links a clean sampling plan file to this tab's download route, and offers none for a file not yet scanned", async () => {
+        const { $ } = await get()
+
+        expect(linksIn($, 'sampling-inspection-plan')).toEqual([
+          {
+            text: 'sampling-plan.pdf',
+            href: `/work-items/${ID}/accreditation-summary/files/sp-clean/download`
+          }
+        ])
+        const row = squash(
+          $('[data-testid="acc-summary-value-sampling-inspection-plan"]').text()
+        )
+        expect(row).toContain('plan-awaiting-scan.pdf')
+        expect(row).toContain('Pending')
+      })
+
+      test('lists each site with its name and country and its BES evidence links', async () => {
+        const { $ } = await get()
+
+        const sites = $(
+          '[data-testid="acc-summary-value-bes"] [data-testid="bes-site"]'
+        )
+        expect(sites).toHaveLength(2)
+        expect(squash(sites.eq(0).find('strong').text())).toBe('Speira GmbH')
+        expect(squash(sites.eq(0).text())).toContain('(Germany)')
+        expect(linksIn($, 'bes')).toEqual([
+          {
+            text: 'bes-speira.pdf',
+            href: `/work-items/${ID}/accreditation-summary/files/bes-clean/download`
+          }
+        ])
+        expect(sites.eq(1).find('a')).toHaveLength(0)
+        expect(squash(sites.eq(1).find('strong').text())).toBe(
+          'Excel Recycling BV'
+        )
+      })
+
+      test('does not offer a download for infected or unscanned BES evidence', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              overseasSites: [
+                aSite({
+                  besEvidence: {
+                    files: [
+                      aFile('bes-infected', 'bad.pdf', 'Infected'),
+                      aFile('bes-none', 'unscanned.pdf', null)
+                    ]
+                  }
+                })
+              ]
+            })
+          })
+        )
+
+        const { $ } = await get()
+
+        expect(linksIn($, 'bes')).toEqual([])
+        const row = squash($('[data-testid="acc-summary-value-bes"]').text())
+        expect(row).toContain('bad.pdf')
+        expect(row).toContain('Infected')
+        expect(row).toContain('unscanned.pdf')
+      })
+
+      test('a reprocessor has the sampling plan but no BES row', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              wasteProcessingType: 'reprocessor',
+              material: 'plastic',
+              glassRecyclingProcess: null
+            })
+          })
+        )
+
+        const { $ } = await get()
+
+        const keys = rows($).map((r) => r.key)
+        expect(keys).toContain('sampling-inspection-plan')
+        expect(keys).not.toContain('bes')
+      })
+
+      test.each([
+        ['no files', { files: [] }],
+        ['no sampling plan', undefined]
+      ])('shows the empty value for %s', async (_, samplingPlan) => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({ accreditation: anAccreditation({ samplingPlan }) })
+        )
+
+        const { $ } = await get()
+
+        expect(
+          rows($).find((r) => r.key === 'sampling-inspection-plan').value
+        ).toBe('—')
+      })
+
+      test('an exporter with no sites shows the empty value for BES', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({ accreditation: anAccreditation({ overseasSites: [] }) })
+        )
+
+        const { $ } = await get()
+
+        expect(rows($).find((r) => r.key === 'bes').value).toBe('—')
+      })
+
+      test('never renders the S3 key or bucket of any file', async () => {
+        const { result } = await get()
+
+        expect(result).not.toContain('SECRET-KEY')
+        expect(result).not.toContain('SECRET-BUCKET')
+        expect(result).not.toContain('s3Key')
+        expect(result).not.toContain('s3Bucket')
+      })
     })
 
     describe('overseas reprocessing sites', () => {

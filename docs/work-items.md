@@ -170,7 +170,9 @@ from its own hooks, never from a check on its category:
   management-be's `GET /work-items/{id}/accreditation-summary`
   (`accreditation-summary.controller.js`): the accreditation details, then PRN
   tonnage, PRN authorisers (`Name (email)`), Authority to issue (names only,
-  from the same list) and the business plan, then for an exporter the
+  from the same list), the sampling and inspection plan (download links) and
+  the business plan, then for an exporter the Broadly Equivalent Standards
+  (BES) row (each site's name, country and evidence links) and the
   Overseas Reprocessing Site (ORS) row: one `details` section per site,
   collapsed, whose summary always shows the ORS ID as its number, the name and
   the condensed address (`overseasSiteList` with `siteNumber`, shared with
@@ -183,7 +185,15 @@ from its own hooks, never from a check on its category:
   (`empty-tab.controller.js`). Its
   Additional information and Recycling operations pages are not found, and a
   type without the Accreditation summary or Related applications tab gets
-  not found for those.
+  not found for those. Each clean file links to
+  `/work-items/{id}/accreditation-summary/files/{fileId}/download`
+  (`accreditation-summary-download.controller.js`), which reads the summary
+  afresh and serves only a file in it: 404 for a file not in it, an unknown
+  case or one without the tab, 503 when the live read fails, 422 when the
+  file is not clean, 404 when S3 fails. The S3 key and bucket come from that
+  read and are never rendered. The payload-based
+  `/work-items/{id}/files/{fileId}/download` is unchanged (both share
+  `serveFile`).
 - `describeCardSite(payload)` gives the card a site line in place of the
   registration number, and `cardAlwaysShowsSubmittedOn` keeps "Submitted on"
   on the card in every state.

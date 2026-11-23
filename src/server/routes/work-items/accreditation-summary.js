@@ -8,6 +8,7 @@ import {
   buildBusinessPlanPairs,
   buildOverseasSites,
   deriveSiteAddressLines,
+  fileViewModel,
   isExporterApplication,
   toDisplayLines,
   tonnageBandLabel
@@ -27,8 +28,14 @@ import {
  * `data-testid` suffix) and a `kind` the template switches on:
  * Organisation, Accreditation number, Status, Accreditation year,
  * Accreditation start date, Registration number, Location, Type, Material,
- * PRN tonnage, PRN authorisers, Authority to issue, Business plan, then for an
- * exporter Overseas Reprocessing Site (ORS).
+ * PRN tonnage, PRN authorisers, Authority to issue, Sampling and inspection
+ * plan, Business plan, then for an exporter Broadly Equivalent Standards (BES)
+ * and Overseas Reprocessing Site (ORS).
+ *
+ * Documents are listed from the live summary. Each clean file links to this
+ * tab's own download route, which reads the summary afresh and serves only a
+ * file in it. A file's S3 location is never put in a view model: it stays in
+ * the summary read, server side.
  *
  * The authorisers are the one list the operator backend holds. PRN authorisers
  * shows each as `Name (email)`, Authority to issue shows the names only. The
@@ -88,6 +95,64 @@ function authorityToIssueLines(prns) {
   return buildAuthorityToIssueContacts(prns).map(({ name }) => name)
 }
 
+/** This tab's download route for a file of the live summary. */
+export function summaryFileHref(workItemId, fileId) {
+  return `/work-items/${encodeURIComponent(workItemId)}/accreditation-summary/files/${encodeURIComponent(fileId)}/download`
+}
+
+/**
+ * A file as the shared document item renders it, linked to this tab's download
+ * route rather than the payload-based one. Only a clean file is linked.
+ */
+function summaryFileViewModel(file, workItemId) {
+  const model = fileViewModel(file, workItemId)
+  return {
+    ...model,
+    href: model.href ? summaryFileHref(workItemId, file.fileId) : null
+  }
+}
+
+function filesOf(container) {
+  return Array.isArray(container?.files) ? container.files : []
+}
+
+/**
+ * Every file the live summary offers: the sampling plan's and each site's BES
+ * evidence. The download route serves a file only if it is found here, so a
+ * file that is not on the accreditation (including one on a site that is not
+ * selected, which the operator backend never answers) is never served.
+ *
+ * @param {object} accreditation
+ * @returns {object[]}
+ */
+export function summaryFiles(accreditation) {
+  const sites = Array.isArray(accreditation?.overseasSites)
+    ? accreditation.overseasSites
+    : []
+  return [
+    ...filesOf(accreditation?.samplingPlan),
+    ...sites.flatMap((site) => filesOf(site?.besEvidence))
+  ]
+}
+
+function buildBesRow(accreditation, workItemId) {
+  const sites = Array.isArray(accreditation.overseasSites)
+    ? accreditation.overseasSites
+    : []
+  return {
+    key: 'bes',
+    label: 'Broadly Equivalent Standards (BES)',
+    kind: 'bes-sites',
+    sites: sites.map((site) => ({
+      siteName: site?.siteName || EM_DASH,
+      country: site?.country || null,
+      files: filesOf(site?.besEvidence).map((file) =>
+        summaryFileViewModel(file, workItemId)
+      )
+    }))
+  }
+}
+
 function startDateText(accreditationStartDate) {
   return formatDateGds(accreditationStartDate) || EM_DASH
 }
@@ -139,12 +204,14 @@ function buildOrsRow(accreditation, multipleInterimSitesEnabled) {
  * @param {object} args
  * @param {object} args.accreditation the accreditation, as management-be answers it
  * @param {string|null} args.accreditationStartDate `yyyy-MM-dd`
+ * @param {string} args.workItemId the case, for the download links
  * @param {boolean} [args.multipleInterimSitesEnabled]
  * @returns {{ rows: object[], isExporter: boolean }}
  */
 export function buildAccreditationSummary({
   accreditation,
   accreditationStartDate,
+  workItemId,
   multipleInterimSitesEnabled = false
 }) {
   const isExporter = isExporterApplication({ payload: accreditation })
@@ -230,13 +297,24 @@ export function buildAccreditationSummary({
         values: authorityToIssueLines(accreditation.prns)
       },
       {
+        key: 'sampling-inspection-plan',
+        label: 'Sampling and inspection plan',
+        kind: 'files',
+        files: filesOf(accreditation.samplingPlan).map((file) =>
+          summaryFileViewModel(file, workItemId)
+        )
+      },
+      {
         key: 'business-plan',
         label: 'Business plan',
         kind: 'pairs',
         pairs: buildBusinessPlanPairs(accreditation.businessPlan)
       },
       ...(isExporter
-        ? [buildOrsRow(accreditation, multipleInterimSitesEnabled)]
+        ? [
+            buildBesRow(accreditation, workItemId),
+            buildOrsRow(accreditation, multipleInterimSitesEnabled)
+          ]
         : [])
     ]
   }

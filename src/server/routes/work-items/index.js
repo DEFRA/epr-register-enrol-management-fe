@@ -18,6 +18,7 @@ import { workItemAuditLogController } from './audit-log.controller.js'
 import { workItemRecyclingOperationsController } from './recycling-operations.controller.js'
 import { workItemAdditionalInformationController } from './additional-information.controller.js'
 import { workItemAccreditationSummaryController } from './accreditation-summary.controller.js'
+import { workItemAccreditationSummaryDownloadController } from './accreditation-summary-download.controller.js'
 import { workItemRelatedApplicationsController } from './empty-tab.controller.js'
 import {
   makeShowExtendController,
@@ -184,6 +185,14 @@ export const workItems = {
           method: 'GET',
           path: '/work-items/{id}/accreditation-summary',
           ...workItemAccreditationSummaryController
+        },
+        {
+          // RA-769. A file download from that tab: a fresh read of the
+          // summary, serving only a file in it. The payload-based download
+          // above is unchanged.
+          method: 'GET',
+          path: '/work-items/{id}/accreditation-summary/files/{fileId}/download',
+          ...workItemAccreditationSummaryDownloadController
         },
         {
           method: 'GET',

@@ -68,7 +68,11 @@ export const workItemAccreditationSummaryController = {
       unavailableMessage: ACCREDITATION_SUMMARY_UNAVAILABLE,
       multipleInterimSitesEnabled,
       accreditationSummary: summary
-        ? buildAccreditationSummary({ ...summary, multipleInterimSitesEnabled })
+        ? buildAccreditationSummary({
+            ...summary,
+            workItemId: id,
+            multipleInterimSitesEnabled
+          })
         : null
     })
   }

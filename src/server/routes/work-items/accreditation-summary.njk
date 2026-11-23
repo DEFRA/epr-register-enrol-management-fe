@@ -1,7 +1,7 @@
 {% extends 'layouts/page.njk' %}
 
 {% from "govuk/components/tag/macro.njk" import govukTag %}
-{% from "work-items/summary-macros.njk" import businessPlanPair, overseasSiteList %}
+{% from "work-items/summary-macros.njk" import businessPlanPair, documentItem, overseasSiteList %}
 
 {# ---------------------------------------------------------------- #}
 {# RA-769. The Accreditation summary tab of an In-Year Change case:  #}
@@ -36,6 +36,29 @@
                   {% for line in row.values %}
                     <p class="govuk-body govuk-!-margin-bottom-1"
                        data-testid="acc-summary-line">{{ line }}</p>
+                  {% else %}
+                    —
+                  {% endfor %}
+                {% elif row.kind == 'files' %}
+                  {% if row.files.length %}
+                    <ul class="govuk-list">
+                      {% for file in row.files %}{{ documentItem(file) }}{% endfor %}
+                    </ul>
+                  {% else %}
+                    —
+                  {% endif %}
+                {% elif row.kind == 'bes-sites' %}
+                  {% for site in row.sites %}
+                    <div data-testid="bes-site">
+                      <p class="govuk-body govuk-!-margin-bottom-1">
+                        <strong>{{ site.siteName }}</strong>{% if site.country %} ({{ site.country }}){% endif %}
+                      </p>
+                      {% if site.files.length %}
+                        <ul class="govuk-list">
+                          {% for file in site.files %}{{ documentItem(file) }}{% endfor %}
+                        </ul>
+                      {% endif %}
+                    </div>
                   {% else %}
                     —
                   {% endfor %}
