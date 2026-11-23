@@ -6,8 +6,10 @@ import {
   EM_DASH,
   buildAuthorityToIssueContacts,
   buildBusinessPlanPairs,
+  buildOverseasSites,
   deriveSiteAddressLines,
   isExporterApplication,
+  toDisplayLines,
   tonnageBandLabel
 } from './application-summary.js'
 
@@ -25,7 +27,8 @@ import {
  * `data-testid` suffix) and a `kind` the template switches on:
  * Organisation, Accreditation number, Status, Accreditation year,
  * Accreditation start date, Registration number, Location, Type, Material,
- * PRN tonnage, PRN authorisers, Authority to issue, Business plan.
+ * PRN tonnage, PRN authorisers, Authority to issue, Business plan, then for an
+ * exporter Overseas Reprocessing Site (ORS).
  *
  * The authorisers are the one list the operator backend holds. PRN authorisers
  * shows each as `Name (email)`, Authority to issue shows the names only. The
@@ -90,17 +93,63 @@ function startDateText(accreditationStartDate) {
 }
 
 /**
+ * The ORS row: each overseas site as the shared overseas site rendering takes
+ * it, its ORS ID as the number ahead of its name. The summary address is kept
+ * for every site, even one with a unique name, so a summary always shows
+ * number, name and address.
+ *
+ * The operator backend answers selected sites only, in ORS ID then site ID
+ * order, and never marks one new, so nothing is filtered, reordered or flagged
+ * here.
+ */
+/**
+ * The operator backend never returns these, and the tab never shows them: a
+ * site stays new for the year after grant, so it would be marked new all year.
+ * Dropped here so a body that did carry them could not bring them back.
+ */
+function withoutNewSiteMarkers(site) {
+  const copy = { ...site }
+  delete copy.isNewSite
+  delete copy.registeredNowAccredited
+  return copy
+}
+
+function buildOrsRow(accreditation, multipleInterimSitesEnabled) {
+  const sources = (
+    Array.isArray(accreditation.overseasSites)
+      ? accreditation.overseasSites
+      : []
+  ).map(withoutNewSiteMarkers)
+  const sites = buildOverseasSites(sources, {
+    multipleInterimSitesEnabled,
+    alwaysShowSummaryAddress: true
+  }).map((site, index) => ({
+    ...site,
+    siteNumber: toDisplayLines(sources[index]?.orsId)[0] ?? null
+  }))
+  return {
+    key: 'ors',
+    label: 'Overseas Reprocessing Site (ORS)',
+    kind: 'overseas-sites',
+    sites
+  }
+}
+
+/**
  * @param {object} args
  * @param {object} args.accreditation the accreditation, as management-be answers it
  * @param {string|null} args.accreditationStartDate `yyyy-MM-dd`
+ * @param {boolean} [args.multipleInterimSitesEnabled]
  * @returns {{ rows: object[], isExporter: boolean }}
  */
 export function buildAccreditationSummary({
   accreditation,
-  accreditationStartDate
+  accreditationStartDate,
+  multipleInterimSitesEnabled = false
 }) {
+  const isExporter = isExporterApplication({ payload: accreditation })
   return {
-    isExporter: isExporterApplication({ payload: accreditation }),
+    isExporter,
     rows: [
       {
         key: 'organisation',
@@ -185,7 +234,10 @@ export function buildAccreditationSummary({
         label: 'Business plan',
         kind: 'pairs',
         pairs: buildBusinessPlanPairs(accreditation.businessPlan)
-      }
+      },
+      ...(isExporter
+        ? [buildOrsRow(accreditation, multipleInterimSitesEnabled)]
+        : [])
     ]
   }
 }

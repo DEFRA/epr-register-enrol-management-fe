@@ -10,6 +10,7 @@ import * as cheerio from 'cheerio'
 
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
+import { config } from '#/config/config.js'
 
 vi.mock(
   '#/server/common/helpers/backend-api/backend-api.js',
@@ -91,6 +92,44 @@ function anAccreditation(overrides = {}) {
       priceSupportPercent: 40,
       priceSupportDetail: null
     },
+    overseasSites: [
+      aSite(),
+      aSite({
+        siteId: 8,
+        orsId: '002',
+        siteName: 'Excel Recycling BV',
+        addressLine1: '3 Havenweg',
+        addressLine2: null,
+        townOrCity: 'Rotterdam',
+        country: 'Netherlands'
+      })
+    ],
+    ...overrides
+  }
+}
+
+function aSite(overrides = {}) {
+  return {
+    siteId: 7,
+    orsId: '001',
+    siteName: 'Speira GmbH',
+    siteAddress: null,
+    addressLine1: '1 Test Strasse',
+    addressLine2: 'Block B',
+    townOrCity: 'Bremen',
+    country: 'Germany',
+    coordinates: '51.847,7.123',
+    contactName: 'Hans Contact',
+    contactEmail: 'hans@example.de',
+    contactPhone: '+49 123',
+    operationCodes: ['R4', 'R5'],
+    code1: 'B1010',
+    code2: 'B1020',
+    code3: null,
+    repatriatedLoads: 'As per article 18',
+    conditionsOfExport: true,
+    isEu: true,
+    isOecd: false,
     ...overrides
   }
 }
@@ -111,8 +150,8 @@ function rows($) {
       key: $(row)
         .attr('data-testid')
         .replace(/^acc-summary-row-/, ''),
-      label: squash($(row).find('dt').text()),
-      value: squash($(row).find('dd').text())
+      label: squash($(row).children('dt').text()),
+      value: squash($(row).children('dd').text())
     }))
     .get()
 }
@@ -231,8 +270,221 @@ describe('RA-769: Accreditation summary tab', () => {
           label: 'Business plan',
           value:
             'New infrastructure — 60% of PRN incomeA new sorting line Price support — 40% of PRN income'
+        },
+        {
+          key: 'ors',
+          label: 'Overseas Reprocessing Site (ORS)',
+          value: expect.stringMatching(/^001 Speira GmbH /)
         }
       ])
+    })
+
+    describe('overseas reprocessing sites', () => {
+      const sitesOf = ($) => $('[data-testid="overseas-site"]')
+
+      afterEach(() => {
+        config.set('featureFlags.multipleInterimSitesEnabled', false)
+      })
+
+      test('lists each site as a section, every one collapsed on load', async () => {
+        const { $ } = await get()
+
+        const sites = sitesOf($)
+        expect(sites).toHaveLength(2)
+        sites.each((_, el) => {
+          expect(el.tagName).toBe('details')
+          expect($(el).attr('open')).toBeUndefined()
+        })
+      })
+
+      test('each summary shows the number, name and address, even when the names are unique', async () => {
+        const { $ } = await get()
+
+        const text = (el, testId) =>
+          squash($(el).find(`summary [data-testid="${testId}"]`).text())
+        const summaries = sitesOf($)
+          .map((_, el) => ({
+            number: text(el, 'overseas-site-number'),
+            name: text(el, 'overseas-site-name'),
+            address: text(el, 'overseas-site-summary-address')
+          }))
+          .get()
+        expect(summaries).toEqual([
+          {
+            number: '001',
+            name: 'Speira GmbH',
+            address: '1 Test Strasse, Germany'
+          },
+          {
+            number: '002',
+            name: 'Excel Recycling BV',
+            address: '3 Havenweg, Netherlands'
+          }
+        ])
+      })
+
+      test('an expanded site shows its full address and details, in the design order', async () => {
+        const { $ } = await get()
+
+        const first = sitesOf($).first()
+        const detail = (key) =>
+          squash(first.find(`[data-testid="overseas-site-${key}"]`).text())
+        expect(detail('address')).toBe(
+          '1 Test Strasse, Block B, Bremen, Germany'
+        )
+        expect(detail('ors-id')).toBe('001')
+        expect(detail('coordinates')).toBe('51.847,7.123')
+        expect(detail('contact-name')).toBe('Hans Contact')
+        expect(detail('contact-email')).toBe('hans@example.de')
+        expect(detail('contact-phone')).toBe('+49 123')
+        expect(detail('operation-code')).toBe('R4 R5')
+        expect(detail('waste-codes')).toBe('B1010, B1020')
+        expect(detail('repatriated-loads')).toBe('As per article 18')
+        expect(detail('conditions-of-export')).toBe('Yes')
+        expect(detail('eu-country')).toBe('Yes')
+        expect(detail('oecd-country')).toBe('No')
+        const labels = first
+          .find('.govuk-details__text dt')
+          .map((_, el) => squash($(el).text()))
+          .get()
+        expect(labels).toEqual([
+          'ORS ID',
+          'Coordinates',
+          'Contact name',
+          'Contact email',
+          'Contact phone number',
+          'Operation code',
+          'Basel/OECD codes',
+          'Repatriated loads',
+          'Conditions of export',
+          'EU country',
+          'OECD country'
+        ])
+      })
+
+      test('never shows "Registered, now seeking accreditation" or a NEW marker, even if a site were flagged', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              overseasSites: [
+                aSite({ isNewSite: true, registeredNowAccredited: true })
+              ]
+            })
+          })
+        )
+
+        const { $, result } = await get()
+
+        expect(result).not.toContain('Registered, now seeking accreditation')
+        expect(result).not.toContain('NEW:')
+        expect($('.app-new-flag')).toHaveLength(0)
+      })
+
+      test('shows the sites in the order answered', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              overseasSites: [
+                aSite({ orsId: '001', siteName: 'First' }),
+                aSite({ siteId: 2, orsId: '002', siteName: 'Second' }),
+                aSite({ siteId: 3, orsId: '010', siteName: 'Third' })
+              ]
+            })
+          })
+        )
+
+        const { $ } = await get()
+
+        expect(
+          $('[data-testid="overseas-site-name"]')
+            .map((_, el) => squash($(el).text()))
+            .get()
+        ).toEqual(['First', 'Second', 'Third'])
+      })
+
+      test('a site without an ORS ID shows no number rather than an empty one', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              overseasSites: [aSite({ orsId: null })]
+            })
+          })
+        )
+
+        const { $ } = await get()
+
+        expect($('[data-testid="overseas-site-number"]')).toHaveLength(0)
+        expect(squash($('[data-testid="overseas-site-name"]').text())).toBe(
+          'Speira GmbH'
+        )
+      })
+
+      test.each([
+        ['no sites', []],
+        ['no site list at all', undefined]
+      ])(
+        'an exporter with %s shows the empty value in the row',
+        async (_, overseasSites) => {
+          getAccreditationSummary.mockResolvedValue(
+            aSummary({ accreditation: anAccreditation({ overseasSites }) })
+          )
+
+          const { $ } = await get()
+
+          expect(sitesOf($)).toHaveLength(0)
+          expect(rows($).find((r) => r.key === 'ors').value).toBe('—')
+        }
+      )
+
+      test('a reprocessor accreditation has no ORS row, even if sites came back', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              wasteProcessingType: 'reprocessor',
+              material: 'plastic',
+              glassRecyclingProcess: null
+            })
+          })
+        )
+
+        const { $ } = await get()
+
+        expect(rows($).map((r) => r.key)).not.toContain('ors')
+        expect(sitesOf($)).toHaveLength(0)
+      })
+
+      test('hands the interim sites flag to the rendering, in either state', async () => {
+        const interimSites = [
+          {
+            siteName: 'Depot A',
+            siteNumber: 'SN-1',
+            addressLine1: '1 Road',
+            country: 'Spain'
+          },
+          {
+            siteName: 'Depot B',
+            siteNumber: 'SN-2',
+            addressLine1: '2 Road',
+            country: 'Spain'
+          }
+        ]
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              overseasSites: [aSite({ interimSites })]
+            })
+          })
+        )
+
+        const off = await get()
+        expect(off.$('[data-testid="interim-sites"]')).toHaveLength(0)
+        expect(off.$('[data-testid="interim-site"]')).toHaveLength(1)
+
+        config.set('featureFlags.multipleInterimSitesEnabled', true)
+        const on = await get()
+        expect(on.$('[data-testid="interim-sites-label"]')).toHaveLength(1)
+        expect(on.$('details[data-testid="interim-site"]')).toHaveLength(2)
+      })
     })
 
     describe('PRN details and business plan', () => {

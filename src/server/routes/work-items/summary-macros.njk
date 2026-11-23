@@ -119,6 +119,7 @@
 {#                                                                          #}
 {# `options.hideNewMarkers` leaves out every `NEW:` prefix.                 #}
 {# `options.showNoInterimSites` says so for a site with no interim sites.   #}
+{# A site carrying `siteNumber` shows it before its name (RA-769).         #}
 {# Whether the condensed address shows is decided by the view model: see    #}
 {# `alwaysShowSummaryAddress` on `buildOverseasSites`.                      #}
 {% macro overseasSiteList(sites, multipleInterimSitesEnabled, options={}) %}
@@ -141,7 +142,10 @@
         {# "NEW: <name>" string and a prefix assertion scoped   #}
         {# to it cannot be satisfied by a nested interim site's #}
         {# prefix.                                              #}
+        {# RA-769: an optional site number ahead of the name, in    #}
+        {# its own element so the name element is unchanged.        #}
         <span class="govuk-details__summary-text">
+          {% if site.siteNumber %}<span data-testid="overseas-site-number">{{ site.siteNumber }} </span>{% endif %}
           <span data-testid="overseas-site-name">
             <strong>{% if site.isNew and not options.hideNewMarkers %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>
           </span>

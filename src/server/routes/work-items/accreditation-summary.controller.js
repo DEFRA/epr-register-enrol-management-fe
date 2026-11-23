@@ -1,3 +1,4 @@
+import { config } from '#/config/config.js'
 import {
   getAccreditationSummary,
   getWorkItem
@@ -50,6 +51,9 @@ export const workItemAccreditationSummaryController = {
     const read = await getAccreditationSummary({ workItemId: id, user })
     const summary = read.ok && read.accreditation ? read : null
 
+    const multipleInterimSitesEnabled = config.get(
+      'featureFlags.multipleInterimSitesEnabled'
+    )
     const forHeader = decorateForCaseHeader(result.workItem)
     return h.view(VIEW, {
       pageTitle: `Accreditation summary — ${forHeader.payload?.applicationReference ?? forHeader.id}`,
@@ -62,7 +66,10 @@ export const workItemAccreditationSummaryController = {
       heading: ACCREDITATION_SUMMARY_HEADING,
       intro: ACCREDITATION_SUMMARY_INTRO,
       unavailableMessage: ACCREDITATION_SUMMARY_UNAVAILABLE,
-      accreditationSummary: summary ? buildAccreditationSummary(summary) : null
+      multipleInterimSitesEnabled,
+      accreditationSummary: summary
+        ? buildAccreditationSummary({ ...summary, multipleInterimSitesEnabled })
+        : null
     })
   }
 }

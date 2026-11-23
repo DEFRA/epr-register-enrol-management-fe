@@ -59,6 +59,12 @@ describe('overseasSiteList', () => {
       )
     })
 
+    test('renders no site number unless the site has one', () => {
+      const $ = render([site('Alpha')])
+
+      expect(byTestId($, 'overseas-site-number')).toHaveLength(0)
+    })
+
     test('renders an em dash when there are no sites', () => {
       const $ = render([])
 
@@ -129,5 +135,21 @@ describe('overseasSiteList', () => {
       expect(none.text()).toBe('No interim sites')
       expect(byTestId($, 'overseas-site').first().find(none).length).toBe(1)
     })
+  })
+})
+
+describe('overseasSiteList site number (RA-769)', () => {
+  test('shows the number before the name in the summary, outside the name element', () => {
+    const $ = render([{ ...site('Alpha'), siteNumber: '001' }])
+
+    expect(byTestId($, 'overseas-site-number').first().text().trim()).toBe(
+      '001'
+    )
+    expect($('summary').text().replace(/\s+/g, ' ').trim()).toMatch(
+      /^001 Alpha/
+    )
+    expect(byTestId($, 'overseas-site-name').first().text().trim()).toBe(
+      'Alpha'
+    )
   })
 })

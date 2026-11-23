@@ -1,7 +1,7 @@
 {% extends 'layouts/page.njk' %}
 
 {% from "govuk/components/tag/macro.njk" import govukTag %}
-{% from "work-items/summary-macros.njk" import businessPlanPair %}
+{% from "work-items/summary-macros.njk" import businessPlanPair, overseasSiteList %}
 
 {# ---------------------------------------------------------------- #}
 {# RA-769. The Accreditation summary tab of an In-Year Change case:  #}
@@ -44,6 +44,8 @@
                   {% else %}
                     —
                   {% endfor %}
+                {% elif row.kind == 'overseas-sites' %}
+                  {{ overseasSiteList(row.sites, multipleInterimSitesEnabled, { hideNewMarkers: true }) }}
                 {% else %}
                   {{ row.value }}
                 {% endif %}
