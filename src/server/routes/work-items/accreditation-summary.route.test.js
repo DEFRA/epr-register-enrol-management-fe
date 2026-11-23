@@ -453,37 +453,149 @@ describe('RA-769: Accreditation summary tab', () => {
         expect(sitesOf($)).toHaveLength(0)
       })
 
-      test('hands the interim sites flag to the rendering, in either state', async () => {
-        const interimSites = [
-          {
-            siteName: 'Depot A',
-            siteNumber: 'SN-1',
-            addressLine1: '1 Road',
-            country: 'Spain'
-          },
-          {
-            siteName: 'Depot B',
-            siteNumber: 'SN-2',
-            addressLine1: '2 Road',
-            country: 'Spain'
-          }
-        ]
-        getAccreditationSummary.mockResolvedValue(
-          aSummary({
-            accreditation: anAccreditation({
-              overseasSites: [aSite({ interimSites })]
+      describe('interim sites', () => {
+        const interim = (siteNumber, siteName, overrides = {}) => ({
+          siteId: Number(siteNumber.replace(/D/g, '')),
+          siteNumber,
+          siteName,
+          addressLine1: `${siteName} Road`,
+          addressLine2: null,
+          townOrCity: 'Hamburg',
+          stateOrRegion: null,
+          postcode: '20095',
+          country: 'Germany',
+          contactName: 'Ines Interim',
+          contactEmail: 'ines@example.de',
+          contactPhone: '+49 456',
+          operationCodes: ['R12', 'R3'],
+          ...overrides
+        })
+
+        const withInterimSites = async (interimSites, flag) => {
+          config.set('featureFlags.multipleInterimSitesEnabled', flag)
+          getAccreditationSummary.mockResolvedValue(
+            aSummary({
+              accreditation: anAccreditation({
+                overseasSites: [aSite({ interimSites })]
+              })
             })
+          )
+          return get()
+        }
+
+        const A = interim('I-1', 'Depot A')
+        const B = interim('I-2', 'Depot B')
+        const C = interim('I-3', 'Depot C')
+
+        test('flag on: lists every interim site with a count, each in its own collapsed section', async () => {
+          const { $ } = await withInterimSites([A, B, C], true)
+
+          expect($('[data-testid="interim-sites-label"]').text()).toBe(
+            'Interim sites (3)'
+          )
+          const sections = $('details[data-testid="interim-site"]')
+          expect(sections).toHaveLength(3)
+          sections.each((_, el) => {
+            expect($(el).attr('open')).toBeUndefined()
           })
+          expect(
+            $('[data-testid="interim-site-name"]')
+              .map((_, el) => squash($(el).text()))
+              .get()
+          ).toEqual(['Depot A', 'Depot B', 'Depot C'])
+          expect($('[data-testid="interim-sites-none"]')).toHaveLength(0)
+        })
+
+        test('flag on: an interim site shows its address, site number, contact and operation code', async () => {
+          const { $ } = await withInterimSites([A], true)
+
+          const section = $('details[data-testid="interim-site"]').first()
+          expect(
+            squash(section.find('[data-testid="interim-site-address"]').text())
+          ).toBe('Depot A Road, Hamburg, 20095, Germany')
+          const value = (key) =>
+            squash(section.find(`[data-testid="interim-site-${key}"]`).text())
+          expect(value('site-number')).toBe('I-1')
+          expect(value('contact-name')).toBe('Ines Interim')
+          expect(value('contact-email')).toBe('ines@example.de')
+          expect(value('contact-phone')).toBe('+49 456')
+          expect(value('operation-code')).toContain('R12')
+          expect(value('operation-code')).toContain('R3')
+        })
+
+        test('flag off: shows only the first interim site, already open (not collapsed)', async () => {
+          const { $ } = await withInterimSites([A, B, C], false)
+
+          expect($('[data-testid="interim-sites-label"]')).toHaveLength(0)
+          expect($('details[data-testid="interim-site"]')).toHaveLength(0)
+          const shown = $('[data-testid="interim-site"]')
+          expect(shown).toHaveLength(1)
+          expect(
+            squash(shown.find('[data-testid="interim-site-name"]').text())
+          ).toBe('Depot A')
+          expect(shown.text()).not.toContain('Depot B')
+          expect($('[data-testid="interim-sites-none"]')).toHaveLength(0)
+        })
+
+        test.each([
+          ['on', true],
+          ['off', false]
+        ])('flag %s: a site with no interim sites says so', async (_, flag) => {
+          const { $ } = await withInterimSites([], flag)
+
+          expect($('[data-testid="interim-sites-none"]').text()).toBe(
+            'No interim sites'
+          )
+          expect($('[data-testid="interim-site"]')).toHaveLength(0)
+        })
+
+        test.each([
+          ['on', true],
+          ['off', false]
+        ])(
+          'flag %s: a site whose interim sites are all withdrawn says there are none',
+          async (_, flag) => {
+            const { $ } = await withInterimSites(
+              [interim('I-9', 'Gone', { removedAt: '2026-05-01T00:00:00Z' })],
+              flag
+            )
+
+            expect($('[data-testid="interim-sites-none"]').text()).toBe(
+              'No interim sites'
+            )
+            expect($('[data-testid="interim-site"]')).toHaveLength(0)
+          }
         )
 
-        const off = await get()
-        expect(off.$('[data-testid="interim-sites"]')).toHaveLength(0)
-        expect(off.$('[data-testid="interim-site"]')).toHaveLength(1)
+        test('flag off: a withdrawn interim site is never the first one shown', async () => {
+          const { $ } = await withInterimSites(
+            [interim('I-9', 'Gone', { removedAt: '2026-05-01T00:00:00Z' }), B],
+            false
+          )
 
-        config.set('featureFlags.multipleInterimSitesEnabled', true)
-        const on = await get()
-        expect(on.$('[data-testid="interim-sites-label"]')).toHaveLength(1)
-        expect(on.$('details[data-testid="interim-site"]')).toHaveLength(2)
+          const shown = $('[data-testid="interim-site"]')
+          expect(shown).toHaveLength(1)
+          expect(
+            squash(shown.find('[data-testid="interim-site-name"]').text())
+          ).toBe('Depot B')
+          expect($.text()).not.toContain('Gone')
+        })
+
+        test('a site without the interimSites key (an older operator backend) says there are none', async () => {
+          const { $ } = await get()
+
+          expect($('[data-testid="interim-sites-none"]')).toHaveLength(2)
+        })
+
+        test('no NEW: marker appears on an interim site, even one flagged new', async () => {
+          const flagged = { ...A, isNewSite: true }
+          const on = await withInterimSites([flagged], true)
+          expect(on.$('[data-testid="interim-site-new-tag"]')).toHaveLength(0)
+
+          const off = await withInterimSites([flagged], false)
+          expect(off.$('[data-testid="interim-site-new-tag"]')).toHaveLength(0)
+          expect(off.$.text()).not.toContain('NEW:')
+        })
       })
     })
 
