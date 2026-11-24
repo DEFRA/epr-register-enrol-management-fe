@@ -1,4 +1,3 @@
-import { config } from '#/config/config.js'
 import {
   getReAccreditationPriorYear,
   getWorkItem
@@ -501,18 +500,12 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
   // failed lookup simply omits the section rather than failing the page.
   const priorYear = await loadPriorYear({ workItem: enriched, id, user })
 
-  const multipleInterimSitesEnabled = config.get(
-    'featureFlags.multipleInterimSitesEnabled'
-  )
   // RA-739. A type with its own summary (add-ORS) builds it; every other
   // type gets re-accreditation's.
   const buildSummary =
     getWorkItemType(enriched.typeId)?.buildApplicationSummary ??
     buildApplicationSummary
-  const applicationSummary = buildSummary({
-    multipleInterimSitesEnabled,
-    workItem: enriched
-  })
+  const applicationSummary = buildSummary({ workItem: enriched })
 
   return h
     .view(templatePath, {
@@ -529,9 +522,6 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       }),
       applicationDetails: applicationSummary.rows,
       applicationSummary,
-      // RA-603: the nested interim-site layout is behind the same flag as the
-      // data, so with it off a regulator sees exactly the page they see today.
-      multipleInterimSitesEnabled,
       priorYear,
       workItem: enriched,
       assignment,

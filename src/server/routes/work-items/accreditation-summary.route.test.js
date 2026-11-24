@@ -10,7 +10,6 @@ import * as cheerio from 'cheerio'
 
 import { createServer } from '#/server/server.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
-import { config } from '#/config/config.js'
 
 vi.mock(
   '#/server/common/helpers/backend-api/backend-api.js',
@@ -249,7 +248,11 @@ describe('RA-769: Accreditation summary tab', () => {
           label: 'Accreditation number',
           value: 'A26ER5003240164GR'
         },
-        { key: 'status', label: 'Status', value: 'Granted' },
+        {
+          key: 'status',
+          label: 'Accreditation status',
+          value: 'Granted'
+        },
         {
           key: 'accreditation-year',
           label: 'Accreditation year',
@@ -453,10 +456,6 @@ describe('RA-769: Accreditation summary tab', () => {
 
     describe('overseas reprocessing sites', () => {
       const sitesOf = ($) => $('[data-testid="overseas-site"]')
-
-      afterEach(() => {
-        config.set('featureFlags.multipleInterimSitesEnabled', false)
-      })
 
       test('lists each site as a section, every one collapsed on load', async () => {
         const { $ } = await get()
@@ -679,8 +678,7 @@ describe('RA-769: Accreditation summary tab', () => {
           ...overrides
         })
 
-        const withInterimSites = async (interimSites, flag) => {
-          config.set('featureFlags.multipleInterimSitesEnabled', flag)
+        const withInterimSites = async (interimSites) => {
           getAccreditationSummary.mockResolvedValue(
             aSummary({
               accreditation: anAccreditation({
@@ -695,8 +693,8 @@ describe('RA-769: Accreditation summary tab', () => {
         const B = interim('I-2', 'Depot B')
         const C = interim('I-3', 'Depot C')
 
-        test('flag on: lists every interim site with a count, each in its own collapsed section', async () => {
-          const { $ } = await withInterimSites([A, B, C], true)
+        test('lists every interim site with a count, each in its own collapsed section', async () => {
+          const { $ } = await withInterimSites([A, B, C])
 
           expect($('[data-testid="interim-sites-label"]').text()).toBe(
             'Interim sites (3)'
@@ -714,8 +712,8 @@ describe('RA-769: Accreditation summary tab', () => {
           expect($('[data-testid="interim-sites-none"]')).toHaveLength(0)
         })
 
-        test('flag on: an interim site shows its address, site number, contact and operation code', async () => {
-          const { $ } = await withInterimSites([A], true)
+        test('an interim site shows its address, site number, contact and operation code', async () => {
+          const { $ } = await withInterimSites([A])
 
           const section = $('details[data-testid="interim-site"]').first()
           expect(
@@ -731,25 +729,8 @@ describe('RA-769: Accreditation summary tab', () => {
           expect(value('operation-code')).toContain('R3')
         })
 
-        test('flag off: shows only the first interim site, already open (not collapsed)', async () => {
-          const { $ } = await withInterimSites([A, B, C], false)
-
-          expect($('[data-testid="interim-sites-label"]')).toHaveLength(0)
-          expect($('details[data-testid="interim-site"]')).toHaveLength(0)
-          const shown = $('[data-testid="interim-site"]')
-          expect(shown).toHaveLength(1)
-          expect(
-            squash(shown.find('[data-testid="interim-site-name"]').text())
-          ).toBe('Depot A')
-          expect(shown.text()).not.toContain('Depot B')
-          expect($('[data-testid="interim-sites-none"]')).toHaveLength(0)
-        })
-
-        test.each([
-          ['on', true],
-          ['off', false]
-        ])('flag %s: a site with no interim sites says so', async (_, flag) => {
-          const { $ } = await withInterimSites([], flag)
+        test('a site with no interim sites says so', async () => {
+          const { $ } = await withInterimSites([])
 
           expect($('[data-testid="interim-sites-none"]').text()).toBe(
             'No interim sites'
@@ -757,31 +738,24 @@ describe('RA-769: Accreditation summary tab', () => {
           expect($('[data-testid="interim-site"]')).toHaveLength(0)
         })
 
-        test.each([
-          ['on', true],
-          ['off', false]
-        ])(
-          'flag %s: a site whose interim sites are all withdrawn says there are none',
-          async (_, flag) => {
-            const { $ } = await withInterimSites(
-              [interim('I-9', 'Gone', { removedAt: '2026-05-01T00:00:00Z' })],
-              flag
-            )
+        test('a site whose interim sites are all withdrawn says there are none', async () => {
+          const { $ } = await withInterimSites([
+            interim('I-9', 'Gone', { removedAt: '2026-05-01T00:00:00Z' })
+          ])
 
-            expect($('[data-testid="interim-sites-none"]').text()).toBe(
-              'No interim sites'
-            )
-            expect($('[data-testid="interim-site"]')).toHaveLength(0)
-          }
-        )
-
-        test('flag off: a withdrawn interim site is never the first one shown', async () => {
-          const { $ } = await withInterimSites(
-            [interim('I-9', 'Gone', { removedAt: '2026-05-01T00:00:00Z' }), B],
-            false
+          expect($('[data-testid="interim-sites-none"]').text()).toBe(
+            'No interim sites'
           )
+          expect($('[data-testid="interim-site"]')).toHaveLength(0)
+        })
 
-          const shown = $('[data-testid="interim-site"]')
+        test('a withdrawn interim site is left out and the rest are listed', async () => {
+          const { $ } = await withInterimSites([
+            interim('I-9', 'Gone', { removedAt: '2026-05-01T00:00:00Z' }),
+            B
+          ])
+
+          const shown = $('details[data-testid="interim-site"]')
           expect(shown).toHaveLength(1)
           expect(
             squash(shown.find('[data-testid="interim-site-name"]').text())

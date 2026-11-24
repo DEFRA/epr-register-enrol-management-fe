@@ -26,7 +26,7 @@ import {
  *
  * Rows are one ordered array of siblings, each with a stable `key` (its
  * `data-testid` suffix) and a `kind` the template switches on:
- * Organisation, Accreditation number, Status, Accreditation year,
+ * Organisation, Accreditation number, Accreditation status, Accreditation year,
  * Accreditation start date, Registration number, Location, Type, Material,
  * PRN tonnage, PRN authorisers, Authority to issue, Sampling and inspection
  * plan, Business plan, then for an exporter Broadly Equivalent Standards (BES)
@@ -179,7 +179,7 @@ function withoutNewSiteMarkers(site) {
   return copy
 }
 
-function buildOrsRow(accreditation, multipleInterimSitesEnabled) {
+function buildOrsRow(accreditation) {
   const sources = (
     Array.isArray(accreditation.overseasSites)
       ? accreditation.overseasSites
@@ -187,9 +187,7 @@ function buildOrsRow(accreditation, multipleInterimSitesEnabled) {
   ).map(withoutNewSiteMarkers)
   // As on re-accreditation, a site's condensed address shows in the summary
   // only when its name repeats in the list.
-  const sites = buildOverseasSites(sources, {
-    multipleInterimSitesEnabled
-  }).map((site, index) => ({
+  const sites = buildOverseasSites(sources).map((site, index) => ({
     ...site,
     siteNumber: toDisplayLines(sources[index]?.orsId)[0] ?? null
   }))
@@ -206,14 +204,12 @@ function buildOrsRow(accreditation, multipleInterimSitesEnabled) {
  * @param {object} args.accreditation the accreditation, as management-be answers it
  * @param {string|null} args.accreditationStartDate `yyyy-MM-dd`
  * @param {string} args.workItemId the case, for the download links
- * @param {boolean} [args.multipleInterimSitesEnabled]
  * @returns {{ rows: object[], isExporter: boolean }}
  */
 export function buildAccreditationSummary({
   accreditation,
   accreditationStartDate,
-  workItemId,
-  multipleInterimSitesEnabled = false
+  workItemId
 }) {
   const isExporter = isExporterApplication({ payload: accreditation })
   return {
@@ -233,7 +229,7 @@ export function buildAccreditationSummary({
       },
       {
         key: 'status',
-        label: 'Status',
+        label: 'Accreditation status',
         kind: 'tag',
         value: GRANTED_TEXT,
         tagClass: stateTagClass(GRANTED_STATE_ID)
@@ -312,10 +308,7 @@ export function buildAccreditationSummary({
         pairs: buildBusinessPlanPairs(accreditation.businessPlan)
       },
       ...(isExporter
-        ? [
-            buildBesRow(accreditation, workItemId),
-            buildOrsRow(accreditation, multipleInterimSitesEnabled)
-          ]
+        ? [buildBesRow(accreditation, workItemId), buildOrsRow(accreditation)]
         : [])
     ]
   }

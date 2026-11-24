@@ -176,9 +176,8 @@ from its own hooks, never from a check on its category:
   Overseas Reprocessing Site (ORS) row: one `details` section per site,
   collapsed, whose summary always shows the ORS ID as its number, the name and
   the condensed address (`overseasSiteList` with `siteNumber`, shared with
-  re-accreditation). Each expands to its active interim sites, following
-  `multipleInterimSitesEnabled` as re-accreditation does (on: "Interim sites
-  (n)", each collapsed; off: the first only, open), or "No interim sites". The row
+  re-accreditation). Each expands to its active interim sites, as re-accreditation does
+  ("Interim sites (n)", each collapsed), or "No interim sites". The row
   has no `NEW:` marker and no "Registered, now seeking accreditation" detail; when there is no accreditation to
   show, or it cannot be read, the tab says so under the heading and keeps the
   case header and tabs. Related applications is empty until RA-770

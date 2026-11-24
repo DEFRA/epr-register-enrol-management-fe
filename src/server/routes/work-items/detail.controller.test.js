@@ -2,7 +2,6 @@ import { vi } from 'vitest'
 import { load } from 'cheerio'
 
 import { createServer } from '#/server/server.js'
-import { config } from '#/config/config.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { bannerClasses } from '#/test-helpers/banner.js'
 import { injectWithCrumb } from '#/test-helpers/csrf.js'
@@ -4498,9 +4497,7 @@ describe('RA-295 individual work item page', () => {
       'Registration number:',
       'Material:',
       'Charge:',
-      'Payment date:',
-      'Submitted by:',
-      'Submitted on:'
+      'Payment date:'
     ])
   })
 
@@ -5383,15 +5380,15 @@ describe('RA-295 individual work item page', () => {
     expect(ors).not.toContain('data-testid="overseas-site-new-tag"')
   })
 
-  test('RA-292 AC02: renders the "Interim sites" sub-label', async () => {
+  test('RA-292 AC02: renders the "Interim sites" sub-label with its count', async () => {
     const ors = detailValue(await renderWithSites([ROTTERDAM]), 'ors')
-    const interimIdx = ors.indexOf('data-testid="interim-site"')
-    expect(ors.slice(interimIdx, interimIdx + 600)).toContain(
-      '<strong>Interim sites</strong>'
+    const labelIdx = ors.indexOf('data-testid="interim-sites-label"')
+    expect(ors.slice(labelIdx, labelIdx + 200)).toContain(
+      '<strong>Interim sites (1)</strong>'
     )
   })
 
-  describe('RA-603 AC10b: the nested interim-site layout follows the flag', () => {
+  describe('RA-603 AC10b: every interim site folds down under a counted label', () => {
     const SEVERAL = {
       ...ROTTERDAM,
       interimSites: [
@@ -5405,23 +5402,7 @@ describe('RA-295 individual work item page', () => {
       ]
     }
 
-    afterEach(() => {
-      config.set('featureFlags.multipleInterimSitesEnabled', false)
-    })
-
-    test('with the flag off, a regulator sees the page they see today', async () => {
-      const ors = detailValue(await renderWithSites([SEVERAL]), 'ors')
-
-      expect(ors).toContain('<strong>Interim sites</strong>')
-      expect(ors).not.toContain('data-testid="interim-sites"')
-      expect(ors).not.toMatch(/<details[^>]*data-testid="interim-site"/)
-      expect(ors).toContain('Antwerp Interim Holding Site')
-      expect(ors).not.toContain('Ghent Interim Depot')
-    })
-
-    test('with the flag on, each interim site folds down under a counted label', async () => {
-      config.set('featureFlags.multipleInterimSitesEnabled', true)
-
+    test('each interim site folds down under a counted label', async () => {
       const ors = detailValue(await renderWithSites([SEVERAL]), 'ors')
 
       // The label sits on the wrapper above the individual fold-downs, and the

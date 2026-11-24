@@ -557,7 +557,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('[data-testid="case-header"]').text()).not.toContain('123001')
     })
 
-    test('shows the eleven meta items in the order re-accreditation shares, with the site charge', async () => {
+    test('shows the eight meta items, in the order re-accreditation shares, with the site charge', async () => {
       const $ = await detailPage(anAddOrsItem())
 
       const meta = $(
@@ -573,10 +573,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Accreditation number: ACC-REP-PL-0007',
         'Material: Plastic',
         'Charge: £328.00',
-        'Payment date: Not received',
-        'Submitted by: Sam Operator',
-        'Submitted on: 11 Feb 2027',
-        `Valid from date: ${EM_DASH}`
+        'Payment date: Not received'
       ])
       expect(
         $(
@@ -619,18 +616,10 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       const item = anAddOrsItem()
       delete item.payload.material
       delete item.payload.accreditationReference
-      delete item.payload.submittedBy
-      delete item.submittedAt
       item.payload.site = { siteName: 'Denmark PR' }
       const $ = await detailPage(item)
 
-      for (const key of [
-        'date-added',
-        'submitted-by',
-        'material',
-        'accreditation-number',
-        'charge'
-      ]) {
+      for (const key of ['material', 'accreditation-number', 'charge']) {
         expect(
           squash($(`[data-testid="case-header-${key}"]`).text()),
           key
@@ -708,6 +697,53 @@ describe('RA-739 / RA-495: in-year change applications', () => {
     function rowValue($, key) {
       return $(`[data-testid="app-detail-value-${key}"]`)
     }
+
+    test('has no Valid from date until the determination records one', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+
+      expect($('[data-testid="application-valid-from"]')).toHaveLength(0)
+      expect(rowValue($, 'valid-from')).toHaveLength(0)
+    })
+
+    // A refusal records the submission date as its effective date, so the
+    // date is shown only once the case is Approved or Granted.
+    test.each([
+      'submitted',
+      'duly-made',
+      'rejected-pending-contact',
+      'rejected'
+    ])(
+      'shows no Valid from date in state %s, even with a date recorded',
+      async (stateId) => {
+        const item = { ...anAddOrsItem(), stateId }
+        item.payload.effectiveDate = '2027-03-01'
+        const $ = await summaryPage(item)
+
+        expect($('[data-testid="application-valid-from"]')).toHaveLength(0)
+        expect(rowValue($, 'valid-from')).toHaveLength(0)
+      }
+    )
+
+    test.each(['approved-pending-contact', 'approved'])(
+      'leads with the Valid from date, set apart from the site rows, once recorded, in state %s',
+      async (stateId) => {
+        const item = { ...anAddOrsItem(), stateId }
+        item.payload.effectiveDate = '2027-03-01'
+        const $ = await summaryPage(item)
+
+        const validFrom = $('[data-testid="application-valid-from"]')
+        expect(squash(validFrom.find('.govuk-summary-list__key').text())).toBe(
+          'Valid from date'
+        )
+        expect(squash(rowValue($, 'valid-from').text())).toBe('01 Mar 2027')
+        // Its own list, with a gap, ahead of the site's rows.
+        expect(validFrom.hasClass('govuk-!-margin-bottom-6')).toBe(true)
+        expect(
+          validFrom.nextAll('[data-testid="application-details"]')
+        ).toHaveLength(1)
+        expect(summaryRows($)[0].label).toBe('Site name')
+      }
+    )
 
     test('shows every site row with its Figma label, in order', async () => {
       const $ = await summaryPage(anAddOrsItem())

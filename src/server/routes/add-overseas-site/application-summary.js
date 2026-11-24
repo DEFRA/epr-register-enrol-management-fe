@@ -1,4 +1,5 @@
 import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
+import { formatHeaderDate } from '#/server/routes/work-items/case-header.js'
 import {
   EM_DASH,
   buildInterimSites,
@@ -26,7 +27,7 @@ import {
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
- * @returns {{ rows: object[], interimSites: object[] }}
+ * @returns {{ validFrom: object | null, rows: object[], interimSites: object[] }}
  */
 export function buildAddOverseasSiteSummary({ workItem }) {
   const site = workItem?.payload?.site ?? {}
@@ -36,11 +37,34 @@ export function buildAddOverseasSiteSummary({ workItem }) {
   )
 
   return {
+    validFrom: validFromEntry(workItem),
     rows: siteRows(site, workItemId, supplied),
     interimSites: withShortAddressOnlyForRepeatedNames(
       buildInterimSites(site, buildAddOrsInterimSite)
     )
   }
+}
+
+// "Approved" (awaiting the applicant contact) and "Granted".
+const APPROVED_STATE_IDS = new Set(['approved-pending-contact', 'approved'])
+
+/**
+ * The Valid from date (user, 2026-11-24: moved here from the case header): the
+ * date the determination recorded (`payload.effectiveDate`, RA-495 AC6), shown
+ * above the site's rows. Only an approved or granted case has one to show: a
+ * refusal records the submission date there (so management-be can close the
+ * case), and nothing takes effect. Absent until there is a date.
+ *
+ * @returns {{ key: string, label: string, value: string } | null}
+ */
+function validFromEntry(workItem) {
+  if (!APPROVED_STATE_IDS.has(workItem?.stateId)) {
+    return null
+  }
+  const value = formatHeaderDate(workItem?.payload?.effectiveDate)
+  return value === EM_DASH
+    ? null
+    : { key: 'valid-from', label: 'Valid from date', value }
 }
 
 /**

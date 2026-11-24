@@ -23,7 +23,7 @@ import { EM_DASH } from './application-summary.js'
  *   7. assigned to,       8. due on, and 9. registration number,
  *
  * plus (RA-493) 10. payment date and 11. the charge, and (RA-495, to match
- * add-ORS) application type, submitted by and submitted on.
+ * add-ORS) application type.
  *
  * (1)-(4) are the breadcrumb + title lines; the rest are the meta grid.
  *
@@ -172,28 +172,6 @@ export function submittedOnEntry(workItem) {
   }
 }
 
-/**
- * The submitter's name. A re-accreditation submitted before the operator
- * backend sent `submittedBy` has only its contact details.
- */
-export function submittedByEntry(payload) {
-  const name =
-    payload?.submittedBy?.fullName ?? payload?.submitterContactDetails?.fullName
-  return {
-    key: 'submitted-by',
-    label: 'Submitted by',
-    value: typeof name === 'string' && name.trim() ? name.trim() : EM_DASH
-  }
-}
-
-export function effectiveDateEntry(date) {
-  return {
-    key: 'effective-date',
-    label: 'Valid from date',
-    value: formatHeaderDate(date)
-  }
-}
-
 export function materialEntry(payload) {
   return {
     key: 'material',
@@ -248,13 +226,13 @@ export function dueOnEntry(workItem) {
 
 /**
  * The same fields in the same places as add-ORS's (user, 2026-11-19), rows
- * of four: the case, then what it is for and its payment, then who submitted
- * it and when. Sequence alone controls placement. The charge is the amount
- * owed, shown from submission.
+ * of four: the case, then what it is for and its payment. Sequence alone
+ * controls placement. The charge is the amount owed, shown from submission.
  *
- * Unlike add-ORS, no Valid from date: the accreditation start date is always
- * 1 January of the accreditation year, set at confirm contact, and the
- * decision panel already shows it once Granted (user, 2026-11-19).
+ * Unlike add-ORS, no Submitted by or Submitted on (user, 2026-11-24), and no
+ * Valid from date: the accreditation start date is always 1 January of the
+ * accreditation year, set at confirm contact, and the decision panel already
+ * shows it once Granted (user, 2026-11-19).
  */
 function reAccreditationMeta({ workItem, assignment, payload }) {
   return [
@@ -269,9 +247,7 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
     },
     materialEntry(payload),
     chargeEntry(payload.chargeAmountPence),
-    paymentDateEntry(payload),
-    submittedByEntry(payload),
-    submittedOnEntry(workItem)
+    paymentDateEntry(payload)
   ]
 }
 

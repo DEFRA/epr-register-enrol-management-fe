@@ -122,7 +122,7 @@
 {# A site carrying `siteNumber` shows it before its name (RA-769).         #}
 {# Whether the condensed address shows is decided by the view model: only   #}
 {# for a site whose name repeats in the list (`buildOverseasSites`).        #}
-{% macro overseasSiteList(sites, multipleInterimSitesEnabled, options={}) %}
+{% macro overseasSiteList(sites, options={}) %}
   {# RA-292 AC01 + AC02 + AC04. One block per overseas site:    #}
   {# name (+ "New" tag), the full site detail, and the interim  #}
   {# site NESTED inside its parent — an interim site belongs to #}
@@ -167,32 +167,7 @@
              data-testid="overseas-site-address">{{ site.addressLines | join(', ') }}</p>
         {% endif %}
         {{ siteDetails(site.details, 'overseas-site') }}
-        {% if not multipleInterimSitesEnabled and site.interimSite %}
-          {# RA-603: with the flag off, the pre-RA-603 single   #}
-          {# interim site markup, unchanged, so a regulator     #}
-          {# sees exactly the page they see today.              #}
-          <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-0"
-               data-testid="interim-site">
-            {# Sub-label per the design, on its own line above  #}
-            {# the site name. The PLURAL is deliberate and        #}
-            {# matches the mockup, confirmed with Tom. Do not     #}
-            {# "correct" it to singular. It carries no testid:    #}
-            {# the e2e suite reads `interim-site-name` for the    #}
-            {# name line, and putting the label inside that       #}
-            {# element would push `NEW: ` off position 0 and      #}
-            {# break its prefix check.                            #}
-            <p class="govuk-body govuk-!-margin-bottom-1"><strong>Interim sites</strong></p>
-            <p class="govuk-body govuk-!-margin-bottom-1"
-               data-testid="interim-site-name">
-              <strong>{% if site.interimSite.isNew and not options.hideNewMarkers %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ site.interimSite.siteName }}</strong>
-            </p>
-            {% if site.interimSite.addressLines.length %}
-              <p class="govuk-body govuk-!-margin-bottom-1"
-                 data-testid="interim-site-address">{{ site.interimSite.addressLines | join(', ') }}</p>
-            {% endif %}
-            {{ siteDetails(site.interimSite.details, 'interim-site') }}
-          </div>
-        {% elif multipleInterimSitesEnabled and site.interimSites.length %}
+        {% if site.interimSites.length %}
           {# RA-603 AC10b: an ORS can carry several interim     #}
           {# sites, each folding down on its own so a regulator #}
           {# can open one without wading through the rest.      #}

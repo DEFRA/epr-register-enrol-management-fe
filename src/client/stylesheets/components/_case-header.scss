@@ -46,11 +46,13 @@
 
 // Meta grid (RA-493, matching Figma): each item is a bold label stacked above
 // its regular-weight value, laid out on a fixed-column grid so the second row
-// lines up under the first. Desktop is four columns with the first twice as
-// wide (Material / Registration number carry the longest values):
+// lines up under the first. Desktop is four columns, the first the widest (it
+// carries the longest values: the type, the registration or accreditation
+// number) and the third a quarter wider than the others, so Assigned to's
+// caseworker name does not wrap onto two lines:
 //
-//   Material             | Status       | Assigned to    | Due date
-//   Registration number  | Payment date | Charge |
+//   Application type     | Status   | Assigned to    | Due date
+//   Registration number  | Material | Charge         | Payment date
 //
 // The rows fall out of the order of `buildCaseHeader().meta` via grid
 // auto-placement, so the template stays a plain loop. Mobile-first: one
@@ -71,7 +73,9 @@
 
 @include govuk-media-query($from: desktop) {
   .app-case-header__meta {
-    grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+    grid-template-columns:
+      minmax(0, 1.75fr) minmax(0, 1fr) minmax(0, 1.25fr)
+      minmax(0, 1fr);
   }
 }
 

@@ -241,7 +241,7 @@
                 {% endfor %}
 
               {% elif row.kind == 'overseas-sites' %}
-                {{ overseasSiteList(row.sites, multipleInterimSitesEnabled) }}
+                {{ overseasSiteList(row.sites) }}
 
               {% elif row.kind == 'authority-contacts' %}
                 {# RA-292 AC03. The contact text is unchanged from the        #}

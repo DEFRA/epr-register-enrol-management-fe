@@ -105,6 +105,51 @@ describe('RA-739: #buildAddOverseasSiteSummary', () => {
     })
   })
 
+  describe('Valid from date', () => {
+    const withEffectiveDate = (effectiveDate, stateId = 'approved') =>
+      buildAddOverseasSiteSummary({
+        workItem: {
+          id: 'w-1',
+          stateId,
+          payload: { site: aSite(), effectiveDate }
+        }
+      })
+
+    // "Approved" (pending contact) and "Granted".
+    test.each(['approved-pending-contact', 'approved'])(
+      'is the date the determination recorded, in state %s',
+      (stateId) => {
+        expect(withEffectiveDate('2027-03-01', stateId).validFrom).toEqual({
+          key: 'valid-from',
+          label: 'Valid from date',
+          value: '01 Mar 2027'
+        })
+      }
+    )
+
+    // A refusal records the submission date as its effective date.
+    test.each([
+      'submitted',
+      'duly-made',
+      'rejected-pending-contact',
+      'rejected'
+    ])('is absent in state %s, even with a date recorded', (stateId) => {
+      expect(withEffectiveDate('2027-03-01', stateId).validFrom).toBeNull()
+    })
+
+    test.each([undefined, null, '', 'not a date'])(
+      'is absent, not a dash, when an approved case has the date %j',
+      (effectiveDate) => {
+        expect(withEffectiveDate(effectiveDate).validFrom).toBeNull()
+      }
+    )
+
+    test('is not one of the site rows', () => {
+      const { rows } = withEffectiveDate('2027-03-01')
+      expect(rows.map((row) => row.key)).not.toContain('valid-from')
+    })
+  })
+
   describe('RA-495: operator-supplied values', () => {
     function suppliedKeys(site) {
       return summaryFor(site)

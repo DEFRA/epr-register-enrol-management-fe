@@ -106,7 +106,7 @@ describe('RA-527: detail page once the determination is applied', () => {
       expect(
         squash($('[data-testid="standard-lifecycle-readonly-actions"]').text())
       ).toBe(
-        'This work item is in a final state. No further decision actions are available.'
+        'This work item is in a final state. No further actions are available.'
       )
       expect(
         squash($('[data-testid="standard-lifecycle-state-tag"]').text())

@@ -14,11 +14,11 @@ const env = nunjucks.configure(
   { autoescape: true, trimBlocks: true, lstripBlocks: true }
 )
 
-function render(sites, { multiple = false, options = {} } = {}) {
+function render(sites, { options = {} } = {}) {
   const out = env.renderString(
     `{%- from "work-items/summary-macros.njk" import overseasSiteList -%}` +
-      `{{- overseasSiteList(sites, multiple, options) -}}`,
-    { sites, multiple, options }
+      `{{- overseasSiteList(sites, options) -}}`,
+    { sites, options }
   )
   return load(out)
 }
@@ -36,8 +36,7 @@ const site = (siteName, interimSites = [], isNew = false) => ({
   summaryAddress: 'Havenstraat, Netherlands',
   addressLines: ['1 Havenstraat', 'Netherlands'],
   details: [{ key: 'ors-id', label: 'ORS ID', values: ['7'] }],
-  interimSites,
-  interimSite: interimSites[0] ?? null
+  interimSites
 })
 
 const byTestId = ($, testId) => $(`[data-testid="${testId}"]`)
@@ -72,21 +71,10 @@ describe('overseasSiteList', () => {
       expect($.root().text().trim()).toBe('—')
     })
 
-    test('with the flag off, shows the single interim site already open', () => {
-      const $ = render([site('Alpha', [interimSite('Depot')])])
-
-      const interim = byTestId($, 'interim-site')
-      expect(interim).toHaveLength(1)
-      expect(interim.is('div')).toBe(true)
-      expect(byTestId($, 'interim-sites')).toHaveLength(0)
-      expect(byTestId($, 'interim-site-name').text().trim()).toBe('Depot')
-    })
-
-    test('with the flag on, lists every interim site with a count, collapsed', () => {
-      const $ = render(
-        [site('Alpha', [interimSite('Depot'), interimSite('Yard')])],
-        { multiple: true }
-      )
+    test('lists every interim site with a count, each collapsed', () => {
+      const $ = render([
+        site('Alpha', [interimSite('Depot'), interimSite('Yard')])
+      ])
 
       expect(byTestId($, 'interim-sites-label').text()).toBe(
         'Interim sites (2)'
@@ -97,25 +85,21 @@ describe('overseasSiteList', () => {
       expect(interims.first().attr('open')).toBeUndefined()
     })
 
-    test.each([false, true])(
-      'marks new sites and renders nothing for no interim sites (flag %s)',
-      (multiple) => {
-        const $ = render(
-          [site('Alpha', [interimSite('Depot', true)], true), site('Beta')],
-          { multiple }
-        )
+    test('marks new sites and renders nothing for no interim sites', () => {
+      const $ = render([
+        site('Alpha', [interimSite('Depot', true)], true),
+        site('Beta')
+      ])
 
-        expect(byTestId($, 'overseas-site-new-tag')).toHaveLength(1)
-        expect(byTestId($, 'interim-site-new-tag')).toHaveLength(1)
-        expect(byTestId($, 'interim-sites-none')).toHaveLength(0)
-      }
-    )
+      expect(byTestId($, 'overseas-site-new-tag')).toHaveLength(1)
+      expect(byTestId($, 'interim-site-new-tag')).toHaveLength(1)
+      expect(byTestId($, 'interim-sites-none')).toHaveLength(0)
+    })
   })
 
-  describe.each([false, true])('with the interim flag %s', (multiple) => {
+  describe('options', () => {
     test('hideNewMarkers leaves out every NEW: marker', () => {
       const $ = render([site('Alpha', [interimSite('Depot', true)], true)], {
-        multiple,
         options: { hideNewMarkers: true }
       })
 
@@ -126,7 +110,6 @@ describe('overseasSiteList', () => {
 
     test('showNoInterimSites says so for a site with none', () => {
       const $ = render([site('Alpha'), site('Beta', [interimSite('Depot')])], {
-        multiple,
         options: { showNoInterimSites: true }
       })
 
