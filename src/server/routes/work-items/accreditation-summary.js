@@ -116,6 +116,12 @@ function filesOf(container) {
   return Array.isArray(container?.files) ? container.files : []
 }
 
+function overseasSitesOf(accreditation) {
+  return Array.isArray(accreditation?.overseasSites)
+    ? accreditation.overseasSites
+    : []
+}
+
 /**
  * Every file the live summary offers: the sampling plan's and each site's BES
  * evidence. The download route serves a file only if it is found here, so a
@@ -126,19 +132,16 @@ function filesOf(container) {
  * @returns {object[]}
  */
 export function summaryFiles(accreditation) {
-  const sites = Array.isArray(accreditation?.overseasSites)
-    ? accreditation.overseasSites
-    : []
   return [
     ...filesOf(accreditation?.samplingPlan),
-    ...sites.flatMap((site) => filesOf(site?.besEvidence))
+    ...overseasSitesOf(accreditation).flatMap((site) =>
+      filesOf(site?.besEvidence)
+    )
   ]
 }
 
 function buildBesRow(accreditation, workItemId) {
-  const sites = Array.isArray(accreditation.overseasSites)
-    ? accreditation.overseasSites
-    : []
+  const sites = overseasSitesOf(accreditation)
   return {
     key: 'bes',
     label: 'Broadly Equivalent Standards (BES)',
@@ -180,11 +183,7 @@ function withoutNewSiteMarkers(site) {
  * here.
  */
 function buildOrsRow(accreditation) {
-  const sources = (
-    Array.isArray(accreditation.overseasSites)
-      ? accreditation.overseasSites
-      : []
-  ).map(withoutNewSiteMarkers)
+  const sources = overseasSitesOf(accreditation).map(withoutNewSiteMarkers)
   // As on re-accreditation, a site's condensed address shows in the summary
   // only when its name repeats in the list.
   const sites = buildOverseasSites(sources).map((site, index) => ({
