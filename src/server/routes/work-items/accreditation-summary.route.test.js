@@ -709,7 +709,6 @@ describe('RA-769: Accreditation summary tab', () => {
               .map((_, el) => squash($(el).text()))
               .get()
           ).toEqual(['Depot A', 'Depot B', 'Depot C'])
-          expect($('[data-testid="interim-sites-none"]')).toHaveLength(0)
         })
 
         test('an interim site shows its address, site number, contact and operation code', async () => {
@@ -729,24 +728,22 @@ describe('RA-769: Accreditation summary tab', () => {
           expect(value('operation-code')).toContain('R3')
         })
 
-        test('a site with no interim sites says so', async () => {
+        test('a site with no interim sites shows no interim block', async () => {
           const { $ } = await withInterimSites([])
 
-          expect($('[data-testid="interim-sites-none"]').text()).toBe(
-            'No interim sites'
-          )
+          expect($('[data-testid="interim-sites"]')).toHaveLength(0)
           expect($('[data-testid="interim-site"]')).toHaveLength(0)
+          expect($.text()).not.toContain('No interim sites')
         })
 
-        test('a site whose interim sites are all withdrawn says there are none', async () => {
+        test('a site whose interim sites are all withdrawn shows no interim block', async () => {
           const { $ } = await withInterimSites([
             interim('I-9', 'Gone', { removedAt: '2026-05-01T00:00:00Z' })
           ])
 
-          expect($('[data-testid="interim-sites-none"]').text()).toBe(
-            'No interim sites'
-          )
+          expect($('[data-testid="interim-sites"]')).toHaveLength(0)
           expect($('[data-testid="interim-site"]')).toHaveLength(0)
+          expect($.text()).not.toContain('No interim sites')
         })
 
         test('a withdrawn interim site is left out and the rest are listed', async () => {
@@ -763,10 +760,10 @@ describe('RA-769: Accreditation summary tab', () => {
           expect($.text()).not.toContain('Gone')
         })
 
-        test('a site without the interimSites key (an older operator backend) says there are none', async () => {
+        test('a site without the interimSites key (an older operator backend) shows no interim block', async () => {
           const { $ } = await get()
 
-          expect($('[data-testid="interim-sites-none"]')).toHaveLength(2)
+          expect($('[data-testid="interim-sites"]')).toHaveLength(0)
         })
 
         test('no NEW: marker appears on an interim site, even one flagged new', async () => {

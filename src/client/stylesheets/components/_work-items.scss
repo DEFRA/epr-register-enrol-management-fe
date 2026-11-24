@@ -286,3 +286,10 @@
   color: govuk-colour("blue", $variant: "shade-25");
   font-weight: bold;
 }
+
+// An interim site sits inside the inset text's own left rule. Figma draws no
+// second rule down the opened site, so drop the details' left border and indent.
+.app-interim-site > .govuk-details__text {
+  padding-left: 0;
+  border-left: 0;
+}

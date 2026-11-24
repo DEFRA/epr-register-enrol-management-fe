@@ -93,7 +93,7 @@ describe('overseasSiteList', () => {
 
       expect(byTestId($, 'overseas-site-new-tag')).toHaveLength(1)
       expect(byTestId($, 'interim-site-new-tag')).toHaveLength(1)
-      expect(byTestId($, 'interim-sites-none')).toHaveLength(0)
+      expect(byTestId($, 'interim-sites')).toHaveLength(1)
     })
   })
 
@@ -106,17 +106,6 @@ describe('overseasSiteList', () => {
       expect($.root().text()).not.toContain('NEW:')
       expect(byTestId($, 'overseas-site-name').text().trim()).toBe('Alpha')
       expect(byTestId($, 'interim-site-name').text().trim()).toBe('Depot')
-    })
-
-    test('showNoInterimSites says so for a site with none', () => {
-      const $ = render([site('Alpha'), site('Beta', [interimSite('Depot')])], {
-        options: { showNoInterimSites: true }
-      })
-
-      const none = byTestId($, 'interim-sites-none')
-      expect(none).toHaveLength(1)
-      expect(none.text()).toBe('No interim sites')
-      expect(byTestId($, 'overseas-site').first().find(none).length).toBe(1)
     })
   })
 })

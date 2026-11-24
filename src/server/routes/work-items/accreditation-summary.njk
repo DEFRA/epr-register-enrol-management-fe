@@ -68,7 +68,7 @@
                     —
                   {% endfor %}
                 {% elif row.kind == 'overseas-sites' %}
-                  {{ overseasSiteList(row.sites, { hideNewMarkers: true, showNoInterimSites: true }) }}
+                  {{ overseasSiteList(row.sites, { hideNewMarkers: true }) }}
                 {% else %}
                   {{ row.value }}
                 {% endif %}

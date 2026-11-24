@@ -118,7 +118,6 @@
 {# mgmt-tests.                                                             #}
 {#                                                                          #}
 {# `options.hideNewMarkers` leaves out every `NEW:` prefix.                 #}
-{# `options.showNoInterimSites` says so for a site with no interim sites.   #}
 {# A site carrying `siteNumber` shows it before its name (RA-769).         #}
 {# Whether the condensed address shows is decided by the view model: only   #}
 {# for a site whose name repeats in the list (`buildOverseasSites`).        #}
@@ -190,7 +189,7 @@
               {# newTagCount), so repeating them per interim     #}
               {# site is what those helpers expect; suffixing    #}
               {# would break every one of them for no gain.      #}
-              <details class="govuk-details govuk-!-margin-bottom-1"
+              <details class="govuk-details app-interim-site govuk-!-margin-bottom-1"
                        data-testid="interim-site">
                 <summary class="govuk-details__summary">
                   {# The testid sits on the <strong>, not the   #}
@@ -211,9 +210,6 @@
               </details>
             {% endfor %}
           </div>
-        {% elif options.showNoInterimSites %}
-          <p class="govuk-body govuk-!-margin-bottom-0"
-             data-testid="interim-sites-none">No interim sites</p>
         {% endif %}
       </div>
     </details>
