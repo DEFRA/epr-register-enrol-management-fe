@@ -184,8 +184,6 @@ function withoutNewSiteMarkers(site) {
  */
 function buildOrsRow(accreditation) {
   const sources = overseasSitesOf(accreditation).map(withoutNewSiteMarkers)
-  // As on re-accreditation, a site's condensed address shows in the summary
-  // only when its name repeats in the list.
   const sites = buildOverseasSites(sources).map((site, index) => ({
     ...site,
     siteNumber: toDisplayLines(sources[index]?.orsId)[0] ?? null

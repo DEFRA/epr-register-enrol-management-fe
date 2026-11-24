@@ -231,12 +231,22 @@ describe('RA-769: Accreditation summary file download', () => {
     expect(s3Client.send).not.toHaveBeenCalled()
   })
 
-  test('answers 404 when the work item cannot be read', async () => {
+  test('answers 502, not 404, when the work item lookup fails', async () => {
     getWorkItem.mockResolvedValue({ ok: false, status: 500, error: 'boom' })
 
     const { statusCode } = await get(download('sp-clean'))
 
-    expect(statusCode).toBe(statusCodes.notFound)
+    expect(statusCode).toBe(statusCodes.badGateway)
+    expect(getAccreditationSummary).not.toHaveBeenCalled()
+    expect(s3Client.send).not.toHaveBeenCalled()
+  })
+
+  test('answers 502 when the work item lookup fails without a status', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, error: 'timed out' })
+
+    const { statusCode } = await get(download('sp-clean'))
+
+    expect(statusCode).toBe(statusCodes.badGateway)
     expect(s3Client.send).not.toHaveBeenCalled()
   })
 

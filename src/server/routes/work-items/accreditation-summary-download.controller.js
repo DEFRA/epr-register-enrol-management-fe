@@ -25,8 +25,9 @@ import {
  * sent to the browser or taken from the request.
  *
  * Outcomes: 404 for an unknown work item, a case without the tab, an
- * accreditation that is not there, or a file that is not in it; 503 when the
- * live read fails, so no file is served; 422 for a file that has not passed
+ * accreditation that is not there, or a file that is not in it; 502 when the
+ * work item lookup fails and 503 when the live read fails, so no file is
+ * served in either case; 422 for a file that has not passed
  * its scan; 404 when S3 fails. Access follows the documented model that any
  * caseworker can read any case (ADR-0005), as for the payload-based download.
  */
@@ -36,8 +37,13 @@ export const workItemAccreditationSummaryDownloadController = {
     const user = getUser(request)
 
     const result = await getWorkItem({ workItemId: id, user })
+    if (result.ok === false && result.status === statusCodes.notFound) {
+      return h.response('Not found').code(statusCodes.notFound)
+    }
+    if (!result.ok) {
+      return h.response('Work item unavailable').code(statusCodes.badGateway)
+    }
     if (
-      !result.ok ||
       !caseHasTab(
         getWorkItemType(result.workItem?.typeId),
         ACCREDITATION_SUMMARY_TAB_KEY
