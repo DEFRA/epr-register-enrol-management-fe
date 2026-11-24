@@ -771,18 +771,6 @@ describe('#buildOverseasSites (RA-769)', () => {
     ])
   })
 
-  test('alwaysShowSummaryAddress keeps it for every site', () => {
-    const sites = buildOverseasSites(SITES, {
-      alwaysShowSummaryAddress: true
-    })
-
-    expect(sites.map((site) => site.summaryAddress)).toEqual([
-      '1 Quay, Spain',
-      '2 Quay, France',
-      '3 Quay, Italy'
-    ])
-  })
-
   test('passes the interim flag through to each site', () => {
     const interimSites = [{ siteName: 'Depot' }, { siteName: 'Yard' }]
     const source = [{ siteName: 'Alpha', interimSites }]

@@ -772,21 +772,15 @@ function buildCoreSummaryRows({
  * @param {object[]} overseasSites
  * @param {object} [options]
  * @param {boolean} [options.multipleInterimSitesEnabled]
- * @param {boolean} [options.alwaysShowSummaryAddress] - keep the condensed
- *   address on every site, even when its name is unique (RA-769).
  * @returns {object[]}
  */
 export function buildOverseasSites(
   overseasSites,
-  { multipleInterimSitesEnabled = false, alwaysShowSummaryAddress = false } = {}
+  { multipleInterimSitesEnabled = false } = {}
 ) {
   const sites = overseasSites.map((site) =>
     buildOverseasSite(site, { multipleInterimSitesEnabled })
   )
-
-  if (alwaysShowSummaryAddress) {
-    return sites
-  }
 
   const siteNameCounts = new Map()
 

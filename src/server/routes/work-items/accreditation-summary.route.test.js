@@ -469,19 +469,54 @@ describe('RA-769: Accreditation summary tab', () => {
         })
       })
 
-      test('each summary shows the number, name and address, even when the names are unique', async () => {
-        const { $ } = await get()
-
+      const summariesOf = ($) => {
         const text = (el, testId) =>
           squash($(el).find(`summary [data-testid="${testId}"]`).text())
-        const summaries = sitesOf($)
+        return sitesOf($)
           .map((_, el) => ({
             number: text(el, 'overseas-site-number'),
             name: text(el, 'overseas-site-name'),
             address: text(el, 'overseas-site-summary-address')
           }))
           .get()
-        expect(summaries).toEqual([
+      }
+
+      test('each summary shows the number and name, and no address when the names are unique', async () => {
+        const { $ } = await get()
+
+        expect(summariesOf($)).toEqual([
+          { number: '001', name: 'Speira GmbH', address: '' },
+          { number: '002', name: 'Excel Recycling BV', address: '' }
+        ])
+      })
+
+      test('a summary shows the address only for sites whose name repeats', async () => {
+        getAccreditationSummary.mockResolvedValue(
+          aSummary({
+            accreditation: anAccreditation({
+              overseasSites: [
+                aSite(),
+                aSite({
+                  siteId: 8,
+                  orsId: '002',
+                  addressLine1: '3 Havenweg',
+                  addressLine2: null,
+                  townOrCity: 'Rotterdam',
+                  country: 'Netherlands'
+                }),
+                aSite({
+                  siteId: 9,
+                  orsId: '003',
+                  siteName: 'Excel Recycling BV'
+                })
+              ]
+            })
+          })
+        )
+
+        const { $ } = await get()
+
+        expect(summariesOf($)).toEqual([
           {
             number: '001',
             name: 'Speira GmbH',
@@ -489,9 +524,10 @@ describe('RA-769: Accreditation summary tab', () => {
           },
           {
             number: '002',
-            name: 'Excel Recycling BV',
+            name: 'Speira GmbH',
             address: '3 Havenweg, Netherlands'
-          }
+          },
+          { number: '003', name: 'Excel Recycling BV', address: '' }
         ])
       })
 
