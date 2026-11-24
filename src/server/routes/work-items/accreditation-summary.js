@@ -212,101 +212,134 @@ export function buildAccreditationSummary({
   return {
     isExporter,
     rows: [
-      {
-        key: 'organisation',
-        label: 'Organisation',
-        kind: 'text',
-        value: organisationText(accreditation)
-      },
-      {
-        key: 'accreditation-number',
-        label: 'Accreditation number',
-        kind: 'text',
-        value: textOrDash(accreditation.accreditationNumber)
-      },
-      {
-        key: 'status',
-        label: 'Accreditation status',
-        kind: 'tag',
-        value: GRANTED_TEXT,
-        tagClass: stateTagClass(GRANTED_STATE_ID)
-      },
-      {
-        key: 'accreditation-year',
-        label: 'Accreditation year',
-        kind: 'text',
-        value: textOrDash(accreditation.accreditationYear)
-      },
-      {
-        key: 'accreditation-start-date',
-        label: 'Accreditation start date',
-        kind: 'text',
-        value: startDateText(accreditationStartDate)
-      },
-      {
-        key: 'registration-number',
-        label: 'Registration number',
-        kind: 'text',
-        value: textOrDash(accreditation.registrationNumber)
-      },
-      {
-        key: 'location',
-        label: 'Location',
-        kind: 'lines',
-        values: locationLines(accreditation)
-      },
-      {
-        key: 'type',
-        label: 'Type',
-        kind: 'text',
-        value: typeText(accreditation)
-      },
-      {
-        key: 'material',
-        label: 'Material',
-        kind: 'text',
-        value: accreditation.material
-          ? materialLabel(
-              accreditation.material,
-              accreditation.glassRecyclingProcess
-            )
-          : EM_DASH
-      },
-      {
-        key: 'prn-tonnage',
-        label: 'PRN tonnage',
-        kind: 'text',
-        value: tonnageBandLabel(accreditation.prns?.plannedTonnageBand)
-      },
-      {
-        key: 'prn-authorisers',
-        label: 'PRN authorisers',
-        kind: 'lines',
-        values: authoriserLines(accreditation.prns)
-      },
-      {
-        key: 'authority-to-issue',
-        label: 'Authority to issue',
-        kind: 'lines',
-        values: authorityToIssueLines(accreditation.prns)
-      },
-      {
-        key: 'sampling-inspection-plan',
-        label: 'Sampling and inspection plan',
-        kind: 'files',
-        files: filesOf(accreditation.samplingPlan).map((file) =>
-          summaryFileViewModel(file, workItemId)
-        )
-      },
-      {
-        key: 'business-plan',
-        label: 'Business plan',
-        kind: 'pairs',
-        pairs: buildBusinessPlanPairs(accreditation.businessPlan)
-      },
+      ...identityRows(accreditation, accreditationStartDate),
+      ...prnRows(accreditation),
+      ...planRows(accreditation, workItemId),
       ...(isExporter
         ? [buildBesRow(accreditation, workItemId), buildOrsRow(accreditation)]
         : [])
     ]
   }
+}
+
+/**
+ * Who and what is accredited: organisation, numbers, status, dates, location, type and material.
+ * @param {object} accreditation
+ * @param {string|null} accreditationStartDate `yyyy-MM-dd`
+ * @returns {object[]}
+ */
+function identityRows(accreditation, accreditationStartDate) {
+  return [
+    {
+      key: 'organisation',
+      label: 'Organisation',
+      kind: 'text',
+      value: organisationText(accreditation)
+    },
+    {
+      key: 'accreditation-number',
+      label: 'Accreditation number',
+      kind: 'text',
+      value: textOrDash(accreditation.accreditationNumber)
+    },
+    {
+      key: 'status',
+      label: 'Accreditation status',
+      kind: 'tag',
+      value: GRANTED_TEXT,
+      tagClass: stateTagClass(GRANTED_STATE_ID)
+    },
+    {
+      key: 'accreditation-year',
+      label: 'Accreditation year',
+      kind: 'text',
+      value: textOrDash(accreditation.accreditationYear)
+    },
+    {
+      key: 'accreditation-start-date',
+      label: 'Accreditation start date',
+      kind: 'text',
+      value: startDateText(accreditationStartDate)
+    },
+    {
+      key: 'registration-number',
+      label: 'Registration number',
+      kind: 'text',
+      value: textOrDash(accreditation.registrationNumber)
+    },
+    {
+      key: 'location',
+      label: 'Location',
+      kind: 'lines',
+      values: locationLines(accreditation)
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      kind: 'text',
+      value: typeText(accreditation)
+    },
+    {
+      key: 'material',
+      label: 'Material',
+      kind: 'text',
+      value: accreditation.material
+        ? materialLabel(
+            accreditation.material,
+            accreditation.glassRecyclingProcess
+          )
+        : EM_DASH
+    }
+  ]
+}
+
+/**
+ * @param {object} accreditation
+ * @returns {object[]}
+ */
+function prnRows(accreditation) {
+  return [
+    {
+      key: 'prn-tonnage',
+      label: 'PRN tonnage',
+      kind: 'text',
+      value: tonnageBandLabel(accreditation.prns?.plannedTonnageBand)
+    },
+    {
+      key: 'prn-authorisers',
+      label: 'PRN authorisers',
+      kind: 'lines',
+      values: authoriserLines(accreditation.prns)
+    },
+    {
+      key: 'authority-to-issue',
+      label: 'Authority to issue',
+      kind: 'lines',
+      values: authorityToIssueLines(accreditation.prns)
+    }
+  ]
+}
+
+/**
+ * @param {object} accreditation
+ * @param {string} workItemId the case, for the download links
+ * @returns {object[]}
+ */
+function planRows(accreditation, workItemId) {
+  return [
+    {
+      key: 'sampling-inspection-plan',
+      label: 'Sampling and inspection plan',
+      kind: 'files',
+      files: filesOf(accreditation.samplingPlan).map((file) =>
+        summaryFileViewModel(file, workItemId)
+      )
+    },
+    {
+      key: 'business-plan',
+      label: 'Business plan',
+      kind: 'pairs',
+      pairs: buildBusinessPlanPairs(accreditation.businessPlan)
+    }
+  ]
 }
