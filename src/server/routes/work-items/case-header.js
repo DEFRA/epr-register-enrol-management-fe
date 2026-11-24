@@ -163,15 +163,6 @@ export function requestTypeEntry(workItem) {
   }
 }
 
-/** The work item's submission date; the key keeps RA-495's "Date added" testid. */
-export function submittedOnEntry(workItem) {
-  return {
-    key: 'date-added',
-    label: 'Submitted on',
-    value: formatHeaderDate(workItem?.submittedAt)
-  }
-}
-
 export function materialEntry(payload) {
   return {
     key: 'material',

@@ -158,16 +158,6 @@ function startDateText(accreditationStartDate) {
 }
 
 /**
- * The ORS row: each overseas site as the shared overseas site rendering takes
- * it, its ORS ID as the number ahead of its name. The summary address is kept
- * for every site, even one with a unique name, so a summary always shows
- * number, name and address.
- *
- * The operator backend answers selected sites only, in ORS ID then site ID
- * order, and never marks one new, so nothing is filtered, reordered or flagged
- * here.
- */
-/**
  * The operator backend never returns these, and the tab never shows them: a
  * site stays new for the year after grant, so it would be marked new all year.
  * Dropped here so a body that did carry them could not bring them back.
@@ -179,6 +169,16 @@ function withoutNewSiteMarkers(site) {
   return copy
 }
 
+/**
+ * The ORS row: each overseas site as the shared overseas site rendering takes
+ * it, its ORS ID as the number ahead of its name. As on re-accreditation, a
+ * site's condensed address shows in the summary only when its name repeats in
+ * the list.
+ *
+ * The operator backend answers selected sites only, in ORS ID then site ID
+ * order, and never marks one new, so nothing is filtered, reordered or flagged
+ * here.
+ */
 function buildOrsRow(accreditation) {
   const sources = (
     Array.isArray(accreditation.overseasSites)
