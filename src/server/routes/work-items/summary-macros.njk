@@ -1,7 +1,8 @@
 {# ------------------------------------------------------------------- #}
 {# Summary fragments shared by the work item detail templates: the     #}
-{# generic (re-accreditation) Application summary in `detail.njk` and  #}
-{# the add-ORS one in `add-overseas-site/detail-v1.njk` (RA-739).      #}
+{# generic (re-accreditation) Application summary in `detail.njk`, the  #}
+{# add-ORS one in `add-overseas-site/detail-v1.njk` (RA-739) and the     #}
+{# Accreditation summary tab in `accreditation-summary.njk` (RA-769).    #}
 {# ------------------------------------------------------------------- #}
 
 {% from "govuk/components/tag/macro.njk" import govukTag %}
@@ -218,9 +219,7 @@
   {% endfor %}
 {% endmacro %}
 
-{# RA-769. Moved here from `detail.njk` so the Accreditation summary tab
-   renders the business plan with the same macro.
-   One business-plan category: bold label, PRN-income share, narrative.     #}
+{# One business-plan category: bold label, PRN-income share, narrative.     #}
 {# `testId` is a parameter because the AC02 business-plan row and the       #}
 {# previous-year section render the same shape but are counted separately — #}
 {# stamping `app-detail-pair` on both would make an AC02 pair count also    #}

@@ -754,8 +754,8 @@ function buildCoreSummaryRows({
 }
 
 /**
- * Build overseas-site view models. By default the condensed address shows only
- * when site names repeat in the visible list.
+ * Build overseas-site view models. The condensed address shows only when site
+ * names repeat in the visible list.
  *
  * @param {object[]} overseasSites
  * @returns {object[]}
