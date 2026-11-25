@@ -54,9 +54,7 @@ function siteLabel({ siteName, orsId }) {
  * @param {string} args.basePath the tab's own path, for the page links
  */
 export function buildRelatedRequests({ related, basePath }) {
-  const totalCount = related.totalCount ?? related.items.length
-  const pageSize = related.pageSize || totalCount || 1
-  const page = related.page ?? 1
+  const { totalCount, page, pageSize } = related
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   return {
     totalCount,
