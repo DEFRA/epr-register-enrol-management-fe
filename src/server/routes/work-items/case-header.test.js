@@ -139,7 +139,7 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
     expect(metaValue(buildCaseHeader({ workItem }), 'charge')).toBe('£2,184.00')
   })
 
-  test('has the eight meta items in the order add-ORS shares, without Submitted by or on', () => {
+  test('has the ten meta items in the order add-ORS shares', () => {
     const header = buildCaseHeader({
       workItem: {
         ...workItem,
@@ -155,35 +155,52 @@ describe('#buildCaseHeader (RA-295 AC01)', () => {
       ['registration-number', 'Registration number'],
       ['material', 'Material'],
       ['charge', 'Charge'],
-      ['payment-date', 'Payment date']
+      ['payment-date', 'Payment date'],
+      ['submitted-by', 'Submitted by'],
+      ['date-added', 'Submitted on']
     ])
     expect(metaValue(header, 'charge')).toBe('£2,184.00')
     expect(metaValue(header, 'payment-date')).toBe('01 Nov 2026')
   })
 
-  test('shows the type, and no submission date or submitter even when the payload has them', () => {
-    const header = buildCaseHeader({
+  test('shows the type, submission date and submitter, falling back to the contact details', () => {
+    const value = (header, key) =>
+      header.meta.find((entry) => entry.key === key).value
+    const item = {
+      ...workItem,
+      typeDisplayName: 'Re-accreditation',
+      submittedAt: '2026-10-05T09:00:00Z',
+      payload: {
+        ...workItem.payload,
+        submittedBy: { fullName: 'Sam Operator' }
+      }
+    }
+
+    const header = buildCaseHeader({ workItem: item })
+    expect(value(header, 'request-type')).toBe('Re-accreditation')
+    expect(value(header, 'date-added')).toBe('05 Oct 2026')
+    expect(value(header, 'submitted-by')).toBe('Sam Operator')
+
+    const older = buildCaseHeader({
       workItem: {
-        ...workItem,
-        typeDisplayName: 'Re-accreditation',
-        submittedAt: '2026-10-05T09:00:00Z',
+        ...item,
         payload: {
           ...workItem.payload,
-          submittedBy: { fullName: 'Sam Operator' }
+          submitterContactDetails: { fullName: 'Pat Contact' }
         }
       }
     })
-
+    expect(value(older, 'submitted-by')).toBe('Pat Contact')
     expect(
-      header.meta.find((entry) => entry.key === 'request-type').value
-    ).toBe('Re-accreditation')
-    const keys = header.meta.map((entry) => entry.key)
-    expect(keys).not.toContain('submitted-by')
-    expect(keys).not.toContain('date-added')
+      value(
+        buildCaseHeader({ workItem: { ...item, payload: workItem.payload } }),
+        'submitted-by'
+      )
+    ).toBe('—')
   })
 
-  // The accreditation start date is always 1 January of the accreditation
-  // year and the decision panel shows it, so the header leaves it out.
+  // The decision panel shows the accreditation start date once Granted, so
+  // the header leaves it out.
   test('has no Valid from date, even once Granted', () => {
     const header = buildCaseHeader({
       workItem: {

@@ -93,7 +93,7 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     expect(headerFor(item).title).toBe(EM_DASH)
   })
 
-  test('has the eight meta items, in the order re-accreditation shares', () => {
+  test('has the ten meta items, in the order re-accreditation shares', () => {
     const header = headerFor(addOrs())
     expect(header.meta.map((entry) => [entry.label, entry.value])).toEqual([
       ['Application type', 'New ORS accreditation'],
@@ -103,7 +103,9 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
       ['Accreditation number', 'ACC-1'],
       ['Material', 'Plastic'],
       ['Charge', '£328.00'],
-      ['Payment date', NOT_RECEIVED]
+      ['Payment date', NOT_RECEIVED],
+      ['Submitted by', 'Sam Operator'],
+      ['Submitted on', '12 Feb 2027']
     ])
   })
 
@@ -150,15 +152,12 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     })
   })
 
-  // The Valid from date is on the Application summary instead, and there is
-  // no Submitted by or Submitted on.
-  test('has no Valid from date, Submitted by or Submitted on, even once a date is recorded', () => {
+  // The Valid from date is on the Application summary instead.
+  test('has no Valid from date, even once a date is recorded', () => {
     const item = addOrs()
     item.payload.effectiveDate = '2027-03-01'
     const keys = headerFor(item).meta.map((entry) => entry.key)
     expect(keys).not.toContain('effective-date')
-    expect(keys).not.toContain('submitted-by')
-    expect(keys).not.toContain('date-added')
   })
 
   test('shows the payment date once the item is duly made', () => {

@@ -23,7 +23,7 @@ import { EM_DASH } from './application-summary.js'
  *   7. assigned to,       8. due on, and 9. registration number,
  *
  * plus (RA-493) 10. payment date and 11. the charge, and (RA-495, to match
- * add-ORS) application type.
+ * add-ORS) application type, submitted by and submitted on.
  *
  * (1)-(4) are the breadcrumb + title lines; the rest are the meta grid.
  *
@@ -163,6 +163,29 @@ export function requestTypeEntry(workItem) {
   }
 }
 
+/** The work item's submission date; the key keeps RA-495's "Date added" testid. */
+export function submittedOnEntry(workItem) {
+  return {
+    key: 'date-added',
+    label: 'Submitted on',
+    value: formatHeaderDate(workItem?.submittedAt)
+  }
+}
+
+/**
+ * The submitter's name. A re-accreditation submitted before the operator
+ * backend sent `submittedBy` has only its contact details.
+ */
+export function submittedByEntry(payload) {
+  const name =
+    payload?.submittedBy?.fullName ?? payload?.submitterContactDetails?.fullName
+  return {
+    key: 'submitted-by',
+    label: 'Submitted by',
+    value: typeof name === 'string' && name.trim() ? name.trim() : EM_DASH
+  }
+}
+
 export function materialEntry(payload) {
   return {
     key: 'material',
@@ -217,11 +240,12 @@ export function dueOnEntry(workItem) {
 
 /**
  * The same fields in the same places as add-ORS's, rows of four: the case,
- * then what it is for and its payment. Sequence alone controls placement. The
- * charge is the amount owed, shown from submission.
+ * then what it is for and its payment, then who submitted it and when.
+ * Sequence alone controls placement. The charge is the amount owed, shown
+ * from submission.
  *
- * Like add-ORS, no Submitted by, Submitted on or Valid from date: the decision
- * panel shows the accreditation start date once Granted.
+ * Like add-ORS, no Valid from date: the decision panel shows the
+ * accreditation start date once Granted.
  */
 function reAccreditationMeta({ workItem, assignment, payload }) {
   return [
@@ -236,7 +260,9 @@ function reAccreditationMeta({ workItem, assignment, payload }) {
     },
     materialEntry(payload),
     chargeEntry(payload.chargeAmountPence),
-    paymentDateEntry(payload)
+    paymentDateEntry(payload),
+    submittedByEntry(payload),
+    submittedOnEntry(workItem)
   ]
 }
 

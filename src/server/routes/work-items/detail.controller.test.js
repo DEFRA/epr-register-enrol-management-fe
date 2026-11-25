@@ -4454,7 +4454,7 @@ describe('RA-295 individual work item page', () => {
   }
 
   // AC01 -------------------------------------------------------------
-  test('AC01: renders the case header with all eight pieces of information', async () => {
+  test('AC01: renders the case header with all its pieces of information', async () => {
     getWorkItem.mockResolvedValue({ ok: true, workItem: fullPayloadWorkItem() })
 
     const { statusCode, result } = await server.inject({
@@ -4497,7 +4497,9 @@ describe('RA-295 individual work item page', () => {
       'Registration number:',
       'Material:',
       'Charge:',
-      'Payment date:'
+      'Payment date:',
+      'Submitted by:',
+      'Submitted on:'
     ])
   })
 

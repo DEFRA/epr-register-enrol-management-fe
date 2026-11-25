@@ -5,7 +5,9 @@ import {
   materialEntry,
   paymentDateEntry,
   requestTypeEntry,
-  statusEntry
+  statusEntry,
+  submittedByEntry,
+  submittedOnEntry
 } from '#/server/routes/work-items/case-header.js'
 import { EM_DASH } from '#/server/routes/work-items/application-summary.js'
 
@@ -65,9 +67,9 @@ function siteTitle(site) {
  * summary has it).
  *
  * The charge is the site's own (`site.chargePence`), always with pence
- * ("£328.00"). No Submitted by, Submitted on or Valid from date: the
- * Application summary shows the Valid from date once the determination
- * records one.
+ * ("£328.00"). Submitted by and Submitted on end the header, as in
+ * re-accreditation's. No Valid from date: the Application summary shows it
+ * once the determination records one.
  */
 function meta({ workItem, assignment, payload }) {
   return [
@@ -78,6 +80,8 @@ function meta({ workItem, assignment, payload }) {
     referenceEntry(payload),
     materialEntry(payload),
     chargeEntry(payload.site?.chargePence),
-    paymentDateEntry(payload)
+    paymentDateEntry(payload),
+    submittedByEntry(payload),
+    submittedOnEntry(workItem)
   ]
 }

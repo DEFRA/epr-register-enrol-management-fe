@@ -557,7 +557,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('[data-testid="case-header"]').text()).not.toContain('123001')
     })
 
-    test('shows the eight meta items, in the order re-accreditation shares, with the site charge', async () => {
+    test('shows the ten meta items, in the order re-accreditation shares, with the site charge', async () => {
       const $ = await detailPage(anAddOrsItem())
 
       const meta = $(
@@ -573,7 +573,9 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Accreditation number: ACC-REP-PL-0007',
         'Material: Plastic',
         'Charge: £328.00',
-        'Payment date: Not received'
+        'Payment date: Not received',
+        'Submitted by: Sam Operator',
+        'Submitted on: 11 Feb 2027'
       ])
       expect(
         $(
