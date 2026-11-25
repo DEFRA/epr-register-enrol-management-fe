@@ -53,6 +53,25 @@
   {% endif %}
 {% endblock %}
 
+{# RA-800. "Change valid from date" leads the assignment panel's links,  #}
+{# above Reassign. A LINK to the change page, so clicking it changes     #}
+{# nothing; inert for a read-only user. Gated by                          #}
+{# `workItem.canChangeValidFrom`, which goes through the same helper that #}
+{# guards the route itself.                                               #}
+{% block panelLinksFirst %}
+  {% if workItem.canChangeValidFrom %}
+    <li>
+      {{ appActionLink({
+        text: "Change valid from date",
+        href: workItem.changeValidFromHref,
+        classes: "govuk-link",
+        disabled: user.isReadOnly,
+        testId: "change-valid-from-link"
+      }) }}
+    </li>
+  {% endif %}
+{% endblock %}
+
 {# RA-156. The lifecycle CTAs live in the actionsPanel button group so   #}
 {# they render alongside the generic actions.                            #}
 {% block primaryActions %}{% endblock %}

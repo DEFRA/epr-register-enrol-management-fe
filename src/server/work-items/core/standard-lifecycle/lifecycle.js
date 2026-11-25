@@ -12,7 +12,7 @@
  *     readPaymentDetails: (workItem) => ({ chargePence, paymentReference }),
  *     // Optional. The management-be calls. Each defaults to the type-less
  *     // Standard-lifecycle endpoint (`/work-items/{id}/duly-make` etc.).
- *     backend: { dulyMake, recordDecision, confirmContact },
+ *     backend: { dulyMake, recordDecision, confirmContact, changeValidFrom },
  *     // Optional. When true the Duly make page lists every work item from
  *     // the same submission, this one included ("Related change
  *     // requests"), read from management-be's
@@ -38,6 +38,8 @@ import { getWorkItemType } from '../registry.js'
 export const DULY_MAKE_PAGE = 'duly-make'
 export const DECISION_PAGE = 'decision'
 export const CONFIRM_CONTACT_PAGE = 'confirm-contact'
+// RA-800. Correct the valid from date while a determination awaits contact.
+export const CHANGE_VALID_FROM_PAGE = 'change-valid-from'
 
 /**
  * The URL of one of a type's lifecycle pages for a work item.
@@ -135,7 +137,7 @@ async function backendApi() {
  * mocking `undici`.
  *
  * @param {string | null} [typeSegment]
- * @returns {{ dulyMake: Function, recordDecision: Function, confirmContact: Function }}
+ * @returns {{ dulyMake: Function, recordDecision: Function, confirmContact: Function, changeValidFrom: Function }}
  */
 export function buildLifecycleBackend(typeSegment = null) {
   const withSegment = (args) => (typeSegment ? { ...args, typeSegment } : args)
@@ -145,7 +147,9 @@ export function buildLifecycleBackend(typeSegment = null) {
     recordDecision: async (args) =>
       (await backendApi()).recordWorkItemDecision(withSegment(args)),
     confirmContact: async (args) =>
-      (await backendApi()).confirmWorkItemApplicantContact(withSegment(args))
+      (await backendApi()).confirmWorkItemApplicantContact(withSegment(args)),
+    changeValidFrom: async (args) =>
+      (await backendApi()).changeValidFromWorkItem(withSegment(args))
   })
 }
 
@@ -156,7 +160,7 @@ const DEFAULT_BACKEND = buildLifecycleBackend()
  * declares one, otherwise the type-less endpoint.
  *
  * @param {string} typeId
- * @param {'dulyMake' | 'recordDecision' | 'confirmContact'} step
+ * @param {'dulyMake' | 'recordDecision' | 'confirmContact' | 'changeValidFrom'} step
  * @returns {Function}
  */
 export function lifecycleBackendCall(typeId, step) {
