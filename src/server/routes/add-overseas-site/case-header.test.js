@@ -150,8 +150,8 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     })
   })
 
-  // The Valid from date is on the Application summary instead (user,
-  // 2026-11-24), and there is no Submitted by.
+  // The Valid from date is on the Application summary instead, and there is
+  // no Submitted by or Submitted on.
   test('has no Valid from date, Submitted by or Submitted on, even once a date is recorded', () => {
     const item = addOrs()
     item.payload.effectiveDate = '2027-03-01'

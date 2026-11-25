@@ -56,7 +56,7 @@ function aSummary(accreditation = {}) {
         {
           siteId: 1,
           orsId: '001',
-          siteName: 'Speira GmbH',
+          siteName: 'Example Recycling GmbH',
           besEvidence: { files: [aFile('bes-clean')] }
         }
       ],

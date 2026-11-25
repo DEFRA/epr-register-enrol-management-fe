@@ -14,11 +14,11 @@ const env = nunjucks.configure(
   { autoescape: true, trimBlocks: true, lstripBlocks: true }
 )
 
-function render(sites, { options = {} } = {}) {
+function render(sites) {
   const out = env.renderString(
     `{%- from "work-items/summary-macros.njk" import overseasSiteList -%}` +
-      `{{- overseasSiteList(sites, options) -}}`,
-    { sites, options }
+      `{{- overseasSiteList(sites) -}}`,
+    { sites }
   )
   return load(out)
 }
@@ -94,18 +94,6 @@ describe('overseasSiteList', () => {
       expect(byTestId($, 'overseas-site-new-tag')).toHaveLength(1)
       expect(byTestId($, 'interim-site-new-tag')).toHaveLength(1)
       expect(byTestId($, 'interim-sites')).toHaveLength(1)
-    })
-  })
-
-  describe('options', () => {
-    test('hideNewMarkers leaves out every NEW: marker', () => {
-      const $ = render([site('Alpha', [interimSite('Depot', true)], true)], {
-        options: { hideNewMarkers: true }
-      })
-
-      expect($.root().text()).not.toContain('NEW:')
-      expect(byTestId($, 'overseas-site-name').text().trim()).toBe('Alpha')
-      expect(byTestId($, 'interim-site-name').text().trim()).toBe('Depot')
     })
   })
 })

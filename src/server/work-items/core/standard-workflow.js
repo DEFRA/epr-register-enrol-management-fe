@@ -24,6 +24,9 @@
  */
 export const STATE_APPROVED_PENDING_CONTACT = 'approved-pending-contact'
 
+/** The final approved state, displayed as "Granted". Terminal. */
+export const STATE_APPROVED = 'approved'
+
 /**
  * RA-527. Step 1 of the two-step determination for a refusal: refused (no
  * number is minted), but the applicant not yet contacted. Not terminal.
@@ -66,7 +69,7 @@ const STATES = [
   // applicant has not been contacted, so nothing is applied yet. Deliberately
   // NOT terminal. The label mirrors the backend's display name.
   { id: STATE_APPROVED_PENDING_CONTACT, displayName: 'Approved' },
-  { id: 'approved', displayName: 'Granted', isTerminal: true },
+  { id: STATE_APPROVED, displayName: 'Granted', isTerminal: true },
   // RA-527 (management-be v17). Step 1 of a refusal: refused, no number
   // minted, the applicant not yet contacted. NOT terminal. It reads
   // "Refused", the same as the final `rejected` state (user decision,
@@ -247,7 +250,7 @@ const TRANSITIONS = [
     actionId: 'confirm-contact-approved',
     displayName: 'Confirm applicant contact',
     fromStateId: STATE_APPROVED_PENDING_CONTACT,
-    toStateId: 'approved',
+    toStateId: STATE_APPROVED,
     callerInvocable: false
   },
   // RA-527 (management-be v17). A refusal takes the same two steps. Step 1:

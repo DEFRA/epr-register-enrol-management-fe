@@ -65,9 +65,9 @@ function siteTitle(site) {
  * summary has it).
  *
  * The charge is the site's own (`site.chargePence`), always with pence
- * ("£328.00"). No Submitted by or Submitted on for now (user, 2026-11-24),
- * and no Valid from date: the Application summary shows that once the
- * determination records one.
+ * ("£328.00"). No Submitted by, Submitted on or Valid from date: the
+ * Application summary shows the Valid from date once the determination
+ * records one.
  */
 function meta({ workItem, assignment, payload }) {
   return [

@@ -174,9 +174,10 @@ from its own hooks, never from a check on its category:
   the business plan, then for an exporter the Broadly Equivalent Standards
   (BES) row (each site's name, country and evidence links) and the
   Overseas Reprocessing Site (ORS) row: one `details` section per site,
-  collapsed, whose summary always shows the ORS ID as its number, the name and
-  the condensed address (`overseasSiteList` with `siteNumber`, shared with
-  re-accreditation). Each expands to its active interim sites, as re-accreditation does
+  collapsed, whose summary always shows the ORS ID as its number and the name,
+  and the condensed address only when the site's name repeats in the list
+  (`overseasSiteList` with `siteNumber`, shared with re-accreditation, whose
+  `buildOverseasSites` decides this). Each expands to its active interim sites, as re-accreditation does
   ("Interim sites (n)", each collapsed), and nothing for a site with none. The row
   has no `NEW:` marker and no "Registered, now seeking accreditation" detail; when there is no accreditation to
   show, or it cannot be read, the tab says so under the heading and keeps the
@@ -188,8 +189,8 @@ from its own hooks, never from a check on its category:
   `/work-items/{id}/accreditation-summary/files/{fileId}/download`
   (`accreditation-summary-download.controller.js`), which reads the summary
   afresh and serves only a file in it: 404 for a file not in it, an unknown
-  case or one without the tab, 503 when the live read fails, 422 when the
-  file is not clean, 404 when S3 fails. The S3 key and bucket come from that
+  case or one without the tab, 502 when the work item lookup fails, 503 when
+  the live read fails, 422 when the file is not clean, 404 when S3 fails. The S3 key and bucket come from that
   read and are never rendered. The payload-based
   `/work-items/{id}/files/{fileId}/download` is unchanged (both share
   `serveFile`).

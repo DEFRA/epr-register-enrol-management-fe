@@ -9,6 +9,7 @@ import { vi } from 'vitest'
 import * as cheerio from 'cheerio'
 
 import { createServer } from '#/server/server.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
 
 vi.mock(
@@ -100,13 +101,13 @@ function anAccreditation(overrides = {}) {
     overseasSites: [
       aSite({
         besEvidence: {
-          files: [aFile('bes-clean', 'bes-speira.pdf')]
+          files: [aFile('bes-clean', 'bes-example.pdf')]
         }
       }),
       aSite({
         siteId: 8,
         orsId: '002',
-        siteName: 'Excel Recycling BV',
+        siteName: 'Sample Recycling BV',
         addressLine1: '3 Havenweg',
         addressLine2: null,
         townOrCity: 'Rotterdam',
@@ -133,7 +134,7 @@ function aSite(overrides = {}) {
   return {
     siteId: 7,
     orsId: '001',
-    siteName: 'Speira GmbH',
+    siteName: 'Example Recycling GmbH',
     siteAddress: null,
     addressLine1: '1 Test Strasse',
     addressLine2: 'Block B',
@@ -305,12 +306,12 @@ describe('RA-769: Accreditation summary tab', () => {
           key: 'bes',
           label: 'Broadly Equivalent Standards (BES)',
           value:
-            'Speira GmbH (Germany) bes-speira.pdf Excel Recycling BV (Netherlands)'
+            'Example Recycling GmbH (Germany) bes-example.pdf Sample Recycling BV (Netherlands)'
         },
         {
           key: 'ors',
           label: 'Overseas Reprocessing Site (ORS)',
-          value: expect.stringMatching(/^001 Speira GmbH /)
+          value: expect.stringMatching(/^001 Example Recycling GmbH /)
         }
       ])
     })
@@ -360,17 +361,19 @@ describe('RA-769: Accreditation summary tab', () => {
           '[data-testid="acc-summary-value-bes"] [data-testid="bes-site"]'
         )
         expect(sites).toHaveLength(2)
-        expect(squash(sites.eq(0).find('strong').text())).toBe('Speira GmbH')
+        expect(squash(sites.eq(0).find('strong').text())).toBe(
+          'Example Recycling GmbH'
+        )
         expect(squash(sites.eq(0).text())).toContain('(Germany)')
         expect(linksIn($, 'bes')).toEqual([
           {
-            text: 'bes-speira.pdf',
+            text: 'bes-example.pdf',
             href: `/work-items/${ID}/accreditation-summary/files/bes-clean/download`
           }
         ])
         expect(sites.eq(1).find('a')).toHaveLength(0)
         expect(squash(sites.eq(1).find('strong').text())).toBe(
-          'Excel Recycling BV'
+          'Sample Recycling BV'
         )
       })
 
@@ -484,8 +487,8 @@ describe('RA-769: Accreditation summary tab', () => {
         const { $ } = await get()
 
         expect(summariesOf($)).toEqual([
-          { number: '001', name: 'Speira GmbH', address: '' },
-          { number: '002', name: 'Excel Recycling BV', address: '' }
+          { number: '001', name: 'Example Recycling GmbH', address: '' },
+          { number: '002', name: 'Sample Recycling BV', address: '' }
         ])
       })
 
@@ -506,7 +509,7 @@ describe('RA-769: Accreditation summary tab', () => {
                 aSite({
                   siteId: 9,
                   orsId: '003',
-                  siteName: 'Excel Recycling BV'
+                  siteName: 'Sample Recycling BV'
                 })
               ]
             })
@@ -518,15 +521,15 @@ describe('RA-769: Accreditation summary tab', () => {
         expect(summariesOf($)).toEqual([
           {
             number: '001',
-            name: 'Speira GmbH',
+            name: 'Example Recycling GmbH',
             address: '1 Test Strasse, Germany'
           },
           {
             number: '002',
-            name: 'Speira GmbH',
+            name: 'Example Recycling GmbH',
             address: '3 Havenweg, Netherlands'
           },
-          { number: '003', name: 'Excel Recycling BV', address: '' }
+          { number: '003', name: 'Sample Recycling BV', address: '' }
         ])
       })
 
@@ -622,7 +625,7 @@ describe('RA-769: Accreditation summary tab', () => {
 
         expect($('[data-testid="overseas-site-number"]')).toHaveLength(0)
         expect(squash($('[data-testid="overseas-site-name"]').text())).toBe(
-          'Speira GmbH'
+          'Example Recycling GmbH'
         )
       })
 
@@ -1023,7 +1026,7 @@ describe('RA-769: Accreditation summary tab', () => {
       const { $ } = await get()
 
       expect($('[data-testid="case-assignment-panel"]')).toHaveLength(0)
-      expect($('[data-testid="actions-card"]')).toHaveLength(0)
+      expect($('[data-testid="actions-panel"]')).toHaveLength(0)
       const text = squash($('main').text())
       expect(text).not.toContain('Duly make')
       expect(text).not.toContain('Assign')
@@ -1063,6 +1066,47 @@ describe('RA-769: Accreditation summary tab', () => {
         )
       }
     )
+
+    test.each([
+      ['a 404', { ok: false, status: 404 }, '404'],
+      [
+        'a failed read',
+        { ok: false, status: 503, error: 'down' },
+        'unavailable'
+      ],
+      [
+        'a transport failure',
+        { ok: false, error: 'ECONNREFUSED' },
+        'unavailable'
+      ],
+      ['an unusable body', { ok: true }, 'unusable body']
+    ])(
+      'logs a warning with the work item id and outcome for %s',
+      async (_, outcome, expected) => {
+        const warn = vi.spyOn(createLogger(), 'warn')
+        getAccreditationSummary.mockResolvedValue(outcome)
+
+        await get()
+
+        expect(warn).toHaveBeenCalledWith(
+          expect.objectContaining({ workItemId: ID, outcome: expected }),
+          'Accreditation summary not available'
+        )
+        warn.mockRestore()
+      }
+    )
+
+    test('logs nothing when the accreditation can be read', async () => {
+      const warn = vi.spyOn(createLogger(), 'warn')
+
+      await get()
+
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'Accreditation summary not available'
+      )
+      warn.mockRestore()
+    })
 
     test('keeps the case header and the tabs', async () => {
       getAccreditationSummary.mockResolvedValue({ ok: false, status: 404 })

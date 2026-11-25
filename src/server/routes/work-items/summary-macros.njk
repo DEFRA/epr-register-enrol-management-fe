@@ -118,11 +118,10 @@
 {# re-accreditation output. The `data-testid` hooks are a contract with    #}
 {# mgmt-tests.                                                             #}
 {#                                                                          #}
-{# `options.hideNewMarkers` leaves out every `NEW:` prefix.                 #}
 {# A site carrying `siteNumber` shows it before its name (RA-769).         #}
 {# Whether the condensed address shows is decided by the view model: only   #}
 {# for a site whose name repeats in the list (`buildOverseasSites`).        #}
-{% macro overseasSiteList(sites, options={}) %}
+{% macro overseasSiteList(sites) %}
   {# RA-292 AC01 + AC02 + AC04. One block per overseas site:    #}
   {# name (+ "New" tag), the full site detail, and the interim  #}
   {# site NESTED inside its parent — an interim site belongs to #}
@@ -147,7 +146,7 @@
         <span class="govuk-details__summary-text">
           {% if site.siteNumber %}<span data-testid="overseas-site-number">{{ site.siteNumber }} </span>{% endif %}
           <span data-testid="overseas-site-name">
-            <strong>{% if site.isNew and not options.hideNewMarkers %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>
+            <strong>{% if site.isNew %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>
           </span>
           {% if site.summaryAddress %}
             <br>
@@ -199,7 +198,7 @@
                   {# any "text of this element" reader stop at   #}
                   {# the marker's closing tag and see "NEW:"     #}
                   {# alone instead of the site name.             #}
-                  <span class="govuk-details__summary-text"><strong data-testid="interim-site-name">{% if interimSite.isNew and not options.hideNewMarkers %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ interimSite.siteName }}</strong></span>
+                  <span class="govuk-details__summary-text"><strong data-testid="interim-site-name">{% if interimSite.isNew %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ interimSite.siteName }}</strong></span>
                 </summary>
                 <div class="govuk-details__text">
                   {% if interimSite.addressLines.length %}

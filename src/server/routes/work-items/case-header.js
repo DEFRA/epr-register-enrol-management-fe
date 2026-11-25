@@ -216,14 +216,12 @@ export function dueOnEntry(workItem) {
 }
 
 /**
- * The same fields in the same places as add-ORS's (user, 2026-11-19), rows
- * of four: the case, then what it is for and its payment. Sequence alone
- * controls placement. The charge is the amount owed, shown from submission.
+ * The same fields in the same places as add-ORS's, rows of four: the case,
+ * then what it is for and its payment. Sequence alone controls placement. The
+ * charge is the amount owed, shown from submission.
  *
- * Unlike add-ORS, no Submitted by or Submitted on (user, 2026-11-24), and no
- * Valid from date: the accreditation start date is always 1 January of the
- * accreditation year, set at confirm contact, and the decision panel already
- * shows it once Granted (user, 2026-11-19).
+ * Like add-ORS, no Submitted by, Submitted on or Valid from date: the decision
+ * panel shows the accreditation start date once Granted.
  */
 function reAccreditationMeta({ workItem, assignment, payload }) {
   return [

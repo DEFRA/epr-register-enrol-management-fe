@@ -2,6 +2,7 @@ import { formatDateGds } from '#/config/nunjucks/filters/format-date.js'
 import { formatSiteAddress } from '#/server/common/helpers/format/site-address.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
+import { STATE_APPROVED } from '#/server/work-items/core/standard-workflow.js'
 import {
   EM_DASH,
   buildAuthorityToIssueContacts,
@@ -42,16 +43,22 @@ import {
  * operator backend never says which contacts are new, and no row marks one.
  */
 
-/** Wording of the tab (confirmed by the user, RA-769 spec). */
+/** Wording of the tab. */
 export const ACCREDITATION_SUMMARY_HEADING = 'Accreditation Summary'
 export const ACCREDITATION_SUMMARY_INTRO =
   'A summary of the accreditation as it stands today. The changes in this request are not included until the request is granted.'
 export const ACCREDITATION_SUMMARY_UNAVAILABLE =
   'Accreditation summary is not available at the moment.'
 
-/** An accreditation is only ever shown Granted: the operator backend answers for Approved ones only. */
+/**
+ * The accreditation status is the constant "Granted", not data. That is only
+ * true because the operator backend answers 404 for an accreditation that is
+ * not Approved, and its response carries no status of its own. Once an
+ * accreditation can be suspended or revoked, the status must come from the
+ * backend and be rendered from the response here, or a suspended accreditation
+ * would show "Granted".
+ */
 const GRANTED_TEXT = 'Granted'
-const GRANTED_STATE_ID = 'approved'
 
 function textOrDash(value) {
   if (value === null || value === undefined) {
@@ -160,16 +167,35 @@ function startDateText(accreditationStartDate) {
   return formatDateGds(accreditationStartDate) || EM_DASH
 }
 
+/** An interim site without its new marker. */
+function withoutNewMarker(interimSite) {
+  if (interimSite == null || typeof interimSite !== 'object') {
+    return interimSite
+  }
+  const { isNewSite: _isNewSite, ...rest } = interimSite
+  return rest
+}
+
 /**
- * The operator backend never returns these, and the tab never shows them: a
- * site stays new for the year after grant, so it would be marked new all year.
- * Dropped here so a body that did carry them could not bring them back.
+ * The one place the tab keeps new-site markers out: a site stays new for the
+ * year after grant, so it would be marked new all year. The operator backend
+ * never returns these; dropping them here (from the site and its interim
+ * sites) means a body that did carry them could not bring them back, and the
+ * template needs no option of its own.
  */
 function withoutNewSiteMarkers(site) {
-  const copy = { ...site }
-  delete copy.isNewSite
-  delete copy.registeredNowAccredited
-  return copy
+  const {
+    isNewSite: _isNewSite,
+    registeredNowAccredited: _registeredNowAccredited,
+    ...rest
+  } = site
+  if (Array.isArray(rest.interimSites)) {
+    rest.interimSites = rest.interimSites.map(withoutNewMarker)
+  }
+  if (rest.interimSite != null) {
+    rest.interimSite = withoutNewMarker(rest.interimSite)
+  }
+  return rest
 }
 
 /**
@@ -247,7 +273,7 @@ function identityRows(accreditation, accreditationStartDate) {
       label: 'Accreditation status',
       kind: 'tag',
       value: GRANTED_TEXT,
-      tagClass: stateTagClass(GRANTED_STATE_ID)
+      tagClass: stateTagClass(STATE_APPROVED)
     },
     {
       key: 'accreditation-year',

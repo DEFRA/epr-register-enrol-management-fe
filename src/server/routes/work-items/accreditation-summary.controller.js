@@ -3,6 +3,8 @@ import {
   getWorkItem
 } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
+import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { statusCodes } from '#/server/common/constants/status-codes.js'
 import {
   ACCREDITATION_SUMMARY_TAB_KEY,
   buildCaseHeader,
@@ -18,6 +20,19 @@ import {
 } from './accreditation-summary.js'
 
 const VIEW = 'work-items/accreditation-summary'
+
+const logger = createLogger()
+
+/**
+ * Why a read gave nothing to show, for the log: every such read renders the
+ * same unavailable message, so the log is the only place the cases differ.
+ */
+function unavailableOutcome(read) {
+  if (read?.status === statusCodes.notFound) {
+    return '404'
+  }
+  return read?.ok ? 'unusable body' : 'unavailable'
+}
 
 /**
  * RA-769. The Accreditation summary tab of an In-Year Change case: the
@@ -49,6 +64,17 @@ export const workItemAccreditationSummaryController = {
 
     const read = await getAccreditationSummary({ workItemId: id, user })
     const summary = read.ok && read.accreditation ? read : null
+    if (!summary) {
+      logger.warn(
+        {
+          workItemId: id,
+          outcome: unavailableOutcome(read),
+          status: read.status,
+          error: read.error
+        },
+        'Accreditation summary not available'
+      )
+    }
 
     const forHeader = decorateForCaseHeader(result.workItem)
     return h.view(VIEW, {

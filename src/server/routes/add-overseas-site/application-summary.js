@@ -1,6 +1,10 @@
 import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
 import { formatHeaderDate } from '#/server/routes/work-items/case-header.js'
 import {
+  STATE_APPROVED,
+  STATE_APPROVED_PENDING_CONTACT
+} from '#/server/work-items/core/standard-workflow.js'
+import {
   EM_DASH,
   buildInterimSites,
   fileViewModel,
@@ -46,10 +50,13 @@ export function buildAddOverseasSiteSummary({ workItem }) {
 }
 
 // "Approved" (awaiting the applicant contact) and "Granted".
-const APPROVED_STATE_IDS = new Set(['approved-pending-contact', 'approved'])
+const APPROVED_STATE_IDS = new Set([
+  STATE_APPROVED_PENDING_CONTACT,
+  STATE_APPROVED
+])
 
 /**
- * The Valid from date (user, 2026-11-24: moved here from the case header): the
+ * The Valid from date: the
  * date the determination recorded (`payload.effectiveDate`, RA-495 AC6), shown
  * above the site's rows. Only an approved or granted case has one to show: a
  * refusal records the submission date there (so management-be can close the
