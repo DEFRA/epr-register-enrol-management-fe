@@ -7,6 +7,10 @@ import {
   summarisePaymentDateChanged
 } from './audit-log-payment-date.js'
 import {
+  DETERMINATION_MADE_ACTION,
+  determinationMadeRows
+} from './audit-log-valid-from.js'
+import {
   ACCREDITATION_NUMBER_CORRECTED_ACTION,
   LAST_YEARS_ACCREDITATION_NUMBER_ADDED_ACTION,
   accreditationNumberCorrectedRows,
@@ -532,6 +536,8 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
     }
     case PAYMENT_DATE_CHANGED_ACTION:
       return paymentDateChangedRows(entry)
+    case DETERMINATION_MADE_ACTION:
+      return determinationMadeRows(entry)
     case ACTION_ASSIGNED: {
       const rows = []
       const previous =

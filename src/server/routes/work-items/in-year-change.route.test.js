@@ -1978,6 +1978,67 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       )
     })
 
+    // RA-795 AC08. The valid from date set on approval shows on the
+    // determination entry; a refusal records none, so shows no such row.
+    describe.each([
+      [
+        'an approval',
+        {
+          actionDisplayName: 'Determination made: Approved',
+          details: { outcome: 'approved', effectiveDate: '2027-06-01' }
+        },
+        true
+      ],
+      [
+        'a refusal',
+        {
+          actionDisplayName: 'Determination made: Refused',
+          details: { outcome: 'rejected' }
+        },
+        false
+      ]
+    ])('the determination entry for %s', (_, entry, showsValidFrom) => {
+      test(
+        showsValidFrom
+          ? 'shows the valid from date, user and timestamp'
+          : 'shows no valid from date row',
+        async () => {
+          const item = anAddOrsItem()
+          item.auditLog = [
+            {
+              id: 'e0000004-0000-4000-8000-000000000000',
+              action: 'determination-made',
+              stateId: 'approved-pending-contact',
+              createdBy: 'user-1',
+              createdByName: 'Reg Ulator',
+              createdAt: '2027-03-01T09:00:00Z',
+              ...entry
+            }
+          ]
+          getWorkItem.mockResolvedValue({ ok: true, workItem: item })
+
+          const { result, statusCode } = await server.inject({
+            method: 'GET',
+            url: `/work-items/${ADD_ORS_ID}/audit-log`
+          })
+
+          expect(statusCode).toBe(statusCodes.ok)
+          const $ = cheerio.load(result)
+          const text = squash(
+            $('[data-testid="work-item-audit-log"] > li').text()
+          )
+          expect(text).toContain(entry.actionDisplayName)
+          expect(text).toContain('1 March 2027')
+          if (showsValidFrom) {
+            expect(text).toContain('Valid from date 01/06/2027')
+            expect(text).toContain('Determined by Reg Ulator')
+          } else {
+            expect(text).not.toContain('Valid from date')
+          }
+        }
+      )
+    })
+
     test('shows the add-ORS header and tabs', async () => {
       getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
 

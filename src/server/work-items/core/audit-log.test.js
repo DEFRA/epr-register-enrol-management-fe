@@ -1888,3 +1888,40 @@ describe('change-payment-date audit entries (RA-576)', () => {
     expect(rows.map((r) => r.key)).toEqual(['Changed by'])
   })
 })
+
+describe('determination audit entries (RA-795 AC08)', () => {
+  const approved = {
+    action: 'determination-made',
+    actionDisplayName: 'Determination made: Approved',
+    createdBy: 'user-1',
+    createdByName: 'Reg Ulator',
+    createdAt: '2027-03-01T09:00:00Z',
+    details: { outcome: 'approved', effectiveDate: '2027-06-01' }
+  }
+
+  test('an approval shows the valid from date and who set it', () => {
+    expect(detailRowsForAuditEntry(approved)).toEqual([
+      { key: 'Valid from date', value: '01/06/2027' },
+      { key: 'Determined by', value: 'Reg Ulator' }
+    ])
+  })
+
+  test('a refusal has no valid from date row', () => {
+    expect(
+      detailRowsForAuditEntry({
+        ...approved,
+        actionDisplayName: 'Determination made: Refused',
+        details: { outcome: 'rejected' }
+      })
+    ).toEqual([])
+  })
+
+  test('a malformed stored date yields no row', () => {
+    expect(
+      detailRowsForAuditEntry({
+        ...approved,
+        details: { outcome: 'approved', effectiveDate: 'garbage' }
+      })
+    ).toEqual([])
+  })
+})
