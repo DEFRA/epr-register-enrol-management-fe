@@ -1655,6 +1655,31 @@ describe('RA-739 / RA-495: in-year change applications', () => {
     })
 
     test.each([
+      ['before 1 January', '31', '12', '2025', 'on or after 1 January 2026'],
+      ['after 31 December', '1', '1', '2027', 'on or before 31 December 2026']
+    ])(
+      'an approval dated %s of the accreditation year is shown again with the year named',
+      async (_, day, month, year, expected) => {
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anItemIn('assessment-started')
+        })
+
+        const { statusCode, result } = await postForm(
+          DECISION_URL,
+          `decision=approved&effective-date-day=${day}&effective-date-month=${month}&effective-date-year=${year}`
+        )
+
+        expect(statusCode).toBe(400)
+        const $ = cheerio.load(result)
+        expect(
+          squash($('[data-testid="effective-date-error"]').text())
+        ).toContain(`Valid from date must be ${expected}`)
+        expect(recordWorkItemDecision).not.toHaveBeenCalled()
+      }
+    )
+
+    test.each([
       'submitted',
       'approved-pending-contact',
       'approved',
@@ -1692,7 +1717,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       const { statusCode, headers } = await postForm(
         DECISION_URL,
         'decision=approved&decisionNote=Site%20meets%20the%20conditions' +
-          '&effective-date-day=1&effective-date-month=3&effective-date-year=2027'
+          '&effective-date-day=1&effective-date-month=3&effective-date-year=2026'
       )
 
       expect(statusCode).toBe(statusCodes.redirect)
@@ -1713,7 +1738,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         expect.objectContaining({
           workItemId: ADD_ORS_ID,
           outcome: 'approved',
-          effectiveDate: '2027-03-01'
+          effectiveDate: '2026-03-01'
         })
       )
     })
