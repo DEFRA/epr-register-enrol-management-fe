@@ -2328,6 +2328,62 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         expect(applyWorkItemAction).not.toHaveBeenCalled()
       })
 
+      // RA-800 / RA-769. After a correction the summary's Valid from date row
+      // reads the stored (corrected) date, and the old date is nowhere on it.
+      test('then shows only the corrected Valid from date on the summary, with the status unchanged', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+        changeValidFromWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anApprovedItem({ effectiveDate: '2026-04-02' })
+        })
+
+        const posted = await post(dateBody('2', '4', '2026'))
+        expect(posted.statusCode).toBe(statusCodes.redirect)
+        // The backend now holds the corrected date; the summary re-reads it.
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anApprovedItem({ effectiveDate: '2026-04-02' })
+        })
+        const cookie = []
+          .concat(posted.headers['set-cookie'] ?? [])
+          .map((header) => header.split(';')[0])
+          .join('; ')
+        const followed = await server.inject({
+          method: 'GET',
+          url: DETAIL_URL,
+          headers: { cookie }
+        })
+        const $ = cheerio.load(followed.result)
+
+        expect(
+          squash(
+            $(
+              '[data-testid="application-valid-from"] [data-testid="app-detail-value-valid-from"]'
+            ).text()
+          )
+        ).toBe('02 Apr 2026')
+        const page = squash($('body').text())
+        expect(page).not.toContain('27 Mar 2026')
+        expect(page).not.toContain('27/03/2026')
+        expect(
+          squash($('[data-testid="work-item-flash-banner"]').text())
+        ).toContain('Updated')
+        expect(
+          squash(
+            $(
+              '[data-testid="case-header-status"] [data-testid="work-item-state-tag"]'
+            ).text()
+          )
+        ).toBe('Approved')
+        expect($('[data-testid="confirm-applicant-contact-cta"]')).toHaveLength(
+          1
+        )
+        // The date stays out of the case header.
+        expect($('[data-testid="case-header"]').text()).not.toContain(
+          'Valid from'
+        )
+      })
+
       test('accepts the same date as the current one', async () => {
         getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
         changeValidFromWorkItem.mockResolvedValue({
