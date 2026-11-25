@@ -27,6 +27,23 @@ describe('add-overseas-site module (RA-739)', () => {
     })
   })
 
+  // RA-769. A registration-only change has a registration reference and no
+  // accreditation reference, so there is no accreditation to summarise.
+  test('has an accreditation unless the change is registration-only', () => {
+    const { hasAccreditation } = addOverseasSiteType
+    expect(
+      hasAccreditation({
+        registrationReference: 'R26EX0500190001PL',
+        accreditationReference: 'A26EX0500190001PL'
+      })
+    ).toBe(true)
+    expect(
+      hasAccreditation({ registrationReference: 'R26EX0500190001PL' })
+    ).toBe(false)
+    expect(hasAccreditation({})).toBe(true)
+    expect(hasAccreditation(undefined)).toBe(true)
+  })
+
   test('follows the Standard workflow', () => {
     expect(addOverseasSiteType.states).toBe(standardWorkflow.states)
     expect(addOverseasSiteType.transitions).toBe(standardWorkflow.transitions)

@@ -163,6 +163,10 @@ from its own hooks, never from a check on its category:
   meta items (RA-495). Every work item page builds its header from a work item passed
   through `decorateForCaseHeader` (`routes/work-items/case-header.js`), so
   the type's header shows on every tab.
+- `hasAccreditation(payload)` says whether a case has an accreditation to
+  summarise (by default it does). Add-ORS's is false for a registration-only
+  change, whose Accreditation summary tab then says so without asking the
+  backend (RA-769).
 - `caseTabs` lists the tab keys the type's case has (by default all four).
   Add-ORS has Application summary, Accreditation summary, Related
   applications and Application history (RA-495). Accreditation summary

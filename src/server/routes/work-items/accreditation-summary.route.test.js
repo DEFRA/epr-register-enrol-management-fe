@@ -1081,7 +1081,15 @@ describe('RA-769: Accreditation summary tab', () => {
         { ok: false, error: 'ECONNREFUSED' },
         'unavailable'
       ],
-      ['an unusable body', { ok: true }, 'unusable body']
+      [
+        'an unusable body',
+        {
+          ok: false,
+          unusable: true,
+          error: 'Backend returned an unusable summary'
+        },
+        'unusable body'
+      ]
     ])(
       'logs a warning with the work item id and outcome for %s',
       async (_, outcome, expected) => {

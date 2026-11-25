@@ -644,6 +644,7 @@ describe('#getAccreditationSummary (RA-769)', () => {
 
       expect(result.ok).toBe(false)
       expect(result.error).toBeDefined()
+      expect(result.unusable).toBe(true)
     }
   )
 
@@ -654,6 +655,7 @@ describe('#getAccreditationSummary (RA-769)', () => {
     })
 
     expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
+    expect(result.unusable).toBeUndefined()
   })
 })
 

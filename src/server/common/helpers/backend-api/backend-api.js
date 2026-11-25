@@ -1232,8 +1232,9 @@ export async function getReAccreditationPriorYear({
  *                                  (registration-only case, unknown or not
  *                                  Approved)
  *  - { ok: false, status, error } on other 4xx/5xx, including a failed read
- *  - { ok: false, error }         on transport errors, timeouts and a body
- *                                  that is not a usable summary
+ *  - { ok: false, error }         on transport errors and timeouts
+ *  - { ok: false, unusable: true, error }
+ *                                  on a body that is not a usable summary
  */
 export async function getAccreditationSummary({
   workItemId,
@@ -1257,7 +1258,11 @@ export async function getAccreditationSummary({
             accreditation: body.accreditation,
             accreditationStartDate: body.accreditationStartDate ?? null
           }
-        : { ok: false, error: 'Backend returned an unusable summary' }
+        : {
+            ok: false,
+            unusable: true,
+            error: 'Backend returned an unusable summary'
+          }
   })
 }
 

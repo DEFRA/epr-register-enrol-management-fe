@@ -12,7 +12,7 @@ import {
   decorateForCaseHeader
 } from './case-header.js'
 import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
-import { isRegistrationOnlyChange } from '#/server/routes/add-overseas-site/case-header.js'
+import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import {
   ACCREDITATION_SUMMARY_HEADING,
   ACCREDITATION_SUMMARY_INTRO,
@@ -26,14 +26,14 @@ const VIEW = 'work-items/accreditation-summary'
 const logger = createLogger()
 
 /**
- * Why a read gave nothing to show, for the log: every such read renders the
- * same unavailable message, so the log is the only place the cases differ.
+ * Why a read gave nothing to show, for the log: every other such read renders
+ * the same unavailable message, so the log is the only place the cases differ.
  */
 function unavailableOutcome(read) {
   if (read?.status === statusCodes.notFound) {
     return '404'
   }
-  return read?.ok ? 'unusable body' : 'unavailable'
+  return read?.unusable ? 'unusable body' : 'unavailable'
 }
 
 /**
@@ -65,7 +65,12 @@ export const workItemAccreditationSummaryController = {
       return errorResponse
     }
 
-    const registrationOnly = isRegistrationOnlyChange(result.workItem?.payload)
+    // A type's case has an accreditation unless the type says this one does not
+    // (add-ORS: a registration-only change).
+    const registrationOnly =
+      getWorkItemType(result.workItem?.typeId)?.hasAccreditation?.(
+        result.workItem?.payload
+      ) === false
     const read = registrationOnly
       ? null
       : await getAccreditationSummary({ workItemId: id, user })
