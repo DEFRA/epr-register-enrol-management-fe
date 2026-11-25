@@ -1925,3 +1925,51 @@ describe('determination audit entries (RA-795 AC08)', () => {
     ).toEqual([])
   })
 })
+
+describe('change-valid-from audit entries (RA-800 AC07)', () => {
+  const entry = {
+    action: 'valid-from-changed',
+    createdBy: 'user-1',
+    createdByName: 'Reg Ulator',
+    details: {
+      previousEffectiveDate: '2027-06-01',
+      effectiveDate: '2027-06-15',
+      reason: 'Escalation moved the date.\r\nSee email.'
+    }
+  }
+
+  test('summarises as the date range', () => {
+    expect(summariseAuditEntry(entry)).toBe('01/06/2027 → 15/06/2027')
+  })
+
+  test('projects previous date, new date, actor and a multiline reason', () => {
+    expect(detailRowsForAuditEntry(entry)).toEqual([
+      { key: 'Previous valid from date', value: '01/06/2027' },
+      { key: 'New valid from date', value: '15/06/2027' },
+      { key: 'Changed by', value: 'Reg Ulator' },
+      {
+        key: 'Reason',
+        value: 'Escalation moved the date.\nSee email.',
+        multiline: true
+      }
+    ])
+  })
+
+  test('omits rows whose values are absent or malformed', () => {
+    const rows = detailRowsForAuditEntry({
+      ...entry,
+      details: {
+        ...entry.details,
+        previousEffectiveDate: undefined,
+        effectiveDate: 'garbage',
+        reason: '  '
+      }
+    })
+    expect(rows.map((r) => r.key)).toEqual(['Changed by'])
+  })
+
+  test('is not flagged as a failure', () => {
+    const [decorated] = decorateAuditLog([entry])
+    expect(decorated.isFailure).toBe(false)
+  })
+})

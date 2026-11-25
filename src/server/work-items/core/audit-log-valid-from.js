@@ -37,3 +37,41 @@ export function determinationMadeRows(entry) {
   }
   return rows
 }
+
+/**
+ * Valid-from corrections (RA-800 AC07): management-be stamps a dedicated
+ * `valid-from-changed` entry (not a state transition) carrying
+ * `previousEffectiveDate`, `effectiveDate` and the reason.
+ */
+export const VALID_FROM_CHANGED_ACTION = 'valid-from-changed'
+
+/** At-a-glance summary: "01/06/2027 → 15/06/2027" (empty if either is bad). */
+export function summariseValidFromChanged(details) {
+  const previous = formatIsoDate(details?.previousEffectiveDate)
+  const next = formatIsoDate(details?.effectiveDate)
+  return previous && next ? `${previous} → ${next}` : ''
+}
+
+/** Detail rows: previous / new date, actor and a multiline reason. */
+export function validFromChangedRows(entry) {
+  const details = entry.details ?? {}
+  const rows = [
+    {
+      key: 'Previous valid from date',
+      value: formatIsoDate(details.previousEffectiveDate)
+    },
+    { key: 'New valid from date', value: formatIsoDate(details.effectiveDate) },
+    { key: 'Changed by', value: entry.createdByName ?? entry.createdBy }
+  ].filter((row) => row.value)
+
+  if (typeof details.reason === 'string' && details.reason.trim() !== '') {
+    // Browsers normalise a `<textarea>` to CRLF on submit; the template splits
+    // on `\n`, so normalise back to avoid a stray carriage return.
+    rows.push({
+      key: 'Reason',
+      value: details.reason.replaceAll('\r\n', '\n'),
+      multiline: true
+    })
+  }
+  return rows
+}

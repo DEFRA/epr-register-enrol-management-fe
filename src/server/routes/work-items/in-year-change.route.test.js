@@ -2495,6 +2495,112 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       )
     })
 
+    // RA-800 AC07. Each correction is its own entry, in the style of the
+    // payment date change: summary "dd/mm/yyyy -> dd/mm/yyyy", then previous
+    // date, new date, who changed it and the (multi-line) reason.
+    describe('valid from date corrections', () => {
+      const correction = (id, createdAt, previous, next, reason) => ({
+        id,
+        action: 'valid-from-changed',
+        actionDisplayName: 'Valid from date changed',
+        stateId: 'approved-pending-contact',
+        createdBy: 'user-1',
+        createdByName: 'Reg Ulator',
+        createdAt,
+        details: {
+          previousEffectiveDate: previous,
+          effectiveDate: next,
+          reason
+        }
+      })
+
+      const loadHistory = async (auditLog) => {
+        const item = anAddOrsItem()
+        item.auditLog = auditLog
+        getWorkItem.mockResolvedValue({ ok: true, workItem: item })
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ADD_ORS_ID}/audit-log`
+        })
+        expect(statusCode).toBe(statusCodes.ok)
+        return cheerio.load(result)
+      }
+
+      test('shows the previous date, new date, reason, user and timestamp', async () => {
+        const $ = await loadHistory([
+          correction(
+            'e0000005-0000-4000-8000-000000000000',
+            '2027-03-02T10:30:00Z',
+            '2027-06-01',
+            '2027-06-15',
+            'Escalation moved the date.'
+          )
+        ])
+
+        const text = squash(
+          $('[data-testid="work-item-audit-log"] > li').text()
+        )
+        expect(text).toContain('Valid from date changed')
+        expect(text).toContain('01/06/2027 → 15/06/2027')
+        expect(text).toContain('Previous valid from date 01/06/2027')
+        expect(text).toContain('New valid from date 15/06/2027')
+        expect(text).toContain('Changed by Reg Ulator')
+        expect(text).toContain('Reason Escalation moved the date.')
+        expect(text).toContain('2 March 2027')
+      })
+
+      test('preserves the lines of a multi-line reason', async () => {
+        const $ = await loadHistory([
+          correction(
+            'e0000005-0000-4000-8000-000000000000',
+            '2027-03-02T10:30:00Z',
+            '2027-06-01',
+            '2027-06-15',
+            'First line.\r\nSecond line.'
+          )
+        ])
+
+        const lines = $('[data-testid="work-item-audit-log"] > li')
+          .find('p, li, dd, div')
+          .map((_, el) => squash($(el).text()))
+          .get()
+        expect(lines).toContain('First line.')
+        expect(lines).toContain('Second line.')
+      })
+
+      test('lists several corrections as separate entries in order', async () => {
+        const $ = await loadHistory([
+          correction(
+            'e0000006-0000-4000-8000-000000000000',
+            '2027-03-03T10:30:00Z',
+            '2027-06-15',
+            '2027-07-01',
+            'Second correction.'
+          ),
+          correction(
+            'e0000005-0000-4000-8000-000000000000',
+            '2027-03-02T10:30:00Z',
+            '2027-06-01',
+            '2027-06-15',
+            'First correction.'
+          )
+        ])
+
+        const entries = $('[data-testid="work-item-audit-log"] > li')
+        expect(entries.map((_, el) => $(el).attr('data-action')).get()).toEqual(
+          ['valid-from-changed', 'valid-from-changed']
+        )
+        expect(squash($(entries[0]).text())).toContain(
+          '15/06/2027 → 01/07/2027'
+        )
+        expect(squash($(entries[0]).text())).toContain('Second correction.')
+        expect(squash($(entries[1]).text())).toContain(
+          '01/06/2027 → 15/06/2027'
+        )
+        expect(squash($(entries[1]).text())).toContain('First correction.')
+      })
+    })
+
     test('shows the add-ORS header and tabs', async () => {
       getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
 

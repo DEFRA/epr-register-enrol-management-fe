@@ -8,7 +8,10 @@ import {
 } from './audit-log-payment-date.js'
 import {
   DETERMINATION_MADE_ACTION,
-  determinationMadeRows
+  VALID_FROM_CHANGED_ACTION,
+  determinationMadeRows,
+  summariseValidFromChanged,
+  validFromChangedRows
 } from './audit-log-valid-from.js'
 import {
   ACCREDITATION_NUMBER_CORRECTED_ACTION,
@@ -443,6 +446,8 @@ export function summariseAuditEntry(entry) {
     }
     case PAYMENT_DATE_CHANGED_ACTION:
       return summarisePaymentDateChanged(details)
+    case VALID_FROM_CHANGED_ACTION:
+      return summariseValidFromChanged(details)
     case ACTION_ASSIGNED: {
       const to = details.assigneeName ?? details.assigneeId ?? 'unknown user'
       const from = details.previousAssigneeName ?? details.previousAssigneeId
@@ -538,6 +543,8 @@ export function detailRowsForAuditEntry(entry, { payload } = {}) {
       return paymentDateChangedRows(entry)
     case DETERMINATION_MADE_ACTION:
       return determinationMadeRows(entry)
+    case VALID_FROM_CHANGED_ACTION:
+      return validFromChangedRows(entry)
     case ACTION_ASSIGNED: {
       const rows = []
       const previous =
