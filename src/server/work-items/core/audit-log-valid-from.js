@@ -22,20 +22,13 @@ function formatIsoDate(value) {
 }
 
 /**
- * Detail rows for a determination entry: the valid-from date and who set it
- * (the timestamp is the entry's own). No date, no rows.
+ * Detail rows for a determination entry: the valid-from date. Who made the
+ * determination and when are already in the entry's own header. No date, no
+ * rows.
  */
 export function determinationMadeRows(entry) {
   const validFrom = formatIsoDate(entry.details?.effectiveDate)
-  if (!validFrom) {
-    return []
-  }
-  const rows = [{ key: 'Valid from date', value: validFrom }]
-  const actor = entry.createdByName ?? entry.createdBy
-  if (actor) {
-    rows.push({ key: 'Determined by', value: actor })
-  }
-  return rows
+  return validFrom ? [{ key: 'Valid from date', value: validFrom }] : []
 }
 
 /**

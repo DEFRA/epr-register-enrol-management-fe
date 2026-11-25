@@ -1899,10 +1899,9 @@ describe('determination audit entries (RA-795 AC08)', () => {
     details: { outcome: 'approved', effectiveDate: '2027-06-01' }
   }
 
-  test('an approval shows the valid from date and who set it', () => {
+  test('an approval shows only the valid from date (the actor is in the entry header)', () => {
     expect(detailRowsForAuditEntry(approved)).toEqual([
-      { key: 'Valid from date', value: '01/06/2027' },
-      { key: 'Determined by', value: 'Reg Ulator' }
+      { key: 'Valid from date', value: '01/06/2027' }
     ])
   })
 

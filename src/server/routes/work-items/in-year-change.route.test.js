@@ -2543,7 +2543,8 @@ describe('RA-739 / RA-495: in-year change applications', () => {
           expect(text).toContain('1 March 2027')
           if (showsValidFrom) {
             expect(text).toContain('Valid from date 01/06/2027')
-            expect(text).toContain('Determined by Reg Ulator')
+            expect(text).toContain('Reg Ulator')
+            expect(text).not.toContain('Determined by')
           } else {
             expect(text).not.toContain('Valid from date')
           }
