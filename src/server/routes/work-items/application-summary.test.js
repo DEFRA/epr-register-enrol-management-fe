@@ -9,6 +9,7 @@ import {
   buildInterimSite,
   buildInterimSites,
   buildOverseasSite,
+  buildOverseasSites,
   buildSiteAddressLines,
   deriveSiteAddress,
   deriveSiteAddressLines,
@@ -564,7 +565,7 @@ describe('#buildApplicationSummary (RA-295 AC02)', () => {
       isNew: false,
       addressLines: [],
       details: [],
-      interimSite: null
+      interimSites: []
     })
     expect(row(rows, 'bes').sites[0].files).toEqual([])
   })
@@ -753,6 +754,31 @@ describe('#toDisplayLines (RA-292: wire value -> display lines)', () => {
   })
 })
 
+describe('#buildOverseasSites (RA-769)', () => {
+  const SITES = [
+    { siteName: 'Alpha', addressLine1: '1 Quay', country: 'Spain' },
+    { siteName: 'Beta', addressLine1: '2 Quay', country: 'France' },
+    { siteName: 'Beta', addressLine1: '3 Quay', country: 'Italy' }
+  ]
+
+  test('by default keeps the condensed address only for repeated names', () => {
+    const sites = buildOverseasSites(SITES)
+
+    expect(sites.map((site) => site.summaryAddress)).toEqual([
+      '',
+      '2 Quay, France',
+      '3 Quay, Italy'
+    ])
+  })
+
+  test('carries every interim site of each site', () => {
+    const interimSites = [{ siteName: 'Depot' }, { siteName: 'Yard' }]
+    const source = [{ siteName: 'Alpha', interimSites }]
+
+    expect(buildOverseasSites(source)[0].interimSites).toHaveLength(2)
+  })
+})
+
 describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
   // Mirrors the management-be seed's site[0] "Rotterdam" — the item that
   // carries every field, so it is the one that proves AC04 in full.
@@ -858,7 +884,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
     expect(site.addressLines).toEqual(['Calle Uno, Bilbao', 'Spain'])
     expect(site.summaryAddress).toBe('Calle Uno, Bilbao, Spain')
     expect(site.isNew).toBe(false)
-    expect(site.interimSite).toBeNull()
+    expect(site.interimSites).toEqual([])
   })
 
   test('names an unnamed site with an em dash and leaves country null', () => {
@@ -869,8 +895,7 @@ describe('#buildOverseasSite (RA-292 AC01 + AC04)', () => {
       // RA-603: an ORS now also reports its interim sites as a list, empty here.
       interimSites: [],
       addressLines: [],
-      details: [],
-      interimSite: null
+      details: []
     })
   })
 
@@ -1153,7 +1178,9 @@ describe('#buildInterimSite (RA-292 AC02 + AC04)', () => {
     })
     const sites = row(rows, 'ors').sites
     expect(sites).toHaveLength(1)
-    expect(sites[0].interimSite.siteName).toBe('Antwerp Interim Holding Site')
+    expect(sites[0].interimSites[0].siteName).toBe(
+      'Antwerp Interim Holding Site'
+    )
   })
 })
 
@@ -1251,7 +1278,7 @@ describe('RA-292 producer contract (verbatim captured payload)', () => {
     // notice it has stopped meaning anything. Now server-derived and
     // defaulting to false, so the failure direction is a MISSING badge.
     expect(site.isNew).toBe(false)
-    expect(site.interimSite).toBeNull()
+    expect(site.interimSites).toEqual([])
 
     // Exactly the fields that are PRESENT — and all three false booleans are
     // among them. If the omit rule ever regressed to a truthiness test these
@@ -1324,7 +1351,7 @@ describe('RA-292 backwards compatibility (pre-story work items)', () => {
     const [site] = row(rows, 'ors').sites
     expect(site.siteName).toBe('Rotterdam Reprocessing')
     expect(site.isNew).toBe(false)
-    expect(site.interimSite).toBeNull()
+    expect(site.interimSites).toEqual([])
     expect(site.addressLines).toEqual([
       '1 Overseas Lane, Rotterdam',
       'Netherlands'
@@ -1544,8 +1571,7 @@ describe('#buildOverseasSite interim sites (RA-603)', () => {
       site([
         { siteId: 21, siteName: 'First' },
         { siteId: 22, siteName: 'Second' }
-      ]),
-      { multipleInterimSitesEnabled: true }
+      ])
     )
 
     expect(built.interimSites.map((i) => i.siteName)).toEqual([
@@ -1554,9 +1580,7 @@ describe('#buildOverseasSite interim sites (RA-603)', () => {
     ])
   })
 
-  // The singular property stays so nothing reading it has to change at once; it points at the
-  // first interim site still standing, never at a withdrawn one.
-  test('keeps the singular property pointing at the first active interim site', () => {
+  test('leaves out a withdrawn interim site', () => {
     const built = buildOverseasSite(
       site([
         {
@@ -1568,42 +1592,22 @@ describe('#buildOverseasSite interim sites (RA-603)', () => {
       ])
     )
 
-    expect(built.interimSite.siteName).toBe('Still here')
+    expect(built.interimSites.map((i) => i.siteName)).toEqual(['Still here'])
   })
 
-  test('leaves the singular property null when every interim site is withdrawn', () => {
+  test('has an empty list when every interim site is withdrawn', () => {
     const built = buildOverseasSite(
       site([
         { siteId: 21, siteName: 'Gone', removedAt: '2026-08-14T09:30:00.000Z' }
       ])
     )
 
-    expect(built.interimSite).toBeNull()
     expect(built.interimSites).toEqual([])
   })
 
-  // B3: with the flag off the regulator sees what they see today - at most one.
-  test('shows only the first interim site when multiple are not enabled', () => {
-    const built = buildOverseasSite(
-      site([
-        { siteId: 21, siteName: 'First' },
-        { siteId: 22, siteName: 'Second' }
-      ]),
-      { multipleInterimSitesEnabled: false }
-    )
+  test('has no singular interimSite property', () => {
+    const built = buildOverseasSite(site([{ siteId: 21, siteName: 'First' }]))
 
-    expect(built.interimSites.map((i) => i.siteName)).toEqual(['First'])
-  })
-
-  test('shows all of them when multiple are enabled', () => {
-    const built = buildOverseasSite(
-      site([
-        { siteId: 21, siteName: 'First' },
-        { siteId: 22, siteName: 'Second' }
-      ]),
-      { multipleInterimSitesEnabled: true }
-    )
-
-    expect(built.interimSites).toHaveLength(2)
+    expect(built).not.toHaveProperty('interimSite')
   })
 })

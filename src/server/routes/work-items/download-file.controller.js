@@ -56,6 +56,52 @@ function findFile(payload, fileId) {
   return filesOf(payload).find((file) => file?.fileId === fileId)
 }
 
+/**
+ * Serves one file record: 404 without an S3 key, 422 unless its scan status is
+ * Clean, otherwise streamed from S3 (404 if S3 fails). Shared by the
+ * payload-based download above and the Accreditation summary tab's download
+ * (RA-769), which differ only in where they find the record.
+ *
+ * @param {object} args
+ * @param {object} args.h the response toolkit
+ * @param {object|undefined} args.file `{ fileId, filename, contentType, scanStatus, s3Key, s3Bucket }`
+ * @param {string} args.workItemId for the log
+ */
+export async function serveFile({ h, file, workItemId }) {
+  if (!file || !file.s3Key) {
+    return h.response('File not found').code(404)
+  }
+
+  if (file.scanStatus !== 'Clean') {
+    return h
+      .response('File is not available for download: scan status is not clean.')
+      .code(422)
+  }
+
+  const bucket = file.s3Bucket || config.get('fileStorage.fallbackBucket')
+
+  try {
+    const response = await s3Client.send(
+      new GetObjectCommand({ Bucket: bucket, Key: file.s3Key })
+    )
+
+    return h
+      .response(response.Body)
+      .header(
+        'Content-Type',
+        response.ContentType || file.contentType || 'application/octet-stream'
+      )
+      .header(
+        'Content-Disposition',
+        `attachment; filename="${encodeURIComponent(file.filename || file.fileId)}"`
+      )
+      .code(200)
+  } catch (err) {
+    logger.error({ err, workItemId, fileId: file.fileId }, 'S3 download failed')
+    return h.response('File not found').code(404)
+  }
+}
+
 export const workItemDownloadFileController = {
   async handler(request, h) {
     const { id, fileId } = request.params
@@ -68,39 +114,6 @@ export const workItemDownloadFileController = {
 
     const file = findFile(result.workItem?.payload, fileId)
 
-    if (!file || !file.s3Key) {
-      return h.response('File not found').code(404)
-    }
-
-    if (file.scanStatus !== 'Clean') {
-      return h
-        .response(
-          'File is not available for download: scan status is not clean.'
-        )
-        .code(422)
-    }
-
-    const bucket = file.s3Bucket || config.get('fileStorage.fallbackBucket')
-
-    try {
-      const response = await s3Client.send(
-        new GetObjectCommand({ Bucket: bucket, Key: file.s3Key })
-      )
-
-      return h
-        .response(response.Body)
-        .header(
-          'Content-Type',
-          response.ContentType || file.contentType || 'application/octet-stream'
-        )
-        .header(
-          'Content-Disposition',
-          `attachment; filename="${encodeURIComponent(file.filename || file.fileId)}"`
-        )
-        .code(200)
-    } catch (err) {
-      logger.error({ err, workItemId: id, fileId }, 'S3 download failed')
-      return h.response('File not found').code(404)
-    }
+    return serveFile({ h, file, workItemId: id })
   }
 }

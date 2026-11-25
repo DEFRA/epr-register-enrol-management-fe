@@ -93,7 +93,7 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
     expect(headerFor(item).title).toBe(EM_DASH)
   })
 
-  test('has the eleven meta items in the order re-accreditation shares', () => {
+  test('has the ten meta items, in the order re-accreditation shares', () => {
     const header = headerFor(addOrs())
     expect(header.meta.map((entry) => [entry.label, entry.value])).toEqual([
       ['Application type', 'New ORS accreditation'],
@@ -105,16 +105,59 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
       ['Charge', '£328.00'],
       ['Payment date', NOT_RECEIVED],
       ['Submitted by', 'Sam Operator'],
-      ['Submitted on', '12 Feb 2027'],
-      ['Valid from date', EM_DASH]
+      ['Submitted on', '12 Feb 2027']
     ])
   })
 
-  // RA-495 AC6: the date the determination recorded.
-  test('shows the effective date once the determination records one', () => {
+  // A registered ORS added to a registration with no accreditation: the
+  // operator backend sends no accreditationReference.
+  test('shows the registration number when there is no accreditation', () => {
+    const item = addOrs()
+    item.payload.accreditationReference = null
+    item.payload.registrationReference = 'R26EX0500190001PL'
+    const header = headerFor(item)
+
+    expect(header.meta[4]).toEqual({
+      key: 'registration-number',
+      label: 'Registration number',
+      value: 'R26EX0500190001PL'
+    })
+    expect(header.meta.map((entry) => entry.key)).not.toContain(
+      'accreditation-number'
+    )
+  })
+
+  test('shows the accreditation number, not the registration number, when there is both', () => {
+    const item = addOrs()
+    item.payload.registrationReference = 'R26EX0500190001PL'
+    const header = headerFor(item)
+
+    expect(header.meta[4]).toMatchObject({
+      key: 'accreditation-number',
+      label: 'Accreditation number',
+      value: 'ACC-1'
+    })
+    expect(header.meta.map((entry) => entry.key)).not.toContain(
+      'registration-number'
+    )
+  })
+
+  test('shows the accreditation number dash when there is neither', () => {
+    const item = addOrs()
+    item.payload.accreditationReference = undefined
+    expect(headerFor(item).meta[4]).toEqual({
+      key: 'accreditation-number',
+      label: 'Accreditation number',
+      value: EM_DASH
+    })
+  })
+
+  // The Valid from date is on the Application summary instead.
+  test('has no Valid from date, even once a date is recorded', () => {
     const item = addOrs()
     item.payload.effectiveDate = '2027-03-01'
-    expect(metaValue(headerFor(item), 'effective-date')).toBe('01 Mar 2027')
+    const keys = headerFor(item).meta.map((entry) => entry.key)
+    expect(keys).not.toContain('effective-date')
   })
 
   test('shows the payment date once the item is duly made', () => {
@@ -124,19 +167,12 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
   })
 
   test('shows the dash for every missing value', () => {
-    const item = addOrs({ submittedAt: null })
+    const item = addOrs()
     item.payload.material = undefined
     item.payload.accreditationReference = undefined
-    item.payload.submittedBy = undefined
     item.payload.site = { siteName: 'Denmark PR' }
     const header = headerFor(item)
-    for (const key of [
-      'date-added',
-      'submitted-by',
-      'material',
-      'accreditation-number',
-      'charge'
-    ]) {
+    for (const key of ['material', 'accreditation-number', 'charge']) {
       expect(metaValue(header, key), key).toBe(EM_DASH)
     }
   })

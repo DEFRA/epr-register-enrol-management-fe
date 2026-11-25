@@ -17,10 +17,9 @@ import {
 import { workItemAuditLogController } from './audit-log.controller.js'
 import { workItemRecyclingOperationsController } from './recycling-operations.controller.js'
 import { workItemAdditionalInformationController } from './additional-information.controller.js'
-import {
-  workItemAccreditationSummaryController,
-  workItemRelatedApplicationsController
-} from './empty-tab.controller.js'
+import { workItemAccreditationSummaryController } from './accreditation-summary.controller.js'
+import { workItemAccreditationSummaryDownloadController } from './accreditation-summary-download.controller.js'
+import { workItemRelatedApplicationsController } from './empty-tab.controller.js'
 import {
   makeShowExtendController,
   makeSubmitExtendController
@@ -180,11 +179,20 @@ export const workItems = {
         },
         {
           // RA-495. The add-ORS "Accreditation summary" and "Related
-          // applications" tabs, empty until RA-769 and RA-770. Not found
+          // applications" tabs. RA-769 fills the first (the accreditation as
+          // it stands today); the second is empty until RA-770. Not found
           // for a type whose case lacks them.
           method: 'GET',
           path: '/work-items/{id}/accreditation-summary',
           ...workItemAccreditationSummaryController
+        },
+        {
+          // RA-769. A file download from that tab: a fresh read of the
+          // summary, serving only a file in it. The payload-based download
+          // above is unchanged.
+          method: 'GET',
+          path: '/work-items/{id}/accreditation-summary/files/{fileId}/download',
+          ...workItemAccreditationSummaryDownloadController
         },
         {
           method: 'GET',

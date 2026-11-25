@@ -2,7 +2,6 @@ import {
   assignedToEntry,
   chargeEntry,
   dueOnEntry,
-  effectiveDateEntry,
   materialEntry,
   paymentDateEntry,
   requestTypeEntry,
@@ -33,6 +32,36 @@ export function buildAddOverseasSiteHeader({ header, workItem, assignment }) {
   }
 }
 
+/**
+ * A registration-only change: a registered ORS added to a registration that
+ * has no accreditation, so the operator backend sends a registration
+ * reference and no `accreditationReference`.
+ */
+export function isRegistrationOnlyChange(payload) {
+  return Boolean(
+    payload?.registrationReference && !payload.accreditationReference
+  )
+}
+
+/**
+ * The accreditation number, or, for a registration-only change, the
+ * registration number. With neither, the accreditation number's dash.
+ */
+function referenceEntry(payload) {
+  if (isRegistrationOnlyChange(payload)) {
+    return {
+      key: 'registration-number',
+      label: 'Registration number',
+      value: payload.registrationReference
+    }
+  }
+  return {
+    key: 'accreditation-number',
+    label: 'Accreditation number',
+    value: payload.accreditationReference || EM_DASH
+  }
+}
+
 /** "Site name (ORS id)", as on the in-year change list card. */
 function siteTitle(site) {
   const name = site?.siteName || EM_DASH
@@ -42,13 +71,14 @@ function siteTitle(site) {
 /**
  * The same fields in the same places as re-accreditation's (user,
  * 2026-11-19), with the accreditation number where it has the registration
- * number. No Site ID (the title has the ORS id) or location (the Application
+ * number (and the registration number when there is no accreditation: see
+ * `referenceEntry`). No Site ID (the title has the ORS id) or location (the Application
  * summary has it).
  *
  * The charge is the site's own (`site.chargePence`), always with pence
- * ("£328.00"). RA-495 AC6: Effective date is the dash until the
- * determination records one (`payload.effectiveDate`: the date entered on
- * approval, the submission date on refusal).
+ * ("£328.00"). Submitted by and Submitted on end the header, as in
+ * re-accreditation's. No Valid from date: the Application summary shows it
+ * once the determination records one.
  */
 function meta({ workItem, assignment, payload }) {
   return [
@@ -56,16 +86,11 @@ function meta({ workItem, assignment, payload }) {
     statusEntry(workItem),
     assignedToEntry(workItem, assignment),
     dueOnEntry(workItem),
-    {
-      key: 'accreditation-number',
-      label: 'Accreditation number',
-      value: payload.accreditationReference || EM_DASH
-    },
+    referenceEntry(payload),
     materialEntry(payload),
     chargeEntry(payload.site?.chargePence),
     paymentDateEntry(payload),
     submittedByEntry(payload),
-    submittedOnEntry(workItem),
-    effectiveDateEntry(payload.effectiveDate)
+    submittedOnEntry(workItem)
   ]
 }

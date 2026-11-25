@@ -3,7 +3,10 @@ import { IN_YEAR_CHANGE_CATEGORY } from '../core/categories.js'
 import { standardWorkflow } from '../core/standard-workflow.js'
 import { buildStandardLifecycleRoutes } from '../core/standard-lifecycle/routes.js'
 import { buildAddOverseasSiteSummary } from '#/server/routes/add-overseas-site/application-summary.js'
-import { buildAddOverseasSiteHeader } from '#/server/routes/add-overseas-site/case-header.js'
+import {
+  buildAddOverseasSiteHeader,
+  isRegistrationOnlyChange
+} from '#/server/routes/add-overseas-site/case-header.js'
 import {
   ACCREDITATION_SUMMARY_TAB_KEY,
   APPLICATION_HISTORY_TAB_KEY,
@@ -52,6 +55,9 @@ export const addOverseasSiteType = {
     RELATED_APPLICATIONS_TAB_KEY,
     APPLICATION_HISTORY_TAB_KEY
   ],
+  // RA-769: a registration-only change has no accreditation to summarise, so
+  // its Accreditation summary tab says so without asking the backend.
+  hasAccreditation: (payload) => !isRegistrationOnlyChange(payload),
   // The detail controller uses a type's own summary builder when it has one.
   buildApplicationSummary: buildAddOverseasSiteSummary,
   // The Applications list card shows this as its site line, in place of the

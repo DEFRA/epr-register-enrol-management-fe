@@ -617,24 +617,13 @@ export function buildInterimSites(site, build = buildInterimSite) {
 /**
  * RA-292 AC01 + AC04, extended by RA-603 AC10b.
  *
- * `interimSites` is the list the view renders, one fold-down per entry. `interimSite` is retained
- * as the first ACTIVE entry so anything still reading a single value keeps working and can never
- * be handed a site the operator has withdrawn.
+ * `interimSites` is every ACTIVE interim site, one fold-down per entry: a site the operator has
+ * withdrawn is never in it.
  *
  * @param {object} site
- * @param {object} [options]
- * @param {boolean} [options.multipleInterimSitesEnabled] - when false (the default, matching
- *   the config flag), only the first interim site is shown, which is what a regulator sees today.
  */
-export function buildOverseasSite(
-  site,
-  { multipleInterimSitesEnabled = false } = {}
-) {
+export function buildOverseasSite(site) {
   const source = site ?? {}
-  const interimSites = buildInterimSites(source)
-  const visibleInterimSites = multipleInterimSitesEnabled
-    ? interimSites
-    : interimSites.slice(0, 1)
 
   return {
     siteName: firstLineOr(source.siteName, EM_DASH),
@@ -645,8 +634,7 @@ export function buildOverseasSite(
     // detail list.
     addressLines: overseasSiteAddressLines(source, false),
     details: buildDetails(ORS_DETAIL_FIELDS, source),
-    interimSites: visibleInterimSites,
-    interimSite: visibleInterimSites[0] ?? null
+    interimSites: buildInterimSites(source)
   }
 }
 
@@ -766,17 +754,15 @@ function buildCoreSummaryRows({
 }
 
 /**
- * Build overseas-site view models and show condensed addresses only when site
+ * Build overseas-site view models. The condensed address shows only when site
  * names repeat in the visible list.
  *
  * @param {object[]} overseasSites
- * @param {boolean} multipleInterimSitesEnabled
  * @returns {object[]}
  */
-function buildOverseasSites(overseasSites, multipleInterimSitesEnabled) {
-  const sites = overseasSites.map((site) =>
-    buildOverseasSite(site, { multipleInterimSitesEnabled })
-  )
+export function buildOverseasSites(overseasSites) {
+  const sites = overseasSites.map((site) => buildOverseasSite(site))
+
   const siteNameCounts = new Map()
 
   for (const { siteName } of sites) {
@@ -799,10 +785,7 @@ function buildOverseasSites(overseasSites, multipleInterimSitesEnabled) {
  * @param {object} args.workItem decorated work item
  * @returns {{ rows: object[], isExporter: boolean }}
  */
-export function buildApplicationSummary({
-  workItem,
-  multipleInterimSitesEnabled = false
-}) {
+export function buildApplicationSummary({ workItem }) {
   const payload = workItem?.payload ?? {}
   const workItemId = workItem?.id ?? ''
   const prns = payload.prns ?? {}
@@ -857,7 +840,7 @@ export function buildApplicationSummary({
         // RA-292 AC01/AC02/AC04. Carries the new-site flag, the full site
         // detail and the nested interim site.
         kind: 'overseas-sites',
-        sites: buildOverseasSites(overseasSites, multipleInterimSitesEnabled)
+        sites: buildOverseasSites(overseasSites)
       }
     )
   }

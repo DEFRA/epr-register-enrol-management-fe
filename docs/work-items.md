@@ -163,13 +163,41 @@ from its own hooks, never from a check on its category:
   meta items (RA-495). Every work item page builds its header from a work item passed
   through `decorateForCaseHeader` (`routes/work-items/case-header.js`), so
   the type's header shows on every tab.
+- `hasAccreditation(payload)` says whether a case has an accreditation to
+  summarise (by default it does). Add-ORS's is false for a registration-only
+  change, whose Accreditation summary tab then says so without asking the
+  backend (RA-769).
 - `caseTabs` lists the tab keys the type's case has (by default all four).
   Add-ORS has Application summary, Accreditation summary, Related
-  applications and Application history (RA-495; the middle two are empty
-  until RA-769 and RA-770, rendered by `empty-tab.controller.js`). Its
+  applications and Application history (RA-495). Accreditation summary
+  (RA-769) shows the accreditation as it stands today, read live through
+  management-be's `GET /work-items/{id}/accreditation-summary`
+  (`accreditation-summary.controller.js`): the accreditation details, then PRN
+  tonnage, PRN authorisers (`Name (email)`), Authority to issue (names only,
+  from the same list), the sampling and inspection plan (download links) and
+  the business plan, then for an exporter the Broadly Equivalent Standards
+  (BES) row (each site's name, country and evidence links) and the
+  Overseas Reprocessing Site (ORS) row: one `details` section per site,
+  collapsed, whose summary always shows the ORS ID as its number and the name,
+  and the condensed address only when the site's name repeats in the list
+  (`overseasSiteList` with `siteNumber`, shared with re-accreditation, whose
+  `buildOverseasSites` decides this). Each expands to its active interim sites, as re-accreditation does
+  ("Interim sites (n)", each collapsed), and nothing for a site with none. The row
+  has no `NEW:` marker and no "Registered, now seeking accreditation" detail; when there is no accreditation to
+  show, or it cannot be read, the tab says so under the heading and keeps the
+  case header and tabs. Related applications is empty until RA-770
+  (`empty-tab.controller.js`). Its
   Additional information and Recycling operations pages are not found, and a
   type without the Accreditation summary or Related applications tab gets
-  not found for those.
+  not found for those. Each clean file links to
+  `/work-items/{id}/accreditation-summary/files/{fileId}/download`
+  (`accreditation-summary-download.controller.js`), which reads the summary
+  afresh and serves only a file in it: 404 for a file not in it, an unknown
+  case or one without the tab, 502 when the work item lookup fails, 503 when
+  the live read fails, 422 when the file is not clean, 404 when S3 fails. The S3 key and bucket come from that
+  read and are never rendered. The payload-based
+  `/work-items/{id}/files/{fileId}/download` is unchanged (both share
+  `serveFile`).
 - `describeCardSite(payload)` gives the card a site line in place of the
   registration number, and `cardAlwaysShowsSubmittedOn` keeps "Submitted on"
   on the card in every state.
@@ -183,7 +211,7 @@ extends `standard-lifecycle/detail.njk` (see below) and overrides the
 `applicationSummary` block with the site summary and interim sites, so it
 keeps the tabs, banners, assignment panel and lifecycle CTAs; it draws the
 actions card only when there is a lifecycle step or an outcome to show. Both
-templates import the document and site-detail macros from
+templates import their summary macros from
 `work-items/summary-macros.njk`. The file download route also finds BES
 files under `payload.site.besEvidence.files`.
 `add-overseas-site/module.js` is the example.

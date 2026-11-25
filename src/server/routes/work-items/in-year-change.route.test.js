@@ -17,6 +17,7 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   getReAccreditationPriorYear: vi.fn(),
   getBackendHealth: vi.fn(),
   getWorkItem: vi.fn(),
+  getAccreditationSummary: vi.fn(),
   getWorkItems: vi.fn(),
   assignWorkItem: vi.fn(),
   unassignWorkItem: vi.fn(),
@@ -556,7 +557,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('[data-testid="case-header"]').text()).not.toContain('123001')
     })
 
-    test('shows the eleven meta items in the order re-accreditation shares, with the site charge', async () => {
+    test('shows the ten meta items, in the order re-accreditation shares, with the site charge', async () => {
       const $ = await detailPage(anAddOrsItem())
 
       const meta = $(
@@ -574,8 +575,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Charge: £328.00',
         'Payment date: Not received',
         'Submitted by: Sam Operator',
-        'Submitted on: 11 Feb 2027',
-        `Valid from date: ${EM_DASH}`
+        'Submitted on: 11 Feb 2027'
       ])
       expect(
         $(
@@ -618,18 +618,10 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       const item = anAddOrsItem()
       delete item.payload.material
       delete item.payload.accreditationReference
-      delete item.payload.submittedBy
-      delete item.submittedAt
       item.payload.site = { siteName: 'Denmark PR' }
       const $ = await detailPage(item)
 
-      for (const key of [
-        'date-added',
-        'submitted-by',
-        'material',
-        'accreditation-number',
-        'charge'
-      ]) {
+      for (const key of ['material', 'accreditation-number', 'charge']) {
         expect(
           squash($(`[data-testid="case-header-${key}"]`).text()),
           key
@@ -707,6 +699,53 @@ describe('RA-739 / RA-495: in-year change applications', () => {
     function rowValue($, key) {
       return $(`[data-testid="app-detail-value-${key}"]`)
     }
+
+    test('has no Valid from date until the determination records one', async () => {
+      const $ = await summaryPage(anAddOrsItem())
+
+      expect($('[data-testid="application-valid-from"]')).toHaveLength(0)
+      expect(rowValue($, 'valid-from')).toHaveLength(0)
+    })
+
+    // A refusal records the submission date as its effective date, so the
+    // date is shown only once the case is Approved or Granted.
+    test.each([
+      'submitted',
+      'duly-made',
+      'rejected-pending-contact',
+      'rejected'
+    ])(
+      'shows no Valid from date in state %s, even with a date recorded',
+      async (stateId) => {
+        const item = { ...anAddOrsItem(), stateId }
+        item.payload.effectiveDate = '2027-03-01'
+        const $ = await summaryPage(item)
+
+        expect($('[data-testid="application-valid-from"]')).toHaveLength(0)
+        expect(rowValue($, 'valid-from')).toHaveLength(0)
+      }
+    )
+
+    test.each(['approved-pending-contact', 'approved'])(
+      'leads with the Valid from date, set apart from the site rows, once recorded, in state %s',
+      async (stateId) => {
+        const item = { ...anAddOrsItem(), stateId }
+        item.payload.effectiveDate = '2027-03-01'
+        const $ = await summaryPage(item)
+
+        const validFrom = $('[data-testid="application-valid-from"]')
+        expect(squash(validFrom.find('.govuk-summary-list__key').text())).toBe(
+          'Valid from date'
+        )
+        expect(squash(rowValue($, 'valid-from').text())).toBe('01 Mar 2027')
+        // Its own list, with a gap, ahead of the site's rows.
+        expect(validFrom.hasClass('govuk-!-margin-bottom-6')).toBe(true)
+        expect(
+          validFrom.nextAll('[data-testid="application-details"]')
+        ).toHaveLength(1)
+        expect(summaryRows($)[0].label).toBe('Site name')
+      }
+    )
 
     test('shows every site row with its Figma label, in order', async () => {
       const $ = await summaryPage(anAddOrsItem())
@@ -1945,57 +1984,61 @@ describe('RA-739 / RA-495: in-year change applications', () => {
     })
   })
 
-  // RA-495. Accreditation summary (RA-769) and Related applications (RA-770)
-  // are tabs of an add-ORS case with nothing in them yet.
-  describe.each([
-    ['Accreditation summary', 'accreditation-summary'],
-    ['Related applications', 'related-applications']
-  ])('%s tab', (_, tabKey) => {
-    const url = `/work-items/${ADD_ORS_ID}/${tabKey}`
+  // RA-495. Related applications (RA-770) is a tab of an add-ORS case with
+  // nothing in it yet. The Accreditation summary tab (RA-769) has its own
+  // tests in `accreditation-summary.route.test.js`.
+  describe.each([['Related applications', 'related-applications']])(
+    '%s tab',
+    (_, tabKey) => {
+      const url = `/work-items/${ADD_ORS_ID}/${tabKey}`
 
-    test('renders an empty tab under the add-ORS header, with itself active', async () => {
-      getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+      test('renders an empty tab under the add-ORS header, with itself active', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
 
-      const { result, statusCode } = await server.inject({ method: 'GET', url })
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url
+        })
 
-      expect(statusCode).toBe(statusCodes.ok)
-      const $ = cheerio.load(result)
-      expect(squash($('[data-testid="case-header-title"]').text())).toBe(
-        'Denmark PR (007)'
-      )
-      expect($('[data-testid="case-header-site-id"]')).toHaveLength(0)
-      expect(tabs($)).toEqual(addOrsTabs(tabKey))
-      const panel = $(`[data-testid="${tabKey}-tab"]`)
-      expect(panel).toHaveLength(1)
-      expect(squash(panel.text())).toBe('')
-      expect($('[data-testid="case-assignment-panel"]')).toHaveLength(0)
-    })
-
-    test('is not found for a re-accreditation item', async () => {
-      getWorkItem.mockResolvedValue({
-        ok: true,
-        workItem: aReAccreditationItem()
+        expect(statusCode).toBe(statusCodes.ok)
+        const $ = cheerio.load(result)
+        expect(squash($('[data-testid="case-header-title"]').text())).toBe(
+          'Denmark PR (007)'
+        )
+        expect($('[data-testid="case-header-site-id"]')).toHaveLength(0)
+        expect(tabs($)).toEqual(addOrsTabs(tabKey))
+        const panel = $(`[data-testid="${tabKey}-tab"]`)
+        expect(panel).toHaveLength(1)
+        expect(squash(panel.text())).toBe('')
+        expect($('[data-testid="case-assignment-panel"]')).toHaveLength(0)
       })
 
-      const response = await server.inject({
-        method: 'GET',
-        url: `/work-items/${RE_ACCREDITATION_ID}/${tabKey}`
+      test('is not found for a re-accreditation item', async () => {
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aReAccreditationItem()
+        })
+
+        const response = await server.inject({
+          method: 'GET',
+          url: `/work-items/${RE_ACCREDITATION_ID}/${tabKey}`
+        })
+
+        expect(response.statusCode).toBe(statusCodes.notFound)
+        expect(squash(cheerio.load(response.result)('h1').text())).toBe(
+          'Application not found'
+        )
       })
 
-      expect(response.statusCode).toBe(statusCodes.notFound)
-      expect(squash(cheerio.load(response.result)('h1').text())).toBe(
-        'Application not found'
-      )
-    })
+      test('is not found for an unknown work item', async () => {
+        getWorkItem.mockResolvedValue({ ok: false, status: 404 })
 
-    test('is not found for an unknown work item', async () => {
-      getWorkItem.mockResolvedValue({ ok: false, status: 404 })
+        const response = await server.inject({ method: 'GET', url })
 
-      const response = await server.inject({ method: 'GET', url })
-
-      expect(response.statusCode).toBe(statusCodes.notFound)
-    })
-  })
+        expect(response.statusCode).toBe(statusCodes.notFound)
+      })
+    }
+  )
 
   // df7.21. The re-accreditation-only tab pages are not part of an in-year
   // change's case: opened by URL they 404 exactly like an unknown work item.

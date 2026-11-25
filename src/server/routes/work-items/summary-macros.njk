@@ -1,7 +1,8 @@
 {# ------------------------------------------------------------------- #}
 {# Summary fragments shared by the work item detail templates: the     #}
-{# generic (re-accreditation) Application summary in `detail.njk` and  #}
-{# the add-ORS one in `add-overseas-site/detail-v1.njk` (RA-739).      #}
+{# generic (re-accreditation) Application summary in `detail.njk`, the  #}
+{# add-ORS one in `add-overseas-site/detail-v1.njk` (RA-739) and the     #}
+{# Accreditation summary tab in `accreditation-summary.njk` (RA-769).    #}
 {# ------------------------------------------------------------------- #}
 
 {% from "govuk/components/tag/macro.njk" import govukTag %}
@@ -110,4 +111,120 @@
       {% endfor %}
     </dl>
   {% endif %}
+{% endmacro %}
+
+{# The overseas site list and each site's nested interim sites, shared so  #}
+{# another summary can reuse them (RA-769). The defaults are the           #}
+{# re-accreditation output. The `data-testid` hooks are a contract with    #}
+{# mgmt-tests.                                                             #}
+{#                                                                          #}
+{# A site carrying `siteNumber` shows it before its name (RA-769).         #}
+{# Whether the condensed address shows is decided by the view model: only   #}
+{# for a site whose name repeats in the list (`buildOverseasSites`).        #}
+{% macro overseasSiteList(sites) %}
+  {# RA-292 AC01 + AC02 + AC04. One block per overseas site:    #}
+  {# name (+ "New" tag), the full site detail, and the interim  #}
+  {# site NESTED inside its parent — an interim site belongs to #}
+  {# an ORS rather than standing beside it, and the nesting is  #}
+  {# what tells a regulator which ORS a given interim site      #}
+  {# serves when an application declares several.               #}
+  {# Wrapped in a native <details> per site (collapsed by       #}
+  {# default) so a regulator scanning an application with many  #}
+  {# sites sees names and condensed addresses, expanding one   #}
+  {# time rather than scrolling past every field of every site. #}
+  {% for site in sites %}
+    <details class="govuk-details govuk-!-margin-bottom-2" data-testid="overseas-site">
+      <summary class="govuk-details__summary">
+        {# Name line — the design's shape, now doubling as the  #}
+        {# details summary. The `NEW:` prefix is nested INSIDE  #}
+        {# the name element, so that element's text is the full #}
+        {# "NEW: <name>" string and a prefix assertion scoped   #}
+        {# to it cannot be satisfied by a nested interim site's #}
+        {# prefix.                                              #}
+        {# RA-769: an optional site number ahead of the name, in    #}
+        {# its own element so the name element is unchanged.        #}
+        <span class="govuk-details__summary-text">
+          {% if site.siteNumber %}<span data-testid="overseas-site-number">{{ site.siteNumber }} </span>{% endif %}
+          <span data-testid="overseas-site-name">
+            <strong>{% if site.isNew %}{{ newPrefix('overseas-site-new-tag') }}{% endif %}{{ site.siteName }}</strong>
+          </span>
+          {% if site.summaryAddress %}
+            <br>
+            <span data-testid="overseas-site-summary-address">{{ site.summaryAddress }}</span>
+          {% endif %}
+        </span>
+      </summary>
+      <div class="govuk-details__text">
+        {# One flowing comma-separated line, per the design — and #}
+        {# ONE element, so an e2e assertion reads the whole       #}
+        {# address rather than silently matching its first part.  #}
+        {# The parts stay an array until here precisely so the    #}
+        {# de-duplication can work segment-wise; see              #}
+        {# `appendUnseen` in application-summary.js.              #}
+        {% if site.addressLines.length %}
+          <p class="govuk-body govuk-!-margin-bottom-1"
+             data-testid="overseas-site-address">{{ site.addressLines | join(', ') }}</p>
+        {% endif %}
+        {{ siteDetails(site.details, 'overseas-site') }}
+        {% if site.interimSites.length %}
+          {# RA-603 AC10b: an ORS can carry several interim     #}
+          {# sites, each folding down on its own so a regulator #}
+          {# can open one without wading through the rest.      #}
+          {# Nested <details> inside the ORS's own <details> -   #}
+          {# valid, and it works without JavaScript, which a    #}
+          {# nested govuk-accordion would not.                  #}
+          <div class="govuk-inset-text govuk-!-margin-top-0 govuk-!-margin-bottom-0"
+               data-testid="interim-sites">
+            {# Sub-label per the design. The PLURAL was          #}
+            {# deliberate even when only one interim site was    #}
+            {# possible, confirmed with Tom - it is now simply   #}
+            {# accurate. The count tells a regulator how many    #}
+            {# are folded away before they open any of them,     #}
+            {# matching the operator page.                       #}
+            <p class="govuk-body govuk-!-margin-bottom-1"
+               data-testid="interim-sites-label"><strong>Interim sites ({{ site.interimSites.length }})</strong></p>
+            {% for interimSite in site.interimSites %}
+              {# The testids stay unsuffixed. mgmt-tests reads   #}
+              {# these as collections already (flaggedBlockNames,#}
+              {# newTagCount), so repeating them per interim     #}
+              {# site is what those helpers expect; suffixing    #}
+              {# would break every one of them for no gain.      #}
+              <details class="govuk-details app-interim-site govuk-!-margin-bottom-1"
+                       data-testid="interim-site">
+                <summary class="govuk-details__summary">
+                  {# The testid sits on the <strong>, not the   #}
+                  {# wrapping <span>: the NEW marker is itself   #}
+                  {# a <span>, so a same-tag nesting would make  #}
+                  {# any "text of this element" reader stop at   #}
+                  {# the marker's closing tag and see "NEW:"     #}
+                  {# alone instead of the site name.             #}
+                  <span class="govuk-details__summary-text"><strong data-testid="interim-site-name">{% if interimSite.isNew %}{{ newPrefix('interim-site-new-tag') }}{% endif %}{{ interimSite.siteName }}</strong></span>
+                </summary>
+                <div class="govuk-details__text">
+                  {% if interimSite.addressLines.length %}
+                    <p class="govuk-body govuk-!-margin-bottom-1"
+                       data-testid="interim-site-address">{{ interimSite.addressLines | join(', ') }}</p>
+                  {% endif %}
+                  {{ siteDetails(interimSite.details, 'interim-site') }}
+                </div>
+              </details>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </details>
+  {% else %}
+    —
+  {% endfor %}
+{% endmacro %}
+
+{# One business-plan category: bold label, PRN-income share, narrative.     #}
+{# `testId` is a parameter because the AC02 business-plan row and the       #}
+{# previous-year section render the same shape but are counted separately — #}
+{# stamping `app-detail-pair` on both would make an AC02 pair count also    #}
+{# pick up prior-year pairs.                                                #}
+{% macro businessPlanPair(pair, testId='app-detail-pair') %}
+  <p class="govuk-body govuk-!-margin-bottom-1" data-testid="{{ testId }}">
+    <strong>{{ pair.label }}</strong>{% if pair.percent %} — {{ pair.percent }}{% endif %}{% if pair.detail %}<br>{{ pair.detail }}{% endif %}
+  </p>
 {% endmacro %}
