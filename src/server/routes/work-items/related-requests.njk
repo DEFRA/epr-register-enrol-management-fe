@@ -1,0 +1,85 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/tag/macro.njk" import govukTag %}
+{% from "govuk/components/pagination/macro.njk" import govukPagination %}
+
+{# ---------------------------------------------------------------- #}
+{# RA-770. The Related change requests tab of an In-Year Change     #}
+{# case: the accreditation (number, status, start date, year), then #}
+{# the requests submitted with this one, ten to a page, this one    #}
+{# first, each linking to its own case. Information only, so no     #}
+{# assignment panel and no case actions. The data-testid hooks are  #}
+{# a contract with mgmt-tests.                                      #}
+{# ---------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appCaseTabs({ tabs: caseTabs }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-full" data-testid="related-requests-tab">
+      <h2 class="govuk-heading-m" data-testid="related-accreditation-heading">{{ accreditationHeading }}</h2>
+      {% if accreditationRows %}
+        <dl class="govuk-summary-list" data-testid="related-accreditation">
+          {% for row in accreditationRows %}
+            <div class="govuk-summary-list__row" data-testid="related-accreditation-row-{{ row.key }}">
+              <dt class="govuk-summary-list__key">{{ row.label }}</dt>
+              <dd class="govuk-summary-list__value" data-testid="related-accreditation-value-{{ row.key }}">
+                {% if row.kind == 'tag' %}
+                  {{ govukTag({ text: row.value, classes: row.tagClass }) }}
+                {% else %}
+                  {{ row.value }}
+                {% endif %}
+              </dd>
+            </div>
+          {% endfor %}
+        </dl>
+      {% else %}
+        <p class="govuk-body" data-testid="related-accreditation-unavailable">{{ accreditationUnavailableMessage }}</p>
+      {% endif %}
+
+      {% if relatedRequests %}
+        <h2 class="govuk-heading-m govuk-!-margin-top-6" data-testid="related-requests-heading">
+          Related requests ({{ relatedRequests.totalCount }})
+        </h2>
+
+        <table class="govuk-table" data-testid="related-requests-table">
+          <caption class="govuk-table__caption govuk-visually-hidden">Requests submitted with this request</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Site name</th>
+              <th scope="col" class="govuk-table__header">Type</th>
+              <th scope="col" class="govuk-table__header">Charge</th>
+              <th scope="col" class="govuk-table__header">Status</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            {% for row in relatedRequests.rows %}
+              <tr class="govuk-table__row" data-testid="related-requests-row">
+                <td class="govuk-table__cell">
+                  <a class="govuk-link govuk-!-font-weight-bold" href="/work-items/{{ row.id | urlencode }}" data-testid="related-requests-reference">{{ row.reference }}</a><br>
+                  <span class="govuk-body-s" data-testid="related-requests-site">{{ row.site }}</span>
+                </td>
+                <td class="govuk-table__cell" data-testid="related-requests-type">{{ row.type }}</td>
+                <td class="govuk-table__cell" data-testid="related-requests-charge">{{ row.charge }}</td>
+                <td class="govuk-table__cell">
+                  {{ govukTag({
+                    text: row.status,
+                    classes: row.statusTagClass,
+                    attributes: { "data-testid": "related-requests-status" }
+                  }) }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        {% if relatedRequests.pagination %}
+          {{ govukPagination(relatedRequests.pagination) }}
+        {% endif %}
+      {% else %}
+        <h2 class="govuk-heading-m govuk-!-margin-top-6" data-testid="related-requests-heading">Related requests</h2>
+        <p class="govuk-body" data-testid="related-requests-unavailable">{{ relatedUnavailableMessage }}</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -243,7 +243,8 @@ export const workItemRecyclingOperationsController = {
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
         active: 'recycling-operations',
-        typeId: forHeader.typeId
+        typeId: forHeader.typeId,
+        relatedCount: forHeader.submissionWorkItemCount
       }),
       workItem: { id: workItem.id, applicationRef },
       sites: pageSites,

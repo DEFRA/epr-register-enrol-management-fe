@@ -1133,7 +1133,7 @@ describe('RA-769: Accreditation summary tab', () => {
       ).toEqual([
         'tab-application-summary',
         'tab-accreditation-summary',
-        'tab-related-applications',
+        'tab-related-requests',
         'tab-application-history'
       ])
     })

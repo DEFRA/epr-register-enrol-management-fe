@@ -307,10 +307,10 @@ export const RECYCLING_OPERATIONS_TAB_KEY = 'recycling-operations'
 export const APPLICATION_SUMMARY_TAB_KEY = 'application-summary'
 export const APPLICATION_HISTORY_TAB_KEY = 'application-history'
 export const ADDITIONAL_INFORMATION_TAB_KEY = 'additional-information'
-// RA-495. Add-ORS tabs whose content arrives later: Accreditation summary
-// (RA-769) and Related applications (RA-770).
+// RA-495. Add-ORS tabs: Accreditation summary (RA-769) and Related change requests
+// (RA-770, renamed from "Related applications" to match its design).
 export const ACCREDITATION_SUMMARY_TAB_KEY = 'accreditation-summary'
-export const RELATED_APPLICATIONS_TAB_KEY = 'related-applications'
+export const RELATED_REQUESTS_TAB_KEY = 'related-requests'
 
 // RA-469 follow-up. Product asked for the "Recycling operations" tab to be
 // hidden for now — the copy may be reworded before it's shown again. This
@@ -329,7 +329,7 @@ const HIDDEN_TAB_KEYS = new Set([RECYCLING_OPERATIONS_TAB_KEY])
 
 // The tabs a type's case has unless it declares its own `caseTabs` (RA-739,
 // RA-495: add-ORS has Application summary, Accreditation summary, Related
-// applications and Application history).
+// requests and Application history).
 const DEFAULT_CASE_TAB_KEYS = [
   APPLICATION_SUMMARY_TAB_KEY,
   RECYCLING_OPERATIONS_TAB_KEY,
@@ -346,6 +346,16 @@ const DEFAULT_CASE_TAB_KEYS = [
  * @param {object|null} type the registered work item type
  * @param {string} tabKey
  */
+/**
+ * RA-770. "Related change requests (n)", as in the design; without the count
+ * when management-be did not give one.
+ */
+function relatedChangeRequestsTabText(relatedCount) {
+  return Number.isInteger(relatedCount)
+    ? `Related change requests (${relatedCount})`
+    : 'Related change requests'
+}
+
 export function caseHasTab(type, tabKey) {
   return (type?.caseTabs ?? DEFAULT_CASE_TAB_KEYS).includes(tabKey)
 }
@@ -367,16 +377,24 @@ export function caseHasTab(type, tabKey) {
  * "Additional information" both keep their existing order relative to each
  * other; only the new tab is inserted.
  *
- * RA-495. "Accreditation summary" and "Related applications" sit between
+ * RA-495. "Accreditation summary" and "Related change requests" sit between
  * "Application summary" and "Application history" (Figma "Flows 5"); only
  * types that declare them in `caseTabs` (add-ORS) have them.
  *
  * @param {object} args
  * @param {string} args.workItemId
- * @param {'summary'|'recycling-operations'|'history'|'additional-information'|'accreditation-summary'|'related-applications'} args.active
+ * @param {'summary'|'recycling-operations'|'history'|'additional-information'|'accreditation-summary'|'related-requests'} args.active
  * @param {string|null} [args.typeId] the work item's type
+ * @param {number|null} [args.relatedCount] RA-770: how many requests came in
+ *   the work item's submission (management-be's `submissionWorkItemCount`),
+ *   shown in the Related change requests tab's label
  */
-export function buildCaseTabs({ workItemId, active, typeId = null }) {
+export function buildCaseTabs({
+  workItemId,
+  active,
+  typeId = null,
+  relatedCount = null
+}) {
   const base = `/work-items/${encodeURIComponent(workItemId)}`
   const tabs = [
     {
@@ -392,10 +410,10 @@ export function buildCaseTabs({ workItemId, active, typeId = null }) {
       active: active === ACCREDITATION_SUMMARY_TAB_KEY
     },
     {
-      key: RELATED_APPLICATIONS_TAB_KEY,
-      text: 'Related applications',
-      href: `${base}/${RELATED_APPLICATIONS_TAB_KEY}`,
-      active: active === RELATED_APPLICATIONS_TAB_KEY
+      key: RELATED_REQUESTS_TAB_KEY,
+      text: relatedChangeRequestsTabText(relatedCount),
+      href: `${base}/${RELATED_REQUESTS_TAB_KEY}`,
+      active: active === RELATED_REQUESTS_TAB_KEY
     },
     {
       key: RECYCLING_OPERATIONS_TAB_KEY,

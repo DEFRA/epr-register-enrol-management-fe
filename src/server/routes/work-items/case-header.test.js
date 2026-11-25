@@ -458,23 +458,41 @@ describe("RA-739: a type's own header and tabs", () => {
     expect(caseHasTab(null, 'recycling-operations')).toBe(true)
     expect(caseHasTab({ id: 'other' }, 'additional-information')).toBe(true)
     // RA-495. Only add-ORS has the Accreditation summary and Related
-    // applications tabs.
+    // change requests tabs.
     expect(caseHasTab(addOverseasSiteType, 'accreditation-summary')).toBe(true)
     expect(caseHasTab(null, 'accreditation-summary')).toBe(false)
-    expect(caseHasTab(null, 'related-applications')).toBe(false)
+    expect(caseHasTab(null, 'related-requests')).toBe(false)
   })
 
   test('has the four RA-495 tabs for add-ORS, in Figma order', () => {
     const tabs = buildCaseTabs({
       workItemId: 'w-1',
-      active: 'related-applications',
+      active: 'related-requests',
       typeId: 'add-overseas-site'
     })
     expect(tabs.map((tab) => [tab.key, tab.text, tab.active])).toEqual([
       ['application-summary', 'Application summary', false],
       ['accreditation-summary', 'Accreditation summary', false],
-      ['related-applications', 'Related applications', true],
+      ['related-requests', 'Related change requests', true],
       ['application-history', 'Application history', false]
     ])
   })
+
+  test.each([
+    [3, 'Related change requests (3)'],
+    [1, 'Related change requests (1)'],
+    [null, 'Related change requests'],
+    [undefined, 'Related change requests']
+  ])(
+    'RA-770: with %j requests in the submission, the tab reads %j',
+    (relatedCount, text) => {
+      const tabs = buildCaseTabs({
+        workItemId: 'w-1',
+        active: 'summary',
+        typeId: 'add-overseas-site',
+        relatedCount
+      })
+      expect(tabs.find((tab) => tab.key === 'related-requests').text).toBe(text)
+    }
+  )
 })

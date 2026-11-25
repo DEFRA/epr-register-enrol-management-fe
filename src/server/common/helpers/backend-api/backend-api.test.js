@@ -15,6 +15,7 @@ import {
   extendWorkItemSla,
   getBackendHealth,
   getAccreditationSummary,
+  getRelatedWorkItems,
   getWorkItem,
   getWorkItems,
   raiseWorkItemQuery,
@@ -656,6 +657,83 @@ describe('#getAccreditationSummary (RA-769)', () => {
 
     expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
     expect(result.unusable).toBeUndefined()
+  })
+})
+
+describe('#getRelatedWorkItems (RA-770)', () => {
+  const options = {
+    workItemId: 'a/b c',
+    baseUrl: 'http://backend:8085/',
+    timeoutMs: 1000
+  }
+
+  function respond(status, body = {}) {
+    return vi.fn().mockResolvedValue({
+      ok: status >= 200 && status < 300,
+      status,
+      json: () => Promise.resolve(body)
+    })
+  }
+
+  test('GETs the page of related work items and returns the body', async () => {
+    const body = {
+      workItemId: 'a/b c',
+      totalCount: 12,
+      page: 2,
+      pageSize: 10,
+      items: [{ id: 'wi-11' }]
+    }
+    const fetchImpl = respond(200, body)
+
+    const result = await getRelatedWorkItems({ ...options, page: 2, fetchImpl })
+
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      'http://backend:8085/work-items/a%2Fb%20c/related-work-items?page=2'
+    )
+    expect(result).toEqual({ ok: true, related: body })
+  })
+
+  test('asks for page 1 by default', async () => {
+    const fetchImpl = respond(200, { items: [] })
+
+    await getRelatedWorkItems({ ...options, fetchImpl })
+
+    expect(fetchImpl.mock.calls[0][0]).toMatch(/\?page=1$/)
+  })
+
+  test('answers the status and an error on a failed read', async () => {
+    const result = await getRelatedWorkItems({
+      ...options,
+      fetchImpl: respond(404)
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      status: 404,
+      error: 'Backend returned 404'
+    })
+  })
+
+  test.each([[{}], [null], [{ items: 'nope' }]])(
+    'treats %j as unusable',
+    async (body) => {
+      const result = await getRelatedWorkItems({
+        ...options,
+        fetchImpl: respond(200, body)
+      })
+
+      expect(result.ok).toBe(false)
+      expect(result.unusable).toBe(true)
+    }
+  )
+
+  test('answers a transport error when fetch throws', async () => {
+    const result = await getRelatedWorkItems({
+      ...options,
+      fetchImpl: vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+    })
+
+    expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
   })
 })
 

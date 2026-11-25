@@ -37,6 +37,43 @@ function unavailableOutcome(read) {
 }
 
 /**
+ * RA-769. The case's accreditation, read live through management-be:
+ * `{ registrationOnly, summary }`, where `summary` is the read
+ * (`{ accreditation, accreditationStartDate }`) or null when there is nothing
+ * to show. A registration-only case has no accreditation, so the backend is
+ * not asked. Any other read with nothing to show is logged. RA-770: shared
+ * with the Related change requests tab's Accreditation block.
+ *
+ * @param {object} args
+ * @param {object} args.workItem the case's work item
+ * @param {object|null} args.user
+ */
+export async function readAccreditationSummary({ workItem, user }) {
+  // A type's case has an accreditation unless the type says this one does not
+  // (add-ORS: a registration-only change).
+  const registrationOnly =
+    getWorkItemType(workItem?.typeId)?.hasAccreditation?.(workItem?.payload) ===
+    false
+  if (registrationOnly) {
+    return { registrationOnly, summary: null }
+  }
+  const read = await getAccreditationSummary({ workItemId: workItem.id, user })
+  const summary = read?.ok && read.accreditation ? read : null
+  if (!summary) {
+    logger.warn(
+      {
+        workItemId: workItem.id,
+        outcome: unavailableOutcome(read),
+        status: read.status,
+        error: read.error
+      },
+      'Accreditation summary not available'
+    )
+  }
+  return { registrationOnly, summary }
+}
+
+/**
  * RA-769. The Accreditation summary tab of an In-Year Change case: the
  * accreditation as it stands today, read live through management-be on every
  * visit. Information only: the case header and tab strip, no assignment panel
@@ -65,27 +102,10 @@ export const workItemAccreditationSummaryController = {
       return errorResponse
     }
 
-    // A type's case has an accreditation unless the type says this one does not
-    // (add-ORS: a registration-only change).
-    const registrationOnly =
-      getWorkItemType(result.workItem?.typeId)?.hasAccreditation?.(
-        result.workItem?.payload
-      ) === false
-    const read = registrationOnly
-      ? null
-      : await getAccreditationSummary({ workItemId: id, user })
-    const summary = read?.ok && read.accreditation ? read : null
-    if (!summary && !registrationOnly) {
-      logger.warn(
-        {
-          workItemId: id,
-          outcome: unavailableOutcome(read),
-          status: read.status,
-          error: read.error
-        },
-        'Accreditation summary not available'
-      )
-    }
+    const { registrationOnly, summary } = await readAccreditationSummary({
+      workItem: result.workItem,
+      user
+    })
 
     const forHeader = decorateForCaseHeader(result.workItem)
     return h.view(VIEW, {
@@ -94,7 +114,8 @@ export const workItemAccreditationSummaryController = {
       caseTabs: buildCaseTabs({
         workItemId: forHeader.id,
         active: ACCREDITATION_SUMMARY_TAB_KEY,
-        typeId: forHeader.typeId
+        typeId: forHeader.typeId,
+        relatedCount: forHeader.submissionWorkItemCount
       }),
       heading: ACCREDITATION_SUMMARY_HEADING,
       intro: ACCREDITATION_SUMMARY_INTRO,

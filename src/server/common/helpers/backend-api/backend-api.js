@@ -1266,6 +1266,43 @@ export async function getAccreditationSummary({
   })
 }
 
+/**
+ * RA-770. One page of the work items submitted with this one, for the
+ * Related change requests tab: `{ workItemId, totalCount, page, pageSize,
+ * items }`, with this work item first on page 1. Each item is `{ id, typeId,
+ * stateId, applicationReference, siteName, orsId, chargePence }`.
+ * management-be answers a page past the end with the last page.
+ *
+ * Wraps `GET /work-items/{id}/related-work-items?page=`.
+ *
+ * @returns {Promise<{ ok: true, related: object } | { ok: false, status?: number, error: string, unusable?: true }>}
+ */
+export async function getRelatedWorkItems({
+  workItemId,
+  page = 1,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/related-work-items?page=${encodeURIComponent(page)}`
+  return getJson({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'getRelatedWorkItems',
+    read: (body) =>
+      Array.isArray(body?.items)
+        ? { ok: true, related: body }
+        : {
+            ok: false,
+            unusable: true,
+            error: 'Backend returned unusable related work items'
+          }
+  })
+}
+
 async function safeReadJson(response) {
   try {
     return await response.json()

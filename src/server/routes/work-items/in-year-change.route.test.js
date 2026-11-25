@@ -225,11 +225,7 @@ function addOrsTabs(active) {
       'Accreditation summary',
       `${base}/accreditation-summary`
     ],
-    [
-      'related-applications',
-      'Related applications',
-      `${base}/related-applications`
-    ],
+    ['related-requests', 'Related change requests', `${base}/related-requests`],
     ['application-history', 'Application history', `${base}/audit-log`]
   ].map(([key, text, href]) => ({
     key,
@@ -1983,62 +1979,6 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect(tabs($)).toEqual(addOrsTabs('application-history'))
     })
   })
-
-  // RA-495. Related applications (RA-770) is a tab of an add-ORS case with
-  // nothing in it yet. The Accreditation summary tab (RA-769) has its own
-  // tests in `accreditation-summary.route.test.js`.
-  describe.each([['Related applications', 'related-applications']])(
-    '%s tab',
-    (_, tabKey) => {
-      const url = `/work-items/${ADD_ORS_ID}/${tabKey}`
-
-      test('renders an empty tab under the add-ORS header, with itself active', async () => {
-        getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
-
-        const { result, statusCode } = await server.inject({
-          method: 'GET',
-          url
-        })
-
-        expect(statusCode).toBe(statusCodes.ok)
-        const $ = cheerio.load(result)
-        expect(squash($('[data-testid="case-header-title"]').text())).toBe(
-          'Denmark PR (007)'
-        )
-        expect($('[data-testid="case-header-site-id"]')).toHaveLength(0)
-        expect(tabs($)).toEqual(addOrsTabs(tabKey))
-        const panel = $(`[data-testid="${tabKey}-tab"]`)
-        expect(panel).toHaveLength(1)
-        expect(squash(panel.text())).toBe('')
-        expect($('[data-testid="case-assignment-panel"]')).toHaveLength(0)
-      })
-
-      test('is not found for a re-accreditation item', async () => {
-        getWorkItem.mockResolvedValue({
-          ok: true,
-          workItem: aReAccreditationItem()
-        })
-
-        const response = await server.inject({
-          method: 'GET',
-          url: `/work-items/${RE_ACCREDITATION_ID}/${tabKey}`
-        })
-
-        expect(response.statusCode).toBe(statusCodes.notFound)
-        expect(squash(cheerio.load(response.result)('h1').text())).toBe(
-          'Application not found'
-        )
-      })
-
-      test('is not found for an unknown work item', async () => {
-        getWorkItem.mockResolvedValue({ ok: false, status: 404 })
-
-        const response = await server.inject({ method: 'GET', url })
-
-        expect(response.statusCode).toBe(statusCodes.notFound)
-      })
-    }
-  )
 
   // df7.21. The re-accreditation-only tab pages are not part of an in-year
   // change's case: opened by URL they 404 exactly like an unknown work item.
