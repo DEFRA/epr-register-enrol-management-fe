@@ -33,13 +33,22 @@ export function buildAddOverseasSiteHeader({ header, workItem, assignment }) {
 }
 
 /**
- * The accreditation number, or, for a registration-only change (a registered
- * ORS added to a registration that has no accreditation, so the operator
- * backend sends no `accreditationReference`), the registration number. With
- * neither, the accreditation number's dash.
+ * A registration-only change: a registered ORS added to a registration that
+ * has no accreditation, so the operator backend sends a registration
+ * reference and no `accreditationReference`.
+ */
+export function isRegistrationOnlyChange(payload) {
+  return Boolean(
+    payload?.registrationReference && !payload.accreditationReference
+  )
+}
+
+/**
+ * The accreditation number, or, for a registration-only change, the
+ * registration number. With neither, the accreditation number's dash.
  */
 function referenceEntry(payload) {
-  if (!payload.accreditationReference && payload.registrationReference) {
+  if (isRegistrationOnlyChange(payload)) {
     return {
       key: 'registration-number',
       label: 'Registration number',

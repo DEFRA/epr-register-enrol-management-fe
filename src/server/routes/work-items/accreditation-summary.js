@@ -49,6 +49,8 @@ export const ACCREDITATION_SUMMARY_INTRO =
   'A summary of the accreditation as it stands today. The changes in this request are not included until the request is granted.'
 export const ACCREDITATION_SUMMARY_UNAVAILABLE =
   'Accreditation summary is not available at the moment.'
+export const ACCREDITATION_SUMMARY_REGISTRATION_ONLY =
+  'This request is for a registration, which has no accreditation, so there is no accreditation summary to show.'
 
 /**
  * The accreditation status is the constant "Granted", not data. That is only

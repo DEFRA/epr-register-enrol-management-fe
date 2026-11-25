@@ -31,6 +31,8 @@ const URL = `/work-items/${ID}/accreditation-summary`
 const INTRO =
   'A summary of the accreditation as it stands today. The changes in this request are not included until the request is granted.'
 const UNAVAILABLE = 'Accreditation summary is not available at the moment.'
+const REGISTRATION_ONLY =
+  'This request is for a registration, which has no accreditation, so there is no accreditation summary to show.'
 
 function anAddOrsItem({ stateId = 'submitted' } = {}) {
   return {
@@ -1126,6 +1128,66 @@ describe('RA-769: Accreditation summary tab', () => {
         'tab-related-applications',
         'tab-application-history'
       ])
+    })
+  })
+
+  describe('a registration-only case', () => {
+    function aRegistrationOnlyItem() {
+      const item = anAddOrsItem()
+      return {
+        ...item,
+        payload: {
+          ...item.payload,
+          accreditationReference: undefined,
+          registrationReference: 'R26EX0500190001PL'
+        }
+      }
+    }
+
+    test('says there is no accreditation, under the heading, without the intro or rows', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aRegistrationOnlyItem()
+      })
+
+      const { statusCode, $ } = await get()
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(
+        squash($('[data-testid="accreditation-summary-heading"]').text())
+      ).toBe('Accreditation Summary')
+      expect(
+        squash($('[data-testid="accreditation-summary-unavailable"]').text())
+      ).toBe(REGISTRATION_ONLY)
+      expect($('[data-testid="accreditation-summary-intro"]')).toHaveLength(0)
+      expect($('[data-testid="accreditation-summary-details"]')).toHaveLength(0)
+    })
+
+    test('does not ask the backend or log a warning', async () => {
+      const warn = vi.spyOn(createLogger(), 'warn')
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aRegistrationOnlyItem()
+      })
+
+      await get()
+
+      expect(getAccreditationSummary).not.toHaveBeenCalled()
+      expect(warn).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'Accreditation summary not available'
+      )
+      warn.mockRestore()
+    })
+
+    test('an accreditation case that cannot be read keeps the generic message', async () => {
+      getAccreditationSummary.mockResolvedValue({ ok: false, status: 404 })
+
+      const { $ } = await get()
+
+      expect(
+        squash($('[data-testid="accreditation-summary-unavailable"]').text())
+      ).toBe(UNAVAILABLE)
     })
   })
 

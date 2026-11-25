@@ -12,9 +12,11 @@ import {
   decorateForCaseHeader
 } from './case-header.js'
 import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
+import { isRegistrationOnlyChange } from '#/server/routes/add-overseas-site/case-header.js'
 import {
   ACCREDITATION_SUMMARY_HEADING,
   ACCREDITATION_SUMMARY_INTRO,
+  ACCREDITATION_SUMMARY_REGISTRATION_ONLY,
   ACCREDITATION_SUMMARY_UNAVAILABLE,
   buildAccreditationSummary
 } from './accreditation-summary.js'
@@ -40,7 +42,8 @@ function unavailableOutcome(read) {
  * visit. Information only: the case header and tab strip, no assignment panel
  * and no case actions.
  *
- * When there is nothing to show (a registration-only case, an accreditation
+ * A registration-only case has no accreditation, so the tab says so and the
+ * backend is not asked. When there is nothing else to show (an accreditation
  * that is not found or not Approved) or the read fails for any reason, the
  * header and tabs stay and the tab says the summary is not available. A work
  * item that cannot be found, or whose type's case lacks the tab
@@ -62,9 +65,12 @@ export const workItemAccreditationSummaryController = {
       return errorResponse
     }
 
-    const read = await getAccreditationSummary({ workItemId: id, user })
-    const summary = read.ok && read.accreditation ? read : null
-    if (!summary) {
+    const registrationOnly = isRegistrationOnlyChange(result.workItem?.payload)
+    const read = registrationOnly
+      ? null
+      : await getAccreditationSummary({ workItemId: id, user })
+    const summary = read?.ok && read.accreditation ? read : null
+    if (!summary && !registrationOnly) {
       logger.warn(
         {
           workItemId: id,
@@ -87,7 +93,9 @@ export const workItemAccreditationSummaryController = {
       }),
       heading: ACCREDITATION_SUMMARY_HEADING,
       intro: ACCREDITATION_SUMMARY_INTRO,
-      unavailableMessage: ACCREDITATION_SUMMARY_UNAVAILABLE,
+      unavailableMessage: registrationOnly
+        ? ACCREDITATION_SUMMARY_REGISTRATION_ONLY
+        : ACCREDITATION_SUMMARY_UNAVAILABLE,
       accreditationSummary: summary
         ? buildAccreditationSummary({ ...summary, workItemId: id })
         : null
