@@ -1615,11 +1615,12 @@ describe('#workItemListController', () => {
     expect(result).toEqual(expect.stringContaining('href="/work-items?page=3"'))
     // RA-324 phase-2 (prototype). Just the item range + total, no "page X of
     // Y" or filter recap. rangeStart = (page-1)*pageSize+1 = 21; rangeEnd
-    // reflects the actual rendered item count (1 mocked item) = 21. Bold per
-    // the prototype.
-    expect(result).toEqual(
-      expect.stringContaining('<strong>Showing 21-21 of 45</strong>')
+    // reflects the actual rendered item count (1 mocked item) = 21. Normal
+    // weight (RA-814): the summary paragraph holds the bare text.
+    expect(result).toMatch(
+      /data-testid="work-items-summary">\s*Showing 21-21 of 45\s*<\/p>/
     )
+    expect(result).not.toContain('<strong>Showing')
   })
 
   test('Shows a filtered empty-state message when filters are active but nothing matches', async () => {
@@ -2598,8 +2599,11 @@ describe('#workItemListController', () => {
       })
 
       expect(result).toContain('data-testid="work-items-summary"')
-      // Bold per the prototype.
-      expect(result).toContain('<strong>Showing 1-1 of 1</strong>')
+      // Normal weight (RA-814): bare text, no <strong>.
+      expect(result).toMatch(
+        /data-testid="work-items-summary">\s*Showing 1-1 of 1\s*<\/p>/
+      )
+      expect(result).not.toContain('<strong>Showing')
       // No filter/sort recap leaks into the summary text.
       expect(result).not.toContain('material: Plastic')
       expect(result).not.toContain('status: Updated')
