@@ -14,6 +14,7 @@
  */
 
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
+import { statusCodes } from '#/server/common/constants/status-codes.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
@@ -156,7 +157,7 @@ async function loadWorkItem(request, h, id) {
   const user = getUser(request)
   const result = await getWorkItem({ workItemId: id, user })
 
-  if (result.ok === false && result.status === 404) {
+  if (result.ok === false && result.status === statusCodes.notFound) {
     return {
       response: h
         .view(NOT_FOUND_VIEW, {
@@ -168,7 +169,7 @@ async function loadWorkItem(request, h, id) {
             { text: 'Not found' }
           ]
         })
-        .code(404)
+        .code(statusCodes.notFound)
     }
   }
 
@@ -280,7 +281,10 @@ export function makeSubmitQueryController({
         flashBanner(
           request,
           bannerForFailure({
-            outcome: lookupFailure.status === 404 ? 'not-found' : 'server'
+            outcome:
+              lookupFailure.status === statusCodes.notFound
+                ? 'not-found'
+                : 'server'
           })
         )
         return h.redirect(detailHref(id))
