@@ -8,6 +8,7 @@ import { buildWithdrawnNotice } from '#/server/work-items/core/withdrawn-notice.
 import { resolveDetailTemplate } from '#/server/work-items/core/templates.js'
 import { createWorkItemActionsService } from '#/server/work-items/core/service.js'
 import { findAssignableUser } from '#/server/work-items/core/assignees.js'
+import { applyAddOverseasSiteViewModel } from '#/server/routes/add-overseas-site/view-model.js'
 import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/type-id.js'
 import {
   isGenericRouteRejectedActionId,
@@ -457,9 +458,13 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
           source: result.workItem,
           route: request.route.path
         })
-      : applyStandardLifecycleViewModel({
-          workItem: decorated,
-          source: result.workItem
+      : applyAddOverseasSiteViewModel({
+          workItem: applyStandardLifecycleViewModel({
+            workItem: decorated,
+            source: result.workItem
+          }),
+          source: result.workItem,
+          route: request.route.path
         })
   const templatePath = resolveDetailTemplate(
     enriched.typeId,

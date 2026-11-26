@@ -1204,3 +1204,167 @@ describe('POST /work-items/{id}/query', () => {
     expect(raiseWorkItemQuery).not.toHaveBeenCalled()
   })
 })
+
+// RA-698. An add-ORS work item is one ORS, so its query form shows the ORS,
+// one fixed scope and the reason alone, and posts the reason alone.
+describe('add-ORS query (RA-698)', () => {
+  let server
+
+  const anAddOrsItem = (overrides = {}) =>
+    aWorkItem({
+      typeId: 'add-overseas-site',
+      templateVersion: 'v3',
+      payload: {
+        applicationReference: 'IYC-ORS-2026-00001',
+        site: {
+          siteName: 'Denmark PR',
+          orsId: '007',
+          addressLine1: '1 Havnegade',
+          townOrCity: 'Aarhus',
+          country: 'Denmark'
+        }
+      },
+      ...overrides
+    })
+
+  beforeAll(async () => {
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  beforeEach(() => {
+    getWorkItem.mockReset()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: anAddOrsItem() })
+    raiseWorkItemQuery.mockReset()
+  })
+
+  test('the form names the ORS and has one scope and no checkboxes', async () => {
+    const { statusCode, result } = await server.inject({
+      method: 'GET',
+      url: QUERY_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(result).toEqual(expect.stringContaining('Denmark PR'))
+    expect(result).toEqual(expect.stringContaining('007'))
+    expect(result).toEqual(
+      expect.stringContaining('1 Havnegade, Aarhus, Denmark')
+    )
+    expect(result).toEqual(
+      expect.stringContaining('Overseas reprocessing site and BES evidence')
+    )
+    expect(result).toEqual(expect.stringContaining('name="reason"'))
+    expect(result).not.toEqual(expect.stringContaining('name="sections"'))
+    expect(result).not.toEqual(expect.stringContaining('type="checkbox"'))
+  })
+
+  test('redirects away from a state that cannot be queried', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: anAddOrsItem({ stateId: 'queried' })
+    })
+
+    const { statusCode, headers } = await server.inject({
+      method: 'GET',
+      url: QUERY_HREF
+    })
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(DETAIL_HREF)
+  })
+
+  test('posts the reason alone, with no sections', async () => {
+    raiseWorkItemQuery.mockResolvedValue({
+      ok: true,
+      workItem: anAddOrsItem()
+    })
+
+    const { statusCode, headers } = await postQuery(
+      server,
+      form({ sections: ['business-plan'], reason: 'Check the address' })
+    )
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(DETAIL_HREF)
+    const [args] = raiseWorkItemQuery.mock.calls[0]
+    expect(args).toMatchObject({
+      workItemId: ID,
+      typeId: 'add-overseas-site',
+      reason: 'Check the address'
+    })
+    expect(args.sections).toBeUndefined()
+  })
+
+  test('re-renders with an error when the reason is too long', async () => {
+    const { statusCode, result } = await postQuery(
+      server,
+      form({ sections: [], reason: words(QUERY_REASON_MAX_WORDS + 1) })
+    )
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toEqual(expect.stringContaining(REASON_TOO_LONG_MESSAGE))
+    expect(result).toEqual(expect.stringContaining('Denmark PR'))
+    expect(raiseWorkItemQuery).not.toHaveBeenCalled()
+  })
+})
+
+// RA-698 MFE-4. The re-accreditation form has one combined checkbox that
+// posts both existing contract keys.
+describe('re-accreditation combined ORS and BES checkbox (RA-698)', () => {
+  let server
+
+  beforeAll(async () => {
+    server = await createServer()
+    await server.initialize()
+  })
+
+  afterAll(async () => {
+    await server.stop({ timeout: 0 })
+  })
+
+  beforeEach(() => {
+    getWorkItem.mockReset()
+    getWorkItem.mockResolvedValue({ ok: true, workItem: anExporterWorkItem() })
+    raiseWorkItemQuery.mockReset()
+  })
+
+  test('renders one combined checkbox, not separate BES and ORS ones', async () => {
+    const { result } = await server.inject({ method: 'GET', url: QUERY_HREF })
+
+    expect(result).toEqual(
+      expect.stringContaining('Overseas reprocessing sites and BES evidence')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining('value="broadly-equivalent-standards"')
+    )
+    expect(result).not.toEqual(
+      expect.stringContaining('value="overseas-reprocessing-sites"')
+    )
+  })
+
+  test('the one checkbox sends both existing section keys', async () => {
+    raiseWorkItemQuery.mockResolvedValue({
+      ok: true,
+      workItem: anExporterWorkItem()
+    })
+
+    const { statusCode } = await postQuery(
+      server,
+      form({ sections: ['overseas-sites-and-bes-evidence'], reason: '' })
+    )
+
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(raiseWorkItemQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sections: [
+          'broadly-equivalent-standards',
+          'overseas-reprocessing-sites'
+        ]
+      })
+    )
+  })
+})

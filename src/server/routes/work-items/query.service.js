@@ -32,8 +32,20 @@ export function createQueryService({ raiseQuery = raiseWorkItemQuery } = {}) {
      * @returns {Promise<{ ok: true, workItem: object }
      *                 | { ok: false, outcome: string, message: string }>}
      */
-    async raiseQuery({ workItemId, sections, reason, user = null }) {
-      const result = await raiseQuery({ workItemId, sections, reason, user })
+    async raiseQuery({
+      workItemId,
+      typeId = null,
+      sections,
+      reason,
+      user = null
+    }) {
+      const result = await raiseQuery({
+        workItemId,
+        typeId,
+        sections,
+        reason,
+        user
+      })
 
       if (result.ok) {
         return { ok: true, workItem: result.workItem }

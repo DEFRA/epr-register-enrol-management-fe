@@ -19,7 +19,7 @@ describe('add-overseas-site module (RA-739)', () => {
       id: 'add-overseas-site',
       displayName: 'New ORS accreditation',
       category: 'in-year-change',
-      templateVersion: 'v2'
+      templateVersion: 'v3'
     })
     expect(addOverseasSiteType.initialState).toEqual({
       id: 'submitted',
@@ -78,8 +78,8 @@ describe('add-overseas-site module (RA-739)', () => {
 
     // The current version (what management-be stamps) and every older one
     // render with the add-ORS template, never the generic fallback.
-    expect(addOverseasSiteType.templateVersion).toBe('v2')
-    for (const version of ['v1', 'v2']) {
+    expect(addOverseasSiteType.templateVersion).toBe('v3')
+    for (const version of ['v1', 'v2', 'v3']) {
       expect(resolveDetailTemplate('add-overseas-site', version)).toBe(
         'add-overseas-site/detail-v1'
       )
@@ -98,7 +98,9 @@ describe('add-overseas-site module (RA-739)', () => {
       'GET /work-items/add-overseas-site/{id}/decision',
       'POST /work-items/add-overseas-site/{id}/decision',
       'GET /work-items/add-overseas-site/{id}/confirm-contact',
-      'POST /work-items/add-overseas-site/{id}/confirm-contact'
+      'POST /work-items/add-overseas-site/{id}/confirm-contact',
+      // RA-698: the way out of `updated` once the operator has responded.
+      'POST /work-items/add-overseas-site/{id}/continue-review'
     ])
   })
 

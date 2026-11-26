@@ -10,9 +10,9 @@
 {# with the add-ORS site summary (`applicationSummary`, built by the    #}
 {# type's own summary builder).                                         #}
 {#                                                                      #}
-{# add-ORS has no generic actions (no Query, no Withdraw), so the       #}
-{# generic actions list and its "No actions" line never render under    #}
-{# the lifecycle CTAs.                                                  #}
+{# add-ORS has no generic actions, so the generic actions list and its  #}
+{# "No actions" line never render under the lifecycle CTAs. RA-698: the  #}
+{# Query link and Continue review are offered in `lifecycleActionsExtra`. #}
 {#                                                                      #}
 {# `data-state-id` carries the raw state id for the journey tests.      #}
 {# ------------------------------------------------------------------- #}
@@ -21,6 +21,8 @@
 {% set lifecycleHidesGenericActions = true %}
 
 {% from "work-items/summary-macros.njk" import documentItem, newPrefix, siteDetails %}
+{% from "action-link/macro.njk" import appActionLink %}
+{% from "govuk/components/button/macro.njk" import govukButton %}
 
 {% block content %}
   <div data-testid="add-overseas-site-detail"
@@ -29,7 +31,81 @@
   </div>
 {% endblock %}
 
+{# RA-698. "Continue review", the way out of `updated` once the operator    #}
+{# has answered a query, and "Raise a query" (submitted, duly made and      #}
+{# assessment). The `data-testid` hooks are an external contract.          #}
+{% block lifecycleActionsExtra %}
+  {% if workItem.canContinueReview %}
+    <div data-testid="add-overseas-site-continue-review-cta">
+      <form method="post" action="{{ workItem.continueReviewHref }}" novalidate>
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+        {{ govukButton({
+          text: "Continue review",
+          classes: "app-case-panel__primary-action",
+          disabled: user.isReadOnly,
+          attributes: { "data-testid": "action-continue-review" }
+        }) }}
+      </form>
+    </div>
+  {% endif %}
+  {% if workItem.canQuery %}
+    <div class="app-case-panel__action-links" data-testid="add-overseas-site-query-cta">
+      {{ appActionLink({
+        text: "Raise a query",
+        href: workItem.queryHref,
+        classes: "govuk-link",
+        disabled: user.isReadOnly,
+        testId: "action-query"
+      }) }}
+    </div>
+  {% endif %}
+{% endblock %}
+
 {% block applicationSummary %}
+  {% set response = applicationSummary.operatorResponse %}
+  {% if response %}
+    {# RA-698. The operator's latest response to a query: each changed value  #}
+    {# old -> new, the new BES files, who sent it and when.                    #}
+    <div class="govuk-!-margin-bottom-8" data-testid="operator-response">
+      <h2 class="govuk-heading-m" data-testid="operator-response-heading">Operator response to query</h2>
+      <p class="govuk-body" data-testid="operator-response-meta">
+        Submitted by <span data-testid="operator-response-submitted-by">{{ response.submittedBy }}</span>
+        on <span data-testid="operator-response-submitted-at">{{ response.submittedAt }}</span>
+      </p>
+      {% if response.changes.length %}
+        <dl class="govuk-summary-list" data-testid="operator-response-changes">
+          {% for change in response.changes %}
+            <div class="govuk-summary-list__row" data-testid="operator-response-change-{{ change.key }}">
+              <dt class="govuk-summary-list__key">{{ change.label }}</dt>
+              <dd class="govuk-summary-list__value">
+                {% if change.oldValue %}<span data-testid="operator-response-old-{{ change.key }}">{{ change.oldValue }}</span> &rarr; {% endif %}<strong data-testid="operator-response-new-{{ change.key }}">{{ change.newValue }}</strong>
+              </dd>
+            </div>
+          {% endfor %}
+        </dl>
+      {% endif %}
+      {% for interim in response.interimSites %}
+        <h3 class="govuk-heading-s" data-testid="operator-response-interim-site">Interim site {{ interim.siteNumber }}{% if interim.siteName %}: {{ interim.siteName }}{% endif %}</h3>
+        <dl class="govuk-summary-list">
+          {% for change in interim.changes %}
+            <div class="govuk-summary-list__row">
+              <dt class="govuk-summary-list__key">{{ change.label }}</dt>
+              <dd class="govuk-summary-list__value">
+                {% if change.oldValue %}{{ change.oldValue }} &rarr; {% endif %}<strong>{{ change.newValue }}</strong>
+              </dd>
+            </div>
+          {% endfor %}
+        </dl>
+      {% endfor %}
+      {% if response.besFiles.length %}
+        <h3 class="govuk-heading-s">New BES evidence</h3>
+        <ul class="govuk-list" data-testid="operator-response-bes-files">
+          {% for file in response.besFiles %}{{ documentItem(file) }}{% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {# The site, under re-accreditation's heading and borderless as its   #}
   {# application details. Every row renders; a missing value is the     #}
   {# dash. The row and value testids match re-accreditation's. RA-495: a #}
@@ -102,7 +178,7 @@
 {# Duly make, Make Determination, Confirm applicant contact, or the       #}
 {# closed case's Outcome panel.                                           #}
 {% block actionsCard %}
-  {% if workItem.isReadOnlyState or workItem.isPendingContact or workItem.canDulyMake or workItem.canLogDecision %}
+  {% if workItem.isReadOnlyState or workItem.isPendingContact or workItem.canDulyMake or workItem.canLogDecision or workItem.canQuery or workItem.canContinueReview %}
     {{ super() }}
   {% endif %}
 {% endblock %}

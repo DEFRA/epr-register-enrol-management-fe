@@ -21,10 +21,16 @@ import {
   QUERY_REASON_MAX_WORDS,
   QUERY_SECTION_OPTIONS,
   buildErrorSummary,
+  isOptionSelected,
+  validateAddOrsQueryForm,
   validateQueryForm
 } from './query.schema.js'
 import { createQueryService } from './query.service.js'
-import { isExporterApplication } from './application-summary.js'
+import {
+  isExporterApplication,
+  overseasSiteAddressLines
+} from './application-summary.js'
+import { ADD_OVERSEAS_SITE_TYPE_ID } from '#/server/work-items/add-overseas-site/type-id.js'
 import {
   evaluateQueryEligibility,
   QUERY_ELIGIBILITY
@@ -78,14 +84,28 @@ function flashBanner(request, banner) {
  * never sees a section its operator app cannot unlock.
  */
 function sectionOptions(selected, isExporter) {
-  const chosen = new Set(selected)
   return QUERY_SECTION_OPTIONS.filter((o) => isExporter || !o.exporterOnly).map(
     (o) => ({
       value: o.value,
       text: o.text,
-      checked: chosen.has(o.value)
+      checked: isOptionSelected(o, selected)
     })
   )
+}
+
+const isAddOrs = (workItem) => workItem?.typeId === ADD_OVERSEAS_SITE_TYPE_ID
+
+/**
+ * RA-698. The ORS an add-ORS query is about, for the form to show: its name,
+ * ORS id and location (from the one site on the work item's payload).
+ */
+function addOrsSiteSummary(workItem) {
+  const site = workItem?.payload?.site ?? {}
+  return {
+    name: site.siteName ?? null,
+    orsId: site.orsId ?? null,
+    location: overseasSiteAddressLines(site, false).join(', ') || null
+  }
 }
 
 function renderForm(
@@ -103,6 +123,8 @@ function renderForm(
     // a work item we could not re-read hides BES/ORS rather than showing
     // sections a reprocessor cannot use.
     isExporter = false,
+    // RA-698: set for an add-ORS work item, whose form is the reason alone.
+    addOrs = null,
     values = { sections: [], reason: '' },
     fieldErrors = {},
     errorSummary = null,
@@ -119,7 +141,10 @@ function renderForm(
       formAction: queryHref(id),
       cancelHref: detailHref(id),
       maxWords: QUERY_REASON_MAX_WORDS,
-      sectionItems: sectionOptions(values.sections, isExporter),
+      addOrs,
+      sectionItems: addOrs
+        ? []
+        : sectionOptions(values.sections ?? [], isExporter),
       values,
       fieldErrors,
       errorSummary
@@ -191,7 +216,8 @@ export function makeShowQueryController() {
         id,
         applicationRef: workItem.payload?.applicationReference ?? null,
         isUnassigned: !workItem.assignedToId,
-        isExporter: isExporterApplication(workItem)
+        isExporter: isExporterApplication(workItem),
+        addOrs: isAddOrs(workItem) ? addOrsSiteSummary(workItem) : null
       })
     }
   }
@@ -220,10 +246,13 @@ export function makeSubmitQueryController({
       // POST with a misleading "select an area" error (review: jather-code-ee).
       // `validateQueryForm` tolerates a null/undefined payload itself, so
       // there is no need to defend against it twice.
-      const validation = validateQueryForm(request.payload, {
-        isExporter,
-        enforceExporterOnly: item.ok
-      })
+      const addOrs = isAddOrs(workItem)
+      const validation = addOrs
+        ? validateAddOrsQueryForm(request.payload)
+        : validateQueryForm(request.payload, {
+            isExporter,
+            enforceExporterOnly: item.ok
+          })
 
       if (!validation.ok) {
         return renderForm(h, {
@@ -231,6 +260,7 @@ export function makeSubmitQueryController({
           applicationRef: workItem?.payload?.applicationReference ?? null,
           isUnassigned: workItem ? !workItem.assignedToId : false,
           isExporter,
+          addOrs: addOrs ? addOrsSiteSummary(workItem) : null,
           values: validation.values,
           fieldErrors: validation.fieldErrors,
           errorSummary: buildErrorSummary(validation.fieldErrors),
@@ -240,7 +270,8 @@ export function makeSubmitQueryController({
 
       const result = await service.raiseQuery({
         workItemId: id,
-        sections: validation.value.sections,
+        typeId: workItem?.typeId ?? null,
+        sections: addOrs ? undefined : validation.value.sections,
         reason: validation.value.reason,
         user
       })

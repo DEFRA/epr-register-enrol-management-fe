@@ -27,10 +27,38 @@
         }) }}
       {% endif %}
 
-      <p class="govuk-body" data-testid="query-lead">
-        Unlock parts of the application that need to be updated. You'll get a
-        notification when the operator resubmits.
-      </p>
+      {% if addOrs %}
+        {# RA-698. An add-ORS item is one ORS, so the query is the combined   #}
+        {# ORS + BES one: show the ORS, one fixed scope, no checkboxes.        #}
+        <p class="govuk-body" data-testid="query-lead">
+          Ask the operator to update this overseas reprocessing site or its
+          BES evidence. You'll get a notification when the operator resubmits.
+        </p>
+
+        <dl class="govuk-summary-list" data-testid="query-ors">
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">ORS name</dt>
+            <dd class="govuk-summary-list__value" data-testid="query-ors-name">{{ addOrs.name or "—" }}</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">ORS ID</dt>
+            <dd class="govuk-summary-list__value" data-testid="query-ors-id">{{ addOrs.orsId or "—" }}</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Location</dt>
+            <dd class="govuk-summary-list__value" data-testid="query-ors-location">{{ addOrs.location or "—" }}</dd>
+          </div>
+          <div class="govuk-summary-list__row">
+            <dt class="govuk-summary-list__key">Query scope</dt>
+            <dd class="govuk-summary-list__value" data-testid="query-scope">Overseas reprocessing site and BES evidence</dd>
+          </div>
+        </dl>
+      {% else %}
+        <p class="govuk-body" data-testid="query-lead">
+          Unlock parts of the application that need to be updated. You'll get a
+          notification when the operator resubmits.
+        </p>
+      {% endif %}
 
       <form method="post"
             action="{{ formAction }}"
@@ -38,6 +66,7 @@
             data-testid="query-form">
         <input type="hidden" name="crumb" value="{{ crumb }}" />
 
+        {% if not addOrs %}
         {{ govukCheckboxes({
           idPrefix: "field-sections",
           id: "field-sections",
@@ -55,6 +84,7 @@
           errorMessage: { text: fieldErrors["sections"] } if fieldErrors["sections"] else null,
           attributes: { "data-testid": "query-sections" }
         }) }}
+        {% endif %}
 
         {{ govukCharacterCount({
           id: "field-reason",
@@ -65,7 +95,7 @@
             classes: "govuk-label--m"
           },
           hint: {
-            text: "The reason you provide is for internal use only.",
+            text: "The note you provide is sent to the operator with the query." if addOrs else "The reason you provide is for internal use only.",
             attributes: { "data-testid": "query-reason-hint" }
           },
           value: values.reason,

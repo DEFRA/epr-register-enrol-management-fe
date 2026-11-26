@@ -145,8 +145,11 @@ const QUERY_SECTION_DISPLAY_NAMES = {
   'business-plan': 'Business plan',
   'prn-tonnage': 'PRN tonnage',
   'sampling-and-inspection-plan': 'Sampling and inspection plan',
-  'broadly-equivalent-standards': 'Broadly equivalent standards (BES)',
-  'overseas-reprocessing-sites': 'Overseas reprocessing sites (ORS)'
+  // RA-698: one checkbox on the query form covers both keys, so both show
+  // under its one label (de-duplicated by `queriedSectionLabels`).
+  'broadly-equivalent-standards':
+    'Overseas reprocessing sites and BES evidence',
+  'overseas-reprocessing-sites': 'Overseas reprocessing sites and BES evidence'
 }
 
 /**
@@ -167,6 +170,7 @@ function queriedSectionLabels(sections) {
     .map((value) => value.trim())
     .filter((value) => value !== '')
     .map((value) => QUERY_SECTION_DISPLAY_NAMES[value] ?? value)
+    .filter((label, index, labels) => labels.indexOf(label) === index)
 }
 
 /**

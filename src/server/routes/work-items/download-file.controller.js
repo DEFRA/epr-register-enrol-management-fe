@@ -3,6 +3,7 @@ import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { config } from '#/config/config.js'
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { s3Client } from '#/server/common/helpers/s3-client.js'
+import { operatorResponseBesFiles } from '#/server/routes/add-overseas-site/operator-response.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
 const logger = createLogger()
@@ -41,19 +42,21 @@ function filesIn(container) {
  * buys no access control: per ADR-0005 every caseworker may read every
  * case's files regardless.
  */
-function filesOf(payload) {
+function filesOf(payload, workItem = null) {
   const overseasSites = payload?.overseasSites?.sites
   return [
     ...filesIn(payload?.samplingPlan),
     ...(Array.isArray(overseasSites) ? overseasSites : []).flatMap((site) =>
       filesIn(site?.besEvidence)
     ),
-    ...filesIn(payload?.site?.besEvidence)
+    ...filesIn(payload?.site?.besEvidence),
+    // RA-698: BES files the operator added in a query response.
+    ...operatorResponseBesFiles(workItem)
   ]
 }
 
-function findFile(payload, fileId) {
-  return filesOf(payload).find((file) => file?.fileId === fileId)
+function findFile(payload, fileId, workItem = null) {
+  return filesOf(payload, workItem).find((file) => file?.fileId === fileId)
 }
 
 /**
@@ -112,7 +115,7 @@ export const workItemDownloadFileController = {
       return h.response('Not found').code(404)
     }
 
-    const file = findFile(result.workItem?.payload, fileId)
+    const file = findFile(result.workItem?.payload, fileId, result.workItem)
 
     return serveFile({ h, file, workItemId: id })
   }

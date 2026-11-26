@@ -20,6 +20,7 @@ describe('createQueryService', () => {
 
     expect(raiseQuery).toHaveBeenCalledWith({
       workItemId: 'wi-1',
+      typeId: null,
       sections: ['business-plan'],
       reason: 'Needs work',
       user: { id: 'u-1' }

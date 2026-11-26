@@ -14,6 +14,9 @@ import {
   RELATED_APPLICATIONS_TAB_KEY
 } from '#/server/routes/work-items/case-header.js'
 
+import { ADD_OVERSEAS_SITE_TYPE_ID } from './type-id.js'
+import { buildAddOverseasSiteContinueReviewRoutes } from './continue-review-routes.js'
+
 const DETAIL_TEMPLATE_V1 = 'add-overseas-site/detail-v1'
 
 /**
@@ -37,13 +40,13 @@ const DETAIL_TEMPLATE_V1 = 'add-overseas-site/detail-v1'
  * joins an accreditation that already exists.
  */
 export const addOverseasSiteType = {
-  id: 'add-overseas-site',
+  id: ADD_OVERSEAS_SITE_TYPE_ID,
   displayName: 'New ORS accreditation',
   category: IN_YEAR_CHANGE_CATEGORY,
   // Mirrors `AddOverseasSiteType.TemplateVersion` in management-be, which is
   // the value stamped onto work items. Keep the two in lock-step and add the
   // matching entry to the detail-template map below.
-  templateVersion: 'v2',
+  templateVersion: 'v3',
   initialState: standardWorkflow.initialState,
   states: standardWorkflow.states,
   transitions: standardWorkflow.transitions,
@@ -107,7 +110,8 @@ function describeCardSite(payload) {
 export const addOverseasSiteModule = {
   type: addOverseasSiteType,
   async register(server) {
-    // Every version renders with the one template. v2 only made the
+    // Every version renders with the one template. v3 (RA-698) added the query
+    // and continue-review transitions. v2 only made the
     // withdraw transitions non-callable (management-be migrates live items
     // to v2), which this service never offered (RA-317). v1 stays
     // registered so any item still stamped v1 keeps its own template rather
@@ -115,8 +119,14 @@ export const addOverseasSiteModule = {
     // (`assertCurrentTemplateVersionIsRegistered`) needs the current version.
     registerModuleDetailTemplates(addOverseasSiteType.id, {
       v1: DETAIL_TEMPLATE_V1,
-      v2: DETAIL_TEMPLATE_V1
+      v2: DETAIL_TEMPLATE_V1,
+      // RA-698. v3 makes the query and continue-review transitions reachable
+      // (management-be); the page is the same template.
+      v3: DETAIL_TEMPLATE_V1
     })
-    server.route(buildStandardLifecycleRoutes(addOverseasSiteType.id))
+    server.route([
+      ...buildStandardLifecycleRoutes(addOverseasSiteType.id),
+      ...buildAddOverseasSiteContinueReviewRoutes()
+    ])
   }
 }

@@ -3,9 +3,17 @@ import { resolveActionEntryStates } from '#/server/work-items/core/engine.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 import { isQueryActionId } from './generic-route-action-ids.js'
 import { RE_ACCREDITATION_TYPE_ID } from '#/server/work-items/re-accreditation/type-id.js'
+import { ADD_OVERSEAS_SITE_TYPE_ID } from '#/server/work-items/add-overseas-site/type-id.js'
 import { DULY_MAKE_ACTION_ID } from '#/server/work-items/core/standard-lifecycle/duly-making/eligibility.js'
 
 const logger = createLogger()
+
+// RA-698. Add-ORS is on the same Standard workflow as re-accreditation, so the
+// state predicates below (read off re-accreditation's declaration) hold for it.
+const QUERYABLE_TYPE_IDS = new Set([
+  RE_ACCREDITATION_TYPE_ID,
+  ADD_OVERSEAS_SITE_TYPE_ID
+])
 
 const CONTINUE_REVIEW_ACTION_PREFIX = 'continue-review-during-'
 
@@ -114,7 +122,7 @@ export function isQueryState(stateId) {
  *     `stateId`: a broken upstream response, logged here at Error.
  */
 export function evaluateQueryEligibility(workItem, { route }) {
-  if (workItem?.typeId !== RE_ACCREDITATION_TYPE_ID) {
+  if (!QUERYABLE_TYPE_IDS.has(workItem?.typeId)) {
     return QUERY_ELIGIBILITY.NOT_QUERYABLE
   }
   if (workItem.stateId == null) {
