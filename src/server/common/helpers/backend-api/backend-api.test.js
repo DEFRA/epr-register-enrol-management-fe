@@ -7,6 +7,7 @@ import {
   assertSafeHeaderValue,
   assignWorkItem,
   changePaymentDateReAccreditation,
+  changeValidFromWorkItem,
   confirmWorkItemApplicantContact,
   continueReviewReAccreditation,
   createWorkItem,
@@ -2540,6 +2541,84 @@ describe('#changePaymentDateReAccreditation (RA-576)', () => {
     expect(result.ok).toBe(false)
     expect(result.reason).toBe('network')
     expect(result.status).toBeUndefined()
+  })
+})
+
+describe('#changeValidFromWorkItem (RA-800)', () => {
+  const base = {
+    workItemId: 'wi-1',
+    effectiveDate: '2026-07-20',
+    reason: 'Typo',
+    baseUrl: 'http://backend:8085/',
+    timeoutMs: 1000
+  }
+
+  test('POSTs the date and reason to the type-less change-valid-from endpoint', async () => {
+    const workItem = { id: 'wi-1', stateId: 'approved-pending-contact' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await changeValidFromWorkItem({
+      ...base,
+      fetchImpl,
+      user: { id: 'u-1', name: 'Alice' }
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/change-valid-from',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ effectiveDate: '2026-07-20', reason: 'Typo' }),
+        headers: expect.objectContaining({ 'x-cdp-user-id': 'u-1' })
+      })
+    )
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('surfaces the errorCode of a 400 so the controller can bind it to a field', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () =>
+        Promise.resolve({
+          errorCode: 'effective-date-reason-required',
+          field: 'reason',
+          detail: 'A reason is required.'
+        })
+    })
+
+    expect(await changeValidFromWorkItem({ ...base, fetchImpl })).toEqual({
+      ok: false,
+      reason: 'invalid',
+      status: 400,
+      errorCode: 'effective-date-reason-required',
+      message: 'A reason is required.'
+    })
+  })
+
+  test('maps a 409 to a conflict', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ title: 'Wrong state' })
+    })
+
+    expect(await changeValidFromWorkItem({ ...base, fetchImpl })).toEqual({
+      ok: false,
+      reason: 'conflict',
+      status: 409,
+      errorCode: null,
+      message: 'Wrong state'
+    })
+  })
+
+  test('reports a transport failure as a network error', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('connect refused'))
+    const result = await changeValidFromWorkItem({ ...base, fetchImpl })
+    expect(result.reason).toBe('network')
   })
 })
 

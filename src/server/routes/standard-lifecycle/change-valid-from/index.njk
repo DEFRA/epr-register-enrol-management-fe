@@ -1,0 +1,115 @@
+{% extends 'layouts/page.njk' %}
+
+{% from "govuk/components/button/macro.njk" import govukButton %}
+{% from "govuk/components/character-count/macro.njk" import govukCharacterCount %}
+{% from "govuk/components/date-input/macro.njk" import govukDateInput %}
+{% from "govuk/components/error-summary/macro.njk" import govukErrorSummary %}
+
+{# ------------------------------------------------------------------- #}
+{# Change valid from date (RA-800; Figma flow "795").                   #}
+{#                                                                      #}
+{# Reached from the "Change valid from date" link in the detail page's  #}
+{# assignment panel while a determination awaits applicant contact.     #}
+{# Posts back to its own URL and PRG-redirects to the detail page on    #}
+{# success.                                                             #}
+{#                                                                      #}
+{# No browser JavaScript (RA-94): the date input is three plain text    #}
+{# boxes, the 200-word limit on the reason is enforced server-side, and #}
+{# Cancel is an ordinary link rather than a form control.               #}
+{#                                                                      #}
+{# `data-testid` hooks are an EXTERNAL CONTRACT consumed by the         #}
+{# mgmt-tests journey suite. They are prefixed `change-valid-from-*`.   #}
+{# ------------------------------------------------------------------- #}
+
+{% block content %}
+  {{ appHeading({
+    text: heading,
+    caption: ("Application number " + workItem.applicationRef) if workItem.applicationRef else "Application number"
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+
+      {% if errorSummary %}
+        {{ govukErrorSummary({
+          titleText: errorSummary.titleText,
+          errorList: errorSummary.items,
+          attributes: { "data-testid": "change-valid-from-error-summary" }
+        }) }}
+      {% endif %}
+
+      {% if currentValidFromDate %}
+        <p class="govuk-body" data-testid="change-valid-from-current">
+          The current valid from date is {{ currentValidFromDate }}
+        </p>
+      {% endif %}
+
+      <form method="post"
+            action="{{ formAction }}"
+            novalidate
+            data-testid="change-valid-from-form">
+        <input type="hidden" name="crumb" value="{{ crumb }}" />
+
+        {{ govukDateInput({
+          id: dateInputId,
+          namePrefix: dateInputId,
+          fieldset: {
+            legend: {
+              text: "Valid from date",
+              classes: "govuk-fieldset__legend--m"
+            }
+          },
+          hint: { text: "For example, 27 3 2026" },
+          items: [
+            {
+              name: "day",
+              classes: "govuk-input--width-2" + (" govuk-input--error" if dateErrorMessage else ""),
+              value: values.day
+            },
+            {
+              name: "month",
+              classes: "govuk-input--width-2" + (" govuk-input--error" if dateErrorMessage else ""),
+              value: values.month
+            },
+            {
+              name: "year",
+              classes: "govuk-input--width-4" + (" govuk-input--error" if dateErrorMessage else ""),
+              value: values.year
+            }
+          ],
+          errorMessage: { text: dateErrorMessage } if dateErrorMessage else null,
+          attributes: { "data-testid": "change-valid-from-date" }
+        }) }}
+
+        {# `id` is CONTRACT: the error summary anchors to it and the        #}
+        {# mgmt-tests page object reads the value through it.               #}
+        {{ govukCharacterCount({
+          id: reasonId,
+          name: reasonId,
+          maxwords: 200,
+          label: {
+            text: "Reason for change",
+            classes: "govuk-label--m"
+          },
+          hint: {
+            text: "The reason for change will be recorded in the audit log (application history)"
+          },
+          value: values.reason,
+          errorMessage: { text: reasonErrorMessage } if reasonErrorMessage else null,
+          attributes: { "data-testid": "change-valid-from-reason" }
+        }) }}
+
+        <div class="govuk-button-group">
+          {{ govukButton({
+            text: "Save",
+            disabled: user.isReadOnly,
+            attributes: { "data-testid": "change-valid-from-submit" }
+          }) }}
+          <a class="govuk-link"
+             data-testid="change-valid-from-cancel"
+             href="{{ cancelHref }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}

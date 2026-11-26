@@ -381,6 +381,9 @@
         {# session gets an inert (unclickable, non-navigating) span instead   #}
         {# of a live link — see action-link/macro.njk.                       #}
         <ul class="app-case-panel__links">
+          {# RA-800. Type-specific links that lead the list, above Reassign    #}
+          {# (e.g. the Standard lifecycle's "Change valid from date").         #}
+          {% block panelLinksFirst %}{% endblock %}
           <li>
             {{ appActionLink({
               text: "Reassign the application",

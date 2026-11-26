@@ -94,7 +94,8 @@ describe('add-overseas-site module (RA-739)', () => {
         addOverseasSiteType.templateVersion
       )
     ).not.toThrow()
-    // RA-495. Duly make, Make determination and Confirm applicant contact.
+    // RA-495. Duly make, Make determination and Confirm applicant contact;
+    // RA-800, Change valid from date.
     const routes = server.route.mock.calls.flatMap(([mounted]) => mounted)
     expect(routes.map((r) => `${r.method} ${r.path}`)).toEqual([
       'GET /work-items/add-overseas-site/{id}/duly-make',
@@ -103,6 +104,8 @@ describe('add-overseas-site module (RA-739)', () => {
       'POST /work-items/add-overseas-site/{id}/decision',
       'GET /work-items/add-overseas-site/{id}/confirm-contact',
       'POST /work-items/add-overseas-site/{id}/confirm-contact',
+      'GET /work-items/add-overseas-site/{id}/change-valid-from',
+      'POST /work-items/add-overseas-site/{id}/change-valid-from',
       // RA-698: the way out of `updated` once the operator has responded.
       'POST /work-items/add-overseas-site/{id}/continue-review'
     ])

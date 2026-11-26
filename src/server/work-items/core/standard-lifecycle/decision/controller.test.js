@@ -528,15 +528,16 @@ describe('makeSubmitDecisionController', () => {
 })
 
 // RA-495 AC6. Add-ORS takes an effective date: required on Approved, not
-// sent on Refused (the field is hidden then), and never before the date the
-// request was submitted.
+// sent on Refused (the field is hidden then), and (RA-795) inside the work
+// item's accreditation year, which may be before the submission date.
 describe('the effective date on add-ORS', () => {
   const ADD_ORS_DECISION_HREF = '/work-items/add-overseas-site/wi-1/decision'
 
   function mockAddOrs() {
     mockDecidable({
       typeId: 'add-overseas-site',
-      submittedAt: '2027-02-12T10:00:00Z'
+      submittedAt: '2027-02-12T10:00:00Z',
+      payload: { applicationReference: 'RA-REF-001', accreditationYear: 2027 }
     })
   }
 
@@ -594,9 +595,14 @@ describe('the effective date on add-ORS', () => {
     ['missing', ['', '', ''], 'Enter the valid from date'],
     ['unreal', ['30', '2', '2027'], 'Valid from date must be a real date'],
     [
-      'before the submission date',
-      ['11', '2', '2027'],
-      'Valid from date must be on or after the date the change application was submitted'
+      'before the accreditation year',
+      ['31', '12', '2026'],
+      'Valid from date must be on or after 1 January 2027'
+    ],
+    [
+      'after the accreditation year',
+      ['1', '1', '2028'],
+      'Valid from date must be on or before 31 December 2027'
     ]
   ])(
     'an approval with a %s date is shown again with the error, keeping what was typed',
@@ -637,6 +643,22 @@ describe('the effective date on add-ORS', () => {
     }
   )
 
+  test('an approval may be valid from before the submission date', async () => {
+    mockAddOrs()
+    const recordWorkItemDecision = vi
+      .fn()
+      .mockResolvedValue({ ok: true, workItem: { id: 'wi-1' } })
+
+    await submitFor({ service: { recordWorkItemDecision } }).handler(
+      makeRequest(dated({ decision: 'approved' }, '1', '1', '2027')),
+      makeToolkit()
+    )
+
+    expect(recordWorkItemDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ effectiveDate: '2027-01-01' })
+    )
+  })
+
   test('a refusal neither checks nor sends it', async () => {
     mockAddOrs()
     const recordWorkItemDecision = vi
@@ -653,32 +675,42 @@ describe('the effective date on add-ORS', () => {
     )
   })
 
-  test('a backend rejection of the date is bound to the field, not a banner', async () => {
-    mockAddOrs()
-    const recordWorkItemDecision = vi.fn().mockResolvedValue({
-      ok: false,
-      outcome: 'invalid',
-      status: 400,
-      errorCode: 'effective-date-before-submission',
-      message: 'before submission'
-    })
-    const request = makeRequest(
-      dated({ decision: 'approved' }, '1', '3', '2027')
-    )
-    const h = makeToolkit()
-
-    await submitFor({ service: { recordWorkItemDecision } }).handler(request, h)
-
-    expect(h.redirect).not.toHaveBeenCalled()
-    expect(request.yar.flash).not.toHaveBeenCalled()
-    expect(h.view).toHaveBeenCalledWith(
-      'standard-lifecycle/decision/index',
-      expect.objectContaining({
-        fieldErrors: {
-          effectiveDate:
-            'Valid from date must be on or after the date the change application was submitted'
-        }
+  test.each([
+    [
+      'effective-date-before-year-start',
+      'Valid from date must be on or after 1 January 2027'
+    ],
+    [
+      'effective-date-after-year-end',
+      'Valid from date must be on or before 31 December 2027'
+    ]
+  ])(
+    'a backend rejection of the date (%s) is bound to the field, not a banner',
+    async (errorCode, message) => {
+      mockAddOrs()
+      const recordWorkItemDecision = vi.fn().mockResolvedValue({
+        ok: false,
+        outcome: 'invalid',
+        status: 400,
+        errorCode,
+        message: 'rejected'
       })
-    )
-  })
+      const request = makeRequest(
+        dated({ decision: 'approved' }, '1', '3', '2027')
+      )
+      const h = makeToolkit()
+
+      await submitFor({ service: { recordWorkItemDecision } }).handler(
+        request,
+        h
+      )
+
+      expect(h.redirect).not.toHaveBeenCalled()
+      expect(request.yar.flash).not.toHaveBeenCalled()
+      expect(h.view).toHaveBeenCalledWith(
+        'standard-lifecycle/decision/index',
+        expect.objectContaining({ fieldErrors: { effectiveDate: message } })
+      )
+    }
+  )
 })

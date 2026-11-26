@@ -889,6 +889,47 @@ export async function confirmWorkItemApplicantContact({
 }
 
 /**
+ * Change the valid from date of an approved work item that is still awaiting
+ * applicant contact (RA-800).
+ *
+ * Wraps `POST /work-items/[{typeSegment}/]{id}/change-valid-from`, type-scoped
+ * as for {@link dulyMakeWorkItem}. Body: `{ effectiveDate, reason }`, the date
+ * a plain `YYYY-MM-DD` string. Rewrites only the stored date: no state change,
+ * no due-date change, no push to the operator (confirm contact pushes it).
+ *
+ * Same result shape as {@link dulyMakeWorkItem}, including `errorCode`: a 400
+ * carries `effective-date-*` (bind to the date input) or
+ * `effective-date-reason-*` (bind to the reason); a 409 means the case is no
+ * longer awaiting contact; `wrong-work-item-type` (400) and an unreadable
+ * accreditation year (500) are page-level failures.
+ */
+export async function changeValidFromWorkItem({
+  workItemId,
+  effectiveDate,
+  reason,
+  typeSegment = null,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  return postLifecycleStep({
+    url: lifecycleStepUrl(
+      baseUrl,
+      workItemId,
+      'change-valid-from',
+      typeSegment
+    ),
+    body: { effectiveDate, reason },
+    label: 'changeValidFromWorkItem',
+    user,
+    timeoutMs,
+    fetchImpl,
+    withErrorCode: true
+  })
+}
+
+/**
  * Extend the SLA clock on a work item (RA-131).
  *
  * Wraps `POST /work-items/{id}/sla/extend`.

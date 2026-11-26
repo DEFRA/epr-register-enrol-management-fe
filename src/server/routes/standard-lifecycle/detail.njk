@@ -34,8 +34,10 @@
 {# role "region" because it persists: it must not steal focus or be       #}
 {# announced as an alert on each load. The accreditation ID is escaped by #}
 {# autoescaping inside the block capture.                                 #}
+{# The one exception: a one-time flash that says the same thing (RA-800's #}
+{# "Updated") takes its place for the render that shows it.               #}
 {% block typeBanners %}
-  {% if workItem.pendingContactBanner %}
+  {% if workItem.pendingContactBanner and not (flashBanner and flashBanner.replacesPendingContactBanner) %}
     {% set pendingContactHtml %}
       <p class="govuk-notification-banner__heading">{{ workItem.pendingContactBanner.text }}</p>
       {% if workItem.pendingContactBanner.accreditationId %}
@@ -50,6 +52,25 @@
       role: 'region',
       attributes: { "data-testid": "standard-lifecycle-pending-contact-banner" }
     }) }}
+  {% endif %}
+{% endblock %}
+
+{# RA-800. "Change valid from date" leads the assignment panel's links,  #}
+{# above Reassign. A LINK to the change page, so clicking it changes     #}
+{# nothing; inert for a read-only user. Gated by                          #}
+{# `workItem.canChangeValidFrom`, which goes through the same helper that #}
+{# guards the route itself.                                               #}
+{% block panelLinksFirst %}
+  {% if workItem.canChangeValidFrom %}
+    <li>
+      {{ appActionLink({
+        text: "Change valid from date",
+        href: workItem.changeValidFromHref,
+        classes: "govuk-link",
+        disabled: user.isReadOnly,
+        testId: "change-valid-from-link"
+      }) }}
+    </li>
   {% endif %}
 {% endblock %}
 

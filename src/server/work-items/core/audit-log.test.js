@@ -1930,3 +1930,89 @@ describe('application-queried with the combined ORS and BES areas (RA-698)', () 
     ])
   })
 })
+
+describe('determination audit entries (RA-795 AC08)', () => {
+  const approved = {
+    action: 'determination-made',
+    actionDisplayName: 'Determination made: Approved',
+    createdBy: 'user-1',
+    createdByName: 'Reg Ulator',
+    createdAt: '2027-03-01T09:00:00Z',
+    details: { outcome: 'approved', effectiveDate: '2027-06-01' }
+  }
+
+  test('an approval shows only the valid from date (the actor is in the entry header)', () => {
+    expect(detailRowsForAuditEntry(approved)).toEqual([
+      { key: 'Valid from date', value: '01/06/2027' }
+    ])
+  })
+
+  // management-be stamps the submission date as `effectiveDate` on a refusal,
+  // for audit. It is not a valid from date (RA-795 AC10).
+  test('a refusal has no valid from date row, though it carries a date', () => {
+    expect(
+      detailRowsForAuditEntry({
+        ...approved,
+        actionDisplayName: 'Determination made: Refused',
+        details: { outcome: 'rejected', effectiveDate: '2027-02-03' }
+      })
+    ).toEqual([])
+  })
+
+  test('a malformed stored date yields no row', () => {
+    expect(
+      detailRowsForAuditEntry({
+        ...approved,
+        details: { outcome: 'approved', effectiveDate: 'garbage' }
+      })
+    ).toEqual([])
+  })
+})
+
+describe('change-valid-from audit entries (RA-800 AC07)', () => {
+  const entry = {
+    action: 'valid-from-changed',
+    createdBy: 'user-1',
+    createdByName: 'Reg Ulator',
+    details: {
+      previousEffectiveDate: '2027-06-01',
+      effectiveDate: '2027-06-15',
+      reason: 'Escalation moved the date.\r\nSee email.'
+    }
+  }
+
+  test('summarises as the date range', () => {
+    expect(summariseAuditEntry(entry)).toBe('01/06/2027 → 15/06/2027')
+  })
+
+  test('projects previous date, new date, actor and a multiline reason', () => {
+    expect(detailRowsForAuditEntry(entry)).toEqual([
+      { key: 'Previous valid from date', value: '01/06/2027' },
+      { key: 'New valid from date', value: '15/06/2027' },
+      { key: 'Changed by', value: 'Reg Ulator' },
+      {
+        key: 'Reason',
+        value: 'Escalation moved the date.\nSee email.',
+        multiline: true
+      }
+    ])
+  })
+
+  test('omits rows whose values are absent or malformed', () => {
+    const rows = detailRowsForAuditEntry({
+      ...entry,
+      details: {
+        ...entry.details,
+        previousEffectiveDate: undefined,
+        effectiveDate: 'garbage',
+        reason: '  '
+      }
+    })
+    expect(rows.map((r) => r.key)).toEqual(['Changed by'])
+  })
+
+  test('is not flagged as a failure', () => {
+    const [decorated] = decorateAuditLog([entry])
+    expect(decorated.isFailure).toBe(false)
+  })
+})

@@ -6,6 +6,7 @@
  * `register(server)`.
  */
 
+import { buildChangeValidFromRoutes } from './change-valid-from/routes.js'
 import { buildConfirmContactRoutes } from './confirm-contact/routes.js'
 import { buildDecisionRoutes } from './decision/routes.js'
 import { buildDulyMakingRoutes } from './duly-making/routes.js'
@@ -25,6 +26,7 @@ export function buildStandardLifecycleRoutes(typeId) {
   return [
     ...buildDulyMakingRoutes(typeId),
     ...buildDecisionRoutes(typeId),
-    ...buildConfirmContactRoutes(typeId)
+    ...buildConfirmContactRoutes(typeId),
+    ...buildChangeValidFromRoutes(typeId)
   ]
 }
