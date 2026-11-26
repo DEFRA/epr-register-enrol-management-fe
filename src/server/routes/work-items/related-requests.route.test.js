@@ -236,7 +236,7 @@ describe('RA-770: the Related change requests tab', () => {
     )
   })
 
-  test('the tab label has no count for a work item with no submission size', async () => {
+  test('the tab label counts (1) for a work item stored before submission sizes, as the tab lists it alone', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
       workItem: anAddOrsItem({ submissionSize: null })
@@ -248,7 +248,7 @@ describe('RA-770: the Related change requests tab', () => {
     const { $ } = await get()
 
     expect(squash($('[data-testid="tab-related-requests"]').text())).toBe(
-      'Related change requests'
+      'Related change requests (1)'
     )
   })
 

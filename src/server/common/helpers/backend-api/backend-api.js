@@ -1305,15 +1305,16 @@ export async function getRelatedWorkItems({
   })
 }
 
+function isWholeAtLeast(value, min) {
+  return Number.isInteger(value) && value >= min
+}
+
 function isUsableRelatedPage(body) {
   return (
     Array.isArray(body?.items) &&
-    Number.isInteger(body.totalCount) &&
-    body.totalCount >= 0 &&
-    Number.isInteger(body.page) &&
-    body.page >= 1 &&
-    Number.isInteger(body.pageSize) &&
-    body.pageSize >= 1
+    isWholeAtLeast(body.totalCount, 0) &&
+    isWholeAtLeast(body.page, 1) &&
+    isWholeAtLeast(body.pageSize, 1)
   )
 }
 

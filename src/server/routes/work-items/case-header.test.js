@@ -473,7 +473,7 @@ describe("RA-739: a type's own header and tabs", () => {
     expect(tabs.map((tab) => [tab.key, tab.text, tab.active])).toEqual([
       ['application-summary', 'Application summary', false],
       ['accreditation-summary', 'Accreditation summary', false],
-      ['related-requests', 'Related change requests', true],
+      ['related-requests', 'Related change requests (1)', true],
       ['application-history', 'Application history', false]
     ])
   })
@@ -481,8 +481,8 @@ describe("RA-739: a type's own header and tabs", () => {
   test.each([
     [3, 'Related change requests (3)'],
     [1, 'Related change requests (1)'],
-    [null, 'Related change requests'],
-    [undefined, 'Related change requests']
+    [null, 'Related change requests (1)'],
+    [undefined, 'Related change requests (1)']
   ])(
     'RA-770: with %j requests in the submission, the tab reads %j',
     (relatedCount, text) => {

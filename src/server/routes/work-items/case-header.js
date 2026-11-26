@@ -340,12 +340,12 @@ const DEFAULT_CASE_TAB_KEYS = [
 /**
  * RA-770. "Related change requests (n)", as in the design, where n is how
  * many requests came in the submission (the work item's
- * `payload.submissionSize`); without the count when the work item has none.
+ * `payload.submissionSize`). A work item stored before RA-739 has no size and
+ * no submission reference, so it was submitted on its own: (1), as the tab
+ * itself lists it.
  */
 function relatedChangeRequestsTabText(relatedCount) {
-  return Number.isInteger(relatedCount)
-    ? `Related change requests (${relatedCount})`
-    : 'Related change requests'
+  return `Related change requests (${Number.isInteger(relatedCount) ? relatedCount : 1})`
 }
 
 /**
@@ -388,7 +388,8 @@ export function caseHasTab(type, tabKey) {
  * @param {string|null} [args.typeId] the work item's type
  * @param {number|null} [args.relatedCount] RA-770: how many requests came in
  *   the work item's submission (its `payload.submissionSize`), shown in the
- *   Related change requests tab's label; only the add-ORS tab pages pass it
+ *   Related change requests tab's label (1 when absent); only the add-ORS tab
+ *   pages pass it
  */
 export function buildCaseTabs({
   workItemId,
