@@ -1905,12 +1905,14 @@ describe('determination audit entries (RA-795 AC08)', () => {
     ])
   })
 
-  test('a refusal has no valid from date row', () => {
+  // management-be stamps the submission date as `effectiveDate` on a refusal,
+  // for audit. It is not a valid from date (RA-795 AC10).
+  test('a refusal has no valid from date row, though it carries a date', () => {
     expect(
       detailRowsForAuditEntry({
         ...approved,
         actionDisplayName: 'Determination made: Refused',
-        details: { outcome: 'rejected' }
+        details: { outcome: 'rejected', effectiveDate: '2027-02-03' }
       })
     ).toEqual([])
   })

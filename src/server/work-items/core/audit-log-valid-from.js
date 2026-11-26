@@ -2,9 +2,10 @@
  * Audit log rendering for the valid-from date (RA-795 AC08).
  *
  * management-be's `determination-made` entry (written when the regulator
- * approves or refuses in Make determination) carries the valid-from date as
- * `details.effectiveDate` (`YYYY-MM-DD`) when one was entered. A refusal
- * records no valid-from date, so its entry has nothing extra to show.
+ * approves or refuses in Make determination) carries `details.effectiveDate`
+ * (`YYYY-MM-DD`) for a type that takes a valid-from date. Only on an approval
+ * is it the valid-from date: a refusal's is the submission date, kept for
+ * audit, so its entry has nothing extra to show (RA-795 AC10).
  */
 
 export const DETERMINATION_MADE_ACTION = 'determination-made'
@@ -22,12 +23,15 @@ function formatIsoDate(value) {
 }
 
 /**
- * Detail rows for a determination entry: the valid-from date. Who made the
- * determination and when are already in the entry's own header. No date, no
- * rows.
+ * Detail rows for a determination entry: an approval's valid-from date. Who
+ * made the determination and when are already in the entry's own header. No
+ * approval or no date, no rows.
  */
 export function determinationMadeRows(entry) {
-  const validFrom = formatIsoDate(entry.details?.effectiveDate)
+  if (entry.details?.outcome !== 'approved') {
+    return []
+  }
+  const validFrom = formatIsoDate(entry.details.effectiveDate)
   return validFrom ? [{ key: 'Valid from date', value: validFrom }] : []
 }
 

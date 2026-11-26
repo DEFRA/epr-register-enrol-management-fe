@@ -218,9 +218,9 @@ files under `payload.site.besEvidence.files`.
 
 ### Standard lifecycle pages (RA-495)
 
-The Duly make, Make determination and Confirm applicant contact pages, their
-eligibility checks, the detail page's lifecycle CTAs and the pending-contact
-banner are shared by every type on the Standard workflow
+The Duly make, Make determination, Confirm applicant contact and Change valid
+from date pages, their eligibility checks, the detail page's lifecycle CTAs and
+the pending-contact banner are shared by every type on the Standard workflow
 (`src/server/work-items/core/standard-lifecycle/`). A type opts in by declaring
 `standardLifecycle` on its type and mounting the routes from its module:
 
@@ -233,8 +233,8 @@ export const myType = {
     readPaymentDetails: (workItem) => ({ chargePence, paymentReference }),
     // Optional: the management-be calls. Each defaults to the type-less
     // Standard-lifecycle endpoint (`POST /work-items/{id}/duly-make`,
-    // `/decision`, `/confirm-contact`).
-    backend: { dulyMake, recordDecision, confirmContact },
+    // `/decision`, `/confirm-contact`, `/change-valid-from`).
+    backend: { dulyMake, recordDecision, confirmContact, changeValidFrom },
     // Optional: list every work item from the same submission, this one
     // included, on the Duly make page ("Related change requests", from
     // management-be's `GET /work-items/{id}/duly-make`). No section for a
@@ -243,7 +243,12 @@ export const myType = {
     // Optional: the "Applicant contacted" success banner by outcome, each
     // `{ title, text }`. An outcome left out keeps the default copy
     // ("…accreditation is granted." / "…accreditation is refused.").
-    contactConfirmedBanners: { approved, rejected }
+    contactConfirmedBanners: { approved, rejected },
+    // Optional: when true, an approval must name a valid from date within the
+    // work item's accreditation year (`payload.accreditationYear`, 1 January
+    // to 31 December inclusive; RA-795), and it can be corrected on the Change
+    // valid from date page (RA-800).
+    effectiveDate: true
   }
 }
 
@@ -258,8 +263,15 @@ export const myTypeModule = {
 }
 ```
 
-The pages live at `/work-items/{typeId}/{id}/duly-make|decision|confirm-contact`
-and refuse a work item of any other type. Their copy, status labels and badges
+The pages live at
+`/work-items/{typeId}/{id}/duly-make|decision|confirm-contact|change-valid-from`
+and refuse a work item of any other type. The "Change valid from date" link
+leads the assignment panel's links while an approval awaits applicant contact
+and has a valid from date (inert for a read-only user). The link and the page
+share one gate (`change-valid-from/eligibility.js`). Saving needs a reason (200
+words at most), changes neither the status nor the due date, and sends nothing
+to the operator: Confirm applicant contact sends the stored date. Their copy,
+status labels and badges
 are the same for every type. The detail controller layers the CTA flags on
 through `routes/work-items/standard-lifecycle-view-model.js`, and the
 `standard-lifecycle/detail.njk` template renders them; a type's own detail
@@ -275,7 +287,8 @@ and keeps its existing URLs, mounting the pages with
 The shared pages' unit tests live beside them in
 `core/standard-lifecycle/` and run against re-accreditation. Add-ORS
 opts in with the type-less endpoints, the site's own charge and
-`relatedWorkItems`, mounts all three pages and hides the generic actions.
+`relatedWorkItems` and `effectiveDate`, mounts all four pages and hides the
+generic actions.
 An add-ORS approval mints nothing: the site joins an accreditation that
 already exists, so the approval banner has no accreditation ID. For the
 same reason it supplies its own `contactConfirmedBanners` (the site has, or

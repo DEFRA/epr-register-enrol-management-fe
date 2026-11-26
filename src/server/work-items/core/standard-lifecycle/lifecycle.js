@@ -1,7 +1,8 @@
 /**
  * RA-495. The shared Standard-workflow lifecycle: the Duly make, Make
- * determination and Confirm applicant contact pages, their eligibility
- * checks, the detail-page CTAs and the pending-contact banner. Any case type
+ * determination, Confirm applicant contact and (RA-800) Change valid from
+ * date pages, their eligibility checks, the detail-page CTAs and the
+ * pending-contact banner. Any case type
  * on the Standard workflow can opt in by declaring `standardLifecycle` on its
  * type and mounting `buildStandardLifecycleRoutes(type.id)` from its module's
  * `register(server)`:
@@ -23,8 +24,9 @@
  *     // default (accreditation granted / refused).
  *     contactConfirmedBanners: { approved, rejected },
  *     // Optional. RA-495 AC6: when true the Make determination page asks
- *     // for an effective date, required on approval and hidden on refusal
- *     // (see `decision/effective-date.js`).
+ *     // for a valid from date, required on approval and hidden on refusal
+ *     // (see `decision/effective-date.js`), and (RA-800) it can be
+ *     // corrected while the approval awaits applicant contact.
  *     effectiveDate: true
  *   }
  *

@@ -2490,8 +2490,9 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       )
     })
 
-    // RA-795 AC08. The valid from date set on approval shows on the
-    // determination entry; a refusal records none, so shows no such row.
+    // RA-795 AC08/AC10. The valid from date set on approval shows on the
+    // determination entry. A refusal's entry carries the submission date as
+    // `effectiveDate` (audit only), so shows no such row.
     describe.each([
       [
         'an approval',
@@ -2505,7 +2506,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'a refusal',
         {
           actionDisplayName: 'Determination made: Refused',
-          details: { outcome: 'rejected' }
+          details: { outcome: 'rejected', effectiveDate: '2027-02-03' }
         },
         false
       ]
