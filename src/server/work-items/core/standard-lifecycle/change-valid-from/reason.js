@@ -15,7 +15,7 @@ export const ERROR_REASON_TOO_LONG = 'effective-date-reason-too-long'
 
 export const MAX_REASON_WORDS = 200
 
-// Not in Figma (which has no error states): pending content design review.
+// Not in Figma, which has no error states.
 export const REASON_MESSAGES = {
   [ERROR_REASON_REQUIRED]: 'Enter a reason for the valid from date change',
   [ERROR_REASON_TOO_LONG]: `Reason must be ${MAX_REASON_WORDS} words or fewer`
