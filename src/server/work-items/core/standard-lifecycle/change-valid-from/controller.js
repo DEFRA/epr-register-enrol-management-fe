@@ -266,6 +266,78 @@ export function makeShowChangeValidFromController({ typeId }) {
   }
 }
 
+/**
+ * The POST's work item, read and re-gated: the date is bounded by its
+ * accreditation year, the form re-renders with its current date, and the gate
+ * must be checked against the state as it is now. Resolves to `{ workItem }`,
+ * or to the `{ response }` to answer with instead.
+ */
+async function loadEligibleWorkItem(request, h, { typeId, id, user }) {
+  const current = await getWorkItem({ workItemId: id, user })
+  if (current.ok === false && current.status === statusCodes.notFound) {
+    return { response: renderNotFound(h, id) }
+  }
+  if (!current.ok) {
+    logger.warn(
+      { workItemId: id, status: current.status },
+      'Could not verify valid from date change eligibility'
+    )
+    flashBanner(request, bannerForFailure({ outcome: 'server' }))
+    return { response: h.redirect(detailHref(id)) }
+  }
+
+  const eligibility = evaluateChangeValidFromEligibility(current.workItem, {
+    typeId
+  })
+  if (!eligibility.allowed) {
+    logger.warn(
+      { workItemId: id, reason: eligibility.reason },
+      'Blocked valid from date change: work item is not eligible'
+    )
+    flashBanner(request, ineligibleBanner())
+    return { response: h.redirect(detailHref(id)) }
+  }
+
+  return { workItem: current.workItem }
+}
+
+/**
+ * A change management-be did not make: its field errors re-render the form;
+ * anything else is a banner on the detail page.
+ */
+function respondToFailedChange(
+  request,
+  h,
+  { typeId, workItem, values, result }
+) {
+  const id = request.params.id
+  logger.warn(
+    {
+      workItemId: id,
+      outcome: result.outcome,
+      status: result.status,
+      errorCode: result.errorCode,
+      // The backend's `detail` is developer-facing: log it, never render it.
+      message: result.message
+    },
+    'Valid from date change failed'
+  )
+
+  const fieldErrors = fieldErrorsFromBackend(result.errorCode)
+  if (fieldErrors) {
+    return renderForm(h, {
+      typeId,
+      workItem,
+      values,
+      ...fieldErrors,
+      statusCode: statusCodes.badRequest
+    })
+  }
+
+  flashBanner(request, bannerForFailure(result))
+  return h.redirect(detailHref(id))
+}
+
 /** POST — validate, submit, PRG. */
 export function makeSubmitChangeValidFromController({
   typeId,
@@ -277,33 +349,13 @@ export function makeSubmitChangeValidFromController({
       const user = getUser(request)
       const values = readFormValues(request.payload)
 
-      // Read first: the date is bounded by the work item's accreditation
-      // year, the form re-renders with the current date, and the gate must be
-      // re-checked against the state as it is now.
-      const current = await getWorkItem({ workItemId: id, user })
-      if (current.ok === false && current.status === statusCodes.notFound) {
-        return renderNotFound(h, id)
-      }
-      if (!current.ok) {
-        logger.warn(
-          { workItemId: id, status: current.status },
-          'Could not verify valid from date change eligibility'
-        )
-        flashBanner(request, bannerForFailure({ outcome: 'server' }))
-        return h.redirect(detailHref(id))
-      }
-
-      const workItem = current.workItem
-      const eligibility = evaluateChangeValidFromEligibility(workItem, {
-        typeId
+      const { workItem, response } = await loadEligibleWorkItem(request, h, {
+        typeId,
+        id,
+        user
       })
-      if (!eligibility.allowed) {
-        logger.warn(
-          { workItemId: id, reason: eligibility.reason },
-          'Blocked valid from date change: work item is not eligible'
-        )
-        flashBanner(request, ineligibleBanner())
-        return h.redirect(detailHref(id))
+      if (response) {
+        return response
       }
 
       // Both fields are validated before anything is rejected so the user
@@ -328,35 +380,16 @@ export function makeSubmitChangeValidFromController({
         user
       })
 
-      if (result.ok) {
-        flashBanner(request, successBanner(date.value))
-        return h.redirect(detailHref(id))
-      }
-
-      logger.warn(
-        {
-          workItemId: id,
-          outcome: result.outcome,
-          status: result.status,
-          errorCode: result.errorCode,
-          // The backend's `detail` is developer-facing: log it, never render it.
-          message: result.message
-        },
-        'Valid from date change failed'
-      )
-
-      const fieldErrors = fieldErrorsFromBackend(result.errorCode)
-      if (fieldErrors) {
-        return renderForm(h, {
+      if (!result.ok) {
+        return respondToFailedChange(request, h, {
           typeId,
           workItem,
           values,
-          ...fieldErrors,
-          statusCode: statusCodes.badRequest
+          result
         })
       }
 
-      flashBanner(request, bannerForFailure(result))
+      flashBanner(request, successBanner(date.value))
       return h.redirect(detailHref(id))
     }
   }

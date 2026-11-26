@@ -37,6 +37,13 @@ export const ERROR_INVALID = 'effective-date-invalid'
 export const ERROR_BEFORE_YEAR_START = 'effective-date-before-year-start'
 export const ERROR_AFTER_YEAR_END = 'effective-date-after-year-end'
 
+const MIN_FOUR_DIGIT_YEAR = 1000
+const MAX_FOUR_DIGIT_YEAR = 9999
+
+/** The accreditation year's last day, 31 December (`Date.UTC` months are 0-11). */
+const DECEMBER_INDEX = 11
+const LAST_DAY_OF_DECEMBER = 31
+
 const EFFECTIVE_DATE_MESSAGES = {
   [ERROR_REQUIRED]: () => 'Enter the valid from date',
   [ERROR_INVALID]: () => 'Valid from date must be a real date',
@@ -83,7 +90,11 @@ export function accreditationYearOf(workItem) {
 }
 
 function isFourDigitYear(year) {
-  return Number.isInteger(year) && year >= 1000 && year <= 9999
+  return (
+    Number.isInteger(year) &&
+    year >= MIN_FOUR_DIGIT_YEAR &&
+    year <= MAX_FOUR_DIGIT_YEAR
+  )
 }
 
 /**
@@ -109,7 +120,12 @@ export function validateEffectiveDate(values, accreditationYear) {
     if (read.utcTime < Date.UTC(accreditationYear, 0, 1)) {
       return { ok: false, errorCode: ERROR_BEFORE_YEAR_START }
     }
-    if (read.utcTime > Date.UTC(accreditationYear, 11, 31)) {
+    const yearEnd = Date.UTC(
+      accreditationYear,
+      DECEMBER_INDEX,
+      LAST_DAY_OF_DECEMBER
+    )
+    if (read.utcTime > yearEnd) {
       return { ok: false, errorCode: ERROR_AFTER_YEAR_END }
     }
   }
