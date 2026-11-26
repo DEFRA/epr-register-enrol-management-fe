@@ -19,7 +19,7 @@ import { workItemRecyclingOperationsController } from './recycling-operations.co
 import { workItemAdditionalInformationController } from './additional-information.controller.js'
 import { workItemAccreditationSummaryController } from './accreditation-summary.controller.js'
 import { workItemAccreditationSummaryDownloadController } from './accreditation-summary-download.controller.js'
-import { workItemRelatedApplicationsController } from './empty-tab.controller.js'
+import { workItemRelatedRequestsController } from './related-requests.controller.js'
 import {
   makeShowExtendController,
   makeSubmitExtendController
@@ -179,9 +179,10 @@ export const workItems = {
         },
         {
           // RA-495. The add-ORS "Accreditation summary" and "Related
-          // applications" tabs. RA-769 fills the first (the accreditation as
-          // it stands today); the second is empty until RA-770. Not found
-          // for a type whose case lacks them.
+          // change requests" tabs. RA-769 fills the first (the accreditation as
+          // it stands today); RA-770 the second (the requests submitted
+          // with this one, `?page=`). Not found for a type whose case
+          // lacks them.
           method: 'GET',
           path: '/work-items/{id}/accreditation-summary',
           ...workItemAccreditationSummaryController
@@ -196,8 +197,8 @@ export const workItems = {
         },
         {
           method: 'GET',
-          path: '/work-items/{id}/related-applications',
-          ...workItemRelatedApplicationsController
+          path: '/work-items/{id}/related-requests',
+          ...workItemRelatedRequestsController
         },
         // RA-410. The tasks page and the two task-mutation POSTs
         // (`/tasks/{taskId}/complete`, `/tasks/{taskId}/status`) used to sit

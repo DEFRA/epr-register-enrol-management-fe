@@ -11,7 +11,7 @@ import {
   ACCREDITATION_SUMMARY_TAB_KEY,
   APPLICATION_HISTORY_TAB_KEY,
   APPLICATION_SUMMARY_TAB_KEY,
-  RELATED_APPLICATIONS_TAB_KEY
+  RELATED_REQUESTS_TAB_KEY
 } from '#/server/routes/work-items/case-header.js'
 
 import { ADD_OVERSEAS_SITE_TYPE_ID } from './type-id.js'
@@ -26,10 +26,10 @@ const DETAIL_TEMPLATE_V1 = 'add-overseas-site/detail-v1'
  * management-be splits each submission into one work item per site.
  *
  * The detail page has the add-ORS case header (`buildCaseHeader`) and four
- * tabs (`caseTabs`, RA-495): Application summary, Accreditation summary and
- * Related applications (empty until RA-769 and RA-770), and Application
- * history. The Application summary shows the site from `payload.site`, built
- * by the type's own `buildApplicationSummary`, and the assignment panel.
+ * tabs (`caseTabs`, RA-495): Application summary, Accreditation summary
+ * (RA-769), Related change requests (RA-770) and Application history. The
+ * Application summary shows the site from `payload.site`, built by the type's
+ * own `buildApplicationSummary`, and the assignment panel.
  *
  * RA-495. The type opts into the shared Standard lifecycle
  * (`standardLifecycle`), using management-be's type-less endpoints: Duly make,
@@ -55,7 +55,7 @@ export const addOverseasSiteType = {
   caseTabs: [
     APPLICATION_SUMMARY_TAB_KEY,
     ACCREDITATION_SUMMARY_TAB_KEY,
-    RELATED_APPLICATIONS_TAB_KEY,
+    RELATED_REQUESTS_TAB_KEY,
     APPLICATION_HISTORY_TAB_KEY
   ],
   // RA-769: a registration-only change has no accreditation to summarise, so
