@@ -18,6 +18,7 @@ import { ADD_OVERSEAS_SITE_TYPE_ID } from './type-id.js'
 import { buildAddOverseasSiteContinueReviewRoutes } from './continue-review-routes.js'
 
 const DETAIL_TEMPLATE_V1 = 'add-overseas-site/detail-v1'
+const DETAIL_TEMPLATE_V3 = 'add-overseas-site/detail-v3'
 
 /**
  * RA-739. Add-ORS work item module: an operator's request to add an overseas
@@ -110,19 +111,18 @@ function describeCardSite(payload) {
 export const addOverseasSiteModule = {
   type: addOverseasSiteType,
   async register(server) {
-    // Every version renders with the one template. v3 (RA-698) added the query
-    // and continue-review transitions. v2 only made the
-    // withdraw transitions non-callable (management-be migrates live items
-    // to v2), which this service never offered (RA-317). v1 stays
+    // v1 and v2 render with the v1 template: v2 only made the withdraw
+    // transitions non-callable (management-be migrates live items to v2),
+    // which this service never offered (RA-317). v3 (RA-698) added the query
+    // and continue-review transitions, so per docs/work-items.md (RA-295) it
+    // has its own template file (which inherits the v1 presentation). v1 stays
     // registered so any item still stamped v1 keeps its own template rather
     // than silently falling back to the generic one; the boot-time guard
     // (`assertCurrentTemplateVersionIsRegistered`) needs the current version.
     registerModuleDetailTemplates(addOverseasSiteType.id, {
       v1: DETAIL_TEMPLATE_V1,
       v2: DETAIL_TEMPLATE_V1,
-      // RA-698. v3 makes the query and continue-review transitions reachable
-      // (management-be); the page is the same template.
-      v3: DETAIL_TEMPLATE_V1
+      v3: DETAIL_TEMPLATE_V3
     })
     server.route([
       ...buildStandardLifecycleRoutes(addOverseasSiteType.id),

@@ -1,5 +1,6 @@
 /**
- * Re-accreditation continue-review controller (RA-372).
+ * Continue-review controller shared by re-accreditation (RA-372) and
+ * add-overseas-site (RA-698).
  *
  * One handler, POST-only, at
  * `/work-items/re-accreditation/{id}/continue-review`.
@@ -93,7 +94,7 @@ export function makeContinueReviewController({
           status: result.status,
           message: result.message
         },
-        'Re-accreditation continue review failed'
+        'Continue review failed'
       )
       request.yar?.flash?.('flashBanner', bannerForFailure(result))
       return h.redirect(detailHref(id))

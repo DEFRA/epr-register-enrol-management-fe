@@ -626,20 +626,6 @@ describe('GET /work-items/{id}/query', () => {
       expect(statusCode).toBe(statusCodes.badRequest)
       expect(result).not.toEqual(expect.stringContaining(NOTICE))
     })
-
-    test('hides the notice when the work item could not be re-read', async () => {
-      // Conservative default: if we cannot tell whether it is assigned, do
-      // not assert something that may not be true.
-      getWorkItem.mockResolvedValue({ ok: false, status: 503, error: 'boom' })
-
-      const { statusCode, result } = await postQuery(
-        server,
-        form({ sections: [], reason: '' })
-      )
-
-      expect(statusCode).toBe(statusCodes.badRequest)
-      expect(result).not.toEqual(expect.stringContaining(NOTICE))
-    })
   })
 
   test('renders the page copy, word limit, inset text and cancel link', async () => {
@@ -1079,40 +1065,29 @@ describe('POST /work-items/{id}/query', () => {
     expect(result).not.toEqual(expect.stringContaining(REF))
   })
 
-  test('still renders the error page when the work item lookup also fails', async () => {
+  // A failed lookup surfaces the backend error banner (redirect to the detail
+  // page) rather than validating the form against the wrong rules.
+  test('redirects with an error banner, not a form error, when the work item lookup fails', async () => {
     getWorkItem.mockResolvedValue({ ok: false, status: 503 })
 
-    const { statusCode, result } = await postQuery(server, 'reason=')
+    const { statusCode, headers } = await postQuery(server, 'reason=')
 
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(result).toEqual(expect.stringContaining(SELECT_SECTIONS_MESSAGE))
+    expect(statusCode).toBe(statusCodes.redirect)
+    expect(headers.location).toBe(DETAIL_HREF)
+    expect(raiseWorkItemQuery).not.toHaveBeenCalled()
   })
 
-  // RA-367 review (jather-code-ee): a lookup failure must NOT trip the
-  // exporter-only guard. We cannot know the applicant type when the fetch
-  // failed, so a BES/ORS POST has to fall through to raiseQuery — whose own
-  // not-found / network banner is the right feedback — rather than being
-  // rejected with a misleading "select an area" sections error.
-  test('lets a BES/ORS POST reach the backend when the work item lookup fails', async () => {
-    getWorkItem.mockResolvedValue({ ok: false, status: 503 })
-    raiseWorkItemQuery.mockResolvedValue({
-      ok: false,
-      reason: 'not-found',
-      status: 404,
-      message: 'gone'
-    })
+  test('uses the not-found banner when the lookup returns 404', async () => {
+    getWorkItem.mockResolvedValue({ ok: false, status: 404 })
 
     const { statusCode, headers } = await postQuery(
       server,
-      form({
-        sections: ['business-plan', 'broadly-equivalent-standards'],
-        reason: 'A reason'
-      })
+      form({ sections: ['business-plan'], reason: 'A reason' })
     )
 
     expect(statusCode).toBe(statusCodes.redirect)
     expect(headers.location).toBe(DETAIL_HREF)
-    expect(raiseWorkItemQuery).toHaveBeenCalled()
+    expect(raiseWorkItemQuery).not.toHaveBeenCalled()
   })
 
   test.each([

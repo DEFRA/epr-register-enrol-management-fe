@@ -8,8 +8,8 @@
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
 import { continueReviewWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 
-import { makeContinueReviewController } from '../re-accreditation/continue-review/controller.js'
-import { createContinueReviewService } from '../re-accreditation/continue-review/service.js'
+import { makeContinueReviewController } from '../core/continue-review/controller.js'
+import { createContinueReviewService } from '../core/continue-review/service.js'
 import { ADD_OVERSEAS_SITE_TYPE_ID } from './type-id.js'
 
 export function buildAddOverseasSiteContinueReviewRoutes() {

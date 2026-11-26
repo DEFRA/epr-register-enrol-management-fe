@@ -56,17 +56,13 @@ const isPair = (value) =>
   value != null &&
   typeof value === 'object' &&
   !Array.isArray(value) &&
-  ('to' in value || 'new' in value || 'current' in value)
+  'to' in value
 
-function pairOldValue(value) {
-  return 'from' in value ? value.from : (value.old ?? value.previous)
-}
-
-function changeRows(changes, previous = {}) {
+function changeRows(changes) {
   return Object.entries(changes ?? {}).map(([key, value]) => {
     const pair = isPair(value)
-    const oldValue = pair ? pairOldValue(value) : previous[key]
-    const newValue = pair ? (value.to ?? value.new ?? value.current) : value
+    const oldValue = pair ? value.from : undefined
+    const newValue = pair ? value.to : value
     return {
       key,
       label: SITE_FIELD_LABELS[key] ?? key,

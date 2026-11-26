@@ -225,21 +225,24 @@ export function makeShowQueryController() {
 
 /**
  * RA-367: the work item's type is needed to validate the submitted sections
- * (exporter-only BES/ORS are invalid for a reprocessor), so read it up front.
- * The exporter-only guard is only enforced when the work item loaded; if the
- * lookup failed the request falls through to service.raiseQuery, whose
- * not-found / network error handling surfaces the right banner.
+ * (exporter-only BES/ORS are invalid for a reprocessor; an add-ORS item has
+ * no sections at all), so read it up front. If the lookup fails the form
+ * cannot be validated against the right rules, so the failure is returned
+ * for the handler to surface as the backend error banner instead.
  */
 async function loadAndValidate(request, id, user) {
   const item = await getWorkItem({ workItemId: id, user })
-  const workItem = item.ok ? item.workItem : null
-  const isExporter = workItem ? isExporterApplication(workItem) : false
+  if (!item.ok) {
+    return { lookupFailure: item }
+  }
+  const workItem = item.workItem
+  const isExporter = isExporterApplication(workItem)
   const addOrs = isAddOrs(workItem)
   const validation = addOrs
     ? validateAddOrsQueryForm(request.payload)
     : validateQueryForm(request.payload, {
         isExporter,
-        enforceExporterOnly: item.ok
+        enforceExporterOnly: true
       })
   return { workItem, isExporter, addOrs, validation }
 }
@@ -247,8 +250,8 @@ async function loadAndValidate(request, id, user) {
 function formErrorModel({ id, workItem, isExporter, addOrs, validation }) {
   return {
     id,
-    applicationRef: workItem?.payload?.applicationReference ?? null,
-    isUnassigned: workItem ? !workItem.assignedToId : false,
+    applicationRef: workItem.payload?.applicationReference ?? null,
+    isUnassigned: !workItem.assignedToId,
     isExporter,
     addOrs: addOrs ? addOrsSiteSummary(workItem) : null,
     values: validation.values,
@@ -266,8 +269,22 @@ export function makeSubmitQueryController({
       const id = request.params.id
       const user = getUser(request)
 
-      const { workItem, isExporter, addOrs, validation } =
+      const { lookupFailure, workItem, isExporter, addOrs, validation } =
         await loadAndValidate(request, id, user)
+
+      if (lookupFailure) {
+        logger.warn(
+          { workItemId: id, status: lookupFailure.status },
+          'Query application: work item lookup failed'
+        )
+        flashBanner(
+          request,
+          bannerForFailure({
+            outcome: lookupFailure.status === 404 ? 'not-found' : 'server'
+          })
+        )
+        return h.redirect(detailHref(id))
+      }
 
       if (!validation.ok) {
         return renderForm(
@@ -278,7 +295,7 @@ export function makeSubmitQueryController({
 
       const result = await service.raiseQuery({
         workItemId: id,
-        typeId: workItem?.typeId ?? null,
+        typeId: workItem.typeId,
         sections: addOrs ? undefined : validation.value.sections,
         reason: validation.value.reason,
         user

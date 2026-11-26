@@ -84,20 +84,6 @@ export function isOptionSelected(option, selected) {
   return keysOf(option).every((key) => chosen.has(key))
 }
 
-/**
- * RA-698. Display names for the section keys the backend stores on a query,
- * for the summary and audit views. Both keys of the combined checkbox show
- * under its one label.
- */
-export const QUERY_SECTION_DISPLAY_NAMES = Object.freeze({
-  'authority-to-issue': 'Authority to issue',
-  'business-plan': 'Business plan',
-  'prn-tonnage': 'PRN tonnage',
-  'sampling-and-inspection-plan': 'Sampling and inspection plan',
-  [BES_SECTION_KEY]: ORS_AND_BES_LABEL,
-  [ORS_SECTION_KEY]: ORS_AND_BES_LABEL
-})
-
 /** AC07/AC08 — the reason is capped in *words*, not characters. */
 export const QUERY_REASON_MAX_WORDS = 200
 

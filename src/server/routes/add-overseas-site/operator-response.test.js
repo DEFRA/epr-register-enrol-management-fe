@@ -116,12 +116,11 @@ describe('buildOperatorResponse', () => {
 })
 
 describe('buildOperatorResponse change shapes', () => {
-  test('reads old/previous/new/current pairs and bare values', () => {
+  test('reads { from, to } pairs and bare values', () => {
     const view = buildOperatorResponse({
       workItem: workItem({
         siteChanges: {
-          postcode: { old: 'A', new: 'B' },
-          townOrCity: { previous: 'C', current: 'D' },
+          postcode: { from: 'A', to: 'B' },
           contactName: 'Plain'
         }
       })
@@ -131,11 +130,6 @@ describe('buildOperatorResponse change shapes', () => {
         key: 'postcode',
         oldValue: 'A',
         newValue: 'B'
-      }),
-      expect.objectContaining({
-        key: 'townOrCity',
-        oldValue: 'C',
-        newValue: 'D'
       }),
       expect.objectContaining({
         key: 'contactName',

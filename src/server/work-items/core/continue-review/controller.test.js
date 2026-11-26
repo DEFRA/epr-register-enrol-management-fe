@@ -113,7 +113,7 @@ describe('makeContinueReviewController (RA-372)', () => {
       })
       expect(warn).toHaveBeenCalledWith(
         expect.objectContaining({ workItemId: 'wi-1', outcome }),
-        'Re-accreditation continue review failed'
+        'Continue review failed'
       )
     }
   )

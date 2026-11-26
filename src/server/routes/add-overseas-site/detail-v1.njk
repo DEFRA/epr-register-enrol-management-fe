@@ -78,7 +78,7 @@
             <div class="govuk-summary-list__row" data-testid="operator-response-change-{{ change.key }}">
               <dt class="govuk-summary-list__key">{{ change.label }}</dt>
               <dd class="govuk-summary-list__value">
-                {% if change.oldValue %}<span data-testid="operator-response-old-{{ change.key }}">{{ change.oldValue }}</span> &rarr; {% endif %}<strong data-testid="operator-response-new-{{ change.key }}">{{ change.newValue }}</strong>
+                {% if change.oldValue %}<span class="govuk-visually-hidden">Previous: </span><span data-testid="operator-response-old-{{ change.key }}">{{ change.oldValue }}</span> <span aria-hidden="true">&rarr;</span> {% endif %}<span class="govuk-visually-hidden">New: </span><strong data-testid="operator-response-new-{{ change.key }}">{{ change.newValue }}</strong>
               </dd>
             </div>
           {% endfor %}
@@ -91,7 +91,7 @@
             <div class="govuk-summary-list__row">
               <dt class="govuk-summary-list__key">{{ change.label }}</dt>
               <dd class="govuk-summary-list__value">
-                {% if change.oldValue %}{{ change.oldValue }} &rarr; {% endif %}<strong>{{ change.newValue }}</strong>
+                {% if change.oldValue %}<span class="govuk-visually-hidden">Previous: </span>{{ change.oldValue }} <span aria-hidden="true">&rarr;</span> {% endif %}<span class="govuk-visually-hidden">New: </span><strong>{{ change.newValue }}</strong>
               </dd>
             </div>
           {% endfor %}

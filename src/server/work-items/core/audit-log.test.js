@@ -1906,6 +1906,21 @@ describe('application-queried with the combined ORS and BES areas (RA-698)', () 
     )
   })
 
+  test('a query holding only one of the keys keeps its own label', () => {
+    expect(
+      summariseAuditEntry({
+        action: 'application-queried',
+        details: { sections: 'broadly-equivalent-standards' }
+      })
+    ).toBe('Broadly equivalent standards (BES)')
+    expect(
+      summariseAuditEntry({
+        action: 'application-queried',
+        details: { sections: 'overseas-reprocessing-sites' }
+      })
+    ).toBe('Overseas reprocessing sites')
+  })
+
   test('lists the combined label once in the detail rows', () => {
     expect(detailRowsForAuditEntry(entry)).toEqual([
       {
