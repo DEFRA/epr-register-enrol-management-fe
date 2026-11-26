@@ -251,6 +251,35 @@ export function buildAccreditationSummary({
 }
 
 /**
+ * RA-770. The short "Accreditation" block above the Related change requests
+ * table, in the design's order: the accreditation number, status (labelled
+ * "Status", as in the design), start date and year, built as on the
+ * Accreditation summary tab.
+ *
+ * @param {object} args
+ * @param {object} args.accreditation the operator backend's accreditation
+ * @param {string|null} args.accreditationStartDate `yyyy-MM-dd`
+ * @returns {object[]} summary rows `{ key, label, kind, value, tagClass? }`
+ */
+export function buildAccreditationBrief({
+  accreditation,
+  accreditationStartDate
+}) {
+  const byKey = new Map(
+    identityRows(accreditation, accreditationStartDate).map((row) => [
+      row.key,
+      row
+    ])
+  )
+  return [
+    byKey.get('accreditation-number'),
+    { ...byKey.get('status'), label: 'Status' },
+    byKey.get('accreditation-start-date'),
+    byKey.get('accreditation-year')
+  ]
+}
+
+/**
  * Who and what is accredited: organisation, numbers, status, dates, location, type and material.
  * @param {object} accreditation
  * @param {string|null} accreditationStartDate `yyyy-MM-dd`
