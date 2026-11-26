@@ -34,8 +34,10 @@
 {# role "region" because it persists: it must not steal focus or be       #}
 {# announced as an alert on each load. The accreditation ID is escaped by #}
 {# autoescaping inside the block capture.                                 #}
+{# The one exception: a one-time flash that says the same thing (RA-800's #}
+{# "Updated") takes its place for the render that shows it.               #}
 {% block typeBanners %}
-  {% if workItem.pendingContactBanner %}
+  {% if workItem.pendingContactBanner and not (flashBanner and flashBanner.replacesPendingContactBanner) %}
     {% set pendingContactHtml %}
       <p class="govuk-notification-banner__heading">{{ workItem.pendingContactBanner.text }}</p>
       {% if workItem.pendingContactBanner.accreditationId %}

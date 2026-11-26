@@ -2328,6 +2328,49 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         expect(applyWorkItemAction).not.toHaveBeenCalled()
       })
 
+      // Figma: the Updated banner is the only one on the summary after a save.
+      // It already says the applicant needs contacting, so "Application
+      // approved" stands down for that render and returns on the next visit.
+      test('shows the Updated banner in place of the pending-contact banner, once', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+        changeValidFromWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anApprovedItem()
+        })
+        const pendingBanner =
+          '[data-testid="standard-lifecycle-pending-contact-banner"]'
+        const cookieFrom = (response, fallback = '') =>
+          []
+            .concat(response.headers['set-cookie'] ?? [])
+            .map((header) => header.split(';')[0])
+            .join('; ') || fallback
+
+        const posted = await post(dateBody('2', '4', '2026'))
+        const cookie = cookieFrom(posted)
+        const first = await server.inject({
+          method: 'GET',
+          url: DETAIL_URL,
+          headers: { cookie }
+        })
+        const $first = cheerio.load(first.result)
+
+        expect($first('.govuk-notification-banner')).toHaveLength(1)
+        expect($first('[data-testid="work-item-flash-banner"]')).toHaveLength(1)
+        expect($first(pendingBanner)).toHaveLength(0)
+
+        const second = await server.inject({
+          method: 'GET',
+          url: DETAIL_URL,
+          headers: { cookie: cookieFrom(first, cookie) }
+        })
+        const $second = cheerio.load(second.result)
+
+        expect($second('[data-testid="work-item-flash-banner"]')).toHaveLength(
+          0
+        )
+        expect($second(pendingBanner)).toHaveLength(1)
+      })
+
       // RA-800 / RA-769. After a correction the summary's Valid from date row
       // reads the stored (corrected) date, and the old date is nowhere on it.
       test('then shows only the corrected Valid from date on the summary, with the status unchanged', async () => {

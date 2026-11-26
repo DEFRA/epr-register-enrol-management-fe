@@ -176,7 +176,10 @@ function successBanner(isoDate) {
   return {
     type: 'success',
     title: 'Updated',
-    text: `Valid from date updated to ${formatIsoDate(isoDate)}. You now need to contact the applicant about the decision.`
+    text: `Valid from date updated to ${formatIsoDate(isoDate)}. You now need to contact the applicant about the decision.`,
+    // It already says the applicant needs contacting, so it stands in for
+    // the pending-contact banner on the render that shows it.
+    replacesPendingContactBanner: true
   }
 }
 
