@@ -115,6 +115,37 @@ describe('buildOperatorResponse', () => {
   })
 })
 
+describe('buildOperatorResponse change shapes', () => {
+  test('reads old/previous/new/current pairs and bare values', () => {
+    const view = buildOperatorResponse({
+      workItem: workItem({
+        siteChanges: {
+          postcode: { old: 'A', new: 'B' },
+          townOrCity: { previous: 'C', current: 'D' },
+          contactName: 'Plain'
+        }
+      })
+    })
+    expect(view.changes).toEqual([
+      expect.objectContaining({
+        key: 'postcode',
+        oldValue: 'A',
+        newValue: 'B'
+      }),
+      expect.objectContaining({
+        key: 'townOrCity',
+        oldValue: 'C',
+        newValue: 'D'
+      }),
+      expect.objectContaining({
+        key: 'contactName',
+        oldValue: null,
+        newValue: 'Plain'
+      })
+    ])
+  })
+})
+
 describe('operatorResponseBesFiles', () => {
   test('lists the new files, treated as scanned clean', () => {
     const files = operatorResponseBesFiles(workItem(LATEST))

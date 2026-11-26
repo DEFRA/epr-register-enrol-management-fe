@@ -111,6 +111,7 @@ export const INVALID_SECTIONS_MESSAGE = 'Select which areas you want to query'
 // RA-534: the reason is no longer mandatory — an empty reason is a valid
 // submission and raises no error. The only remaining reason rule is the
 // word cap, which still applies to whatever text was entered.
+export const REASON_REQUIRED_MESSAGE = 'Enter a reason for the query'
 export const REASON_TOO_LONG_MESSAGE = `Query must be ${QUERY_REASON_MAX_WORDS} words or fewer`
 
 /**
@@ -119,12 +120,8 @@ export const REASON_TOO_LONG_MESSAGE = `Query must be ${QUERY_REASON_MAX_WORDS} 
  * defensively so the schema only ever sees an array of strings.
  */
 export function normaliseSections(raw) {
-  let values = []
-  if (typeof raw === 'string') {
-    values = raw === '' ? [] : [raw]
-  } else if (Array.isArray(raw)) {
-    values = raw.filter((v) => typeof v === 'string' && v !== '')
-  }
+  const list = Array.isArray(raw) ? raw : [raw]
+  const values = list.filter((v) => typeof v === 'string' && v !== '')
   // RA-698: the combined checkbox stands for both existing keys.
   const expanded = values.flatMap((v) =>
     v === ORS_AND_BES_OPTION_VALUE ? [BES_SECTION_KEY, ORS_SECTION_KEY] : [v]
@@ -261,7 +258,12 @@ export function validateAddOrsQueryForm(payload) {
   const rawReason = typeof payload?.reason === 'string' ? payload.reason : ''
   const values = { reason: rawReason }
   const { error, value } = Joi.object({
-    reason: queryFormSchema.extract('reason')
+    // management-be rejects a blank add-ORS reason, so unlike the main query
+    // form it is mandatory here.
+    reason: queryFormSchema.extract('reason').invalid('').messages({
+      'any.invalid': REASON_REQUIRED_MESSAGE,
+      'string.empty': REASON_REQUIRED_MESSAGE
+    })
   }).validate(values, { abortEarly: false, stripUnknown: true })
 
   if (error) {

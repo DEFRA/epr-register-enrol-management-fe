@@ -58,14 +58,14 @@ const isPair = (value) =>
   !Array.isArray(value) &&
   ('to' in value || 'new' in value || 'current' in value)
 
+function pairOldValue(value) {
+  return 'from' in value ? value.from : (value.old ?? value.previous)
+}
+
 function changeRows(changes, previous = {}) {
   return Object.entries(changes ?? {}).map(([key, value]) => {
     const pair = isPair(value)
-    const oldValue = pair
-      ? 'from' in value
-        ? value.from
-        : (value.old ?? value.previous)
-      : previous[key]
+    const oldValue = pair ? pairOldValue(value) : previous[key]
     const newValue = pair ? (value.to ?? value.new ?? value.current) : value
     return {
       key,

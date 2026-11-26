@@ -1299,6 +1299,19 @@ describe('add-ORS query (RA-698)', () => {
     expect(args.sections).toBeUndefined()
   })
 
+  test('requires a reason and re-renders with an error when it is blank', async () => {
+    const { statusCode, result } = await postQuery(
+      server,
+      form({ sections: [], reason: '   ' })
+    )
+
+    expect(statusCode).toBe(statusCodes.badRequest)
+    expect(result).toEqual(
+      expect.stringContaining('Enter a reason for the query')
+    )
+    expect(raiseWorkItemQuery).not.toHaveBeenCalled()
+  })
+
   test('re-renders with an error when the reason is too long', async () => {
     const { statusCode, result } = await postQuery(
       server,

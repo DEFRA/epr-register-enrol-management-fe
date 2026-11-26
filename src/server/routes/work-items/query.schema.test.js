@@ -7,6 +7,7 @@ import {
   QUERY_REASON_MAX_WORDS,
   QUERY_SECTION_OPTIONS,
   QUERY_SECTION_VALUES,
+  REASON_REQUIRED_MESSAGE,
   REASON_TOO_LONG_MESSAGE,
   SELECT_SECTIONS_MESSAGE,
   allowedSectionValues,
@@ -124,12 +125,14 @@ describe('validateAddOrsQueryForm (RA-698)', () => {
     ).toEqual({ ok: true, value: { reason: 'Check the address' } })
   })
 
-  test('accepts no reason', () => {
-    expect(validateAddOrsQueryForm(undefined)).toEqual({
-      ok: true,
-      value: { reason: '' }
-    })
-  })
+  test.each([undefined, {}, { reason: '' }, { reason: '   ' }, { reason: 5 }])(
+    'requires a reason (%j)',
+    (payload) => {
+      const result = validateAddOrsQueryForm(payload)
+      expect(result.ok).toBe(false)
+      expect(result.fieldErrors).toEqual({ reason: REASON_REQUIRED_MESSAGE })
+    }
+  )
 
   test('rejects a reason over the word cap', () => {
     const result = validateAddOrsQueryForm({
@@ -137,6 +140,14 @@ describe('validateAddOrsQueryForm (RA-698)', () => {
     })
     expect(result.ok).toBe(false)
     expect(result.fieldErrors.reason).toBe(REASON_TOO_LONG_MESSAGE)
+  })
+})
+
+describe('normaliseSections edge cases', () => {
+  test('drops blanks and non-strings, and tolerates a missing value', () => {
+    expect(normaliseSections(undefined)).toEqual([])
+    expect(normaliseSections('')).toEqual([])
+    expect(normaliseSections(['a', '', 5, 'a'])).toEqual(['a'])
   })
 })
 

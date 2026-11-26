@@ -223,6 +223,41 @@ export function makeShowQueryController() {
   }
 }
 
+/**
+ * RA-367: the work item's type is needed to validate the submitted sections
+ * (exporter-only BES/ORS are invalid for a reprocessor), so read it up front.
+ * The exporter-only guard is only enforced when the work item loaded; if the
+ * lookup failed the request falls through to service.raiseQuery, whose
+ * not-found / network error handling surfaces the right banner.
+ */
+async function loadAndValidate(request, id, user) {
+  const item = await getWorkItem({ workItemId: id, user })
+  const workItem = item.ok ? item.workItem : null
+  const isExporter = workItem ? isExporterApplication(workItem) : false
+  const addOrs = isAddOrs(workItem)
+  const validation = addOrs
+    ? validateAddOrsQueryForm(request.payload)
+    : validateQueryForm(request.payload, {
+        isExporter,
+        enforceExporterOnly: item.ok
+      })
+  return { workItem, isExporter, addOrs, validation }
+}
+
+function formErrorModel({ id, workItem, isExporter, addOrs, validation }) {
+  return {
+    id,
+    applicationRef: workItem?.payload?.applicationReference ?? null,
+    isUnassigned: workItem ? !workItem.assignedToId : false,
+    isExporter,
+    addOrs: addOrs ? addOrsSiteSummary(workItem) : null,
+    values: validation.values,
+    fieldErrors: validation.fieldErrors,
+    errorSummary: buildErrorSummary(validation.fieldErrors),
+    statusCode: 400
+  }
+}
+
 export function makeSubmitQueryController({
   service = createQueryService()
 } = {}) {
@@ -231,41 +266,14 @@ export function makeSubmitQueryController({
       const id = request.params.id
       const user = getUser(request)
 
-      // RA-367: we need the work item's type to validate the submitted
-      // sections (exporter-only BES/ORS are invalid for a reprocessor), so
-      // read it up front.
-      const item = await getWorkItem({ workItemId: id, user })
-      const workItem = item.ok ? item.workItem : null
-      const isExporter = workItem ? isExporterApplication(workItem) : false
-
-      // Only enforce the exporter-only section guard when the work item
-      // actually loaded and told us its type. If the lookup itself failed we
-      // cannot know the type, so we let the request fall through to
-      // `service.raiseQuery`, whose existing not-found / network error
-      // handling surfaces the right banner — rather than rejecting a BES/ORS
-      // POST with a misleading "select an area" error (review: jather-code-ee).
-      // `validateQueryForm` tolerates a null/undefined payload itself, so
-      // there is no need to defend against it twice.
-      const addOrs = isAddOrs(workItem)
-      const validation = addOrs
-        ? validateAddOrsQueryForm(request.payload)
-        : validateQueryForm(request.payload, {
-            isExporter,
-            enforceExporterOnly: item.ok
-          })
+      const { workItem, isExporter, addOrs, validation } =
+        await loadAndValidate(request, id, user)
 
       if (!validation.ok) {
-        return renderForm(h, {
-          id,
-          applicationRef: workItem?.payload?.applicationReference ?? null,
-          isUnassigned: workItem ? !workItem.assignedToId : false,
-          isExporter,
-          addOrs: addOrs ? addOrsSiteSummary(workItem) : null,
-          values: validation.values,
-          fieldErrors: validation.fieldErrors,
-          errorSummary: buildErrorSummary(validation.fieldErrors),
-          statusCode: 400
-        })
+        return renderForm(
+          h,
+          formErrorModel({ id, workItem, isExporter, addOrs, validation })
+        )
       }
 
       const result = await service.raiseQuery({
