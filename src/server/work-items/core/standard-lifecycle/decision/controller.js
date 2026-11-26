@@ -44,6 +44,7 @@ import { createDecisionService, DECISION_NOTE_MAX_LENGTH } from './service.js'
 import {
   EFFECTIVE_DATE_ANCHOR,
   EFFECTIVE_DATE_ID,
+  accreditationYearOf,
   effectiveDateMessage,
   isEffectiveDateErrorCode,
   validateEffectiveDate
@@ -259,7 +260,7 @@ export function makeSubmitDecisionController({
         decision,
         decisionNote,
         effectiveDateInput,
-        submittedAt: workItem.submittedAt
+        accreditationYear: accreditationYearOf(workItem)
       })
 
       // Render in place — a redirect would lose the form and the user would
@@ -334,11 +335,12 @@ export function makeSubmitDecisionController({
       }
 
       // RA-495 AC6. A backstop: the local check above names the same rules,
-      // so this means management-be moved, or the work item carried no
-      // submission date to check against. Bound to the field, like a local
+      // so this means management-be moved. Bound to the field, like a local
       // error, rather than a banner.
-      if (isEffectiveDateErrorCode(result.errorCode)) {
-        const message = effectiveDateMessage(result.errorCode)
+      const message = isEffectiveDateErrorCode(result.errorCode)
+        ? effectiveDateMessage(result.errorCode, accreditationYearOf(workItem))
+        : null
+      if (message) {
         return renderWithErrors(h, {
           typeId,
           id,
@@ -381,7 +383,7 @@ function validateDecisionForm({
   decision,
   decisionNote,
   effectiveDateInput,
-  submittedAt
+  accreditationYear
 }) {
   const fieldErrors = {}
   const errorItems = []
@@ -398,11 +400,11 @@ function validateDecisionForm({
   // is hidden, and whatever it holds is neither checked nor sent.
   let effectiveDate = null
   if (takesEffectiveDate(typeId) && decision === 'approved') {
-    const checked = validateEffectiveDate(effectiveDateInput, submittedAt)
+    const checked = validateEffectiveDate(effectiveDateInput, accreditationYear)
     if (checked.ok) {
       effectiveDate = checked.value
     } else {
-      const message = effectiveDateMessage(checked.errorCode)
+      const message = effectiveDateMessage(checked.errorCode, accreditationYear)
       fieldErrors.effectiveDate = message
       errorItems.push({ text: message, href: EFFECTIVE_DATE_ANCHOR })
     }

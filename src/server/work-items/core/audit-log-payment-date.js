@@ -6,19 +6,9 @@
  * states) carrying the previous and new dates and the reason.
  */
 
+import { formatIsoDate } from './format-iso-date.js'
+
 export const PAYMENT_DATE_CHANGED_ACTION = 'payment-date-changed'
-
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
-
-/** `YYYY-MM-DD` -> `dd/mm/yyyy`; anything else yields `null`. */
-function formatIsoDate(value) {
-  const match = ISO_DATE.exec(String(value ?? ''))
-  if (!match) {
-    return null
-  }
-  const [, year, month, day] = match
-  return `${day}/${month}/${year}`
-}
 
 /** At-a-glance summary: "15/07/2026 → 20/07/2026" (empty if either is bad). */
 export function summarisePaymentDateChanged(details) {

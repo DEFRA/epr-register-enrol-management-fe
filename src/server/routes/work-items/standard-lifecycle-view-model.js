@@ -1,7 +1,9 @@
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
+import { evaluateChangeValidFromEligibility } from '#/server/work-items/core/standard-lifecycle/change-valid-from/eligibility.js'
 import { evaluateLogDecisionEligibility } from '#/server/work-items/core/standard-lifecycle/decision/eligibility.js'
 import { evaluateDulyMakeEligibility } from '#/server/work-items/core/standard-lifecycle/duly-making/eligibility.js'
 import {
+  CHANGE_VALID_FROM_PAGE,
   CONFIRM_CONTACT_PAGE,
   DECISION_PAGE,
   DULY_MAKE_PAGE,
@@ -85,6 +87,15 @@ export function buildStandardLifecycleFields({
     canChangeDueDate: isPendingContact ? false : workItem.canChangeDueDate,
     canLogDecision: evaluateLogDecisionEligibility(source, scope).allowed,
     logDecisionHref: lifecyclePageHref(typeId, workItem.id, DECISION_PAGE),
+    // RA-800. The "Change valid from date" link, through the same gate that
+    // guards the page's own route.
+    canChangeValidFrom: evaluateChangeValidFromEligibility(source, scope)
+      .allowed,
+    changeValidFromHref: lifecyclePageHref(
+      typeId,
+      workItem.id,
+      CHANGE_VALID_FROM_PAGE
+    ),
     canDulyMake: evaluateDulyMakeEligibility(source, scope).allowed,
     dulyMakeHref: lifecyclePageHref(typeId, workItem.id, DULY_MAKE_PAGE),
     isReadOnlyState: TERMINAL_STATE_IDS.has(workItem.stateId),

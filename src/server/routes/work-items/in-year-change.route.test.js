@@ -29,7 +29,8 @@ vi.mock('#/server/common/helpers/backend-api/backend-api.js', () => ({
   dulyMakeWorkItem: vi.fn(),
   getDulyMakeDetails: vi.fn(),
   recordWorkItemDecision: vi.fn(),
-  confirmWorkItemApplicantContact: vi.fn()
+  confirmWorkItemApplicantContact: vi.fn(),
+  changeValidFromWorkItem: vi.fn()
 }))
 
 const {
@@ -44,7 +45,8 @@ const {
   getDulyMakeDetails,
   addWorkItemNote,
   recordWorkItemDecision,
-  confirmWorkItemApplicantContact
+  confirmWorkItemApplicantContact,
+  changeValidFromWorkItem
 } = await import('#/server/common/helpers/backend-api/backend-api.js')
 
 const ADD_ORS_ID = '73900003-0000-4000-8000-000000000001'
@@ -1656,6 +1658,31 @@ describe('RA-739 / RA-495: in-year change applications', () => {
     })
 
     test.each([
+      ['before 1 January', '31', '12', '2025', 'on or after 1 January 2026'],
+      ['after 31 December', '1', '1', '2027', 'on or before 31 December 2026']
+    ])(
+      'an approval dated %s of the accreditation year is shown again with the year named',
+      async (_, day, month, year, expected) => {
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anItemIn('assessment-started')
+        })
+
+        const { statusCode, result } = await postForm(
+          DECISION_URL,
+          `decision=approved&effective-date-day=${day}&effective-date-month=${month}&effective-date-year=${year}`
+        )
+
+        expect(statusCode).toBe(400)
+        const $ = cheerio.load(result)
+        expect(
+          squash($('[data-testid="effective-date-error"]').text())
+        ).toContain(`Valid from date must be ${expected}`)
+        expect(recordWorkItemDecision).not.toHaveBeenCalled()
+      }
+    )
+
+    test.each([
       'submitted',
       'approved-pending-contact',
       'approved',
@@ -1693,7 +1720,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       const { statusCode, headers } = await postForm(
         DECISION_URL,
         'decision=approved&decisionNote=Site%20meets%20the%20conditions' +
-          '&effective-date-day=1&effective-date-month=3&effective-date-year=2027'
+          '&effective-date-day=1&effective-date-month=3&effective-date-year=2026'
       )
 
       expect(statusCode).toBe(statusCodes.redirect)
@@ -1714,7 +1741,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         expect.objectContaining({
           workItemId: ADD_ORS_ID,
           outcome: 'approved',
-          effectiveDate: '2027-03-01'
+          effectiveDate: '2026-03-01'
         })
       )
     })
@@ -1902,6 +1929,559 @@ describe('RA-739 / RA-495: in-year change applications', () => {
     )
   })
 
+  // RA-800. Correcting the valid from date of an approved add-ORS while it
+  // awaits applicant contact: link, page, validation, save, cancel, guard.
+  describe('changing the valid from date of an add-ORS application', () => {
+    const DETAIL_URL = `/work-items/${ADD_ORS_ID}`
+    const CHANGE_URL = `/work-items/add-overseas-site/${ADD_ORS_ID}/change-valid-from`
+    const FORM = { 'content-type': 'application/x-www-form-urlencoded' }
+
+    function anApprovedItem({
+      stateId = 'approved-pending-contact',
+      ...rest
+    } = {}) {
+      const base = anAddOrsItem({ assignedToName: 'Test Standard User' })
+      return {
+        ...base,
+        assignedToId: 'test-standard-id',
+        stateId,
+        payload: { ...base.payload, effectiveDate: '2026-03-27', ...rest }
+      }
+    }
+
+    function withoutDate() {
+      const item = anApprovedItem()
+      delete item.payload.effectiveDate
+      return item
+    }
+
+    async function detailPage(workItem, headers = {}) {
+      getWorkItem.mockResolvedValue({ ok: true, workItem })
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: DETAIL_URL,
+        headers
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      return cheerio.load(result)
+    }
+
+    async function changePage() {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+      const { result, statusCode } = await server.inject({
+        method: 'GET',
+        url: CHANGE_URL
+      })
+      expect(statusCode).toBe(statusCodes.ok)
+      return cheerio.load(result)
+    }
+
+    function post(payload) {
+      return injectWithCrumb(server, {
+        method: 'POST',
+        url: CHANGE_URL,
+        payload,
+        headers: FORM
+      })
+    }
+
+    function dateBody(day, month, year, reason = 'Mistyped the date') {
+      return new URLSearchParams({
+        'effective-date-day': day,
+        'effective-date-month': month,
+        'effective-date-year': year,
+        reason
+      }).toString()
+    }
+
+    async function followRedirect(posted) {
+      expect(posted.statusCode).toBe(statusCodes.redirect)
+      expect(posted.headers.location).toBe(DETAIL_URL)
+      const cookie = []
+        .concat(posted.headers['set-cookie'] ?? [])
+        .map((header) => header.split(';')[0])
+        .join('; ')
+      const followed = await server.inject({
+        method: 'GET',
+        url: DETAIL_URL,
+        headers: { cookie }
+      })
+      return cheerio.load(followed.result)
+    }
+
+    beforeEach(() => {
+      changeValidFromWorkItem.mockReset()
+    })
+
+    describe('the link', () => {
+      test('is the first link in the actions card, above Reassign and Unassign', async () => {
+        const $ = await detailPage(anApprovedItem())
+
+        const link = $('[data-testid="change-valid-from-link"]')
+        expect(squash(link.text())).toBe('Change valid from date')
+        expect(link.attr('href')).toBe(CHANGE_URL)
+        const ids = $('.app-case-panel__links li > [data-testid]')
+          .map((_, el) => $(el).attr('data-testid'))
+          .get()
+        expect(ids.slice(0, 3)).toEqual([
+          'change-valid-from-link',
+          'reassign-link',
+          'unassign-link'
+        ])
+      })
+
+      test('is inert for a read-only user', async () => {
+        const $ = await detailPage(anApprovedItem(), {
+          'x-test-user-role': 'support-readonly'
+        })
+
+        const link = $('[data-testid="change-valid-from-link"]')
+        expect(link).toHaveLength(1)
+        expect(link.is('a')).toBe(false)
+        expect(link.attr('href')).toBeUndefined()
+        expect(link.hasClass('app-action-link--disabled')).toBe(true)
+      })
+
+      test('is hidden when there is no valid from date', async () => {
+        const $ = await detailPage(withoutDate())
+        expect($('[data-testid="change-valid-from-link"]')).toHaveLength(0)
+      })
+
+      test.each([
+        'approved',
+        'rejected',
+        'rejected-pending-contact',
+        'duly-made'
+      ])('is hidden for a %s application', async (stateId) => {
+        const $ = await detailPage(anApprovedItem({ stateId }))
+        expect($('[data-testid="change-valid-from-link"]')).toHaveLength(0)
+      })
+
+      test('leaves Confirm applicant contact available', async () => {
+        const $ = await detailPage(anApprovedItem())
+        expect($('[data-testid="confirm-applicant-contact-cta"]')).toHaveLength(
+          1
+        )
+      })
+    })
+
+    describe('the page', () => {
+      test('shows the breadcrumb, caption, current date and an empty form', async () => {
+        const $ = await changePage()
+
+        expect(squash($('h1').text())).toBe('Change valid from date')
+        expect(squash($('[data-testid="app-heading-caption"]').text())).toBe(
+          'Application number IYC-ORS-2026-00001'
+        )
+        expect($('.govuk-breadcrumbs a').first().text()).toBe('Work items')
+        expect(squash($('.govuk-breadcrumbs').text())).toBe(
+          'Work items IYC-ORS-2026-00001 Change valid from date'
+        )
+        expect(
+          squash($('[data-testid="change-valid-from-current"]').text())
+        ).toBe('The current valid from date is 27/03/2026')
+        expect($('[data-testid="change-valid-from-form"]').attr('action')).toBe(
+          CHANGE_URL
+        )
+        for (const part of ['day', 'month', 'year']) {
+          expect($(`#effective-date-${part}`).val() ?? '').toBe('')
+        }
+        expect($('#reason').text().trim()).toBe('')
+        expect(squash($('[for="reason"]').text())).toBe('Reason for change')
+        expect($('body').text()).toContain(
+          'The reason for change will be recorded in the audit log (application history)'
+        )
+        expect($('body').text()).toContain('You can enter up to 200 words')
+        expect($('[data-testid="change-valid-from-cancel"]').attr('href')).toBe(
+          DETAIL_URL
+        )
+        // No client-side JavaScript of its own: Cancel is a link, Save a
+        // plain form post.
+        expect($('[data-testid="change-valid-from-form"] script')).toHaveLength(
+          0
+        )
+      })
+
+      test.each([
+        'duly-made',
+        'approved',
+        'rejected',
+        'approved-pending-contact-no-date'
+      ])('is refused for a %s application', async (stateId) => {
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem:
+            stateId === 'approved-pending-contact-no-date'
+              ? withoutDate()
+              : anApprovedItem({ stateId })
+        })
+
+        const { statusCode, headers } = await server.inject({
+          method: 'GET',
+          url: CHANGE_URL
+        })
+
+        expect(statusCode).toBe(statusCodes.redirect)
+        expect(headers.location).toBe(DETAIL_URL)
+      })
+
+      test('is refused when a POST arrives for an ineligible application', async () => {
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anApprovedItem({ stateId: 'approved' })
+        })
+
+        const posted = await post(dateBody('1', '4', '2026'))
+
+        expect(posted.statusCode).toBe(statusCodes.redirect)
+        expect(posted.headers.location).toBe(DETAIL_URL)
+        expect(changeValidFromWorkItem).not.toHaveBeenCalled()
+      })
+
+      test('is not found for an unknown application', async () => {
+        getWorkItem.mockResolvedValue({ ok: false, status: 404 })
+
+        const { statusCode } = await server.inject({
+          method: 'GET',
+          url: CHANGE_URL
+        })
+
+        expect(statusCode).toBe(statusCodes.notFound)
+      })
+
+      test('is not found for a re-accreditation item', async () => {
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: aReAccreditationItem()
+        })
+
+        const { statusCode, headers } = await server.inject({
+          method: 'GET',
+          url: CHANGE_URL
+        })
+
+        expect(statusCode).toBe(statusCodes.redirect)
+        expect(headers.location).toBe(DETAIL_URL)
+      })
+    })
+
+    describe('validation', () => {
+      test.each([
+        ['missing', '', '', '', 'Enter the valid from date'],
+        [
+          'not a real date',
+          '31',
+          '2',
+          '2026',
+          'Valid from date must be a real date'
+        ],
+        [
+          'before the accreditation year',
+          '31',
+          '12',
+          '2025',
+          'Valid from date must be on or after 1 January 2026'
+        ],
+        [
+          'after the accreditation year',
+          '1',
+          '1',
+          '2027',
+          'Valid from date must be on or before 31 December 2026'
+        ]
+      ])(
+        'a %s date shows an error and keeps the input',
+        async (_, d, m, y, message) => {
+          getWorkItem.mockResolvedValue({
+            ok: true,
+            workItem: anApprovedItem()
+          })
+
+          const { statusCode, result } = await post(
+            dateBody(d, m, y, 'Because')
+          )
+
+          expect(statusCode).toBe(statusCodes.badRequest)
+          const $ = cheerio.load(result)
+          expect(
+            squash($('[data-testid="change-valid-from-error-summary"]').text())
+          ).toContain(message)
+          expect(
+            $('[data-testid="change-valid-from-error-summary"] a').attr('href')
+          ).toBe('#effective-date-day')
+          expect($('#effective-date-day').val()).toBe(d)
+          expect($('#effective-date-month').val()).toBe(m)
+          expect($('#effective-date-year').val()).toBe(y)
+          expect($('#reason').text().trim()).toBe('Because')
+          expect(
+            squash($('[data-testid="change-valid-from-current"]').text())
+          ).toBe('The current valid from date is 27/03/2026')
+          expect(changeValidFromWorkItem).not.toHaveBeenCalled()
+        }
+      )
+
+      test('a missing reason shows an error and keeps the date', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+
+        const { statusCode, result } = await post(
+          dateBody('1', '4', '2026', '  ')
+        )
+
+        expect(statusCode).toBe(statusCodes.badRequest)
+        const $ = cheerio.load(result)
+        expect(
+          squash($('[data-testid="change-valid-from-error-summary"]').text())
+        ).toContain('Enter a reason for the valid from date change')
+        expect($('#effective-date-day').val()).toBe('1')
+        expect($('#effective-date-year').val()).toBe('2026')
+        expect(changeValidFromWorkItem).not.toHaveBeenCalled()
+      })
+
+      test('a reason over 200 words shows an error and keeps the reason', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+        const reason = Array.from({ length: 201 }, () => 'word').join(' ')
+
+        const { statusCode, result } = await post(
+          dateBody('1', '4', '2026', reason)
+        )
+
+        expect(statusCode).toBe(statusCodes.badRequest)
+        const $ = cheerio.load(result)
+        expect(
+          squash($('[data-testid="change-valid-from-error-summary"]').text())
+        ).toContain('Reason must be 200 words or fewer')
+        expect($('#reason').text().trim()).toBe(reason)
+        expect(changeValidFromWorkItem).not.toHaveBeenCalled()
+      })
+
+      test('shows every problem at once', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+
+        const { result } = await post(dateBody('', '', '', ''))
+
+        const $ = cheerio.load(result)
+        expect(
+          $('[data-testid="change-valid-from-error-summary"] li')
+        ).toHaveLength(2)
+      })
+
+      test.each([
+        [
+          'effective-date-before-year-start',
+          'Valid from date must be on or after 1 January 2026'
+        ],
+        ['effective-date-reason-too-long', 'Reason must be 200 words or fewer']
+      ])(
+        'maps the backend code %s back onto its field',
+        async (errorCode, message) => {
+          getWorkItem.mockResolvedValue({
+            ok: true,
+            workItem: anApprovedItem()
+          })
+          changeValidFromWorkItem.mockResolvedValue({
+            ok: false,
+            reason: 'invalid',
+            status: 400,
+            errorCode,
+            message: 'developer detail'
+          })
+
+          const { statusCode, result } = await post(dateBody('1', '4', '2026'))
+
+          expect(statusCode).toBe(statusCodes.badRequest)
+          const $ = cheerio.load(result)
+          expect(
+            squash($('[data-testid="change-valid-from-error-summary"]').text())
+          ).toContain(message)
+          expect(result).not.toContain('developer detail')
+        }
+      )
+    })
+
+    describe('saving', () => {
+      test('sends the date and reason, then returns to the summary with the Updated banner', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+        changeValidFromWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anApprovedItem()
+        })
+
+        const $ = await followRedirect(
+          await post(dateBody('2', '4', '2026', 'Mistyped the date'))
+        )
+
+        expect(changeValidFromWorkItem).toHaveBeenCalledWith(
+          expect.objectContaining({
+            workItemId: ADD_ORS_ID,
+            effectiveDate: '2026-04-02',
+            reason: 'Mistyped the date'
+          })
+        )
+        const banner = $('[data-testid="work-item-flash-banner"]')
+        expect(squash(banner.text())).toContain('Updated')
+        expect(squash(banner.text())).toContain(
+          'Valid from date updated to 02/04/2026. You now need to contact the applicant about the decision.'
+        )
+        // Status unchanged and the next step is still Confirm applicant contact.
+        expect($('[data-testid="confirm-applicant-contact-cta"]')).toHaveLength(
+          1
+        )
+        expect(applyWorkItemAction).not.toHaveBeenCalled()
+      })
+
+      // Figma: the Updated banner is the only one on the summary after a save.
+      // It already says the applicant needs contacting, so "Application
+      // approved" stands down for that render and returns on the next visit.
+      test('shows the Updated banner in place of the pending-contact banner, once', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+        changeValidFromWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anApprovedItem()
+        })
+        const pendingBanner =
+          '[data-testid="standard-lifecycle-pending-contact-banner"]'
+        const cookieFrom = (response, fallback = '') =>
+          []
+            .concat(response.headers['set-cookie'] ?? [])
+            .map((header) => header.split(';')[0])
+            .join('; ') || fallback
+
+        const posted = await post(dateBody('2', '4', '2026'))
+        const cookie = cookieFrom(posted)
+        const first = await server.inject({
+          method: 'GET',
+          url: DETAIL_URL,
+          headers: { cookie }
+        })
+        const $first = cheerio.load(first.result)
+
+        expect($first('.govuk-notification-banner')).toHaveLength(1)
+        expect($first('[data-testid="work-item-flash-banner"]')).toHaveLength(1)
+        expect($first(pendingBanner)).toHaveLength(0)
+
+        const second = await server.inject({
+          method: 'GET',
+          url: DETAIL_URL,
+          headers: { cookie: cookieFrom(first, cookie) }
+        })
+        const $second = cheerio.load(second.result)
+
+        expect($second('[data-testid="work-item-flash-banner"]')).toHaveLength(
+          0
+        )
+        expect($second(pendingBanner)).toHaveLength(1)
+      })
+
+      // RA-800 / RA-769. After a correction the summary's Valid from date row
+      // reads the stored (corrected) date, and the old date is nowhere on it.
+      test('then shows only the corrected Valid from date on the summary, with the status unchanged', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+        changeValidFromWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anApprovedItem({ effectiveDate: '2026-04-02' })
+        })
+
+        const posted = await post(dateBody('2', '4', '2026'))
+        expect(posted.statusCode).toBe(statusCodes.redirect)
+        // The backend now holds the corrected date; the summary re-reads it.
+        getWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anApprovedItem({ effectiveDate: '2026-04-02' })
+        })
+        const cookie = []
+          .concat(posted.headers['set-cookie'] ?? [])
+          .map((header) => header.split(';')[0])
+          .join('; ')
+        const followed = await server.inject({
+          method: 'GET',
+          url: DETAIL_URL,
+          headers: { cookie }
+        })
+        const $ = cheerio.load(followed.result)
+
+        expect(
+          squash(
+            $(
+              '[data-testid="application-valid-from"] [data-testid="app-detail-value-valid-from"]'
+            ).text()
+          )
+        ).toBe('02 Apr 2026')
+        const page = squash($('body').text())
+        expect(page).not.toContain('27 Mar 2026')
+        expect(page).not.toContain('27/03/2026')
+        expect(
+          squash($('[data-testid="work-item-flash-banner"]').text())
+        ).toContain('Updated')
+        expect(
+          squash(
+            $(
+              '[data-testid="case-header-status"] [data-testid="work-item-state-tag"]'
+            ).text()
+          )
+        ).toBe('Approved')
+        expect($('[data-testid="confirm-applicant-contact-cta"]')).toHaveLength(
+          1
+        )
+        // The date stays out of the case header.
+        expect($('[data-testid="case-header"]').text()).not.toContain(
+          'Valid from'
+        )
+      })
+
+      test('accepts the same date as the current one', async () => {
+        getWorkItem.mockResolvedValue({ ok: true, workItem: anApprovedItem() })
+        changeValidFromWorkItem.mockResolvedValue({
+          ok: true,
+          workItem: anApprovedItem()
+        })
+
+        const posted = await post(dateBody('27', '3', '2026'))
+
+        expect(posted.statusCode).toBe(statusCodes.redirect)
+        expect(changeValidFromWorkItem).toHaveBeenCalledWith(
+          expect.objectContaining({ effectiveDate: '2026-03-27' })
+        )
+      })
+
+      test.each([
+        [
+          { ok: false, reason: 'conflict', status: 409 },
+          'can no longer be changed'
+        ],
+        [{ ok: false, reason: 'not-found', status: 404 }, 'could not be found'],
+        [{ ok: false, reason: 'server', status: 500 }, 'There was a problem']
+      ])(
+        'turns a backend failure into a banner on the summary',
+        async (failure, text) => {
+          getWorkItem.mockResolvedValue({
+            ok: true,
+            workItem: anApprovedItem()
+          })
+          changeValidFromWorkItem.mockResolvedValue(failure)
+
+          const $ = await followRedirect(await post(dateBody('2', '4', '2026')))
+
+          const banner = $('[data-testid="work-item-flash-banner"]')
+          expect(squash(banner.text())).toContain(
+            'Could not change the valid from date'
+          )
+          expect(squash(banner.text())).toContain(text)
+        }
+      )
+    })
+
+    describe('cancelling', () => {
+      test('is a plain link back to the summary and sends nothing', async () => {
+        const $ = await changePage()
+
+        const cancel = $('[data-testid="change-valid-from-cancel"]')
+        expect(cancel.is('a')).toBe(true)
+        expect(cancel.attr('href')).toBe(DETAIL_URL)
+        expect(changeValidFromWorkItem).not.toHaveBeenCalled()
+      })
+    })
+  })
+
   describe('Application history page', () => {
     // RA-495 AC3. The entries are management-be's; the page lists each.
     test('lists the assignment and due date changes', async () => {
@@ -1952,6 +2532,175 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('[data-testid="work-item-audit-log"]').text()).toContain(
         'Waiting on evidence'
       )
+    })
+
+    // RA-795 AC08/AC10. The valid from date set on approval shows on the
+    // determination entry. A refusal's entry carries the submission date as
+    // `effectiveDate` (audit only), so shows no such row.
+    describe.each([
+      [
+        'an approval',
+        {
+          actionDisplayName: 'Determination made: Approved',
+          details: { outcome: 'approved', effectiveDate: '2027-06-01' }
+        },
+        true
+      ],
+      [
+        'a refusal',
+        {
+          actionDisplayName: 'Determination made: Refused',
+          details: { outcome: 'rejected', effectiveDate: '2027-02-03' }
+        },
+        false
+      ]
+    ])('the determination entry for %s', (_, entry, showsValidFrom) => {
+      test(
+        showsValidFrom
+          ? 'shows the valid from date, user and timestamp'
+          : 'shows no valid from date row',
+        async () => {
+          const item = anAddOrsItem()
+          item.auditLog = [
+            {
+              id: 'e0000004-0000-4000-8000-000000000000',
+              action: 'determination-made',
+              stateId: 'approved-pending-contact',
+              createdBy: 'user-1',
+              createdByName: 'Reg Ulator',
+              createdAt: '2027-03-01T09:00:00Z',
+              ...entry
+            }
+          ]
+          getWorkItem.mockResolvedValue({ ok: true, workItem: item })
+
+          const { result, statusCode } = await server.inject({
+            method: 'GET',
+            url: `/work-items/${ADD_ORS_ID}/audit-log`
+          })
+
+          expect(statusCode).toBe(statusCodes.ok)
+          const $ = cheerio.load(result)
+          const text = squash(
+            $('[data-testid="work-item-audit-log"] > li').text()
+          )
+          expect(text).toContain(entry.actionDisplayName)
+          expect(text).toContain('1 March 2027')
+          if (showsValidFrom) {
+            expect(text).toContain('Valid from date 01/06/2027')
+            expect(text).toContain('Reg Ulator')
+            expect(text).not.toContain('Determined by')
+          } else {
+            expect(text).not.toContain('Valid from date')
+          }
+        }
+      )
+    })
+
+    // RA-800 AC07. Each correction is its own entry, in the style of the
+    // payment date change: summary "dd/mm/yyyy -> dd/mm/yyyy", then previous
+    // date, new date, who changed it and the (multi-line) reason.
+    describe('valid from date corrections', () => {
+      const correction = (id, createdAt, previous, next, reason) => ({
+        id,
+        action: 'valid-from-changed',
+        actionDisplayName: 'Valid from date changed',
+        stateId: 'approved-pending-contact',
+        createdBy: 'user-1',
+        createdByName: 'Reg Ulator',
+        createdAt,
+        details: {
+          previousEffectiveDate: previous,
+          effectiveDate: next,
+          reason
+        }
+      })
+
+      const loadHistory = async (auditLog) => {
+        const item = anAddOrsItem()
+        item.auditLog = auditLog
+        getWorkItem.mockResolvedValue({ ok: true, workItem: item })
+        const { result, statusCode } = await server.inject({
+          method: 'GET',
+          url: `/work-items/${ADD_ORS_ID}/audit-log`
+        })
+        expect(statusCode).toBe(statusCodes.ok)
+        return cheerio.load(result)
+      }
+
+      test('shows the previous date, new date, reason, user and timestamp', async () => {
+        const $ = await loadHistory([
+          correction(
+            'e0000005-0000-4000-8000-000000000000',
+            '2027-03-02T10:30:00Z',
+            '2027-06-01',
+            '2027-06-15',
+            'Escalation moved the date.'
+          )
+        ])
+
+        const text = squash(
+          $('[data-testid="work-item-audit-log"] > li').text()
+        )
+        expect(text).toContain('Valid from date changed')
+        expect(text).toContain('01/06/2027 → 15/06/2027')
+        expect(text).toContain('Previous valid from date 01/06/2027')
+        expect(text).toContain('New valid from date 15/06/2027')
+        expect(text).toContain('Changed by Reg Ulator')
+        expect(text).toContain('Reason Escalation moved the date.')
+        expect(text).toContain('2 March 2027')
+      })
+
+      test('preserves the lines of a multi-line reason', async () => {
+        const $ = await loadHistory([
+          correction(
+            'e0000005-0000-4000-8000-000000000000',
+            '2027-03-02T10:30:00Z',
+            '2027-06-01',
+            '2027-06-15',
+            'First line.\r\nSecond line.'
+          )
+        ])
+
+        const lines = $('[data-testid="work-item-audit-log"] > li')
+          .find('p, li, dd, div')
+          .map((_, el) => squash($(el).text()))
+          .get()
+        expect(lines).toContain('First line.')
+        expect(lines).toContain('Second line.')
+      })
+
+      test('lists several corrections as separate entries in order', async () => {
+        const $ = await loadHistory([
+          correction(
+            'e0000006-0000-4000-8000-000000000000',
+            '2027-03-03T10:30:00Z',
+            '2027-06-15',
+            '2027-07-01',
+            'Second correction.'
+          ),
+          correction(
+            'e0000005-0000-4000-8000-000000000000',
+            '2027-03-02T10:30:00Z',
+            '2027-06-01',
+            '2027-06-15',
+            'First correction.'
+          )
+        ])
+
+        const entries = $('[data-testid="work-item-audit-log"] > li')
+        expect(entries.map((_, el) => $(el).attr('data-action')).get()).toEqual(
+          ['valid-from-changed', 'valid-from-changed']
+        )
+        expect(squash($(entries[0]).text())).toContain(
+          '15/06/2027 → 01/07/2027'
+        )
+        expect(squash($(entries[0]).text())).toContain('Second correction.')
+        expect(squash($(entries[1]).text())).toContain(
+          '01/06/2027 → 15/06/2027'
+        )
+        expect(squash($(entries[1]).text())).toContain('First correction.')
+      })
     })
 
     test('shows the add-ORS header and tabs', async () => {
