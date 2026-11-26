@@ -121,13 +121,18 @@ describe('RA-770: buildRelatedRequests', () => {
 
 describe('RA-770: requestedPage', () => {
   test.each([
-    ['2', 2],
-    ['1', 1],
-    ['0', 1],
-    ['-4', 1],
-    ['abc', 1],
-    [undefined, 1]
-  ])('reads %j as page %i', (raw, expected) => {
+    ['2', '2'],
+    ['1', '1'],
+    ['0', '0'],
+    ['99999999999999999999', '99999999999999999999'],
+    ['-4', '1'],
+    ['+2', '1'],
+    ['2abc', '1'],
+    ['abc', '1'],
+    ['', '1'],
+    [['2', '3'], '1'],
+    [undefined, '1']
+  ])('reads %j as page %j', (raw, expected) => {
     expect(requestedPage(raw)).toBe(expected)
   })
 })

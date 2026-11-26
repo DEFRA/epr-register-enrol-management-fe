@@ -209,7 +209,7 @@ describe('RA-770: the Related change requests tab', () => {
     expect($('[data-testid="case-assignment-panel"]')).toHaveLength(0)
     expect($('.govuk-pagination')).toHaveLength(0)
     expect(getRelatedWorkItems).toHaveBeenCalledWith(
-      expect.objectContaining({ workItemId: ID, page: 1 })
+      expect.objectContaining({ workItemId: ID, page: '1' })
     )
     expect(getAccreditationSummary).toHaveBeenCalledWith(
       expect.objectContaining({ workItemId: ID })
@@ -260,7 +260,7 @@ describe('RA-770: the Related change requests tab', () => {
     const { $ } = await get(`${URL}?page=2`)
 
     expect(getRelatedWorkItems).toHaveBeenCalledWith(
-      expect.objectContaining({ workItemId: ID, page: 2 })
+      expect.objectContaining({ workItemId: ID, page: '2' })
     )
     expect(squash($('[data-testid="related-requests-heading"]').text())).toBe(
       'Related requests (12)'
@@ -298,7 +298,7 @@ describe('RA-770: the Related change requests tab', () => {
     expect($('.govuk-pagination')).toHaveLength(0)
   })
 
-  test.each([['0'], ['-1'], ['abc'], ['']])(
+  test.each([['-1'], ['+2'], ['2abc'], ['abc'], ['']])(
     'asks management-be for page 1 when the page is %j',
     async (raw) => {
       getRelatedWorkItems.mockResolvedValue(
@@ -308,7 +308,22 @@ describe('RA-770: the Related change requests tab', () => {
       await get(`${URL}?page=${raw}`)
 
       expect(getRelatedWorkItems).toHaveBeenCalledWith(
-        expect.objectContaining({ page: 1 })
+        expect.objectContaining({ page: '1' })
+      )
+    }
+  )
+
+  test.each([['0'], ['99999999999999999999']])(
+    'passes the digits %j to management-be, which clamps them',
+    async (raw) => {
+      getRelatedWorkItems.mockResolvedValue(
+        aPage({ count: 1, items: [anItem(1)] })
+      )
+
+      await get(`${URL}?page=${raw}`)
+
+      expect(getRelatedWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ page: raw })
       )
     }
   )

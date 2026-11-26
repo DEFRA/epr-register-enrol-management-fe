@@ -82,10 +82,10 @@ function buildPagination({ basePath, page, totalPages }) {
 }
 
 /**
- * The page asked for in the query: a whole number from 1, or 1. management-be
- * answers a page past the end with the last page.
+ * The page asked for in the query, as management-be reads it: digits only, or
+ * page 1. The digits go through as they are, so management-be clamps a page
+ * past the end, however long, to the last page.
  */
 export function requestedPage(raw) {
-  const page = Number.parseInt(raw, 10)
-  return Number.isInteger(page) && page >= 1 ? page : 1
+  return typeof raw === 'string' && /^\d+$/.test(raw) ? raw : '1'
 }
