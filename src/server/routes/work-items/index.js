@@ -179,7 +179,7 @@ export const workItems = {
         },
         {
           // RA-495. The add-ORS "Accreditation summary" and "Related
-          // requests" tabs. RA-769 fills the first (the accreditation as
+          // change requests" tabs. RA-769 fills the first (the accreditation as
           // it stands today); RA-770 the second (the requests submitted
           // with this one, `?page=`). Not found for a type whose case
           // lacks them.

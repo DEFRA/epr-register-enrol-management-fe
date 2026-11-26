@@ -677,7 +677,6 @@ describe('#getRelatedWorkItems (RA-770)', () => {
 
   test('GETs the page of related work items and returns the body', async () => {
     const body = {
-      workItemId: 'a/b c',
       totalCount: 12,
       page: 2,
       pageSize: 10,
@@ -693,17 +692,10 @@ describe('#getRelatedWorkItems (RA-770)', () => {
     expect(result).toEqual({ ok: true, related: body })
   })
 
-  test('asks for page 1 by default', async () => {
-    const fetchImpl = respond(200, { items: [] })
-
-    await getRelatedWorkItems({ ...options, fetchImpl })
-
-    expect(fetchImpl.mock.calls[0][0]).toMatch(/\?page=1$/)
-  })
-
   test('answers the status and an error on a failed read', async () => {
     const result = await getRelatedWorkItems({
       ...options,
+      page: 1,
       fetchImpl: respond(404)
     })
 
@@ -714,22 +706,30 @@ describe('#getRelatedWorkItems (RA-770)', () => {
     })
   })
 
-  test.each([[{}], [null], [{ items: 'nope' }]])(
-    'treats %j as unusable',
-    async (body) => {
-      const result = await getRelatedWorkItems({
-        ...options,
-        fetchImpl: respond(200, body)
-      })
+  const page = { totalCount: 1, page: 1, pageSize: 10, items: [] }
+  test.each([
+    [{}],
+    [null],
+    [{ ...page, items: 'nope' }],
+    [{ ...page, totalCount: undefined }],
+    [{ ...page, page: 0 }],
+    [{ ...page, pageSize: 0 }],
+    [{ ...page, pageSize: 2.5 }]
+  ])('treats %j as unusable', async (body) => {
+    const result = await getRelatedWorkItems({
+      ...options,
+      page: 1,
+      fetchImpl: respond(200, body)
+    })
 
-      expect(result.ok).toBe(false)
-      expect(result.unusable).toBe(true)
-    }
-  )
+    expect(result.ok).toBe(false)
+    expect(result.unusable).toBe(true)
+  })
 
   test('answers a transport error when fetch throws', async () => {
     const result = await getRelatedWorkItems({
       ...options,
+      page: 1,
       fetchImpl: vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
     })
 

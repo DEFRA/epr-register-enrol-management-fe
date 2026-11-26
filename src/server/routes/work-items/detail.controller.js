@@ -519,7 +519,7 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
         workItemId: enriched.id,
         active: 'summary',
         typeId: enriched.typeId,
-        relatedCount: enriched.submissionWorkItemCount
+        relatedCount: enriched.payload?.submissionSize
       }),
       applicationDetails: applicationSummary.rows,
       applicationSummary,

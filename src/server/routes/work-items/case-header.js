@@ -307,8 +307,8 @@ export const RECYCLING_OPERATIONS_TAB_KEY = 'recycling-operations'
 export const APPLICATION_SUMMARY_TAB_KEY = 'application-summary'
 export const APPLICATION_HISTORY_TAB_KEY = 'application-history'
 export const ADDITIONAL_INFORMATION_TAB_KEY = 'additional-information'
-// RA-495. Add-ORS tabs: Accreditation summary (RA-769) and Related change requests
-// (RA-770, renamed from "Related applications" to match its design).
+// RA-495. Add-ORS tabs: Accreditation summary (RA-769) and Related change
+// requests (RA-770).
 export const ACCREDITATION_SUMMARY_TAB_KEY = 'accreditation-summary'
 export const RELATED_REQUESTS_TAB_KEY = 'related-requests'
 
@@ -329,13 +329,24 @@ const HIDDEN_TAB_KEYS = new Set([RECYCLING_OPERATIONS_TAB_KEY])
 
 // The tabs a type's case has unless it declares its own `caseTabs` (RA-739,
 // RA-495: add-ORS has Application summary, Accreditation summary, Related
-// requests and Application history).
+// change requests and Application history).
 const DEFAULT_CASE_TAB_KEYS = [
   APPLICATION_SUMMARY_TAB_KEY,
   RECYCLING_OPERATIONS_TAB_KEY,
   APPLICATION_HISTORY_TAB_KEY,
   ADDITIONAL_INFORMATION_TAB_KEY
 ]
+
+/**
+ * RA-770. "Related change requests (n)", as in the design, where n is how
+ * many requests came in the submission (the work item's
+ * `payload.submissionSize`); without the count when the work item has none.
+ */
+function relatedChangeRequestsTabText(relatedCount) {
+  return Number.isInteger(relatedCount)
+    ? `Related change requests (${relatedCount})`
+    : 'Related change requests'
+}
 
 /**
  * RA-739. Does a work item type's case have this tab? A page for a tab the
@@ -346,16 +357,6 @@ const DEFAULT_CASE_TAB_KEYS = [
  * @param {object|null} type the registered work item type
  * @param {string} tabKey
  */
-/**
- * RA-770. "Related change requests (n)", as in the design; without the count
- * when management-be did not give one.
- */
-function relatedChangeRequestsTabText(relatedCount) {
-  return Number.isInteger(relatedCount)
-    ? `Related change requests (${relatedCount})`
-    : 'Related change requests'
-}
-
 export function caseHasTab(type, tabKey) {
   return (type?.caseTabs ?? DEFAULT_CASE_TAB_KEYS).includes(tabKey)
 }
@@ -386,8 +387,8 @@ export function caseHasTab(type, tabKey) {
  * @param {'summary'|'recycling-operations'|'history'|'additional-information'|'accreditation-summary'|'related-requests'} args.active
  * @param {string|null} [args.typeId] the work item's type
  * @param {number|null} [args.relatedCount] RA-770: how many requests came in
- *   the work item's submission (management-be's `submissionWorkItemCount`),
- *   shown in the Related change requests tab's label
+ *   the work item's submission (its `payload.submissionSize`), shown in the
+ *   Related change requests tab's label; only the add-ORS tab pages pass it
  */
 export function buildCaseTabs({
   workItemId,

@@ -1268,10 +1268,12 @@ export async function getAccreditationSummary({
 
 /**
  * RA-770. One page of the work items submitted with this one, for the
- * Related change requests tab: `{ workItemId, totalCount, page, pageSize,
- * items }`, with this work item first on page 1. Each item is `{ id, typeId,
- * stateId, applicationReference, siteName, orsId, chargePence }`.
- * management-be answers a page past the end with the last page.
+ * Related change requests tab: `{ totalCount, page, pageSize, items }`, with
+ * this work item first on page 1. Each item is `{ id, typeId, stateId,
+ * applicationReference, siteName, orsId, chargePence }`. management-be
+ * answers any page value with a page: past the end is the last page. A body
+ * without whole-number paging values (a page size of at least 1) is
+ * unusable, so the tab never builds pagination from them.
  *
  * Wraps `GET /work-items/{id}/related-work-items?page=`.
  *
@@ -1279,7 +1281,7 @@ export async function getAccreditationSummary({
  */
 export async function getRelatedWorkItems({
   workItemId,
-  page = 1,
+  page,
   user = null,
   baseUrl = config.get(CONFIG_BACKEND_API_URL),
   timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
@@ -1293,7 +1295,7 @@ export async function getRelatedWorkItems({
     user,
     label: 'getRelatedWorkItems',
     read: (body) =>
-      Array.isArray(body?.items)
+      isUsableRelatedPage(body)
         ? { ok: true, related: body }
         : {
             ok: false,
@@ -1301,6 +1303,18 @@ export async function getRelatedWorkItems({
             error: 'Backend returned unusable related work items'
           }
   })
+}
+
+function isUsableRelatedPage(body) {
+  return (
+    Array.isArray(body?.items) &&
+    Number.isInteger(body.totalCount) &&
+    body.totalCount >= 0 &&
+    Number.isInteger(body.page) &&
+    body.page >= 1 &&
+    Number.isInteger(body.pageSize) &&
+    body.pageSize >= 1
+  )
 }
 
 async function safeReadJson(response) {

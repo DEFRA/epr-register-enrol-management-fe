@@ -20,8 +20,8 @@ export const ACCREDITATION_HEADING = 'Accreditation'
 
 /**
  * One request from the same submission: its reference, site ("Name (ORS id)"),
- * type, charge and status. A charge of nothing, or of £0, is the dash: there
- * is no fee.
+ * type, charge and status. The charge is the dash when the request carries
+ * none; £0 is a real charge and shows as "£0.00", as in the case header.
  */
 export function relatedWorkItemRow(related) {
   const type = getWorkItemType(related.typeId)
@@ -30,10 +30,7 @@ export function relatedWorkItemRow(related) {
     reference: related.applicationReference || EM_DASH,
     site: siteLabel(related),
     type: type?.displayName ?? related.typeId ?? EM_DASH,
-    charge:
-      related.chargePence > 0
-        ? formatChargeAmount(related.chargePence)
-        : EM_DASH,
+    charge: formatChargeAmount(related.chargePence) ?? EM_DASH,
     status: stateDisplayName(type, related.stateId),
     statusTagClass: stateTagClass(related.stateId)
   }

@@ -225,7 +225,12 @@ function addOrsTabs(active) {
       'Accreditation summary',
       `${base}/accreditation-summary`
     ],
-    ['related-requests', 'Related change requests', `${base}/related-requests`],
+    // RA-770: the fixture's submissionSize is 3, shown on every add-ORS tab.
+    [
+      'related-requests',
+      'Related change requests (3)',
+      `${base}/related-requests`
+    ],
     ['application-history', 'Application history', `${base}/audit-log`]
   ].map(([key, text, href]) => ({
     key,

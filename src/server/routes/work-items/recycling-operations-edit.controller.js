@@ -126,8 +126,7 @@ function renderForm(
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
         active: 'recycling-operations',
-        typeId: forHeader.typeId,
-        relatedCount: forHeader.submissionWorkItemCount
+        typeId: forHeader.typeId
       }),
       workItem: { id, applicationRef: workItem.payload?.applicationReference },
       site: { siteId, siteName: site?.siteName ?? null },

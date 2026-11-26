@@ -32,22 +32,21 @@ const URL = `/work-items/${ID}/related-requests`
 
 const squash = (text) => text.replace(/\s+/g, ' ').trim()
 
-function anAddOrsItem(overrides = {}) {
+function anAddOrsItem({ submissionSize = 3 } = {}) {
   return {
     id: ID,
     typeId: 'add-overseas-site',
     stateId: 'submitted',
     templateVersion: 'v2',
     submittedAt: '2027-02-11T10:00:00Z',
-    submissionWorkItemCount: 3,
     payload: {
       applicationReference: 'IYC-2026-00001',
       submissionReference: 'SUB-2026-0001',
+      submissionSize,
       accreditationReference: 'ACC-REP-PL-0007',
       site: { orsId: '007', siteName: 'Denmark PR' }
     },
-    availableActions: [],
-    ...overrides
+    availableActions: []
   }
 }
 
@@ -83,7 +82,7 @@ function anItem(n, overrides = {}) {
 function aPage({ count, page = 1, items }) {
   return {
     ok: true,
-    related: { workItemId: ID, totalCount: count, page, pageSize: 10, items }
+    related: { totalCount: count, page, pageSize: 10, items }
   }
 }
 
@@ -203,8 +202,8 @@ describe('RA-770: the Related change requests tab', () => {
         link: '/work-items/77000001-0000-4000-8000-000000000003',
         site: 'Site 3 (003)',
         type: 'New ORS accreditation',
-        charge: '—',
-        status: expect.any(String)
+        charge: '£0.00',
+        status: 'Duly made'
       }
     ])
     expect($('[data-testid="case-assignment-panel"]')).toHaveLength(0)
@@ -217,19 +216,39 @@ describe('RA-770: the Related change requests tab', () => {
     )
   })
 
-  test('the count in the tab label comes from the work item read', async () => {
+  test("the tab label's count is the work item's submission size, the heading's is the related read's", async () => {
+    // Different numbers, so each can only have come from its own source.
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: anAddOrsItem({ submissionWorkItemCount: 12 })
+      workItem: anAddOrsItem({ submissionSize: 12 })
     })
     getRelatedWorkItems.mockResolvedValue(
-      aPage({ count: 12, items: [anItem(1)] })
+      aPage({ count: 11, items: [anItem(1)] })
     )
 
     const { $ } = await get()
 
     expect(squash($('[data-testid="tab-related-requests"]').text())).toBe(
       'Related change requests (12)'
+    )
+    expect(squash($('[data-testid="related-requests-heading"]').text())).toBe(
+      'Related requests (11)'
+    )
+  })
+
+  test('the tab label has no count for a work item with no submission size', async () => {
+    getWorkItem.mockResolvedValue({
+      ok: true,
+      workItem: anAddOrsItem({ submissionSize: null })
+    })
+    getRelatedWorkItems.mockResolvedValue(
+      aPage({ count: 1, items: [anItem(1)] })
+    )
+
+    const { $ } = await get()
+
+    expect(squash($('[data-testid="tab-related-requests"]').text())).toBe(
+      'Related change requests'
     )
   })
 
@@ -297,7 +316,7 @@ describe('RA-770: the Related change requests tab', () => {
   test('AC4: a request submitted on its own lists only itself', async () => {
     getWorkItem.mockResolvedValue({
       ok: true,
-      workItem: anAddOrsItem({ submissionWorkItemCount: 1 })
+      workItem: anAddOrsItem({ submissionSize: 1 })
     })
     getRelatedWorkItems.mockResolvedValue(
       aPage({ count: 1, items: [anItem(1)] })

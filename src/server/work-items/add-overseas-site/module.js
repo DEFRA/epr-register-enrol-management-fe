@@ -24,8 +24,9 @@ const DETAIL_TEMPLATE_V1 = 'add-overseas-site/detail-v1'
  *
  * The detail page has the add-ORS case header (`buildCaseHeader`) and four
  * tabs (`caseTabs`, RA-495): Application summary, Accreditation summary
- * (RA-769), Related change requests (RA-770) and Application history. The Application summary shows the site from `payload.site`, built
- * by the type's own `buildApplicationSummary`, and the assignment panel.
+ * (RA-769), Related change requests (RA-770) and Application history. The
+ * Application summary shows the site from `payload.site`, built by the type's
+ * own `buildApplicationSummary`, and the assignment panel.
  *
  * RA-495. The type opts into the shared Standard lifecycle
  * (`standardLifecycle`), using management-be's type-less endpoints: Duly make,

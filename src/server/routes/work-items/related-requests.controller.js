@@ -9,7 +9,7 @@ import {
   ACCREDITATION_SUMMARY_UNAVAILABLE,
   buildAccreditationBrief
 } from './accreditation-summary.js'
-import { readAccreditationSummary } from './accreditation-summary.controller.js'
+import { readAccreditationSummary } from './read-accreditation-summary.js'
 import {
   RELATED_REQUESTS_TAB_KEY,
   buildCaseHeader,
@@ -33,8 +33,9 @@ const logger = createLogger()
  * accreditation the request is for (number, status, start date and year, as
  * on the Accreditation summary tab), then the requests submitted with this
  * one, a page at a time (`?page=`). Both are read through management-be on
- * every visit, side by side. Information only: the case header and tab strip,
- * no assignment panel and no case actions.
+ * every visit, side by side (a registration-only request has no accreditation,
+ * so only the requests are read). Information only: the case header and tab
+ * strip, no assignment panel and no case actions.
  *
  * Either read failing leaves the header, tabs and the other part, and says
  * that part is not available. A work item that cannot be found, or whose
@@ -85,7 +86,7 @@ export const workItemRelatedRequestsController = {
         workItemId: forHeader.id,
         active: RELATED_REQUESTS_TAB_KEY,
         typeId: forHeader.typeId,
-        relatedCount: forHeader.submissionWorkItemCount
+        relatedCount: forHeader.payload?.submissionSize
       }),
       accreditationHeading: ACCREDITATION_HEADING,
       accreditationRows: accreditation.summary

@@ -169,7 +169,7 @@ from its own hooks, never from a check on its category:
   backend (RA-769).
 - `caseTabs` lists the tab keys the type's case has (by default all four).
   Add-ORS has Application summary, Accreditation summary, Related
-  requests and Application history (RA-495). Accreditation summary
+  change requests and Application history (RA-495). Accreditation summary
   (RA-769) shows the accreditation as it stands today, read live through
   management-be's `GET /work-items/{id}/accreditation-summary`
   (`accreditation-summary.controller.js`): the accreditation details, then PRN
@@ -187,7 +187,7 @@ from its own hooks, never from a check on its category:
   show, or it cannot be read, the tab says so under the heading and keeps the
   case header and tabs. Related change requests (RA-770,
   `related-requests.controller.js`, labelled "Related change requests (n)" on
-  every tab from management-be's `submissionWorkItemCount` on the work item)
+  every add-ORS tab from the work item's `payload.submissionSize`)
   shows an "Accreditation" block (Accreditation number, Status, start date and
   year, from the same read as Accreditation summary), then "Related requests
   (n)": every request in the same submission from management-be's
@@ -195,7 +195,7 @@ from its own hooks, never from a check on its category:
   (`govukPagination` only past ten), this request first, each row's reference
   linking to its own case above the site name. Its
   Additional information and Recycling operations pages are not found, and a
-  type without the Accreditation summary or Related requests tab gets
+  type without the Accreditation summary or Related change requests tab gets
   not found for those. Each clean file links to
   `/work-items/{id}/accreditation-summary/files/{fileId}/download`
   (`accreditation-summary-download.controller.js`), which reads the summary

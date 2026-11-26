@@ -68,7 +68,7 @@ export const workItemAuditLogController = {
         workItemId: workItem.id,
         active: 'history',
         typeId: forHeader.typeId,
-        relatedCount: forHeader.submissionWorkItemCount
+        relatedCount: forHeader.payload?.submissionSize
       }),
       workItem: {
         id: workItem.id,

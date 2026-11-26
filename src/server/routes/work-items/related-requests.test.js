@@ -67,14 +67,16 @@ describe('RA-770: relatedWorkItemRow', () => {
     const row = relatedWorkItemRow({
       id: 'wi-3',
       stateId: 'submitted',
-      siteName: 'Belgium PR',
-      chargePence: 0
+      siteName: 'Belgium PR'
     })
-    expect(row).toMatchObject({
-      site: 'Belgium PR',
-      type: EM_DASH,
-      charge: EM_DASH
-    })
+    expect(row).toMatchObject({ site: 'Belgium PR', type: EM_DASH })
+  })
+
+  test('shows a £0 charge as £0.00, as the case header does, not as no charge', () => {
+    expect(
+      relatedWorkItemRow({ id: 'wi-4', stateId: 'submitted', chargePence: 0 })
+        .charge
+    ).toBe('£0.00')
   })
 })
 

@@ -135,8 +135,7 @@ export const workItemAdditionalInformationController = {
       caseTabs: buildCaseTabs({
         workItemId: workItem.id,
         active: 'additional-information',
-        typeId: forHeader.typeId,
-        relatedCount: forHeader.submissionWorkItemCount
+        typeId: forHeader.typeId
       }),
       workItem: {
         id: workItem.id,

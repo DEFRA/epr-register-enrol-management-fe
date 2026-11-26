@@ -1,10 +1,5 @@
-import {
-  getAccreditationSummary,
-  getWorkItem
-} from '#/server/common/helpers/backend-api/backend-api.js'
+import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { createLogger } from '#/server/common/helpers/logging/logger.js'
-import { statusCodes } from '#/server/common/constants/status-codes.js'
 import {
   ACCREDITATION_SUMMARY_TAB_KEY,
   buildCaseHeader,
@@ -12,7 +7,7 @@ import {
   decorateForCaseHeader
 } from './case-header.js'
 import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
-import { getWorkItemType } from '#/server/work-items/core/registry.js'
+import { readAccreditationSummary } from './read-accreditation-summary.js'
 import {
   ACCREDITATION_SUMMARY_HEADING,
   ACCREDITATION_SUMMARY_INTRO,
@@ -22,56 +17,6 @@ import {
 } from './accreditation-summary.js'
 
 const VIEW = 'work-items/accreditation-summary'
-
-const logger = createLogger()
-
-/**
- * Why a read gave nothing to show, for the log: every other such read renders
- * the same unavailable message, so the log is the only place the cases differ.
- */
-function unavailableOutcome(read) {
-  if (read?.status === statusCodes.notFound) {
-    return '404'
-  }
-  return read?.unusable ? 'unusable body' : 'unavailable'
-}
-
-/**
- * RA-769. The case's accreditation, read live through management-be:
- * `{ registrationOnly, summary }`, where `summary` is the read
- * (`{ accreditation, accreditationStartDate }`) or null when there is nothing
- * to show. A registration-only case has no accreditation, so the backend is
- * not asked. Any other read with nothing to show is logged. RA-770: shared
- * with the Related change requests tab's Accreditation block.
- *
- * @param {object} args
- * @param {object} args.workItem the case's work item
- * @param {object|null} args.user
- */
-export async function readAccreditationSummary({ workItem, user }) {
-  // A type's case has an accreditation unless the type says this one does not
-  // (add-ORS: a registration-only change).
-  const registrationOnly =
-    getWorkItemType(workItem?.typeId)?.hasAccreditation?.(workItem?.payload) ===
-    false
-  if (registrationOnly) {
-    return { registrationOnly, summary: null }
-  }
-  const read = await getAccreditationSummary({ workItemId: workItem.id, user })
-  const summary = read?.ok && read.accreditation ? read : null
-  if (!summary) {
-    logger.warn(
-      {
-        workItemId: workItem.id,
-        outcome: unavailableOutcome(read),
-        status: read.status,
-        error: read.error
-      },
-      'Accreditation summary not available'
-    )
-  }
-  return { registrationOnly, summary }
-}
 
 /**
  * RA-769. The Accreditation summary tab of an In-Year Change case: the
@@ -115,7 +60,7 @@ export const workItemAccreditationSummaryController = {
         workItemId: forHeader.id,
         active: ACCREDITATION_SUMMARY_TAB_KEY,
         typeId: forHeader.typeId,
-        relatedCount: forHeader.submissionWorkItemCount
+        relatedCount: forHeader.payload?.submissionSize
       }),
       heading: ACCREDITATION_SUMMARY_HEADING,
       intro: ACCREDITATION_SUMMARY_INTRO,
