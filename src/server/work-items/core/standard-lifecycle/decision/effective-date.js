@@ -20,8 +20,8 @@
  * The year-bound rule lives in `validateEffectiveDate`, so the Change valid
  * from date page can apply the same one.
  *
- * The range copy is not in Figma (which has no error states): it is pending
- * content design review.
+ * The range copy is not in Figma (which has no error states); content design
+ * has approved it.
  */
 
 import { readDateInput } from '../date-input.js'
