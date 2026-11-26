@@ -1,10 +1,5 @@
-import {
-  getAccreditationSummary,
-  getWorkItem
-} from '#/server/common/helpers/backend-api/backend-api.js'
+import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { createLogger } from '#/server/common/helpers/logging/logger.js'
-import { statusCodes } from '#/server/common/constants/status-codes.js'
 import {
   ACCREDITATION_SUMMARY_TAB_KEY,
   buildCaseHeader,
@@ -12,7 +7,7 @@ import {
   decorateForCaseHeader
 } from './case-header.js'
 import { renderFetchErrorUnlessCaseHasTab } from './work-item-fetch-errors.js'
-import { getWorkItemType } from '#/server/work-items/core/registry.js'
+import { readAccreditationSummary } from './read-accreditation-summary.js'
 import {
   ACCREDITATION_SUMMARY_HEADING,
   ACCREDITATION_SUMMARY_INTRO,
@@ -22,19 +17,6 @@ import {
 } from './accreditation-summary.js'
 
 const VIEW = 'work-items/accreditation-summary'
-
-const logger = createLogger()
-
-/**
- * Why a read gave nothing to show, for the log: every other such read renders
- * the same unavailable message, so the log is the only place the cases differ.
- */
-function unavailableOutcome(read) {
-  if (read?.status === statusCodes.notFound) {
-    return '404'
-  }
-  return read?.unusable ? 'unusable body' : 'unavailable'
-}
 
 /**
  * RA-769. The Accreditation summary tab of an In-Year Change case: the
@@ -65,27 +47,10 @@ export const workItemAccreditationSummaryController = {
       return errorResponse
     }
 
-    // A type's case has an accreditation unless the type says this one does not
-    // (add-ORS: a registration-only change).
-    const registrationOnly =
-      getWorkItemType(result.workItem?.typeId)?.hasAccreditation?.(
-        result.workItem?.payload
-      ) === false
-    const read = registrationOnly
-      ? null
-      : await getAccreditationSummary({ workItemId: id, user })
-    const summary = read?.ok && read.accreditation ? read : null
-    if (!summary && !registrationOnly) {
-      logger.warn(
-        {
-          workItemId: id,
-          outcome: unavailableOutcome(read),
-          status: read.status,
-          error: read.error
-        },
-        'Accreditation summary not available'
-      )
-    }
+    const { registrationOnly, summary } = await readAccreditationSummary({
+      workItem: result.workItem,
+      user
+    })
 
     const forHeader = decorateForCaseHeader(result.workItem)
     return h.view(VIEW, {
@@ -94,7 +59,8 @@ export const workItemAccreditationSummaryController = {
       caseTabs: buildCaseTabs({
         workItemId: forHeader.id,
         active: ACCREDITATION_SUMMARY_TAB_KEY,
-        typeId: forHeader.typeId
+        typeId: forHeader.typeId,
+        relatedCount: forHeader.payload?.submissionSize
       }),
       heading: ACCREDITATION_SUMMARY_HEADING,
       intro: ACCREDITATION_SUMMARY_INTRO,

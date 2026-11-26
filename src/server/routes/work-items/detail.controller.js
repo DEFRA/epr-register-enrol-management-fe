@@ -518,7 +518,8 @@ async function renderDetail({ request, h, notice = null, statusCode = 200 }) {
       caseTabs: buildCaseTabs({
         workItemId: enriched.id,
         active: 'summary',
-        typeId: enriched.typeId
+        typeId: enriched.typeId,
+        relatedCount: enriched.payload?.submissionSize
       }),
       applicationDetails: applicationSummary.rows,
       applicationSummary,

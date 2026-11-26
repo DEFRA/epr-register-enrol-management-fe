@@ -1133,9 +1133,24 @@ describe('RA-769: Accreditation summary tab', () => {
       ).toEqual([
         'tab-application-summary',
         'tab-accreditation-summary',
-        'tab-related-applications',
+        'tab-related-requests',
         'tab-application-history'
       ])
+    })
+
+    test('RA-770: labels the Related change requests tab with the submission size', async () => {
+      const item = anAddOrsItem()
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: { ...item, payload: { ...item.payload, submissionSize: 4 } }
+      })
+      getAccreditationSummary.mockResolvedValue({ ok: false, status: 404 })
+
+      const { $ } = await get()
+
+      expect(squash($('[data-testid="tab-related-requests"]').text())).toBe(
+        'Related change requests (4)'
+      )
     })
   })
 
