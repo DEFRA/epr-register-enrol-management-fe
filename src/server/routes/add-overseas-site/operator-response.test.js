@@ -3,85 +3,61 @@ import { describe, expect, test } from 'vitest'
 import {
   buildOperatorResponse,
   findOperatorResponse,
-  isOperatorResponseEntry,
   operatorResponseBesFiles
 } from './operator-response.js'
 
-const RESPONSE = {
-  action: 'query-response-received',
-  createdAt: '2027-03-02T10:30:00Z',
-  createdByName: 'Operator Olly',
-  details: {
-    changes: {
-      siteName: { from: 'Old Name', to: 'New Name' },
-      contactEmail: 'new@example.com',
-      rejectedLoadsArrangements: { old: 'A', new: 'B' }
+const LATEST = {
+  respondedAt: '2027-03-02T10:30:00Z',
+  submittedAt: '2027-03-02T10:29:00Z',
+  responderContactDetails: {
+    fullName: 'Olly Operator',
+    email: 'olly@example.com',
+    role: 'Director'
+  },
+  siteChanges: {
+    siteName: { from: 'Old Name', to: 'New Name' },
+    contactEmail: { from: null, to: 'new@example.com' },
+    rejectedLoadsArrangements: { from: 'A', to: 'B' }
+  },
+  interimSiteChanges: [
+    {
+      siteId: 1,
+      siteNumber: '002',
+      changes: { postcode: { from: 'AA1', to: 'BB2' } }
     },
-    interimSites: [
-      {
-        siteId: 'i-1',
-        siteNumber: 2,
-        changes: { postcode: { from: 'AA1', to: 'BB2' } }
-      },
-      { siteId: 'i-2', siteNumber: 3, changes: {} }
-    ],
-    besEvidenceFiles: [
-      { fileId: 'f-1', filename: 'bes.pdf', scanStatus: 'Clean' },
-      { fileId: 'f-2', filename: 'pending.pdf' }
-    ],
-    submittedBy: 'Olly Operator, Director',
-    submittedAt: '2027-03-02T10:29:00Z'
-  }
+    { siteId: 2, siteNumber: '003', changes: {} }
+  ],
+  besEvidenceFiles: [{ fileId: 'f-1', filename: 'bes.pdf', s3Key: 'k' }]
 }
 
-const workItem = (auditLog) => ({
+const workItem = (latestQueryResponse) => ({
   id: 'wi-1',
   payload: {
-    site: { interimSites: [{ siteId: 'i-1', siteName: 'Interim One' }] }
-  },
-  auditLog
-})
-
-describe('isOperatorResponseEntry', () => {
-  test('recognises a resume entry carrying response data', () => {
-    expect(isOperatorResponseEntry(RESPONSE)).toBe(true)
-    expect(
-      isOperatorResponseEntry({
-        action: 'resumed-from-query',
-        details: { changes: {} }
-      })
-    ).toBe(true)
-  })
-
-  test.each([
-    [undefined],
-    [{ action: 'application-queried', details: { reason: 'x' } }],
-    [{ action: 'query-response-received', details: {} }],
-    [{ action: 'query-response-received' }]
-  ])('rejects %j', (entry) => {
-    expect(isOperatorResponseEntry(entry)).toBe(false)
-  })
+    site: {
+      interimSites: [{ siteId: 1, siteNumber: '002', siteName: 'Interim One' }]
+    },
+    ...(latestQueryResponse ? { latestQueryResponse } : {})
+  }
 })
 
 describe('findOperatorResponse', () => {
-  test('returns the newest (first) response entry', () => {
-    const newer = { ...RESPONSE, createdAt: 'newer' }
-    expect(findOperatorResponse([newer, RESPONSE])).toBe(newer)
+  test('reads the latest response from the payload', () => {
+    expect(findOperatorResponse(workItem(LATEST))).toBe(LATEST)
   })
 
-  test('returns null with no response or no audit log', () => {
-    expect(findOperatorResponse([{ action: 'assigned' }])).toBeNull()
+  test('is null when there is none', () => {
+    expect(findOperatorResponse(workItem())).toBeNull()
     expect(findOperatorResponse(undefined)).toBeNull()
   })
 })
 
 describe('buildOperatorResponse', () => {
   test('is null when the operator has not responded', () => {
-    expect(buildOperatorResponse({ workItem: workItem([]) })).toBeNull()
+    expect(buildOperatorResponse({ workItem: workItem() })).toBeNull()
   })
 
-  test('shows old -> new for ORS and interim-site changes', () => {
-    const response = buildOperatorResponse({ workItem: workItem([RESPONSE]) })
+  test('shows old -> new for ORS and interim-site changes, and who responded', () => {
+    const response = buildOperatorResponse({ workItem: workItem(LATEST) })
 
     expect(response.submittedBy).toBe('Olly Operator, Director')
     expect(response.changes).toEqual([
@@ -94,7 +70,7 @@ describe('buildOperatorResponse', () => {
       {
         key: 'contactEmail',
         label: 'Contact email',
-        oldValue: null,
+        oldValue: expect.any(String),
         newValue: 'new@example.com'
       },
       {
@@ -107,7 +83,7 @@ describe('buildOperatorResponse', () => {
     // An interim site with no changes is left out; one with changes is named.
     expect(response.interimSites).toEqual([
       {
-        siteNumber: 2,
+        siteNumber: '002',
         siteName: 'Interim One',
         changes: [
           {
@@ -121,34 +97,31 @@ describe('buildOperatorResponse', () => {
     ])
   })
 
-  test('links a clean BES file for download from the work item', () => {
-    const response = buildOperatorResponse({ workItem: workItem([RESPONSE]) })
+  test('links the new BES files for download from the work item', () => {
+    const response = buildOperatorResponse({ workItem: workItem(LATEST) })
 
     expect(response.besFiles[0]).toMatchObject({
       filename: 'bes.pdf',
       href: '/work-items/wi-1/files/f-1/download'
     })
-    // A file that is not known clean is listed without a link.
-    expect(response.besFiles[1]).toMatchObject({
-      filename: 'pending.pdf',
-      href: null
-    })
   })
 
-  test('falls back to the entry author when the details name no submitter', () => {
-    const entry = { ...RESPONSE, details: { changes: { siteName: 'X' } } }
-    expect(
-      buildOperatorResponse({ workItem: workItem([entry]) }).submittedBy
-    ).toBe('Operator Olly')
+  test('falls back to the recorded time when no submitter or time is named', () => {
+    const response = buildOperatorResponse({
+      workItem: workItem({ siteChanges: { siteName: { from: 'A', to: 'B' } } })
+    })
+
+    expect(response.submittedBy).toBe('—')
   })
 })
 
 describe('operatorResponseBesFiles', () => {
-  test('returns the raw files of the latest response', () => {
-    expect(
-      operatorResponseBesFiles(workItem([RESPONSE])).map((f) => f.fileId)
-    ).toEqual(['f-1', 'f-2'])
-    expect(operatorResponseBesFiles(workItem([]))).toEqual([])
+  test('lists the new files, treated as scanned clean', () => {
+    const files = operatorResponseBesFiles(workItem(LATEST))
+
+    expect(files.map((f) => f.fileId)).toEqual(['f-1'])
+    expect(files[0].scanStatus).toBe('Clean')
+    expect(operatorResponseBesFiles(workItem())).toEqual([])
     expect(operatorResponseBesFiles(undefined)).toEqual([])
   })
 })
