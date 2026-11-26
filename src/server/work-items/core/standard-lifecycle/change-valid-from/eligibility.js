@@ -20,12 +20,11 @@
 
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
 
+import { formatIsoDate } from '../../format-iso-date.js'
 import { resolveScopedType, takesEffectiveDate } from '../lifecycle.js'
 import { STATE_APPROVED_PENDING_CONTACT } from '../states.js'
 
 const logger = createLogger()
-
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
 
 /**
  * The work item's stored valid from date (`payload.effectiveDate`) as
@@ -34,12 +33,8 @@ const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
  */
 export function readValidFromDate(workItem) {
   const raw = workItem?.payload?.effectiveDate
-  const match = typeof raw === 'string' ? ISO_DATE.exec(raw) : null
-  if (!match) {
-    return null
-  }
-  const [, year, month, day] = match
-  return { iso: raw, display: `${day}/${month}/${year}` }
+  const display = typeof raw === 'string' ? formatIsoDate(raw) : null
+  return display ? { iso: raw, display } : null
 }
 
 /**

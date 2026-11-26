@@ -8,19 +8,9 @@
  * audit, so its entry has nothing extra to show (RA-795 AC10).
  */
 
+import { formatIsoDate } from './format-iso-date.js'
+
 export const DETERMINATION_MADE_ACTION = 'determination-made'
-
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
-
-/** `YYYY-MM-DD` -> `dd/mm/yyyy`; anything else yields `null`. */
-function formatIsoDate(value) {
-  const match = ISO_DATE.exec(String(value ?? ''))
-  if (!match) {
-    return null
-  }
-  const [, year, month, day] = match
-  return `${day}/${month}/${year}`
-}
 
 /**
  * Detail rows for a determination entry: an approval's valid-from date. Who

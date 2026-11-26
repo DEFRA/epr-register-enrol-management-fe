@@ -38,6 +38,7 @@ import {
   evaluateChangeValidFromEligibility,
   readValidFromDate
 } from './eligibility.js'
+import { formatIsoDate } from '../../format-iso-date.js'
 import {
   REASON_ANCHOR,
   REASON_ID,
@@ -87,12 +88,6 @@ function flashBanner(request, banner) {
 
 function applicationRefOf(workItem) {
   return workItem?.payload?.applicationReference ?? null
-}
-
-/** `YYYY-MM-DD` -> `dd/mm/yyyy` (the value is already validated). */
-function displayDate(iso) {
-  const [year, month, day] = iso.split('-')
-  return `${day}/${month}/${year}`
 }
 
 function renderNotFound(h, id) {
@@ -181,7 +176,7 @@ function successBanner(isoDate) {
   return {
     type: 'success',
     title: 'Updated',
-    text: `Valid from date updated to ${displayDate(isoDate)}. You now need to contact the applicant about the decision.`
+    text: `Valid from date updated to ${formatIsoDate(isoDate)}. You now need to contact the applicant about the decision.`
   }
 }
 

@@ -79,7 +79,11 @@ export function effectiveDateMessage(code, accreditationYear) {
  */
 export function accreditationYearOf(workItem) {
   const year = workItem?.payload?.accreditationYear
-  return Number.isInteger(year) && year >= 1000 && year <= 9999 ? year : null
+  return isFourDigitYear(year) ? year : null
+}
+
+function isFourDigitYear(year) {
+  return Number.isInteger(year) && year >= 1000 && year <= 9999
 }
 
 /**
@@ -101,11 +105,7 @@ export function validateEffectiveDate(values, accreditationYear) {
     }
   }
 
-  if (
-    Number.isInteger(accreditationYear) &&
-    accreditationYear >= 1000 &&
-    accreditationYear <= 9999
-  ) {
+  if (isFourDigitYear(accreditationYear)) {
     if (read.utcTime < Date.UTC(accreditationYear, 0, 1)) {
       return { ok: false, errorCode: ERROR_BEFORE_YEAR_START }
     }
