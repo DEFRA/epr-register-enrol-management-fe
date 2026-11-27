@@ -721,4 +721,65 @@ describe('#workItemAuditLogController', () => {
       )
     )
   })
+
+  // RA-681. A type can work its label out from the work item's payload; the
+  // case header and every entry's "Type" row show that label.
+  test.each([
+    [{ site: { selected: true } }, 'Accreditation: change'],
+    [{ site: { selected: false } }, 'Registration: change'],
+    [{ site: {} }, 'Change']
+  ])(
+    'Shows the request type label for payload %j in the header and the Type row',
+    async (payload, label) => {
+      const states = [{ id: 'submitted', displayName: 'Submitted' }]
+      registerWorkItemType({
+        id: 'test-per-item',
+        displayName: 'Change',
+        initialState: states[0],
+        states,
+        describeRequestType: (p) => {
+          const selected = p?.site?.selected
+          if (selected === undefined) {
+            return null
+          }
+          return selected ? 'Accreditation: change' : 'Registration: change'
+        }
+      })
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: aWorkItem({
+          typeId: 'test-per-item',
+          payload: { ...payload, applicationReference: 'IYC-2026-00001' },
+          auditLog: [
+            {
+              id: 'aaaa1111-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+              action: 'note-added',
+              actionDisplayName: 'Note added',
+              details: { noteText: 'Checked' },
+              createdAt: '2026-04-27T09:00:00Z',
+              createdBy: 'alice-1',
+              createdByName: 'Alice Example'
+            }
+          ]
+        })
+      })
+
+      const { statusCode, result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/audit-log`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toMatch(
+        new RegExp(
+          `data-testid="case-header-request-type"[^>]*>\\s*${label}\\s*<`
+        )
+      )
+      expect(result).toMatch(
+        new RegExp(
+          `<dt class="govuk-summary-list__key">Type</dt>\\s*<dd class="govuk-summary-list__value">\\s*${label}\\s*</dd>`
+        )
+      )
+    }
+  )
 })

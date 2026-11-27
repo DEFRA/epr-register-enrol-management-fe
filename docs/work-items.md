@@ -30,6 +30,15 @@ export const myTypeModule = {
   type: {
     id: 'my-type', // unique stable id
     displayName: 'My type',
+    // Optional (RA-681): the request type label for one work item, worked
+    // out from its payload (e.g. "Accreditation: …" / "Registration: …"
+    // from an ORS's `selected` flag). Return null to use `displayName`. The
+    // card, case header, Related change requests and audit log show it
+    // (see `core/request-type-label.js`). The Related change requests rows
+    // carry no payload, so they get `undefined` and show `displayName`.
+    describeRequestType(payload) {
+      return null
+    },
     initialState: { id: 'submitted', displayName: 'Submitted' },
     states: [
       { id: 'submitted', displayName: 'Submitted' },
@@ -222,6 +231,15 @@ templates import their summary macros from
 `work-items/summary-macros.njk`. The file download route also finds BES
 files under `payload.site.besEvidence.files`.
 `add-overseas-site/module.js` is the example.
+
+RA-681. The ORS update type (`update-overseas-site/module.js`) is minimal
+until its own view is built: it labels each item from its site's `selected`
+("Accreditation: ORS update" / "Registration: ORS update", "ORS update" when
+absent), shares add-ORS's card site line (`core/ors-card-site.js`), has an
+add-ORS-style header without the charge and payment date, and its detail
+template extends `work-items/detail.njk` with add-ORS's site summary
+(`add-overseas-site/site-summary.njk`), Application summary and history
+tabs, and no actions card.
 
 ### Standard lifecycle pages (RA-495)
 

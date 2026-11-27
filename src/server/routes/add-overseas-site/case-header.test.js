@@ -67,7 +67,7 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
 
   test('decorates the work item with its type and state', () => {
     const item = addOrs()
-    expect(item.typeDisplayName).toBe('New ORS accreditation')
+    expect(item.typeDisplayName).toBe('Accreditation: add registered ORS')
     expect(item.stateDisplayName).toBe('Not started')
     expect(item.stateTagClass).toEqual(expect.any(String))
   })
@@ -96,7 +96,7 @@ describe('RA-739 / RA-495: add-ORS case header', () => {
   test('has the ten meta items, in the order re-accreditation shares', () => {
     const header = headerFor(addOrs())
     expect(header.meta.map((entry) => [entry.label, entry.value])).toEqual([
-      ['Application type', 'New ORS accreditation'],
+      ['Application type', 'Accreditation: add registered ORS'],
       ['Status', 'Not started'],
       ['Assigned to', 'Unassigned'],
       ['Due date', EM_DASH],

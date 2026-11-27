@@ -10,6 +10,7 @@
 
 import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
+import { requestTypeLabel } from '#/server/work-items/core/request-type-label.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
 import { EM_DASH } from './application-summary.js'
 import { stateDisplayName } from './case-header.js'
@@ -29,7 +30,12 @@ export function relatedWorkItemRow(related) {
     id: related.id,
     reference: related.applicationReference || EM_DASH,
     site: siteLabel(related),
-    type: type?.displayName ?? related.typeId ?? EM_DASH,
+    // RA-681. management-be's related item carries no payload, only its site's
+    // `selected` flag, which is all a type's per-item label reads.
+    type:
+      requestTypeLabel(type, { site: { selected: related.selected } }) ??
+      related.typeId ??
+      EM_DASH,
     charge: formatChargeAmount(related.chargePence) ?? EM_DASH,
     status: stateDisplayName(type, related.stateId),
     statusTagClass: stateTagClass(related.stateId)

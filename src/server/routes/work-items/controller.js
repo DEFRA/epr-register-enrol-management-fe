@@ -1,25 +1,27 @@
 import { getWorkItems } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
-import { IN_YEAR_CHANGE_CATEGORY } from '#/server/work-items/core/categories.js'
 import { getAssignableUsers } from '#/server/work-items/core/assignees.js'
 import { stateTagClass as resolveStateTagClass } from '#/server/work-items/core/state-badge.js'
-import {
-  NATION_OPTIONS,
-  nationLabel
-} from '#/server/work-items/core/nations.js'
-import {
-  MATERIAL_FILTER_OPTIONS,
-  MATERIAL_TOKENS,
-  materialLabel,
-  materialFilterLabel,
-  toBackendMaterialTokens
-} from '#/server/work-items/core/materials.js'
+import { materialLabel } from '#/server/work-items/core/materials.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
-import { NATION_ROLE_MAP } from '#/server/common/helpers/auth/auth-scopes.js'
 import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { config } from '#/config/config.js'
 import { isExporterApplication } from './application-summary.js'
 import { resolveOrganisationId, stateDisplayName } from './case-header.js'
+import { requestTypeLabel } from '#/server/work-items/core/request-type-label.js'
+import { CHECKBOX_FILTERS, resolveTypeFilter } from './list-filters.js'
+import {
+  appendCheckboxFilterParams,
+  buildCheckboxOptions,
+  checkboxFilterParamNames,
+  checkboxFilterChips,
+  checkboxFilterCounts,
+  checkboxFilterRequest,
+  checkboxFilterSections,
+  isCheckboxFilterKey,
+  readCheckboxFilters,
+  withoutCheckboxValue
+} from './checkbox-filters.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -34,15 +36,12 @@ const DEFAULT_PAGE_SIZE = 20
 // mistaken for a bare landing and never triggers a restore.
 const SESSION_FILTERS_KEY = 'workItemsListFilters'
 
-// Every query param this route reads (see readFilters) plus the form's own
-// filtersApplied marker and the pagination page. Used to tell a real filter
-// state apart from a bare landing that merely carries an unrelated param.
+// Every query param this route reads (see readFilters and CHECKBOX_FILTERS)
+// plus the form's own filtersApplied marker and the pagination page. Used to
+// tell a real filter state apart from a bare landing that merely carries an
+// unrelated param.
 const RECOGNISED_FILTER_PARAMS = new Set([
-  'typeId',
-  'applicationType',
-  'status',
-  'material',
-  'nation',
+  ...checkboxFilterParamNames(CHECKBOX_FILTERS),
   'sort',
   'organisation',
   'search',
@@ -57,151 +56,10 @@ const RECOGNISED_FILTER_PARAMS = new Set([
 // landing (see `resolveSort` below).
 const DEFAULT_SORT = 'due-date'
 
-/**
- * Valid nation values accepted by the backend (RA-125). Derived from
- * NATION_ROLE_MAP so the role->nation mapping stays the single source of
- * truth and the two lists cannot drift apart.
- */
-const VALID_NATIONS = Object.values(NATION_ROLE_MAP)
-
 const ASSIGNEE_FILTER_ANY = 'any'
 const ASSIGNEE_FILTER_MINE = 'mine'
 const ASSIGNEE_FILTER_UNASSIGNED = 'unassigned'
 const ASSIGNEE_FILTER_USER = 'user'
-
-// "Applicant type" (RA-324, relabelled by RA-299): who is applying, the
-// accreditation's own waste processing type. Every work item type carries it
-// as `payload.wasteProcessingType`, so it is sent only as the backend's
-// `wasteProcessingTypes` filter, which narrows whatever "Application type"
-// selected (RA-739: it used to add a `re-accreditation` typeId, which widened
-// an In-year change selection and hid add-ORS items from an Exporter one).
-// The URL keeps its RA-324 values: `typeId=re-accreditation` is Reprocessor
-// and `typeId=exporter` is Exporter.
-//
-// management-be matches "exporter" case-insensitively and treats any other
-// value as "not exporter", which includes pre-RA-314 items with no
-// `wasteProcessingType` (read everywhere as reprocessor). So it is sent only
-// when exactly one of the two is ticked: both, or neither, is "either
-// applicant type" (GDS checkbox-group OR), not a narrowing to one kind.
-const EXPORTER_TYPE_FILTER = {
-  // UI/URL token for the Applicant type checkbox (`typeId=exporter`).
-  typeIdToken: 'exporter',
-  // Sent to the backend's `WasteProcessingTypes` filter param, matched
-  // case-insensitively against `payload.wasteProcessingType` (see
-  // isExporterApplication in application-summary.js). Confirmed against
-  // management-be#118, which matches with a `^exporter$` regex and the `i`
-  // flag — RA-314's operator-be itself writes the lowercase wire value
-  // `"exporter"`, but this constant's casing does not need to mirror either
-  // of those exactly given the case-insensitive match.
-  wasteProcessingType: 'Exporter'
-}
-
-// Sent to the backend's `WasteProcessingTypes` filter param to narrow a
-// Reprocessor-only Applicant-type selection — see the block comment above.
-// management-be#118 has no dedicated "reprocessor" match: any value other
-// than a literal case-insensitive "exporter" hits its `$not` branch, so this
-// string's exact casing is arbitrary in the same way EXPORTER_TYPE_FILTER's
-// comment describes, and it is what makes the filter include pre-RA-314
-// items with no `wasteProcessingType` field (Mongo's `$not` on a `$regex`
-// already matches a missing field).
-const REPROCESSOR_WASTE_PROCESSING_TYPE = 'Reprocessor'
-
-// The re-accreditation work item typeId; also the Reprocessor URL value.
-const RE_ACCREDITATION_TYPE_ID = 're-accreditation'
-const TYPE_FILTER_OPTIONS = [
-  { value: RE_ACCREDITATION_TYPE_ID, text: 'Reprocessor' },
-  { value: EXPORTER_TYPE_FILTER.typeIdToken, text: 'Exporter' }
-]
-const ALLOWED_TYPE_IDS = new Set(TYPE_FILTER_OPTIONS.map((o) => o.value))
-const TYPE_LABEL = new Map(TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text]))
-
-// RA-299 AC01/15. A SECOND, distinct type-style filter: "Application type"
-// (what kind of application it is), separate from "Applicant type" (who is
-// applying) above. It alone sets the backend's `typeIds`, submitted via a
-// separate `applicationType=` query param so the two checkbox groups don't
-// collide in the form / active-filter chips.
-// "Re-accreditation" maps to the real `re-accreditation` typeId;
-// "Accreditation", "Registration application" and
-// "Payment of annual registration fee" are BA-requested options with no
-// backend type yet, so they are given not-yet-existing typeId tokens and
-// correctly return zero results via the backend's `builder.In(w => w.TypeId,
-// typeIds)` until those work item types exist.
-//
-// RA-739. "In-year change" is a CATEGORY, not a typeId: it is sent as
-// `category=in-year-change` and management-be expands it to every type
-// registered with that category (add-ORS now, update ORS / tonnage band
-// upgrade later), unioned with the typeIds.
-const APPLICATION_TYPE_FILTER_OPTIONS = [
-  { value: RE_ACCREDITATION_TYPE_ID, text: 'Re-accreditation' },
-  { value: 'accreditation', text: 'Accreditation' },
-  { value: 'registration-application', text: 'Registration application' },
-  {
-    value: 'annual-fee-payment',
-    text: 'Payment of annual registration fee'
-  },
-  { value: IN_YEAR_CHANGE_CATEGORY, text: 'In-year change', isCategory: true }
-]
-const ALLOWED_APPLICATION_TYPE_IDS = new Set(
-  APPLICATION_TYPE_FILTER_OPTIONS.map((o) => o.value)
-)
-const APPLICATION_TYPE_LABEL = new Map(
-  APPLICATION_TYPE_FILTER_OPTIONS.map((o) => [o.value, o.text])
-)
-const APPLICATION_TYPE_CATEGORIES = new Set(
-  APPLICATION_TYPE_FILTER_OPTIONS.filter((o) => o.isCategory).map(
-    (o) => o.value
-  )
-)
-
-// RA-324 phase-2. The "Status" filter groups the backend state ids under the
-// AC06 labels. The single "Updated" option deliberately expands to BOTH
-// `assessment-in-progress` and `updated` (they share the "Updated" label), so
-// the UI shows one checkbox while the backend receives both state ids. The
-// `value` is the stable UI/URL token (submitted via `status=`), decoupled from
-// the raw `stateId` backend param.
-//
-// RA-527 follow-up. "Duly made" likewise expands to `duly-made` AND
-// `assessment-started` (a started case, which still reads "Duly made"), so a
-// started case is found under "Duly made" and never under "Updated".
-const STATUS_FILTER_OPTIONS = [
-  { value: 'submitted', text: 'Not started', stateIds: ['submitted'] },
-  {
-    value: 'duly-made',
-    text: 'Duly made',
-    stateIds: ['duly-made', 'assessment-started']
-  },
-  {
-    value: 'updated',
-    text: 'Updated',
-    stateIds: ['assessment-in-progress', 'updated']
-  },
-  {
-    value: 'awaiting-decision',
-    text: 'Awaiting decision',
-    stateIds: ['awaiting-decision']
-  },
-  { value: 'queried', text: 'Queried', stateIds: ['queried'] },
-  // RA-527. Approved at step 1, applicant not yet contacted. Its own option,
-  // separate from "Granted".
-  {
-    value: 'approved-pending-contact',
-    text: 'Approved',
-    stateIds: ['approved-pending-contact']
-  },
-  { value: 'approved', text: 'Granted', stateIds: ['approved'] },
-  // RA-527. A step 1 refusal (`rejected-pending-contact`) reads "Refused",
-  // the same as the final `rejected` state, so the one "Refused" option
-  // covers both, as "Updated" does above.
-  {
-    value: 'rejected',
-    text: 'Refused',
-    stateIds: ['rejected', 'rejected-pending-contact']
-  },
-  { value: 'withdrawn', text: 'Withdrawn', stateIds: ['withdrawn'] }
-]
-const STATUS_OPTION_BY_VALUE = new Map(
-  STATUS_FILTER_OPTIONS.map((o) => [o.value, o])
-)
 
 // RA-370. States in which the application assessment has NOT yet started, and
 // so the card shows "Submitted on". Assessment work begins at
@@ -261,9 +119,6 @@ const SORT_OPTIONS = [
 const SORT_VALUES = new Set(SORT_OPTIONS.map((o) => o.value))
 const SORT_LABEL = new Map(SORT_OPTIONS.map((o) => [o.value, o.text]))
 
-// RA-324 phase-2. Nation filter uses the shared NATION_OPTIONS (RA-526) -
-// the role-based single-nation default still applies via resolveNations.
-
 /**
  * Renders the cross-type work item list, with filter, search and pagination.
  *
@@ -321,29 +176,14 @@ export const workItemListController = {
     const assignableUsers = await getAssignableUsers()
 
     const result = await getWorkItems({
-      // RA-299 AC01/15. Application type only: Applicant type narrows these
-      // through `wasteProcessingTypes` below.
-      typeIds: filters.applicationTypeIds.filter(
-        (id) => !APPLICATION_TYPE_CATEGORIES.has(id)
-      ),
-      // RA-739. Category options ("In-year change") are expanded to typeIds
-      // by the backend and unioned with `typeIds` above.
-      categories: filters.applicationTypeIds.filter((id) =>
-        APPLICATION_TYPE_CATEGORIES.has(id)
-      ),
-      stateIds: filters.stateIds,
-      // RA-299 AC05. `filters.materials` holds the UI-facing filter values
-      // (e.g. the split 'glass-remelt' / 'glass-other'); translate to the
-      // real backend material token(s) before querying.
-      materials: toBackendMaterialTokens(filters.materials),
+      ...resolveTypeFilter(filters.selected),
+      // Applicant type, Status, Nation and Material (see CHECKBOX_FILTERS).
+      ...checkboxFilterRequest(CHECKBOX_FILTERS, filters.selected),
       sort: filters.sort,
       organisation: filters.organisation,
       search: filters.search,
       assigneeId: filters.backendAssigneeId,
       unassigned: filters.backendUnassignedOnly,
-      nations: filters.nations,
-      // RA-412. Applicant type (see EXPORTER_TYPE_FILTER above).
-      wasteProcessingTypes: filters.wasteProcessingTypes,
       includeArchived: filters.includeArchived,
       page: filters.page,
       pageSize: DEFAULT_PAGE_SIZE,
@@ -377,15 +217,13 @@ export const workItemListController = {
       error: result.error,
       items,
       filters,
-      // RA-324 phase-2 filter sidebar model.
-      typeOptions: buildTypeOptions(filters.typeIds),
-      applicationTypeOptions: buildApplicationTypeOptions(
-        filters.applicationTypeIds
+      // RA-324 phase-2 filter sidebar model. The checkbox filter sections
+      // are keyed by CHECKBOX_FILTERS key.
+      checkboxSections: checkboxFilterSections(
+        CHECKBOX_FILTERS,
+        filters.selected
       ),
-      statusOptions: buildStatusOptions(filters.statusGroups),
-      materialOptions: buildMaterialOptions(filters.materials),
-      sortOptions: buildSortOptions(filters.sort),
-      nationOptions: buildNationOptions(filters.nations),
+      sortOptions: buildCheckboxOptions(SORT_OPTIONS, [filters.sort]),
       assigneeFilterOptions: buildAssigneeFilterOptions(filters),
       assigneeUserOptions: buildAssigneeUserOptions(
         filters.assigneeUserId,
@@ -418,58 +256,17 @@ function readFilters(query, user) {
   // RA-299 sort/assignee defaults below need it too.
   const filtersApplied = query.filtersApplied === '1'
 
-  // Type ("Applicant type" in the UI): only the two Type-filter values are
-  // accepted (Reprocessor -> re-accreditation, Exporter -> exporter).
-  const typeIds = uniqueStringList(query.typeId).filter((id) =>
-    ALLOWED_TYPE_IDS.has(id)
-  )
-
-  // RA-412. The backend filter for Applicant type: only when exactly one of
-  // Exporter/Reprocessor is ticked (see EXPORTER_TYPE_FILTER above).
-  const exporterSelected = typeIds.includes(EXPORTER_TYPE_FILTER.typeIdToken)
-  const reprocessorSelected = typeIds.includes(RE_ACCREDITATION_TYPE_ID)
-  const wasteProcessingTypes =
-    exporterSelected === reprocessorSelected
-      ? []
-      : [
-          exporterSelected
-            ? EXPORTER_TYPE_FILTER.wasteProcessingType
-            : REPROCESSOR_WASTE_PROCESSING_TYPE
-        ]
-
-  // RA-299 AC01/15. "Application type": a second, independent typeId-style
-  // filter (see APPLICATION_TYPE_FILTER_OPTIONS above for the stub-typeId
-  // reasoning). Read exactly like `typeIds` above, just from a different
-  // query param and option list.
-  const applicationTypeIds = uniqueStringList(query.applicationType).filter(
-    (id) => ALLOWED_APPLICATION_TYPE_IDS.has(id)
-  )
-
-  // Status is a UI grouping over backend state ids. Validate the submitted
-  // `status` group tokens, then expand to the flattened set of backend state
-  // ids (the "Updated" and "Refused" groups each expand to two ids).
-  const statusGroups = uniqueStringList(query.status).filter((v) =>
-    STATUS_OPTION_BY_VALUE.has(v)
-  )
-  const stateIds = [
-    ...new Set(
-      statusGroups.flatMap((v) => STATUS_OPTION_BY_VALUE.get(v).stateIds)
-    )
-  ]
-
-  // Material: repeated `material=` tokens, lower-cased and validated against
-  // the canonical token set. Dedup AFTER lower-casing so `?material=Plastic&
-  // material=plastic` collapses to a single token (uniqueStringList dedups
-  // case-sensitively, which would otherwise leak a duplicate chip).
-  const materials = [
-    ...new Set(uniqueStringList(query.material).map((m) => m.toLowerCase()))
-  ].filter((m) => MATERIAL_TOKENS.includes(m))
+  // The checkbox filters' values, keyed by CHECKBOX_FILTERS key.
+  const selected = readCheckboxFilters(CHECKBOX_FILTERS, query, {
+    user,
+    filtersApplied
+  })
 
   // Sort: one of the agreed tokens, else the RA-299 AC06 filtersApplied-aware
-  // default (mirrors resolveNations' shape exactly). `sortExplicit` tracks
-  // whether the user actually chose the sort (vs it being silently defaulted)
-  // so buildActiveFilters can suppress a spurious "Sorted by: Due date" chip
-  // for the default.
+  // default (mirrors the Nation filter's default in CHECKBOX_FILTERS).
+  // `sortExplicit` tracks whether the user actually chose the sort (vs it
+  // being silently defaulted) so buildActiveFilters can suppress a spurious
+  // "Sorted by: Due date" chip for the default.
   const { value: sort, explicit: sortExplicit } = resolveSort(
     query.sort,
     filtersApplied
@@ -487,7 +284,7 @@ function readFilters(query, user) {
 
   const page = clampPositiveInt(query.page, 1)
 
-  // RA-299 AC08/09. Mirrors resolveNations' filtersApplied-aware shape
+  // RA-299 AC08/09. Mirrors the Nation default's filtersApplied-aware shape
   // exactly: an explicit `assigneeMode` value wins; a form submission
   // (filtersApplied) with no assignee option ticked honours that as "show
   // all"; otherwise (a fresh, non-explicit landing) default to "mine".
@@ -518,12 +315,7 @@ function readFilters(query, user) {
     query.includeArchived === 'true' || query.includeArchived === '1'
 
   return {
-    typeIds,
-    wasteProcessingTypes,
-    applicationTypeIds,
-    statusGroups,
-    stateIds,
-    materials,
+    selected,
     sort,
     sortExplicit,
     organisation,
@@ -534,45 +326,9 @@ function readFilters(query, user) {
     assigneeUserId,
     backendAssigneeId,
     backendUnassignedOnly,
-    nations: resolveNations(query.nation, user, filtersApplied),
     includeArchived,
     filtersApplied
   }
-}
-
-/**
- * Resolve the active nation filter.
- *
- * If the query string supplies explicit nation values, use those (validated
- * against the known set). Otherwise, if the authenticated user has exactly
- * one nation role *and* the request is not an explicit form submission,
- * default to that nation so regulators see their own queue first without
- * having to manually apply the filter every time. When the user submits
- * the filter form with no nation boxes ticked we honour that empty
- * selection so they can see all nations or another nation's queue (RA-125).
- */
-function resolveNations(nationParam, user, filtersApplied) {
-  const explicit = uniqueStringList(nationParam).filter((n) =>
-    VALID_NATIONS.includes(n)
-  )
-  if (explicit.length > 0) {
-    return explicit
-  }
-
-  // The user submitted the filter form with every nation unchecked --
-  // respect that and don't fall through to the role-based default.
-  if (filtersApplied) {
-    return []
-  }
-
-  // No explicit filter — check for a single nation role on the user.
-  const userRoles = user?.roles ?? []
-  const nationRoles = userRoles.filter((r) => Object.hasOwn(NATION_ROLE_MAP, r))
-  if (nationRoles.length === 1) {
-    return [NATION_ROLE_MAP[nationRoles[0]]]
-  }
-
-  return []
 }
 
 /**
@@ -611,8 +367,8 @@ function resolveSort(rawValue, filtersApplied) {
  * caseworker's own queue is pre-selected without having to apply the filter
  * every time. A submitted form with no assignee option ticked
  * (`filtersApplied` true, `assigneeMode` absent) honours that as "show all",
- * exactly like `resolveNations` does for an emptied nation selection
- * (RA-125).
+ * exactly like the Nation default (list-filters.js) does for an emptied
+ * nation selection (RA-125).
  */
 function resolveAssigneeMode(rawValue, filtersApplied) {
   if (
@@ -631,27 +387,6 @@ function resolveAssigneeMode(rawValue, filtersApplied) {
   return { value: ASSIGNEE_FILTER_MINE, explicit: false }
 }
 
-function uniqueStringList(value) {
-  if (value == null) {
-    return []
-  }
-  const list = Array.isArray(value) ? value : [value]
-  const seen = new Set()
-  const out = []
-  for (const item of list) {
-    if (typeof item !== 'string') {
-      continue
-    }
-    const trimmed = item.trim()
-    if (trimmed === '' || seen.has(trimmed)) {
-      continue
-    }
-    seen.add(trimmed)
-    out.push(trimmed)
-  }
-  return out
-}
-
 function clampPositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback
@@ -663,9 +398,9 @@ function typeCardFields(type, payload, stateId) {
     // describes a site (add-ORS) shows it in place of the registration number.
     cardModifier: type?.category ?? null,
     cardSite: type?.describeCardSite?.(payload) ?? null,
-    // RA-739. The card's first line starts with the work item type's display
-    // name.
-    requestType: type?.displayName ?? null,
+    // RA-739. The card's first line starts with the request type: RA-681,
+    // the type's label for this work item's payload.
+    requestType: requestTypeLabel(type, payload),
     stateDisplayName: stateDisplayName(type, stateId),
     // The two card dates are gated INDEPENDENTLY — see the block comment above
     // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or
@@ -782,59 +517,6 @@ function formatArchivedAt(value) {
   })
 }
 
-function buildTypeOptions(selectedTypeIds) {
-  const selected = new Set(selectedTypeIds)
-  return TYPE_FILTER_OPTIONS.map((o) => ({
-    value: o.value,
-    text: o.text,
-    checked: selected.has(o.value)
-  }))
-}
-
-function buildApplicationTypeOptions(selectedApplicationTypeIds) {
-  const selected = new Set(selectedApplicationTypeIds)
-  return APPLICATION_TYPE_FILTER_OPTIONS.map((o) => ({
-    value: o.value,
-    text: o.text,
-    checked: selected.has(o.value)
-  }))
-}
-
-function buildStatusOptions(selectedStatusGroups) {
-  const selected = new Set(selectedStatusGroups)
-  return STATUS_FILTER_OPTIONS.map((o) => ({
-    value: o.value,
-    text: o.text,
-    checked: selected.has(o.value)
-  }))
-}
-
-function buildMaterialOptions(selectedMaterials) {
-  const selected = new Set(selectedMaterials)
-  return MATERIAL_FILTER_OPTIONS.map((o) => ({
-    value: o.value,
-    text: o.text,
-    checked: selected.has(o.value)
-  }))
-}
-
-function buildSortOptions(selectedSort) {
-  return SORT_OPTIONS.map((o) => ({
-    value: o.value,
-    text: o.text,
-    checked: selectedSort === o.value
-  }))
-}
-
-function buildNationOptions(selectedNations) {
-  const selected = new Set(selectedNations)
-  return NATION_OPTIONS.map((o) => ({
-    value: o.value,
-    text: o.text,
-    checked: selected.has(o.value)
-  }))
-}
-
 function buildAssigneeFilterOptions(filters) {
   // RA-324 phase-2 Assignment radios (prototype labels). No explicit "Anyone"
   // option — the unfiltered state is simply nothing selected; the user reverts
@@ -902,24 +584,10 @@ function buildPagination({ page, totalPages, filters }) {
 
 function buildHref(filters) {
   // `filters` always comes from readFilters (directly, or via a spread in
-  // withoutFilter / buildPagination), so every list field is guaranteed to be
-  // an array — no nullish guards needed on the loops.
+  // withoutFilter / buildPagination), so every checkbox filter has an array of
+  // values — no nullish guards needed.
   const params = new URLSearchParams()
-  for (const id of filters.typeIds) {
-    params.append('typeId', id)
-  }
-  for (const id of filters.applicationTypeIds) {
-    params.append('applicationType', id)
-  }
-  for (const v of filters.statusGroups) {
-    params.append('status', v)
-  }
-  for (const n of filters.nations) {
-    params.append('nation', n)
-  }
-  for (const m of filters.materials) {
-    params.append('material', m)
-  }
+  appendCheckboxFilterParams(params, CHECKBOX_FILTERS, filters.selected)
   // RA-299 AC06. Only carry `sort=` forward when it was an explicit user
   // choice — a silently-defaulted sort must not "leak" into the URL as if it
   // were user-chosen (readFilters re-derives the same default on every
@@ -973,11 +641,7 @@ function buildHref(filters) {
  */
 function buildFilterCounts(filters) {
   return {
-    type: filters.typeIds.length,
-    applicationType: filters.applicationTypeIds.length,
-    status: filters.statusGroups.length,
-    nation: filters.nations.length,
-    material: filters.materials.length,
+    ...checkboxFilterCounts(CHECKBOX_FILTERS, filters.selected),
     // RA-299 AC08/09/AC06: gated on the *explicit* flag, not the resolved
     // value, so the AC06/AC08 silent defaults (due-date sort, "mine"
     // assignee) don't count as an "active filter" — they must not flip the
@@ -992,17 +656,9 @@ function buildFilterCounts(filters) {
 
 /** True when any filter (or the archived / free-text search) is active. */
 function hasActiveFilters(filters) {
-  const c = buildFilterCounts(filters)
+  // The archived count covers `includeArchived`.
   return (
-    c.type > 0 ||
-    c.applicationType > 0 ||
-    c.status > 0 ||
-    c.nation > 0 ||
-    c.material > 0 ||
-    c.assignment > 0 ||
-    c.sort > 0 ||
-    c.organisation > 0 ||
-    filters.includeArchived ||
+    Object.values(buildFilterCounts(filters)).some((count) => count > 0) ||
     filters.search !== ''
   )
 }
@@ -1019,24 +675,11 @@ function assigneeUserName(userId, assignableUsers) {
  */
 function withoutFilter(filters, key, value) {
   const next = { ...filters, page: 1, filtersApplied: true }
+  if (isCheckboxFilterKey(CHECKBOX_FILTERS, key)) {
+    next.selected = withoutCheckboxValue(filters.selected, key, value)
+    return next
+  }
   switch (key) {
-    case 'type':
-      next.typeIds = filters.typeIds.filter((v) => v !== value)
-      break
-    case 'status':
-      next.statusGroups = filters.statusGroups.filter((v) => v !== value)
-      break
-    case 'nation':
-      next.nations = filters.nations.filter((v) => v !== value)
-      break
-    case 'applicationType':
-      next.applicationTypeIds = filters.applicationTypeIds.filter(
-        (v) => v !== value
-      )
-      break
-    case 'material':
-      next.materials = filters.materials.filter((v) => v !== value)
-      break
     case 'assignment':
       next.assigneeMode = ASSIGNEE_FILTER_ANY
       next.assigneeModeExplicit = false
@@ -1097,24 +740,10 @@ function buildActiveFilters(filters, assignableUsers) {
   // "Reprocessor") — no "Nation:" / "Type:" category prefix,
   // since the category is inferable from the value itself. Sort is the sole
   // exception (kept below): a bare sort value ("Due date") reads ambiguously
-  // as a chip, so it keeps its "Sorted by: " prefix.
-  for (const id of filters.typeIds) {
-    add('type', id, TYPE_LABEL.get(id))
-  }
-  // RA-299 AC01/15. Application-type chips, same shape as Applicant-type.
-  for (const id of filters.applicationTypeIds) {
-    add('applicationType', id, APPLICATION_TYPE_LABEL.get(id))
-  }
-  for (const v of filters.statusGroups) {
-    add('status', v, STATUS_OPTION_BY_VALUE.get(v).text)
-  }
-  for (const n of filters.nations) {
-    add('nation', n, nationLabel(n))
-  }
-  // RA-299 AC05. `m` is the UI filter value (e.g. 'glass-remelt'), not the
-  // raw backend payload token — use materialFilterLabel, not materialLabel.
-  for (const m of filters.materials) {
-    add('material', m, materialFilterLabel(m))
+  // as a chip, so it keeps its "Sorted by: " prefix. An option's `chip` can
+  // still differ from its text (RA-681: "ORS applications").
+  for (const chip of checkboxFilterChips(CHECKBOX_FILTERS, filters.selected)) {
+    add(chip.key, chip.value, chip.label)
   }
   // RA-299 AC08/09. Only render the assignment chip for an EXPLICIT
   // selection — the silent "mine" default must not appear as a removable

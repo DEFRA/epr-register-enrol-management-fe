@@ -4,6 +4,7 @@ import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { materialLabel } from '#/server/work-items/core/materials.js'
 import { getWorkItemType } from '#/server/work-items/core/registry.js'
 import { stateTagClass } from '#/server/work-items/core/state-badge.js'
+import { requestTypeLabel } from '#/server/work-items/core/request-type-label.js'
 // Single definition of the "no value" glyph, shared with the application
 // summary rather than redeclared here.
 import { EM_DASH } from './application-summary.js'
@@ -282,8 +283,8 @@ export function stateDisplayName(type, stateId) {
 
 /**
  * Decorate a raw work item with the fields the case header and tabs read:
- * its type's display name, and its state's display name and
- * badge colour. Every work item page builds its header from a work item
+ * its request type label (RA-681: from its type and its own payload), and
+ * its state's display name and badge colour. Every work item page builds its header from a work item
  * decorated this way, so a case type gets its own header on every tab
  * (RA-739). The detail page's own decorator sets the same fields.
  *
@@ -294,7 +295,9 @@ export function decorateForCaseHeader(workItem) {
   const type = getWorkItemType(workItem.typeId)
   return {
     ...workItem,
-    typeDisplayName: type?.displayName ?? workItem.typeId,
+    // RA-681. The request type label for this work item's own payload.
+    typeDisplayName:
+      requestTypeLabel(type, workItem.payload) ?? workItem.typeId,
     stateDisplayName: stateDisplayName(type, workItem.stateId),
     stateTagClass: stateTagClass(workItem.stateId)
   }

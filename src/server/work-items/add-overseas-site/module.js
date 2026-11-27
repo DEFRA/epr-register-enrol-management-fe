@@ -1,5 +1,6 @@
 import { registerModuleDetailTemplates } from '../core/templates.js'
 import { IN_YEAR_CHANGE_CATEGORY } from '../core/categories.js'
+import { describeOrsCardSite } from '../core/ors-card-site.js'
 import { standardWorkflow } from '../core/standard-workflow.js'
 import { buildStandardLifecycleRoutes } from '../core/standard-lifecycle/routes.js'
 import { buildAddOverseasSiteSummary } from '#/server/routes/add-overseas-site/application-summary.js'
@@ -38,7 +39,10 @@ const DETAIL_TEMPLATE_V1 = 'add-overseas-site/detail-v1'
  */
 export const addOverseasSiteType = {
   id: 'add-overseas-site',
-  displayName: 'New ORS accreditation',
+  // RA-681. A fixed label: the site is a registered ORS joining the
+  // accreditation, so it is always "Accreditation:" (`selected` is true).
+  // Kept in step with management-be's `AddOverseasSiteType.DisplayName`.
+  displayName: 'Accreditation: add registered ORS',
   category: IN_YEAR_CHANGE_CATEGORY,
   // Mirrors `AddOverseasSiteType.TemplateVersion` in management-be, which is
   // the value stamped onto work items. Keep the two in lock-step and add the
@@ -62,7 +66,7 @@ export const addOverseasSiteType = {
   buildApplicationSummary: buildAddOverseasSiteSummary,
   // The Applications list card shows this as its site line, in place of the
   // registration number.
-  describeCardSite,
+  describeCardSite: describeOrsCardSite,
   // The card shows "Submitted on" in every state, not only before assessment.
   cardAlwaysShowsSubmittedOn: true,
   standardLifecycle: {
@@ -90,18 +94,6 @@ export const addOverseasSiteType = {
       }
     }
   }
-}
-
-/**
- * The in-year change card's site line: the site's name and its ORS id, from
- * the one site management-be stamps on each add-ORS work item.
- *
- * @param {object} payload work item payload
- * @returns {{ name: string|null, reference: string|null }}
- */
-function describeCardSite(payload) {
-  const site = payload?.site ?? {}
-  return { name: site.siteName ?? null, reference: site.orsId ?? null }
 }
 
 export const addOverseasSiteModule = {

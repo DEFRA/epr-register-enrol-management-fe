@@ -10,6 +10,7 @@ import {
   registerWorkItemType
 } from '#/server/work-items/core/registry.js'
 import { addOverseasSiteType } from '#/server/work-items/add-overseas-site/module.js'
+import { updateOverseasSiteType } from '#/server/work-items/update-overseas-site/module.js'
 
 import {
   buildRelatedRequests,
@@ -20,7 +21,10 @@ import {
 const EM_DASH = '—'
 
 describe('RA-770: relatedWorkItemRow', () => {
-  beforeAll(() => registerWorkItemType(addOverseasSiteType))
+  beforeAll(() => {
+    registerWorkItemType(addOverseasSiteType)
+    registerWorkItemType(updateOverseasSiteType)
+  })
   afterAll(() => clearWorkItemRegistry())
 
   test('describes an add-ORS request by reference, site, type, charge and status', () => {
@@ -38,7 +42,7 @@ describe('RA-770: relatedWorkItemRow', () => {
       id: 'wi-1',
       reference: 'IYC-2026-00001',
       site: 'Denmark PR (007)',
-      type: 'New ORS accreditation',
+      type: 'Accreditation: add registered ORS',
       charge: '£328.00',
       status: 'Not started',
       statusTagClass: expect.any(String)
@@ -70,6 +74,38 @@ describe('RA-770: relatedWorkItemRow', () => {
       siteName: 'Belgium PR'
     })
     expect(row).toMatchObject({ site: 'Belgium PR', type: EM_DASH })
+  })
+
+  // RA-681. management-be's related item carries its site's `selected` flag,
+  // so an ORS update row is labelled per item, as its card and case header are.
+  test.each([
+    [true, 'Accreditation: ORS update'],
+    [false, 'Registration: ORS update'],
+    [null, 'ORS update'],
+    [undefined, 'ORS update']
+  ])(
+    "labels an ORS update with site selected %s as '%s'",
+    (selected, expected) => {
+      expect(
+        relatedWorkItemRow({
+          id: 'wi-5',
+          typeId: 'update-overseas-site',
+          stateId: 'submitted',
+          selected
+        }).type
+      ).toBe(expected)
+    }
+  )
+
+  test('keeps the add-ORS label whatever its site selected flag', () => {
+    expect(
+      relatedWorkItemRow({
+        id: 'wi-6',
+        typeId: 'add-overseas-site',
+        stateId: 'submitted',
+        selected: false
+      }).type
+    ).toBe('Accreditation: add registered ORS')
   })
 
   test('shows a £0 charge as £0.00, as the case header does, not as no charge', () => {

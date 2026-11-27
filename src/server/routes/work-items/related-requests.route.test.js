@@ -185,7 +185,7 @@ describe('RA-770: the Related change requests tab', () => {
         reference: 'IYC-2026-00001',
         link: `/work-items/${ID}`,
         site: 'Site 1 (001)',
-        type: 'New ORS accreditation',
+        type: 'Accreditation: add registered ORS',
         charge: '£328.00',
         status: 'Not started'
       },
@@ -193,7 +193,7 @@ describe('RA-770: the Related change requests tab', () => {
         reference: 'IYC-2026-00002',
         link: '/work-items/77000001-0000-4000-8000-000000000002',
         site: 'Belgium PR (002)',
-        type: 'New ORS accreditation',
+        type: 'Accreditation: add registered ORS',
         charge: '—',
         status: 'Not started'
       },
@@ -201,7 +201,7 @@ describe('RA-770: the Related change requests tab', () => {
         reference: 'IYC-2026-00003',
         link: '/work-items/77000001-0000-4000-8000-000000000003',
         site: 'Site 3 (003)',
-        type: 'New ORS accreditation',
+        type: 'Accreditation: add registered ORS',
         charge: '£0.00',
         status: 'Duly made'
       }

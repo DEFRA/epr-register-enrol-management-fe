@@ -46,8 +46,9 @@ export function isRegistrationOnlyChange(payload) {
 /**
  * The accreditation number, or, for a registration-only change, the
  * registration number. With neither, the accreditation number's dash.
+ * Shared with the ORS update header (RA-681).
  */
-function referenceEntry(payload) {
+export function referenceEntry(payload) {
   if (isRegistrationOnlyChange(payload)) {
     return {
       key: 'registration-number',
@@ -62,8 +63,11 @@ function referenceEntry(payload) {
   }
 }
 
-/** "Site name (ORS id)", as on the in-year change list card. */
-function siteTitle(site) {
+/**
+ * "Site name (ORS id)", as on the in-year change list card. Shared with the
+ * ORS update header (RA-681).
+ */
+export function siteTitle(site) {
   const name = site?.siteName || EM_DASH
   return site?.orsId ? `${name} (${site.orsId})` : name
 }

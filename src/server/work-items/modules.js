@@ -12,5 +12,10 @@
 
 import { addOverseasSiteModule } from './add-overseas-site/module.js'
 import { reAccreditationModule } from './re-accreditation/module.js'
+import { updateOverseasSiteModule } from './update-overseas-site/module.js'
 
-export const workItemModules = [reAccreditationModule, addOverseasSiteModule]
+export const workItemModules = [
+  reAccreditationModule,
+  addOverseasSiteModule,
+  updateOverseasSiteModule
+]
