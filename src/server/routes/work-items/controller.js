@@ -162,20 +162,9 @@ const APPLICATION_TYPE_CATEGORIES = new Set(
 // are given the typeIds agreed for them, which match nothing until they exist:
 // `upgrade-tonnage-band` (the operator's change type value),
 // `add-new-overseas-site` (a brand-new ORS) and `withdraw-overseas-site`.
-// SIP is phase 2.
-const ORS_TYPE_IDS = [
-  'add-new-overseas-site',
-  'add-overseas-site',
-  'update-overseas-site',
-  'withdraw-overseas-site'
-]
-const IN_YEAR_CHANGE_FILTER_OPTIONS = [
-  { value: 'tonnage', text: 'Tonnage', typeIds: ['upgrade-tonnage-band'] },
-  { value: 'ors', text: 'ORS', typeIds: ORS_TYPE_IDS }
-]
-const IN_YEAR_CHANGE_OPTION_BY_VALUE = new Map(
-  IN_YEAR_CHANGE_FILTER_OPTIONS.map((o) => [o.value, o])
-)
+// SIP is phase 2. The ORS option's typeIds are every ORS management option's,
+// so the two sections can't drift apart.
+const IN_YEAR_CHANGE_ORS = 'ors'
 
 // RA-681. The "ORS management" section narrows the ORS part of the in-year
 // change results to kinds of ORS change (see resolveTypeFilter). Option text
@@ -206,6 +195,18 @@ const ORS_MANAGEMENT_FILTER_OPTIONS = [
 ]
 const ORS_MANAGEMENT_OPTION_BY_VALUE = new Map(
   ORS_MANAGEMENT_FILTER_OPTIONS.map((o) => [o.value, o])
+)
+
+const IN_YEAR_CHANGE_FILTER_OPTIONS = [
+  { value: 'tonnage', text: 'Tonnage', typeIds: ['upgrade-tonnage-band'] },
+  {
+    value: IN_YEAR_CHANGE_ORS,
+    text: 'ORS',
+    typeIds: ORS_MANAGEMENT_FILTER_OPTIONS.flatMap((o) => o.typeIds)
+  }
+]
+const IN_YEAR_CHANGE_OPTION_BY_VALUE = new Map(
+  IN_YEAR_CHANGE_FILTER_OPTIONS.map((o) => [o.value, o])
 )
 
 // RA-324 phase-2. The "Status" filter groups the backend state ids under the
@@ -660,7 +661,7 @@ function narrowedInYearChangeTypeIds(inYearChangeTypes, orsManagementTypes) {
       ? inYearChangeTypes
       : IN_YEAR_CHANGE_FILTER_OPTIONS.map((o) => o.value)
   return included.flatMap((v) =>
-    v === 'ors' && orsManagementTypes.length > 0
+    v === IN_YEAR_CHANGE_ORS && orsManagementTypes.length > 0
       ? orsManagementTypes.flatMap(
           (o) => ORS_MANAGEMENT_OPTION_BY_VALUE.get(o).typeIds
         )
