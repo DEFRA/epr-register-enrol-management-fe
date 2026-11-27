@@ -57,7 +57,9 @@
 {# `newTestId` (3bb.13) puts the "NEW: " prefix, with that testid, before    #}
 {# the file: the add-ORS summary marks the first BES file when the operator  #}
 {# uploaded the evidence on the request.                                     #}
-{% macro documentItem(file, showUpdated=false, showDates=false, newTestId='') %}
+{# `newTag` (RA-782) puts a purple "New" tag after the file: the ORS update   #}
+{# summary marks the BES files the update adds.                             #}
+{% macro documentItem(file, showUpdated=false, showDates=false, newTestId='', newTag=false) %}
   <li>
     {% if newTestId %}{{ newPrefix(newTestId) }}{% endif %}
     {% if file.href %}
@@ -67,6 +69,9 @@
     {% else %}
       <span data-testid="app-detail-document">{{ file.filename }}</span>
       {{ govukTag({ text: file.scanStatus, classes: file.scanTagClass }) }}
+    {% endif %}
+    {% if newTag %}
+      {{ govukTag({ text: "New", classes: "govuk-tag--purple", attributes: { "data-testid": "app-detail-document-new" } }) }}
     {% endif %}
     {% if showUpdated and (file.uploadedAt or file.uploadedBy) %}
       {# "S&I updated by" — retained per RA-295's Jira notes. #}

@@ -153,6 +153,10 @@ const STANDARD_LIFECYCLE_BACKEND_STEPS = [
 
 const STANDARD_LIFECYCLE_BANNER_OUTCOMES = ['approved', 'rejected']
 
+// RA-782. A mistyped `paymentDate: 'false'` would otherwise read as true and
+// ask an uncharged type for a date management-be refuses.
+const STANDARD_LIFECYCLE_FLAGS = ['paymentDate']
+
 /**
  * RA-495. A type opting into the shared Standard-lifecycle pages
  * (`standardLifecycle`, see `standard-lifecycle/lifecycle.js`) must say where
@@ -175,6 +179,14 @@ function assertValidStandardLifecycle(type) {
     if (call !== undefined && typeof call !== 'function') {
       throw new TypeError(
         `Work item type "${type.id}" \`standardLifecycle.backend.${step}\` must be a function`
+      )
+    }
+  }
+  for (const flag of STANDARD_LIFECYCLE_FLAGS) {
+    const value = lifecycle[flag]
+    if (value !== undefined && typeof value !== 'boolean') {
+      throw new TypeError(
+        `Work item type "${type.id}" \`standardLifecycle.${flag}\` must be a boolean`
       )
     }
   }

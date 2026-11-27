@@ -107,11 +107,11 @@ function siteRows(site, workItemId, supplied) {
 }
 
 /** One comma-separated line, or nothing when there are no parts. */
-function joined(lines) {
+export function joined(lines) {
   return lines.length > 0 ? [lines.join(', ')] : []
 }
 
-function orDash(lines) {
+export function orDash(lines) {
   return lines.length > 0 ? lines : [EM_DASH]
 }
 
@@ -121,8 +121,10 @@ function orDash(lines) {
  * when the operator supplied it (`ChangeRequestRules`: the four fields an
  * ORS may lack and the operator then answers on the request). The location
  * row is marked when the operator supplied the country.
+ *
+ * RA-782: exported for the ORS update summary, which shows the same rows.
  */
-const SITE_FIELDS = [
+export const SITE_FIELDS = [
   ['site-name', 'Site name', (site) => toDisplayLines(site.siteName)],
   [
     'location',
@@ -197,7 +199,7 @@ function besFilesOf(site) {
 }
 
 /** The shared file view model (Clean-only link), plus the BES dates. */
-function besFileViewModel(file, workItemId) {
+export function besFileViewModel(file, workItemId) {
   return {
     ...fileViewModel(file, workItemId),
     validFrom: formatDateShortGds(file?.besEvidenceValidFromDate) || EM_DASH,
@@ -205,8 +207,11 @@ function besFileViewModel(file, workItemId) {
   }
 }
 
-/** Figma's interim site fields, in order, plus re-accreditation's contact phone. */
-const INTERIM_FIELDS = [
+/**
+ * Figma's interim site fields, in order, plus re-accreditation's contact
+ * phone. RA-782: exported for the ORS update's interim sites.
+ */
+export const INTERIM_FIELDS = [
   ['site-number', 'Site number', (site) => toDisplayLines(site.siteNumber)],
   ['location', 'Location', (site) => joined(interimSiteAddressLines(site))],
   ['contact-name', 'Contact name', (site) => toDisplayLines(site.contactName)],

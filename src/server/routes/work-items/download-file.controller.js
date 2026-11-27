@@ -30,8 +30,9 @@ function filesIn(container) {
 
 /**
  * Every file a work item's payload can link to: re-accreditation's sampling
- * plan and each overseas site's BES evidence, and (RA-739) the add-ORS
- * site's BES evidence under `payload.site`.
+ * plan and each overseas site's BES evidence, (RA-739) the add-ORS
+ * site's BES evidence under `payload.site`, and (RA-782) the BES evidence an
+ * ORS update adds beside it (`payload.site.addedBesEvidence`).
  *
  * RA-483 deliberately does NOT filter deselected sites out here. This is a
  * lookup by `fileId`, reachable only from a link the summary renders — and
@@ -48,7 +49,8 @@ function filesOf(payload) {
     ...(Array.isArray(overseasSites) ? overseasSites : []).flatMap((site) =>
       filesIn(site?.besEvidence)
     ),
-    ...filesIn(payload?.site?.besEvidence)
+    ...filesIn(payload?.site?.besEvidence),
+    ...filesIn(payload?.site?.addedBesEvidence)
   ]
 }
 

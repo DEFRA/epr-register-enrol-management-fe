@@ -20,10 +20,13 @@
  * Constructor takes the backend call so tests can stub it without mocking
  * `undici`. RA-495: by default it is the call the work item's type declares
  * (`standardLifecycle.backend.dulyMake`), else the type-less endpoint.
+ *
+ * RA-782: a type with no payment date (`standardLifecycle.paymentDate:
+ * false`) duly makes with none; every other type still needs one.
  */
 
 import { toOutcome } from '../../backend-outcome.js'
-import { lifecycleBackendCall } from '../lifecycle.js'
+import { lifecycleBackendCall, takesPaymentDate } from '../lifecycle.js'
 
 /**
  * @param {object} options
@@ -40,16 +43,24 @@ export function createDulyMakingService({
      *
      * @param {object} args
      * @param {string} args.workItemId
-     * @param {string} args.paymentDate Plain `YYYY-MM-DD`. Never an ISO
-     *   timestamp — the backend parses with an exact `yyyy-MM-dd` format
-     *   and rejects anything carrying a time component.
+     * @param {string | null} [args.paymentDate] Plain `YYYY-MM-DD`. Never
+     *   an ISO timestamp — the backend parses with an exact `yyyy-MM-dd`
+     *   format and rejects anything carrying a time component. Absent for
+     *   a type with no payment date (RA-782), and only then.
      */
-    async dulyMakeWorkItem({ workItemId, paymentDate, user = null }) {
+    async dulyMakeWorkItem({ workItemId, paymentDate = null, user = null }) {
       if (typeof workItemId !== 'string' || workItemId.trim() === '') {
         throw new Error('workItemId must be a non-empty string')
       }
-      if (typeof paymentDate !== 'string' || paymentDate.trim() === '') {
+      const withDate = takesPaymentDate(typeId)
+      if (
+        withDate &&
+        (typeof paymentDate !== 'string' || paymentDate.trim() === '')
+      ) {
         throw new Error('paymentDate must be a non-empty string')
+      }
+      if (!withDate && paymentDate != null) {
+        throw new Error('this work item type takes no paymentDate')
       }
 
       const result = await dulyMake({ workItemId, paymentDate, user })

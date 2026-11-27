@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
 
 import { createDulyMakingService } from './service.js'
+import { clearWorkItemRegistry, registerWorkItemType } from '../../registry.js'
 
 const ID = '11111111-1111-1111-1111-111111111111'
 
@@ -101,5 +102,52 @@ describe('createDulyMakingService', () => {
     const { service, dulyMake } = serviceWith({ ok: true, workItem: {} })
     await expect(service.dulyMakeWorkItem(args)).rejects.toThrow()
     expect(dulyMake).not.toHaveBeenCalled()
+  })
+
+  // RA-782. A type with no payment date duly makes with none.
+  describe('for a type with no payment date', () => {
+    const TYPE_ID = 'no-charge-type'
+
+    beforeEach(() => {
+      registerWorkItemType({
+        id: TYPE_ID,
+        standardLifecycle: { paymentDate: false }
+      })
+    })
+
+    afterEach(() => {
+      clearWorkItemRegistry()
+    })
+
+    function noDateServiceWith(result) {
+      const dulyMake = vi.fn().mockResolvedValue(result)
+      return {
+        service: createDulyMakingService({ typeId: TYPE_ID, dulyMake }),
+        dulyMake
+      }
+    }
+
+    test('sends no payment date', async () => {
+      const { service, dulyMake } = noDateServiceWith({
+        ok: true,
+        workItem: { id: ID }
+      })
+      await expect(
+        service.dulyMakeWorkItem({ workItemId: ID })
+      ).resolves.toEqual({ ok: true, workItem: { id: ID } })
+      expect(dulyMake).toHaveBeenCalledWith({
+        workItemId: ID,
+        paymentDate: null,
+        user: null
+      })
+    })
+
+    test('throws on a payment date rather than calling the backend', async () => {
+      const { service, dulyMake } = noDateServiceWith({ ok: true })
+      await expect(
+        service.dulyMakeWorkItem({ workItemId: ID, paymentDate: '2026-03-27' })
+      ).rejects.toThrow('this work item type takes no paymentDate')
+      expect(dulyMake).not.toHaveBeenCalled()
+    })
   })
 })

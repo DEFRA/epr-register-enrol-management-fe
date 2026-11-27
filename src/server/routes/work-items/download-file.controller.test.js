@@ -279,4 +279,73 @@ describe('#workItemDownloadFileController', () => {
       expect(s3Client.send).not.toHaveBeenCalled()
     })
   })
+
+  // RA-782. An ORS update carries the BES evidence the operator added beside
+  // the ORS's own, under `payload.site.addedBesEvidence`.
+  describe('ORS update added BES evidence', () => {
+    const ADDED_FILE = {
+      fileId: 'bes-added-001',
+      filename: 'new-bes.pdf',
+      contentType: 'application/pdf',
+      scanStatus: 'Clean',
+      s3Key: 'bes-evidence/bes-added-001',
+      s3Bucket: 'bes-evidence'
+    }
+
+    function anUpdateItem(file) {
+      return {
+        id: ID,
+        typeId: 'update-overseas-site',
+        stateId: 'submitted',
+        payload: {
+          applicationReference: 'IYC-ORS-2026-00002',
+          site: {
+            orsId: '007',
+            besEvidence: { files: [] },
+            addedBesEvidence: { files: [file] }
+          }
+        }
+      }
+    }
+
+    test('streams a Clean file the update added', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anUpdateItem(ADDED_FILE)
+      })
+      s3Client.send.mockResolvedValue({
+        Body: 'pdf-bytes',
+        ContentType: 'application/pdf'
+      })
+
+      const { statusCode, result, headers } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/files/bes-added-001/download`
+      })
+
+      expect(statusCode).toBe(statusCodes.ok)
+      expect(result).toBe('pdf-bytes')
+      expect(headers['content-disposition']).toContain('new-bes.pdf')
+      const [command] = s3Client.send.mock.calls[0]
+      expect(command.input).toEqual({
+        Bucket: 'bes-evidence',
+        Key: 'bes-evidence/bes-added-001'
+      })
+    })
+
+    test('refuses an added file that is not Clean', async () => {
+      getWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anUpdateItem({ ...ADDED_FILE, scanStatus: 'Pending' })
+      })
+
+      const { statusCode } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ID}/files/bes-added-001/download`
+      })
+
+      expect(statusCode).toBe(422)
+      expect(s3Client.send).not.toHaveBeenCalled()
+    })
+  })
 })

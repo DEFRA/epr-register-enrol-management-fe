@@ -255,7 +255,11 @@ export const myType = {
     // work item's accreditation year (`payload.accreditationYear`, 1 January
     // to 31 December inclusive; RA-795), and it can be corrected on the Change
     // valid from date page (RA-800).
-    effectiveDate: true
+    effectiveDate: true,
+    // Optional (RA-782): false for a type that is never charged. Its Duly make
+    // page shows the charge and payment reference as "-", asks for no payment
+    // date and sends management-be none (management-be refuses one).
+    paymentDate: false
   }
 }
 
@@ -300,6 +304,25 @@ An add-ORS approval mints nothing: the site joins an accreditation that
 already exists, so the approval banner has no accreditation ID. For the
 same reason it supplies its own `contactConfirmedBanners` (the site has, or
 has not, been added to the accreditation; provisional copy).
+
+### ORS update (RA-767 / RA-782)
+
+`update-overseas-site/module.js` ("Update ORS Accreditation") is add-ORS's
+card, tabs and header (`routes/update-overseas-site/case-header.js`, with the
+payment date as the dash) over management-be's `update-overseas-site` type.
+Its Application summary (`routes/update-overseas-site/application-summary.js`
+and `detail-v1.njk`) compares the ORS's details, Current version against
+Requested change, from `payload.site.previous` and `proposed` (the locked
+details from `payload.site` on both sides), each changed row tagged
+"Changed"; then the ORS's BES files and the ones the update adds
+(`payload.site.addedBesEvidence`, tagged "New", downloadable through the
+payload download route); then one collapsible section per interim site from
+`interimSites` and `interimSiteChanges`: "New interim site", "Removed",
+"Changed" (compared, open) or "No changes" (closed). It reuses add-ORS's row
+definitions (`SITE_FIELDS`, `INTERIM_FIELDS`). Its lifecycle takes no
+payment date (`paymentDate: false`) and no valid from date
+(`effectiveDate: false`): a change to an ORS changes neither its status nor
+when it was accredited from.
 
 ## Cross-type list
 

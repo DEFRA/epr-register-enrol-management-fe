@@ -16,6 +16,11 @@
  * a wiring fault) redirect with a flash banner instead: a field error would
  * be actively misleading when the problem is not the field.
  *
+ * RA-782. A type that is never charged (`standardLifecycle.paymentDate:
+ * false`, an ORS update) has no payment date: the page shows the charge and
+ * payment reference as "-", asks for no date, and the POST validates and
+ * sends none.
+ *
  * AC04 — Cancel is a plain link straight back to the detail page. It is
  * deliberately NOT a form post: with no handler there is no code path that
  * could touch state, so "Cancel leaves the application in Not started" is
@@ -30,7 +35,8 @@ import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount
 import {
   DULY_MAKE_PAGE,
   getStandardLifecycle,
-  lifecyclePageHref
+  lifecyclePageHref,
+  takesPaymentDate
 } from '../lifecycle.js'
 import { evaluateDulyMakeEligibility } from './eligibility.js'
 import {
@@ -58,6 +64,13 @@ const HEADING = 'Duly make the application'
  * failed to load".
  */
 const NOT_PROVIDED = 'Not provided'
+
+/**
+ * RA-782 AC4: what the charge and payment reference read for a type that is
+ * never charged. Not "Not provided": nothing is missing, there is nothing to
+ * pay.
+ */
+const NO_PAYMENT = '-'
 
 const logger = createLogger()
 
@@ -89,6 +102,9 @@ function flashBanner(request, banner) {
  * charge and the payment reference differs between types.
  */
 export function buildPaymentDetails(workItem, typeId) {
+  if (!takesPaymentDate(typeId)) {
+    return { chargeAmount: NO_PAYMENT, paymentReference: NO_PAYMENT }
+  }
   const raw = getStandardLifecycle(typeId)?.readPaymentDetails?.(workItem) ?? {}
   // `formatChargeAmount` returns null for absent/non-integer only. A
   // legitimate 0 formats as "£0.00" and must NOT collapse to "Not provided" —
@@ -141,6 +157,7 @@ function renderForm(
       breadcrumbs: breadcrumbs(id, applicationRef),
       workItem: { id, applicationRef },
       paymentDetails,
+      takesPaymentDate: takesPaymentDate(typeId),
       relatedWorkItems,
       dateInputId: PAYMENT_DATE_ID,
       formAction: lifecyclePageHref(typeId, id, DULY_MAKE_PAGE),
@@ -247,7 +264,11 @@ export function makeSubmitDulyMakingController({
         year: payload[`${PAYMENT_DATE_ID}-year`] ?? ''
       }
 
-      const validation = validatePaymentDate(values)
+      // RA-782: a type with no payment date has nothing to validate or send.
+      const withDate = takesPaymentDate(typeId)
+      const validation = withDate
+        ? validatePaymentDate(values)
+        : { ok: true, value: null }
       if (!validation.ok) {
         return renderInvalid(h, {
           typeId,
@@ -270,7 +291,10 @@ export function makeSubmitDulyMakingController({
       })
 
       if (result.ok) {
-        flashBanner(request, SUCCESS_BANNER)
+        flashBanner(
+          request,
+          withDate ? SUCCESS_BANNER : SUCCESS_BANNER_WITHOUT_PAYMENT
+        )
         return h.redirect(detailHref(id))
       }
 
@@ -322,7 +346,7 @@ async function renderInvalid(h, { typeId, id, user, values, errorCode }) {
     applicationRef: item.ok ? applicationRefOf(item.workItem) : null,
     paymentDetails: item.ok
       ? buildPaymentDetails(item.workItem, typeId)
-      : { chargeAmount: NOT_PROVIDED, paymentReference: NOT_PROVIDED },
+      : unreadPaymentDetails(typeId),
     relatedWorkItems: await loadRelatedWorkItems({
       typeId,
       workItemId: id,
@@ -334,10 +358,24 @@ async function renderInvalid(h, { typeId, id, user, values, errorCode }) {
   })
 }
 
+/** The payment details when the work item could not be re-read. */
+function unreadPaymentDetails(typeId) {
+  return takesPaymentDate(typeId)
+    ? { chargeAmount: NOT_PROVIDED, paymentReference: NOT_PROVIDED }
+    : { chargeAmount: NO_PAYMENT, paymentReference: NO_PAYMENT }
+}
+
 const SUCCESS_BANNER = {
   type: 'success',
   title: 'Application duly made',
   text: 'The payment date has been recorded and the application is now duly made.'
+}
+
+// RA-782: nothing was paid, so no payment date was recorded.
+const SUCCESS_BANNER_WITHOUT_PAYMENT = {
+  type: 'success',
+  title: 'Application duly made',
+  text: 'The application is now duly made.'
 }
 
 const FAILURE_TITLE = 'Could not complete duly making'

@@ -362,6 +362,37 @@ describe('assertValidWorkItemModule', () => {
     )
   })
 
+  // RA-782. An uncharged type opts out of the Duly make payment date.
+  test.each([true, false])(
+    'accepts a Standard-lifecycle paymentDate of %s',
+    (paymentDate) => {
+      expect(() =>
+        assertValidWorkItemModule(
+          validModule({
+            type: {
+              standardLifecycle: { readPaymentDetails: () => ({}), paymentDate }
+            }
+          })
+        )
+      ).not.toThrow()
+    }
+  )
+
+  test('rejects a Standard-lifecycle paymentDate that is not a boolean', () => {
+    expect(() =>
+      assertValidWorkItemModule(
+        validModule({
+          type: {
+            standardLifecycle: {
+              readPaymentDetails: () => ({}),
+              paymentDate: 'false'
+            }
+          }
+        })
+      )
+    ).toThrow(/`standardLifecycle.paymentDate` must be a boolean/)
+  })
+
   // RA-410. `getTasksForState` is no longer part of the type contract, so
   // there is nothing left to validate — the two suites that asserted the
   // validator rejected a missing / non-function member went with it.
