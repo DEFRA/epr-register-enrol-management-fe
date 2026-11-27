@@ -4,6 +4,7 @@ import { config } from '#/config/config.js'
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { s3Client } from '#/server/common/helpers/s3-client.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { filesIn } from '#/server/routes/work-items/application-summary.js'
 
 const logger = createLogger()
 
@@ -22,11 +23,6 @@ const logger = createLogger()
  * purpose — this matches the system's documented "any caseworker sees any
  * case" model, not an oversight.
  */
-
-function filesIn(container) {
-  const files = container?.files
-  return Array.isArray(files) ? files : []
-}
 
 /**
  * Every file a work item's payload can link to: re-accreditation's sampling

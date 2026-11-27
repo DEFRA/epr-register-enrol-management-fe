@@ -45,10 +45,9 @@ describe('update-overseas-site module (RA-767 / RA-782)', () => {
     ])
   })
 
-  test('has an accreditation unless the change is registration-only', () => {
+  test('always has an accreditation: an update is to an accredited ORS', () => {
     const { hasAccreditation } = updateOverseasSiteType
     expect(hasAccreditation({ accreditationReference: 'A26' })).toBe(true)
-    expect(hasAccreditation({ registrationReference: 'R26' })).toBe(false)
     expect(hasAccreditation(undefined)).toBe(true)
   })
 
@@ -97,10 +96,7 @@ describe('update-overseas-site module (RA-767 / RA-782)', () => {
   // RA-782 AC4: never charged, so no payment date and no valid from date.
   test('opts into the Standard lifecycle with no payment date and no valid from date', () => {
     const { standardLifecycle } = updateOverseasSiteType
-    expect(standardLifecycle.readPaymentDetails({})).toEqual({
-      chargePence: 0,
-      paymentReference: '-'
-    })
+    expect(standardLifecycle.readPaymentDetails).toBeUndefined()
     expect(standardLifecycle.relatedWorkItems).toBe(true)
     expect(standardLifecycle.effectiveDate).toBe(false)
     expect(standardLifecycle.paymentDate).toBe(false)

@@ -2,23 +2,14 @@
 {# Add-ORS detail template (v1) — RA-739.                               #}
 {#                                                                      #}
 {# The "Application summary" tab, from the Figma "Application page -    #}
-{# Summary" frame. RA-495: extends the Standard-lifecycle detail page,  #}
-{# as re-accreditation's does, for the case tabs, the notices and error #}
-{# banners, the assignment panel, the pending-contact banner, the       #}
-{# Duly make / Make Determination / Confirm applicant contact CTAs and   #}
-{# the closed case's Outcome panel. It replaces the application data   #}
-{# with the add-ORS site summary (`applicationSummary`, built by the    #}
-{# type's own summary builder).                                         #}
-{#                                                                      #}
-{# add-ORS has no generic actions (no Query, no Withdraw), so the       #}
-{# generic actions list and its "No actions" line never render under    #}
-{# the lifecycle CTAs.                                                  #}
+{# Summary" frame. RA-495: the ORS detail layout (the Standard-lifecycle #}
+{# detail page with no generic actions, `ors-detail-layout.njk`), with  #}
+{# the application data replaced by the add-ORS site summary           #}
+{# (`applicationSummary`, built by the type's own summary builder).     #}
 {#                                                                      #}
 {# `data-state-id` carries the raw state id for the journey tests.      #}
 {# ------------------------------------------------------------------- #}
-{% extends 'standard-lifecycle/detail.njk' %}
-
-{% set lifecycleHidesGenericActions = true %}
+{% extends 'add-overseas-site/ors-detail-layout.njk' %}
 
 {% from "work-items/summary-macros.njk" import documentItem, newPrefix, siteDetails %}
 
@@ -94,15 +85,5 @@
         </div>
       {% endfor %}
     </div>
-  {% endif %}
-{% endblock %}
-
-{# RA-495. With the generic actions hidden, the card would be empty in a  #}
-{# state with no lifecycle step to offer, so it renders only when one is: #}
-{# Duly make, Make Determination, Confirm applicant contact, or the       #}
-{# closed case's Outcome panel.                                           #}
-{% block actionsCard %}
-  {% if workItem.isReadOnlyState or workItem.isPendingContact or workItem.canDulyMake or workItem.canLogDecision %}
-    {{ super() }}
   {% endif %}
 {% endblock %}

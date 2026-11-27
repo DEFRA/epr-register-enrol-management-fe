@@ -4,7 +4,7 @@ import { standardWorkflow } from '../core/standard-workflow.js'
 import { buildStandardLifecycleRoutes } from '../core/standard-lifecycle/routes.js'
 import { buildUpdateOverseasSiteSummary } from '#/server/routes/update-overseas-site/application-summary.js'
 import { buildUpdateOverseasSiteHeader } from '#/server/routes/update-overseas-site/case-header.js'
-import { isRegistrationOnlyChange } from '#/server/routes/add-overseas-site/case-header.js'
+import { describeCardSite } from '../add-overseas-site/module.js'
 import {
   ACCREDITATION_SUMMARY_TAB_KEY,
   APPLICATION_HISTORY_TAB_KEY,
@@ -51,22 +51,22 @@ export const updateOverseasSiteType = {
     RELATED_REQUESTS_TAB_KEY,
     APPLICATION_HISTORY_TAB_KEY
   ],
-  // An update is to an accredited ORS, so there is always an accreditation;
-  // the same check as add-ORS keeps the two from drifting.
-  hasAccreditation: (payload) => !isRegistrationOnlyChange(payload),
+  // An update is to an ORS already on an accreditation, so there is always
+  // one to summarise.
+  hasAccreditation: () => true,
   buildApplicationSummary: buildUpdateOverseasSiteSummary,
   describeCardSite,
   cardAlwaysShowsSubmittedOn: true,
   standardLifecycle: {
-    // RA-682 AC05: an update is never charged, so it has no charge to show
-    // beyond £0 and no payment reference. The Duly make page shows both as
-    // "-" (`paymentDate: false`).
-    readPaymentDetails: () => ({ chargePence: 0, paymentReference: '-' }),
     // The Duly make page lists every work item from the same submission.
     relatedWorkItems: true,
     // No valid from date: the ORS keeps the date it was accredited from.
     effectiveDate: false,
-    // RA-782 AC4: nothing is paid, so Duly make asks for no payment date.
+    // RA-782 AC4 / RA-682 AC05: nothing is paid, so Duly make asks for no
+    // payment date and shows the charge and payment reference as "-", with
+    // no payment details to read (no `readPaymentDetails`). management-be's
+    // own `takesPaymentDate` decides when the page can read it; this is the
+    // fallback.
     paymentDate: false,
     // Provisional copy: not in the design, pending content design review.
     contactConfirmedBanners: {
@@ -80,17 +80,6 @@ export const updateOverseasSiteType = {
       }
     }
   }
-}
-
-/**
- * The in-year change card's site line: the site's name and its ORS id.
- *
- * @param {object} payload work item payload
- * @returns {{ name: string|null, reference: string|null }}
- */
-function describeCardSite(payload) {
-  const site = payload?.site ?? {}
-  return { name: site.siteName ?? null, reference: site.orsId ?? null }
 }
 
 export const updateOverseasSiteModule = {

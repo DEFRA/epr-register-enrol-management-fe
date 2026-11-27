@@ -48,11 +48,13 @@
         }) }}
       {% endif %}
 
-      {# RA-782. A type that is never charged has no payment date to add. #}
+      {# RA-782. A work item that is never charged has no payment date to  #}
+      {# add (`takesPaymentDate`, management-be's when it has said).        #}
       <p class="govuk-body" data-testid="duly-making-lead">
         {% if takesPaymentDate %}
           Add the date the payment was received to duly make this application.
         {% else %}
+          {# Provisional copy: not in the design, pending content design review. #}
           There is no charge for this application, so there is no payment date to add.
         {% endif %}
       </p>

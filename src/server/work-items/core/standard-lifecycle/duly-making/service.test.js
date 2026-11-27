@@ -149,5 +149,30 @@ describe('createDulyMakingService', () => {
       ).rejects.toThrow('this work item type takes no paymentDate')
       expect(dulyMake).not.toHaveBeenCalled()
     })
+
+    // management-be's `takesPaymentDate` overrides the type's declaration.
+    test('takes a payment date when the caller says the work item does', async () => {
+      const { service, dulyMake } = noDateServiceWith({ ok: true })
+      await service.dulyMakeWorkItem({
+        workItemId: ID,
+        paymentDate: '2026-03-27',
+        withPaymentDate: true
+      })
+      expect(dulyMake).toHaveBeenCalledWith({
+        workItemId: ID,
+        paymentDate: '2026-03-27',
+        user: null
+      })
+    })
+  })
+
+  test('sends no payment date when the caller says the work item takes none', async () => {
+    const { service, dulyMake } = serviceWith({ ok: true, workItem: {} })
+    await service.dulyMakeWorkItem({ workItemId: ID, withPaymentDate: false })
+    expect(dulyMake).toHaveBeenCalledWith({
+      workItemId: ID,
+      paymentDate: null,
+      user: null
+    })
   })
 })

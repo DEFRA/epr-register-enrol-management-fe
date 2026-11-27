@@ -302,7 +302,12 @@ describe('assertValidWorkItemModule', () => {
 
   test.each([
     ['no payment details', {}],
-    ['a non-function payment details hook', { readPaymentDetails: 'payload' }]
+    ['a non-function payment details hook', { readPaymentDetails: 'payload' }],
+    ['a payment date and no payment details', { paymentDate: true }],
+    [
+      'no payment date and a non-function payment details hook',
+      { paymentDate: false, readPaymentDetails: 'payload' }
+    ]
   ])('rejects a Standard-lifecycle opt-in with %s', (_, standardLifecycle) => {
     expect(() =>
       assertValidWorkItemModule(validModule({ type: { standardLifecycle } }))
@@ -377,6 +382,17 @@ describe('assertValidWorkItemModule', () => {
       ).not.toThrow()
     }
   )
+
+  // RA-782. With no payment date there are no payment details to read.
+  test('accepts a Standard-lifecycle opt-in with no payment date and no payment details', () => {
+    expect(() =>
+      assertValidWorkItemModule(
+        validModule({
+          type: { standardLifecycle: { paymentDate: false } }
+        })
+      )
+    ).not.toThrow()
+  })
 
   test('rejects a Standard-lifecycle paymentDate that is not a boolean', () => {
     expect(() =>

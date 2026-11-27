@@ -169,6 +169,17 @@ export function buildBusinessPlanPairs(businessPlan) {
   })
 }
 
+/**
+ * The files in a file container (`{ files: [...] }`, as the sampling plan and
+ * BES evidence are), or none when it has no list.
+ *
+ * @returns {object[]} possibly empty, never null.
+ */
+export function filesIn(container) {
+  const files = container?.files
+  return Array.isArray(files) ? files : []
+}
+
 export function fileViewModel(file, workItemId) {
   const scanStatus = file?.scanStatus ?? null
   const isClean = scanStatus === 'Clean'
@@ -334,7 +345,8 @@ export function toDisplayLines(value) {
   return []
 }
 
-function firstLineOr(value, fallback) {
+/** The value's first display line, or `fallback` when it has none. */
+export function firstLineOr(value, fallback) {
   return toDisplayLines(value)[0] ?? fallback
 }
 

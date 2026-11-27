@@ -8,6 +8,7 @@ import {
   EM_DASH,
   buildInterimSites,
   fileViewModel,
+  filesIn,
   interimSiteAddressLines,
   overseasSiteAddressLines,
   toDisplayLines
@@ -107,7 +108,7 @@ function siteRows(site, workItemId, supplied) {
 }
 
 /** One comma-separated line, or nothing when there are no parts. */
-export function joined(lines) {
+function joined(lines) {
   return lines.length > 0 ? [lines.join(', ')] : []
 }
 
@@ -181,7 +182,7 @@ export const SITE_FIELDS = [
 const BES_EVIDENCE_FIELD = 'besEvidence'
 
 function besEvidenceRow(site, workItemId, isSupplied) {
-  const files = besFilesOf(site).map((file) =>
+  const files = filesIn(site.besEvidence).map((file) =>
     besFileViewModel(file, workItemId)
   )
   return {
@@ -191,11 +192,6 @@ function besEvidenceRow(site, workItemId, isSupplied) {
     files,
     supplied: files.length > 0 && isSupplied
   }
-}
-
-function besFilesOf(site) {
-  const files = site.besEvidence?.files
-  return Array.isArray(files) ? files : []
 }
 
 /** The shared file view model (Clean-only link), plus the BES dates. */
@@ -235,8 +231,9 @@ export const INTERIM_FIELDS = [
 /**
  * One active interim site: a heading of its name and a short address (first
  * address line and country), then its fields, each with the dash when missing.
+ * RA-782: exported for the ORS update's new and removed interim sites.
  */
-function buildAddOrsInterimSite(site) {
+export function buildAddOrsInterimSite(site) {
   return {
     siteName: toDisplayLines(site.siteName)[0] ?? EM_DASH,
     shortAddress: [site.addressLine1, site.country]

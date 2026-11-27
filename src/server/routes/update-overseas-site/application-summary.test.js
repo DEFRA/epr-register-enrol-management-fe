@@ -67,10 +67,11 @@ function aSite(overrides = {}) {
       contactPhone: '+23 2489 2862',
       repatriatedLoads: 'Returned to the UK exporter.'
     },
+    // As the operator backend sends it (`WhenWritingNull`): the cleared
+    // address line 2 is absent, not null.
     proposed: {
       siteName: 'Denmark PR North',
       addressLine1: 'Ejbyvvej 12',
-      addressLine2: null,
       townOrCity: 'Copenhagen',
       contactName: 'Jane Doe',
       contactEmail: 'john.smith@denmarkpr.com',
@@ -166,6 +167,31 @@ describe('buildUpdateOverseasSiteSummary (RA-782)', () => {
     expect(rows['contact-name'].changed).toBe(true)
     expect(rows['contact-email'].changed).toBe(false)
     expect(rows['repatriated-loads'].changed).toBe(false)
+  })
+
+  test('shows a cleared optional detail, absent from proposed, as cleared rather than as the current value', () => {
+    const { contactPhone, ...proposed } = aSite().proposed
+    const rows = rowsByKey(summaryFor(aSite({ proposed })))
+
+    expect(Object.hasOwn(proposed, 'contactPhone')).toBe(false)
+    expect(rows['contact-phone']).toMatchObject({
+      current: ['+23 2489 2862'],
+      requested: [EM_DASH],
+      changed: true
+    })
+  })
+
+  test('shows a detail absent from previous as empty, not as the site has it now', () => {
+    const { addressLine2, ...previous } = aSite().previous
+    const rows = rowsByKey(
+      summaryFor(aSite({ previous, proposed: aSite().previous }))
+    )
+
+    expect(rows.location).toMatchObject({
+      current: ['Ejbyvvej 12, Copenhagen, Denmark'],
+      requested: ['Ejbyvvej 12, Industrial Park, Copenhagen, Denmark'],
+      changed: true
+    })
   })
 
   test('shows the locked details unchanged from the site', () => {
@@ -338,6 +364,77 @@ describe('buildUpdateOverseasSiteSummary (RA-782)', () => {
       )
     })
 
+    test('shows a cleared optional interim detail, absent from proposed, as cleared', () => {
+      const existing = anInterimSite({
+        addressLine2: 'Unit 4',
+        stateOrRegion: 'Midtjylland',
+        postcode: '8000'
+      })
+      const { addressLine2, stateOrRegion, postcode, ...proposed } =
+        interimDetails(existing)
+      const [interim] = summaryFor(
+        aSite({
+          interimSites: [existing],
+          interimSiteChanges: [
+            {
+              action: 'change',
+              interimSiteId: 101,
+              previous: interimDetails(existing),
+              proposed
+            }
+          ]
+        })
+      ).interimSites
+
+      expect(Object.hasOwn(proposed, 'postcode')).toBe(false)
+      expect(interim.kind).toBe('changed')
+      expect(interim.rows.find((row) => row.key === 'location')).toMatchObject({
+        current: ['Havnegade 1, Unit 4, Aarhus, Midtjylland, 8000, Denmark'],
+        requested: ['Havnegade 1, Aarhus, Denmark'],
+        changed: true
+      })
+      // The site number is not a detail: it is the interim site's.
+      expect(
+        interim.rows.find((row) => row.key === 'site-number').requested
+      ).toEqual(['SN-0101'])
+    })
+
+    test('shows a removed interim site as its previous details have it, not as it stands', () => {
+      const existing = anInterimSite({ addressLine2: 'Unit 4' })
+      const { addressLine2, ...previous } = interimDetails(existing)
+      const [interim] = summaryFor(
+        aSite({
+          interimSites: [existing],
+          interimSiteChanges: [
+            { action: 'remove', interimSiteId: 101, previous }
+          ]
+        })
+      ).interimSites
+
+      expect(interim.details.find((d) => d.key === 'location').values).toEqual([
+        'Havnegade 1, Aarhus, Denmark'
+      ])
+      expect(
+        interim.details.find((d) => d.key === 'site-number').values
+      ).toEqual(['SN-0101'])
+    })
+
+    test('reads the interim site as it stands when a change carries no details', () => {
+      const [interim] = summaryFor(
+        aSite({
+          interimSiteChanges: [{ action: 'change', interimSiteId: 101 }]
+        })
+      ).interimSites
+      expect(interim.kind).toBe('unchanged')
+    })
+
+    test('reads the pre-RA-603 single interim site when there is no list', () => {
+      const [interim] = summaryFor(
+        aSite({ interimSites: [], interimSite: anInterimSite() })
+      ).interimSites
+      expect(interim).toMatchObject({ siteName: 'Bharat Recycling' })
+    })
+
     test('shows a change that changes nothing as No changes', () => {
       const existing = anInterimSite()
       const [interim] = summaryFor(
@@ -389,13 +486,13 @@ describe('buildUpdateOverseasSiteSummary (RA-782)', () => {
             {
               action: 'add',
               proposed: {
-                siteName: 'Sagunto transfer station',
+                siteName: 'Exampletown transfer station',
                 country: 'Spain',
-                addressLine1: 'Polígono Ingruinsa',
-                townOrCity: 'Sagunto',
-                contactName: 'Pablo Gil',
-                contactEmail: 'p.gil@example.com',
-                contactPhone: '+34 962 690 100',
+                addressLine1: '1 Example Street',
+                townOrCity: 'Exampletown',
+                contactName: 'Pat Example',
+                contactEmail: 'pat@example.com',
+                contactPhone: '+44 20 7946 0000',
                 operationCodes: ['R13']
               }
             }
@@ -409,7 +506,7 @@ describe('buildUpdateOverseasSiteSummary (RA-782)', () => {
       const added = summary.interimSites[1]
       expect(added).toMatchObject({
         number: 2,
-        siteName: 'Sagunto transfer station',
+        siteName: 'Exampletown transfer station',
         tag: 'New interim site',
         tagClass: 'govuk-tag--purple',
         note: 'This interim site is new. There is no previous version to compare it with.',
@@ -455,14 +552,18 @@ describe('buildUpdateOverseasSiteSummary (RA-782)', () => {
       ).toEqual([])
     })
 
-    test('reads an interim site with no id as unchanged', () => {
-      const [interim] = summaryFor(
+    test('reads an interim site with no id as unchanged, and leaves out a change with no id', () => {
+      const sections = summaryFor(
         aSite({
           interimSites: [anInterimSite({ siteId: null })],
-          interimSiteChanges: [{ action: 'change', interimSiteId: null }]
+          interimSiteChanges: [
+            { action: 'change', interimSiteId: null },
+            { action: 'remove' }
+          ]
         })
       ).interimSites
-      expect(interim.kind).toBe('unchanged')
+      expect(sections).toHaveLength(1)
+      expect(sections[0].kind).toBe('unchanged')
     })
   })
 

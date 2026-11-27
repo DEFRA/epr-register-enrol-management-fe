@@ -8,8 +8,9 @@
  * `register(server)`:
  *
  *   standardLifecycle: {
- *     // Required. The raw payment values the Duly make page shows; the
- *     // shared page formats them and says "Not provided" for a missing one.
+ *     // Required unless `paymentDate` is false. The raw payment values the
+ *     // Duly make page shows; the shared page formats them and says "Not
+ *     // provided" for a missing one.
  *     readPaymentDetails: (workItem) => ({ chargePence, paymentReference }),
  *     // Optional. The management-be calls. Each defaults to the type-less
  *     // Standard-lifecycle endpoint (`/work-items/{id}/duly-make` etc.).
@@ -32,6 +33,8 @@
  *     // update): its Duly make page asks for no payment date, shows the
  *     // charge and payment reference as "-", and sends management-be no
  *     // date (management-be refuses one for such a type). Default true.
+ *     // management-be's `takesPaymentDate` decides instead when the Duly
+ *     // make page has read it (with `relatedWorkItems`).
  *     paymentDate: false
  *   }
  *

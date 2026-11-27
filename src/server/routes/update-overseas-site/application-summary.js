@@ -2,9 +2,15 @@ import {
   INTERIM_FIELDS,
   SITE_FIELDS,
   besFileViewModel,
+  buildAddOrsInterimSite,
   orDash
 } from '#/server/routes/add-overseas-site/application-summary.js'
-import { EM_DASH } from '#/server/routes/work-items/application-summary.js'
+import {
+  EM_DASH,
+  buildInterimSites,
+  filesIn,
+  firstLineOr
+} from '#/server/routes/work-items/application-summary.js'
 
 /**
  * RA-782. The ORS update's Application summary, from the "EPR Management UI"
@@ -21,6 +27,11 @@ import { EM_DASH } from '#/server/routes/work-items/application-summary.js'
  * `interimSiteChanges` lists what the update does to the interim sites
  * (`change`, `add`, `remove`), and `addedBesEvidence` the BES evidence files
  * it adds to the ORS's own (`besEvidence`).
+ *
+ * The operator backend serialises with `WhenWritingNull`, so a cleared
+ * optional detail is ABSENT from `previous` / `proposed` (and from an interim
+ * change's), not null. Each is therefore read as a whole set of details: a
+ * missing key is an empty detail, never a reason to fall back to the site's.
  *
  * The rows, labels and readers are add-ORS's (`SITE_FIELDS`,
  * `INTERIM_FIELDS`), so the two summaries never describe an ORS differently.
@@ -43,26 +54,33 @@ export function buildUpdateOverseasSiteSummary({ workItem }) {
 }
 
 function introFor(site, year) {
-  const orsId = textOr(site.orsId, EM_DASH)
+  const orsId = firstLineOr(site.orsId, EM_DASH)
   const accreditation = year
     ? `their ${year} accreditation`
     : 'their accreditation'
+  // Provisional copy: not in the design, pending content design review.
   return `The operator wants to change the details of ORS ${orsId}, which is on ${accreditation}. Each changed detail is marked.`
 }
 
-function textOr(value, fallback) {
-  if (value == null) {
-    return fallback
-  }
-  const text = String(value).trim()
-  return text === '' ? fallback : text
-}
+/**
+ * The details the operator may change: management-be's and the operator
+ * backend's `OverseasSiteDetails`, the whole of `previous` and `proposed`.
+ */
+const EDITABLE_DETAILS = [
+  'siteName',
+  'addressLine1',
+  'addressLine2',
+  'townOrCity',
+  'contactName',
+  'contactEmail',
+  'contactPhone',
+  'repatriatedLoads'
+]
 
 /**
- * The details the operator may change (`OverseasSiteDetails` in the operator
- * backend), by `SITE_FIELDS` key. The location row is the address, which is
- * editable, plus the country, which is not: its country comes from the site on
- * both sides.
+ * The same details by `SITE_FIELDS` key. The location row is the address,
+ * which is editable, plus the country, which is not: its country comes from
+ * the site on both sides.
  */
 const EDITABLE_KEYS = new Set([
   'site-name',
@@ -102,11 +120,8 @@ const SITE_FIELDS_BY_KEY = new Map(
 )
 
 function siteGroups(site) {
-  // `previous` / `proposed` override the site's own values only for the
-  // details they hold. A cleared optional detail is sent as null and must
-  // stay cleared, so spread rather than `??` per field.
-  const current = { ...site, ...detailsOf(site.previous) }
-  const requested = { ...site, ...detailsOf(site.proposed) }
+  const current = withEditableDetails(site, site.previous)
+  const requested = withEditableDetails(site, site.proposed)
   return GROUPS.map(({ key, title, keys }) => ({
     key,
     title,
@@ -123,8 +138,25 @@ function siteGroups(site) {
   }))
 }
 
-function detailsOf(details) {
-  return details != null && typeof details === 'object' ? details : {}
+/**
+ * The site with its editable details as `details` has them, a key missing
+ * from `details` read as empty (the operator cleared it). Only when there is
+ * no `details` at all are the site's own shown.
+ */
+function withEditableDetails(site, details) {
+  if (!isDetails(details)) {
+    return site
+  }
+  return {
+    ...site,
+    ...Object.fromEntries(
+      EDITABLE_DETAILS.map((key) => [key, details[key] ?? null])
+    )
+  }
+}
+
+function isDetails(value) {
+  return value != null && typeof value === 'object'
 }
 
 /** A Detail | Current version | Requested change row. */
@@ -136,11 +168,6 @@ function compareRow(key, label, currentLines, requestedLines) {
     requested: orDash(requestedLines),
     changed: currentLines.join('\n') !== requestedLines.join('\n')
   }
-}
-
-function filesIn(container) {
-  const files = container?.files
-  return Array.isArray(files) ? files : []
 }
 
 /**
@@ -167,38 +194,32 @@ const ADD = 'add'
 const REMOVE = 'remove'
 
 /**
- * One section per interim site: every active one, in the site's order, with
- * what the update does to it, then the ones the update adds. A change or
- * removal whose interim site is not in the list (it has since gone) still
- * shows, from the details the change carries. A site the operator withdrew
- * before the update is not shown.
+ * One section per interim site: every active one (add-ORS's
+ * `buildInterimSites`, with its fallback to the pre-RA-603 `interimSite`), in
+ * the site's order, with what the update does to it, then the ones the update
+ * adds. A change or removal whose interim site is not in the list (it has
+ * since gone) still shows, from the details the change carries; one with no
+ * interim site id names no site, so it is not shown. A site the operator
+ * withdrew before the update is not shown.
  */
 function interimSites(site) {
   const changes = Array.isArray(site.interimSiteChanges)
     ? site.interimSiteChanges.filter((change) => change != null)
     : []
-  const changeFor = new Map(
+  const unmatched = new Map(
     changes
       .filter((change) => change.action !== ADD && change.interimSiteId != null)
       .map((change) => [String(change.interimSiteId), change])
   )
 
-  const active = (
-    Array.isArray(site.interimSites) ? site.interimSites : []
-  ).filter((interim) => interim != null && interim.removedAt == null)
-  const shown = new Set()
-  const entries = active.map((interim) => {
+  const entries = buildInterimSites(site, (interim) => {
     const id = interim.siteId == null ? null : String(interim.siteId)
-    const change = id == null ? undefined : changeFor.get(id)
-    if (change) {
-      shown.add(change)
-    }
+    const change = unmatched.get(id)
+    unmatched.delete(id)
     return { interim, change }
   })
-  for (const change of changes) {
-    if (change.action !== ADD && !shown.has(change)) {
-      entries.push({ interim: {}, change })
-    }
+  for (const change of unmatched.values()) {
+    entries.push({ interim: {}, change })
   }
   for (const change of changes) {
     if (change.action === ADD) {
@@ -211,32 +232,41 @@ function interimSites(site) {
   )
 }
 
+// Provisional copy: not in the design, pending content design review.
+const ADDED_SECTION = {
+  kind: 'added',
+  tag: 'New interim site',
+  tagClass: 'govuk-tag--purple',
+  note: 'This interim site is new. There is no previous version to compare it with.',
+  open: true
+}
+
+// Provisional copy: not in the design, pending content design review.
+const REMOVED_SECTION = {
+  kind: 'removed',
+  tag: 'Removed',
+  tagClass: 'govuk-tag--red',
+  note: 'The operator wants to remove this interim site.',
+  open: true
+}
+
 function interimSection(number, interim, change) {
   if (change?.action === ADD) {
-    const proposed = detailsOf(change.proposed)
-    return listSection(number, proposed, {
-      kind: 'added',
-      tag: 'New interim site',
-      tagClass: 'govuk-tag--purple',
-      note: 'This interim site is new. There is no previous version to compare it with.',
-      open: true
-    })
+    return listSection(number, detailsOf(change.proposed), ADDED_SECTION)
   }
 
-  const current = { ...interim, ...detailsOf(change?.previous) }
+  const current = interimVersion(interim, change?.previous)
   if (change?.action === REMOVE) {
-    return listSection(number, current, {
-      kind: 'removed',
-      tag: 'Removed',
-      tagClass: 'govuk-tag--red',
-      note: 'The operator wants to remove this interim site.',
-      open: true
-    })
+    return listSection(number, current, REMOVED_SECTION)
   }
+  return compareSection(number, interim, current, change)
+}
 
+/** An existing interim site, current version against requested change. */
+function compareSection(number, interim, current, change) {
   const requested =
     change?.action === CHANGE
-      ? { ...interim, ...detailsOf(change.proposed) }
+      ? interimVersion(interim, change.proposed)
       : current
   // The section's title shows only the requested name, so a rename needs its own row to show the old one.
   const rows = [
@@ -264,21 +294,38 @@ function interimSection(number, interim, change) {
   }
 }
 
-/** A new or removed interim site: its details as a list, nothing to compare. */
+function detailsOf(details) {
+  return isDetails(details) ? details : {}
+}
+
+/**
+ * One side of an interim site's change. An interim change's `previous` and
+ * `proposed` carry the site's full details (`InterimSiteDetails`, a cleared
+ * optional one absent), so they are used as they are; only the site number,
+ * which is not a detail, comes from the interim site. With no details, the
+ * interim site as it stands.
+ */
+function interimVersion(interim, details) {
+  return isDetails(details)
+    ? { ...details, siteNumber: interim?.siteNumber }
+    : interim
+}
+
+/**
+ * A new or removed interim site: its details as a list, nothing to compare,
+ * as add-ORS lists an interim site.
+ */
 function listSection(number, details, section) {
+  const { siteName, details: rows } = buildAddOrsInterimSite(details)
   return {
     number,
-    siteName: nameOf(details),
+    siteName,
     ...section,
     rows: null,
-    details: INTERIM_FIELDS.map(([key, label, read]) => ({
-      key,
-      label,
-      values: orDash(read(details))
-    }))
+    details: rows
   }
 }
 
 function nameOf(details) {
-  return textOr(details?.siteName, EM_DASH)
+  return firstLineOr(details?.siteName, EM_DASH)
 }

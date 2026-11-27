@@ -235,8 +235,9 @@ the pending-contact banner are shared by every type on the Standard workflow
 export const myType = {
   // …the Standard workflow's states and transitions…
   standardLifecycle: {
-    // Required: the raw charge (pence) and payment reference the Duly make
-    // page shows. The page formats them and says "Not provided" for a gap.
+    // Required, unless `paymentDate` is false: the raw charge (pence) and
+    // payment reference the Duly make page shows. The page formats them and
+    // says "Not provided" for a gap.
     readPaymentDetails: (workItem) => ({ chargePence, paymentReference }),
     // Optional: the management-be calls. Each defaults to the type-less
     // Standard-lifecycle endpoint (`POST /work-items/{id}/duly-make`,
@@ -258,7 +259,10 @@ export const myType = {
     effectiveDate: true,
     // Optional (RA-782): false for a type that is never charged. Its Duly make
     // page shows the charge and payment reference as "-", asks for no payment
-    // date and sends management-be none (management-be refuses one).
+    // date and sends management-be none (management-be refuses one), and the
+    // type needs no `readPaymentDetails`. With `relatedWorkItems`,
+    // management-be's `takesPaymentDate` (same `GET …/duly-make`) decides
+    // instead; this is the fallback when that is not to hand.
     paymentDate: false
   }
 }
@@ -314,15 +318,21 @@ Its Application summary (`routes/update-overseas-site/application-summary.js`
 and `detail-v1.njk`) compares the ORS's details, Current version against
 Requested change, from `payload.site.previous` and `proposed` (the locked
 details from `payload.site` on both sides), each changed row tagged
-"Changed"; then the ORS's BES files and the ones the update adds
-(`payload.site.addedBesEvidence`, tagged "New", downloadable through the
-payload download route); then one collapsible section per interim site from
-`interimSites` and `interimSiteChanges`: "New interim site", "Removed",
-"Changed" (compared, open) or "No changes" (closed). It reuses add-ORS's row
-definitions (`SITE_FIELDS`, `INTERIM_FIELDS`). Its lifecycle takes no
-payment date (`paymentDate: false`) and no valid from date
-(`effectiveDate: false`): a change to an ORS changes neither its status nor
-when it was accredited from.
+"Changed". The operator backend omits null fields, so a detail missing from
+`previous` or `proposed` is empty (cleared), never the site's current value;
+the site's own show only when the whole object is missing. Then the ORS's BES
+files and the ones the update adds (`payload.site.addedBesEvidence`, with the
+"NEW: " prefix, downloadable through the payload download route); then one
+collapsible section per interim site from `interimSites` (add-ORS's
+`buildInterimSites`) and `interimSiteChanges`: "New interim site",
+"Removed", "Changed" (compared, open) or "No changes" (closed); a change with
+no interim site id is not shown. It reuses add-ORS's row definitions
+(`SITE_FIELDS`, `INTERIM_FIELDS`), interim site details, card site line and
+detail layout (`add-overseas-site/ors-detail-layout.njk`). Its lifecycle
+takes no payment date (`paymentDate: false`, so no `readPaymentDetails`;
+management-be's `takesPaymentDate` decides when the Duly make page has it)
+and no valid from date (`effectiveDate: false`): a change to an ORS changes
+neither its status nor when it was accredited from.
 
 ## Cross-type list
 

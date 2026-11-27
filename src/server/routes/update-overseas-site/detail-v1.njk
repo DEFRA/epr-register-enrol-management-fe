@@ -1,9 +1,9 @@
 {# ------------------------------------------------------------------- #}
 {# ORS update detail template (v1) — RA-782.                            #}
 {#                                                                      #}
-{# Extends the Standard-lifecycle detail page, as add-ORS's does, for   #}
-{# the case tabs, banners, assignment panel and lifecycle CTAs, and     #}
-{# replaces the application data with the ORS update summary           #}
+{# The ORS detail layout, as add-ORS's (`ors-detail-layout.njk`: the   #}
+{# Standard-lifecycle detail page with no generic actions), with the    #}
+{# application data replaced by the ORS update summary                 #}
 {# (`applicationSummary`, built by the type's own summary builder):     #}
 {# the ORS's details, current version against requested change, its    #}
 {# BES evidence and its interim sites, each marked with what the update #}
@@ -11,21 +11,19 @@
 {#                                                                      #}
 {# `data-state-id` carries the raw state id for the journey tests.      #}
 {# ------------------------------------------------------------------- #}
-{% extends 'standard-lifecycle/detail.njk' %}
-
-{% set lifecycleHidesGenericActions = true %}
+{% extends 'add-overseas-site/ors-detail-layout.njk' %}
 
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 {% from "work-items/summary-macros.njk" import documentItem, siteDetails %}
 
 {# One Detail | Current version | Requested change table. A changed row  #}
 {# is tagged "Changed" under its label, as text, so it does not rely on  #}
-{# colour.                                                               #}
-{% macro compareTable(rows, caption, testIdPrefix) %}
+{# colour. `captionHidden` keeps the caption for screen readers only,    #}
+{# where a visible heading already names the table.                      #}
+{% macro compareTable(rows, caption, testIdPrefix, captionHidden=false) %}
   <table class="govuk-table" data-testid="{{ testIdPrefix }}-table">
-    {% if caption %}
-      <caption class="govuk-table__caption govuk-table__caption--s">{{ caption }}</caption>
-    {% endif %}
+    <caption class="govuk-table__caption {{ 'govuk-visually-hidden' if captionHidden else 'govuk-table__caption--s' }}"
+             data-testid="{{ testIdPrefix }}-caption">{{ caption }}</caption>
     <thead class="govuk-table__head">
       <tr class="govuk-table__row">
         <th scope="col" class="govuk-table__header govuk-!-width-one-quarter">Detail</th>
@@ -73,12 +71,13 @@
     </div>
   {% endfor %}
 
-  {# The ORS's own BES evidence, then any the update adds, tagged "New". #}
+  {# The ORS's own BES evidence, then any the update adds, each with the  #}
+  {# "NEW: " prefix (`newPrefix`, see the DESIGN NOTE in summary-macros). #}
   <div class="govuk-!-margin-bottom-6" data-testid="update-ors-bes-evidence">
     <h3 class="govuk-heading-s">Broadly equivalent standards (BES) evidence</h3>
     {% if applicationSummary.besEvidence.files.length %}
       <ul class="govuk-list">
-        {% for file in applicationSummary.besEvidence.files %}{{ documentItem(file, showDates=true, newTag=file.isNew) }}{% endfor %}
+        {% for file in applicationSummary.besEvidence.files %}{{ documentItem(file, showDates=true, newTestId='app-detail-document-new' if file.isNew else '') }}{% endfor %}
       </ul>
     {% else %}
       <p class="govuk-body" data-testid="app-detail-documents-none">No documents uploaded.</p>
@@ -105,7 +104,7 @@
               <p class="govuk-body" data-testid="update-ors-interim-site-note">{{ interimSite.note }}</p>
             {% endif %}
             {% if interimSite.rows %}
-              {{ compareTable(interimSite.rows, null, 'update-ors-interim') }}
+              {{ compareTable(interimSite.rows, 'Interim site ' + interimSite.number + ': ' + interimSite.siteName, 'update-ors-interim', captionHidden=true) }}
             {% else %}
               {{ siteDetails(interimSite.details, 'interim-site') }}
             {% endif %}
@@ -113,13 +112,5 @@
         </details>
       {% endfor %}
     </div>
-  {% endif %}
-{% endblock %}
-
-{# As add-ORS: the actions card renders only when there is a lifecycle  #}
-{# step or an outcome to show.                                           #}
-{% block actionsCard %}
-  {% if workItem.isReadOnlyState or workItem.isPendingContact or workItem.canDulyMake or workItem.canLogDecision %}
-    {{ super() }}
   {% endif %}
 {% endblock %}

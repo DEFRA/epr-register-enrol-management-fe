@@ -94,12 +94,13 @@ export const addOverseasSiteType = {
 
 /**
  * The in-year change card's site line: the site's name and its ORS id, from
- * the one site management-be stamps on each add-ORS work item.
+ * the one site management-be stamps on each add-ORS work item. RA-782: an ORS
+ * update's card uses it too.
  *
  * @param {object} payload work item payload
  * @returns {{ name: string|null, reference: string|null }}
  */
-function describeCardSite(payload) {
+export function describeCardSite(payload) {
   const site = payload?.site ?? {}
   return { name: site.siteName ?? null, reference: site.orsId ?? null }
 }

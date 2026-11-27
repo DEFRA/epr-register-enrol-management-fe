@@ -177,13 +177,13 @@ function aSite() {
         changeId: 'c-3',
         action: 'add',
         proposed: {
-          siteName: 'Sagunto transfer station',
+          siteName: 'Exampletown transfer station',
           country: 'Spain',
-          addressLine1: 'Polígono Ingruinsa',
-          townOrCity: 'Sagunto',
-          contactName: 'Pablo Gil',
-          contactEmail: 'p.gil@example.com',
-          contactPhone: '+34 962 690 100',
+          addressLine1: '1 Example Street',
+          townOrCity: 'Exampletown',
+          contactName: 'Pat Example',
+          contactEmail: 'pat@example.com',
+          contactPhone: '+44 20 7946 0000',
           operationCodes: ['R13']
         }
       }
@@ -450,8 +450,11 @@ describe('RA-767 / RA-782: ORS update applications', () => {
             $(el).find('[data-testid="app-detail-document"]').text()
           ),
           href: $(el).find('a').attr('href'),
+          // The ratified "NEW: " prefix (summary-macros' `newPrefix`).
           isNew:
-            $(el).find('[data-testid="app-detail-document-new"]').length === 1
+            squash(
+              $(el).find('[data-testid="app-detail-document-new"]').text()
+            ) === 'NEW:'
         }))
         .get()
       expect(files).toEqual([
@@ -520,7 +523,7 @@ describe('RA-767 / RA-782: ORS update applications', () => {
           open: true
         },
         {
-          title: 'Interim site 4: Sagunto transfer station',
+          title: 'Interim site 4: Exampletown transfer station',
           tag: 'New interim site',
           tagClass: 'govuk-tag govuk-tag--purple',
           open: true
@@ -555,12 +558,57 @@ describe('RA-767 / RA-782: ORS update applications', () => {
       ).toBe('The operator wants to remove this interim site.')
       expect(
         squash($(added).find('[data-testid="interim-site-location"]').text())
-      ).toBe('Polígono Ingruinsa, Sagunto, Spain')
+      ).toBe('1 Example Street, Exampletown, Spain')
+    })
+
+    test("gives each interim site's compare table a caption for screen readers", async () => {
+      const $ = await detailPage()
+
+      const captions = $('[data-testid="update-ors-interim-table"] caption')
+      expect(captions.map((_, el) => squash($(el).text())).get()).toEqual([
+        'Interim site 1: Bharat Recycling',
+        'Interim site 2: Valencia yard'
+      ])
+      expect(
+        captions
+          .toArray()
+          .every((el) => $(el).hasClass('govuk-visually-hidden'))
+      ).toBe(true)
+    })
+
+    test('shows a cleared optional detail, absent from proposed, as cleared', async () => {
+      const item = anUpdateItem()
+      delete item.payload.site.proposed.contactPhone
+      const $ = await detailPage(item)
+
+      expect(
+        squash($('[data-testid="update-ors-requested-contact-phone"]').text())
+      ).toBe(EM_DASH)
+      expect(
+        $('[data-testid="update-ors-row-contact-phone"]').attr('data-changed')
+      ).toBe('true')
     })
   })
 
   // RA-782 AC4.
   describe('duly making', () => {
+    function dulyMakeDetails(overrides = {}) {
+      return {
+        ok: true,
+        details: {
+          workItemId: ID,
+          chargePence: 0,
+          takesPaymentDate: false,
+          relatedWorkItems: [],
+          ...overrides
+        }
+      }
+    }
+
+    beforeEach(() => {
+      getDulyMakeDetails.mockResolvedValue(dulyMakeDetails())
+    })
+
     test('shows the charge and payment reference as "-" and asks for no payment date', async () => {
       getWorkItem.mockResolvedValue({ ok: true, workItem: anUpdateItem() })
       getDulyMakeDetails.mockResolvedValue({
@@ -618,6 +666,64 @@ describe('RA-767 / RA-782: ORS update applications', () => {
       ).toEqual(['Update ORS Accreditation', 'Update ORS Accreditation'])
     })
 
+    // management-be's `takesPaymentDate` decides; the module's
+    // `paymentDate: false` is only the fallback.
+    test('asks for the payment date when management-be says the work item takes one', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anUpdateItem() })
+      getDulyMakeDetails.mockResolvedValue(
+        dulyMakeDetails({ takesPaymentDate: true })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: DULY_MAKE_URL
+      })
+
+      const $ = cheerio.load(result)
+      expect($('[data-testid="duly-making-payment-date"]')).toHaveLength(1)
+      expect(squash($('[data-testid="duly-making-lead"]').text())).toBe(
+        'Add the date the payment was received to duly make this application.'
+      )
+    })
+
+    test('falls back to the type, asking for no payment date, when management-be does not say', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anUpdateItem() })
+      getDulyMakeDetails.mockResolvedValue({ ok: false, status: 500 })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: DULY_MAKE_URL
+      })
+
+      const $ = cheerio.load(result)
+      expect($('[data-testid="duly-making-payment-date"]')).toHaveLength(0)
+      expect(
+        squash($('[data-testid="duly-making-charge-amount"]').text())
+      ).toBe('-')
+    })
+
+    test('sends the payment date when management-be says the work item takes one', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anUpdateItem() })
+      getDulyMakeDetails.mockResolvedValue(
+        dulyMakeDetails({ takesPaymentDate: true })
+      )
+      dulyMakeWorkItem.mockResolvedValue({
+        ok: true,
+        workItem: anUpdateItem({ stateId: 'duly-made' })
+      })
+      const today = new Date()
+
+      await postForm(
+        DULY_MAKE_URL,
+        `payment-date-day=${today.getDate()}&payment-date-month=${today.getMonth() + 1}&payment-date-year=${today.getFullYear()}`
+      )
+
+      expect(dulyMakeWorkItem).toHaveBeenCalledTimes(1)
+      expect(dulyMakeWorkItem.mock.calls[0][0].paymentDate).toMatch(
+        /^\d{4}-\d{2}-\d{2}$/
+      )
+    })
+
     test('duly makes without a payment date', async () => {
       getWorkItem.mockResolvedValue({ ok: true, workItem: anUpdateItem() })
       dulyMakeWorkItem.mockResolvedValue({
@@ -656,7 +762,7 @@ describe('RA-767 / RA-782: ORS update applications', () => {
       expect(dulyMakeWorkItem.mock.calls[0][0].paymentDate).toBeNull()
     })
 
-    test('a failure re-reads nothing and redirects with a banner', async () => {
+    test('a payment-date refusal redirects with a page-level banner, not a field error or "Try again"', async () => {
       getWorkItem.mockResolvedValue({ ok: true, workItem: anUpdateItem() })
       dulyMakeWorkItem.mockResolvedValue({
         ok: false,
@@ -664,6 +770,27 @@ describe('RA-767 / RA-782: ORS update applications', () => {
         status: 400,
         errorCode: 'payment-date-not-taken',
         message: 'This work item type takes no payment date.'
+      })
+
+      const posted = await postForm(DULY_MAKE_URL, '')
+
+      const $ = await followRedirect(posted)
+      const banner = squash($('[data-testid="work-item-flash-banner"]').text())
+      expect(banner).toContain(
+        'This application could not be duly made because of a problem with its payment date. Contact the service support team.'
+      )
+      expect(banner).not.toContain('Try again')
+      expect($('[data-testid="duly-making-error-summary"]')).toHaveLength(0)
+    })
+
+    test('any other failure redirects with the generic banner', async () => {
+      getWorkItem.mockResolvedValue({ ok: true, workItem: anUpdateItem() })
+      dulyMakeWorkItem.mockResolvedValue({
+        ok: false,
+        reason: 'server',
+        status: 500,
+        errorCode: null,
+        message: 'Boom'
       })
 
       const posted = await postForm(DULY_MAKE_URL, '')
