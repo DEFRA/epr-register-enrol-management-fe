@@ -259,6 +259,7 @@ describe('buildUpdateOverseasSiteSummary (RA-782)', () => {
       })
       expect(interim.rows.every((row) => !row.changed)).toBe(true)
       expect(interim.rows.map((row) => row.key)).toEqual([
+        'site-name',
         'site-number',
         'location',
         'contact-name',
@@ -299,10 +300,42 @@ describe('buildUpdateOverseasSiteSummary (RA-782)', () => {
         changed: true
       })
       // The site number is the interim site's own, on both sides.
-      expect(interim.rows[0]).toMatchObject({
+      expect(
+        interim.rows.find((row) => row.key === 'site-number')
+      ).toMatchObject({
         current: ['SN-0101'],
         changed: false
       })
+    })
+
+    test('marks an interim site whose only change is its name as changed, with the old name', () => {
+      const existing = anInterimSite()
+      const [interim] = summaryFor(
+        aSite({
+          interimSiteChanges: [
+            {
+              action: 'change',
+              interimSiteId: 101,
+              previous: interimDetails(existing),
+              proposed: {
+                ...interimDetails(existing),
+                siteName: 'Bharat Port Hub'
+              }
+            }
+          ]
+        })
+      ).interimSites
+      expect(interim).toMatchObject({
+        kind: 'changed',
+        siteName: 'Bharat Port Hub'
+      })
+      expect(interim.rows.find((row) => row.key === 'site-name')).toMatchObject(
+        {
+          current: ['Bharat Recycling'],
+          requested: ['Bharat Port Hub'],
+          changed: true
+        }
+      )
     })
 
     test('shows a change that changes nothing as No changes', () => {

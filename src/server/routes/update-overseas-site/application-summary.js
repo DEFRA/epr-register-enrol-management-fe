@@ -238,9 +238,18 @@ function interimSection(number, interim, change) {
     change?.action === CHANGE
       ? { ...interim, ...detailsOf(change.proposed) }
       : current
-  const rows = INTERIM_FIELDS.map(([key, label, read]) =>
-    compareRow(key, label, read(current), read(requested))
-  )
+  // The section's title shows only the requested name, so a rename needs its own row to show the old one.
+  const rows = [
+    compareRow(
+      'site-name',
+      'Site name',
+      [nameOf(current)],
+      [nameOf(requested)]
+    ),
+    ...INTERIM_FIELDS.map(([key, label, read]) =>
+      compareRow(key, label, read(current), read(requested))
+    )
+  ]
   const changed = rows.some((row) => row.changed)
   return {
     number,
