@@ -120,6 +120,18 @@
           }) }}
         {% endcall %}
 
+        {# 2c. In-year change (checkboxes). RA-681: narrows the in-year     #}
+        {# change part of the results to particular kinds of change.       #}
+        {% call filterSection('in-year-change', 'In-year change', filterCounts.inYearChange) %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-in-year-change",
+            name: "inYearChange",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "In-year change", classes: "govuk-visually-hidden" } },
+            items: inYearChangeOptions
+          }) }}
+        {% endcall %}
+
         {# 3. Nation (checkboxes) #}
         {% call filterSection('nation', 'Nation', filterCounts.nation) %}
           {{ govukCheckboxes({

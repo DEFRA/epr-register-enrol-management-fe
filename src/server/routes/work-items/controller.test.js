@@ -2907,6 +2907,361 @@ describe('#workItemListController', () => {
   })
 
   // ---------------------------------------------------------------- //
+  // RA-681 — "In-year change" filter section (Tonnage / ORS)          //
+  // ---------------------------------------------------------------- //
+  describe('RA-681 in-year change filter section', () => {
+    const ORS_TYPE_IDS = [
+      'add-new-overseas-site',
+      'add-overseas-site',
+      'update-overseas-site',
+      'withdraw-overseas-site'
+    ]
+
+    function sessionCookie(res) {
+      return [].concat(res.headers['set-cookie'] ?? []).join('; ')
+    }
+
+    function inYearChangeSection(html) {
+      return html.slice(
+        html.indexOf('data-testid="filter-section-in-year-change"'),
+        html.indexOf('data-testid="filter-section-nation"')
+      )
+    }
+
+    test('Renders collapsed after Application type and before Nation, with Tonnage then ORS and no SIP', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      const applicationType = result.indexOf(
+        'data-testid="filter-section-application-type"'
+      )
+      const inYearChange = result.indexOf(
+        'data-testid="filter-section-in-year-change"'
+      )
+      const nation = result.indexOf('data-testid="filter-section-nation"')
+      expect(applicationType).toBeGreaterThan(-1)
+      expect(inYearChange).toBeGreaterThan(applicationType)
+      expect(nation).toBeGreaterThan(inYearChange)
+
+      const $ = cheerio.load(result)
+      const details = $('[data-testid="filter-section-in-year-change"]')
+      expect(details.attr('open')).toBeUndefined()
+      expect(
+        $('[data-testid="filter-section-in-year-change-toggle"]').text().trim()
+      ).toBe('In-year change')
+      const options = details
+        .find('input[name="inYearChange"]')
+        .map((_, el) => ({
+          value: $(el).attr('value'),
+          label: details
+            .find(`label[for="${$(el).attr('id')}"]`)
+            .text()
+            .trim(),
+          checked: $(el).attr('checked') !== undefined
+        }))
+        .get()
+      expect(options).toEqual([
+        { value: 'tonnage', label: 'Tonnage', checked: false },
+        { value: 'ors', label: 'ORS', checked: false }
+      ])
+      expect(inYearChangeSection(result)).not.toContain('SIP')
+    })
+
+    test('Opens with "(N selected)" and ticks the options when something is selected', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?inYearChange=tonnage&inYearChange=ors&filtersApplied=1'
+      })
+
+      const $ = cheerio.load(result)
+      expect(
+        $('[data-testid="filter-section-in-year-change"]').attr('open')
+      ).toBeDefined()
+      expect(
+        $('[data-testid="filter-section-in-year-change-toggle"]').text().trim()
+      ).toBe('In-year change (2 selected)')
+      expect(
+        $('input[name="inYearChange"][checked]')
+          .map((_, el) => $(el).attr('value'))
+          .get()
+      ).toEqual(['tonnage', 'ors'])
+    })
+
+    describe('narrows the backend query', () => {
+      async function typeQueryFor(qs) {
+        getWorkItems.mockResolvedValue(emptyPage())
+        await server.inject({
+          method: 'GET',
+          url: `/work-items?${qs}&filtersApplied=1`
+        })
+        const { typeIds, categories } = getWorkItems.mock.calls[0][0]
+        return { typeIds: [...typeIds].sort(), categories }
+      }
+
+      test('Ignores it when Application type is ticked without "In-year change"', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=re-accreditation&inYearChange=ors'
+          )
+        ).toEqual({ typeIds: ['re-accreditation'], categories: [] })
+      })
+
+      test('Sends the in-year change category as today when nothing is ticked in it', async () => {
+        expect(await typeQueryFor('applicationType=in-year-change')).toEqual({
+          typeIds: [],
+          categories: ['in-year-change']
+        })
+      })
+
+      test('Sends no type filter as today when nothing is ticked in either', async () => {
+        expect(await typeQueryFor('material=plastic')).toEqual({
+          typeIds: [],
+          categories: []
+        })
+      })
+
+      test('"In-year change" with ORS sends the ORS typeIds and no category', async () => {
+        expect(
+          await typeQueryFor('applicationType=in-year-change&inYearChange=ors')
+        ).toEqual({ typeIds: [...ORS_TYPE_IDS].sort(), categories: [] })
+      })
+
+      test('"In-year change" with Tonnage sends the tonnage typeId', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=in-year-change&inYearChange=tonnage'
+          )
+        ).toEqual({ typeIds: ['upgrade-tonnage-band'], categories: [] })
+      })
+
+      test('Tonnage and ORS together send both', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=in-year-change&inYearChange=tonnage&inYearChange=ors'
+          )
+        ).toEqual({
+          typeIds: [...ORS_TYPE_IDS, 'upgrade-tonnage-band'].sort(),
+          categories: []
+        })
+      })
+
+      test('An empty Application type counts as every option ticked', async () => {
+        expect(await typeQueryFor('inYearChange=ors')).toEqual({
+          typeIds: [
+            'accreditation',
+            'annual-fee-payment',
+            're-accreditation',
+            'registration-application',
+            ...ORS_TYPE_IDS
+          ].sort(),
+          categories: []
+        })
+      })
+
+      test('"Re-accreditation" and "In-year change" with ORS send their union', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=re-accreditation&applicationType=in-year-change&inYearChange=ors'
+          )
+        ).toEqual({
+          typeIds: ['re-accreditation', ...ORS_TYPE_IDS].sort(),
+          categories: []
+        })
+      })
+
+      test('Keeps the other filters alongside it', async () => {
+        getWorkItems.mockResolvedValue(emptyPage())
+
+        await server.inject({
+          method: 'GET',
+          url: '/work-items?inYearChange=ors&applicationType=in-year-change&typeId=exporter&material=plastic&nation=England&status=submitted&organisation=Acme&assigneeMode=unassigned&includeArchived=true&filtersApplied=1'
+        })
+
+        expect(getWorkItems).toHaveBeenCalledWith(
+          expect.objectContaining({
+            wasteProcessingTypes: ['Exporter'],
+            materials: ['plastic'],
+            nations: ['England'],
+            stateIds: ['submitted'],
+            organisation: 'Acme',
+            unassigned: true,
+            includeArchived: true
+          })
+        )
+      })
+    })
+
+    test('Shows each option as a removable chip that keeps the other filters', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&inYearChange=tonnage&inYearChange=ors&material=plastic&filtersApplied=1'
+      })
+
+      const $ = cheerio.load(result)
+      const chips = $('[data-testid="active-filter-remove"]')
+        .map((_, el) => ({
+          label: $(el).find('[data-testid="active-filter-label"]').text(),
+          href: $(el).attr('href')
+        }))
+        .get()
+      expect(chips).toEqual(
+        expect.arrayContaining([
+          {
+            label: 'Tonnage',
+            href: '/work-items?applicationType=in-year-change&inYearChange=ors&material=plastic&filtersApplied=1'
+          },
+          {
+            label: 'ORS',
+            href: '/work-items?applicationType=in-year-change&inYearChange=tonnage&material=plastic&filtersApplied=1'
+          }
+        ])
+      )
+      // Removing another filter's chip keeps the in-year change selections.
+      expect(chips).toContainEqual({
+        label: 'Plastic',
+        href: '/work-items?applicationType=in-year-change&inYearChange=tonnage&inYearChange=ors&filtersApplied=1'
+      })
+    })
+
+    test('Shows the filtered empty state when nothing matches', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?inYearChange=tonnage&filtersApplied=1'
+      })
+
+      expect(result).toContain('No work items match your filters.')
+    })
+
+    test('Keeps an ignored selection ticked and as a chip', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=re-accreditation&inYearChange=ors&filtersApplied=1'
+      })
+
+      const $ = cheerio.load(result)
+      expect($('input[name="inYearChange"][checked]').attr('value')).toBe('ors')
+      expect(
+        $('[data-testid="active-filter-label"]')
+          .map((_, el) => $(el).text())
+          .get()
+      ).toEqual(['Re-accreditation', 'ORS'])
+    })
+
+    test('A link carrying only the new param is saved and restored on a bare landing', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?inYearChange=ors'
+      })
+      const cookie = sessionCookie(applied)
+
+      getWorkItems.mockClear()
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems.mock.calls[0][0].typeIds).toEqual(
+        expect.arrayContaining(ORS_TYPE_IDS)
+      )
+      expect(result).toContain('data-testid="active-filter-label">ORS</span>')
+    })
+
+    test('"Clear all filters" drops the saved selection', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?inYearChange=ors&filtersApplied=1'
+      })
+      const firstCookie = sessionCookie(applied)
+      const cleared = await server.inject({
+        method: 'GET',
+        url: '/work-items?clear=1',
+        headers: { cookie: firstCookie }
+      })
+      // yar re-issues the cookie on a write, as in the RA-299 tests.
+      const cookie = sessionCookie(cleared) || firstCookie
+
+      getWorkItems.mockClear()
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ typeIds: [], categories: [] })
+      )
+      const $ = cheerio.load(result)
+      expect($('input[name="inYearChange"][checked]')).toHaveLength(0)
+      expect(
+        $('[data-testid="filter-section-in-year-change"]').attr('open')
+      ).toBeUndefined()
+    })
+
+    test('Pagination links keep the selection', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: '68168168-1681-4681-8681-681681681681',
+              typeId: 'add-overseas-site',
+              stateId: 'submitted',
+              payload: {}
+            }
+          ],
+          totalCount: 45
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&inYearChange=ors&filtersApplied=1'
+      })
+
+      const $ = cheerio.load(result)
+      expect($('.govuk-pagination__next a').attr('href')).toBe(
+        '/work-items?applicationType=in-year-change&inYearChange=ors&filtersApplied=1&page=2'
+      )
+    })
+
+    test('Drops unknown values', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&inYearChange=sip&inYearChange=ors&inYearChange=&filtersApplied=1'
+      })
+
+      expect([...getWorkItems.mock.calls[0][0].typeIds].sort()).toEqual(
+        [...ORS_TYPE_IDS].sort()
+      )
+      const $ = cheerio.load(result)
+      expect(
+        $('[data-testid="active-filter-label"]')
+          .map((_, el) => $(el).text())
+          .get()
+      ).toEqual(['In-year change', 'ORS'])
+    })
+  })
+
+  // ---------------------------------------------------------------- //
   // RA-299 — Material: split "Glass" filter (AC05)                    //
   // ---------------------------------------------------------------- //
   describe('RA-299 material glass split', () => {

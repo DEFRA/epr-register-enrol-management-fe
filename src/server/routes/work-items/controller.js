@@ -40,6 +40,7 @@ const SESSION_FILTERS_KEY = 'workItemsListFilters'
 const RECOGNISED_FILTER_PARAMS = new Set([
   'typeId',
   'applicationType',
+  'inYearChange',
   'status',
   'material',
   'nation',
@@ -151,6 +152,28 @@ const APPLICATION_TYPE_CATEGORIES = new Set(
   APPLICATION_TYPE_FILTER_OPTIONS.filter((o) => o.isCategory).map(
     (o) => o.value
   )
+)
+
+// RA-681. The "In-year change" section narrows the in-year change part of the
+// results to particular kinds of change (see resolveTypeFilter). Each option
+// lists the work item typeIds it stands for, so it is sent as `typeIds`, not
+// as the `in-year-change` category. Types case management doesn't have yet
+// are given the typeIds agreed for them, which match nothing until they exist:
+// `upgrade-tonnage-band` (the operator's change type value),
+// `add-new-overseas-site` (a brand-new ORS) and `withdraw-overseas-site`.
+// SIP is phase 2.
+const ORS_TYPE_IDS = [
+  'add-new-overseas-site',
+  'add-overseas-site',
+  'update-overseas-site',
+  'withdraw-overseas-site'
+]
+const IN_YEAR_CHANGE_FILTER_OPTIONS = [
+  { value: 'tonnage', text: 'Tonnage', typeIds: ['upgrade-tonnage-band'] },
+  { value: 'ors', text: 'ORS', typeIds: ORS_TYPE_IDS }
+]
+const IN_YEAR_CHANGE_OPTION_BY_VALUE = new Map(
+  IN_YEAR_CHANGE_FILTER_OPTIONS.map((o) => [o.value, o])
 )
 
 // RA-324 phase-2. The "Status" filter groups the backend state ids under the
@@ -321,16 +344,7 @@ export const workItemListController = {
     const assignableUsers = await getAssignableUsers()
 
     const result = await getWorkItems({
-      // RA-299 AC01/15. Application type only: Applicant type narrows these
-      // through `wasteProcessingTypes` below.
-      typeIds: filters.applicationTypeIds.filter(
-        (id) => !APPLICATION_TYPE_CATEGORIES.has(id)
-      ),
-      // RA-739. Category options ("In-year change") are expanded to typeIds
-      // by the backend and unioned with `typeIds` above.
-      categories: filters.applicationTypeIds.filter((id) =>
-        APPLICATION_TYPE_CATEGORIES.has(id)
-      ),
+      ...resolveTypeFilter(filters),
       stateIds: filters.stateIds,
       // RA-299 AC05. `filters.materials` holds the UI-facing filter values
       // (e.g. the split 'glass-remelt' / 'glass-other'); translate to the
@@ -382,6 +396,7 @@ export const workItemListController = {
       applicationTypeOptions: buildApplicationTypeOptions(
         filters.applicationTypeIds
       ),
+      inYearChangeOptions: buildInYearChangeOptions(filters.inYearChangeTypes),
       statusOptions: buildStatusOptions(filters.statusGroups),
       materialOptions: buildMaterialOptions(filters.materials),
       sortOptions: buildSortOptions(filters.sort),
@@ -443,6 +458,11 @@ function readFilters(query, user) {
   // query param and option list.
   const applicationTypeIds = uniqueStringList(query.applicationType).filter(
     (id) => ALLOWED_APPLICATION_TYPE_IDS.has(id)
+  )
+
+  // RA-681. "In-year change" sub-filter, read like Application type.
+  const inYearChangeTypes = uniqueStringList(query.inYearChange).filter((v) =>
+    IN_YEAR_CHANGE_OPTION_BY_VALUE.has(v)
   )
 
   // Status is a UI grouping over backend state ids. Validate the submitted
@@ -521,6 +541,7 @@ function readFilters(query, user) {
     typeIds,
     wasteProcessingTypes,
     applicationTypeIds,
+    inYearChangeTypes,
     statusGroups,
     stateIds,
     materials,
@@ -537,6 +558,53 @@ function readFilters(query, user) {
     nations: resolveNations(query.nation, user, filtersApplied),
     includeArchived,
     filtersApplied
+  }
+}
+
+/**
+ * The backend's `typeIds` and `categories` list params, from the type-style
+ * filter sections. Applicant type is not one of them: it narrows these
+ * through `wasteProcessingTypes`.
+ *
+ * RA-681. The "In-year change" section narrows only the in-year change part
+ * of Application type:
+ *   - Application type ticked without "In-year change": it is ignored.
+ *   - Nothing ticked in it: the request is as before RA-681.
+ *   - Otherwise its options' typeIds replace the `in-year-change` category,
+ *     and an empty Application type counts as every option ticked.
+ */
+function resolveTypeFilter(filters) {
+  const { applicationTypeIds, inYearChangeTypes } = filters
+  const inYearChangeApplies =
+    applicationTypeIds.length === 0 ||
+    applicationTypeIds.includes(IN_YEAR_CHANGE_CATEGORY)
+  if (inYearChangeApplies && inYearChangeTypes.length > 0) {
+    const selectedApplicationTypes =
+      applicationTypeIds.length > 0
+        ? applicationTypeIds
+        : APPLICATION_TYPE_FILTER_OPTIONS.map((o) => o.value)
+    return {
+      typeIds: [
+        ...selectedApplicationTypes.filter(
+          (id) => !APPLICATION_TYPE_CATEGORIES.has(id)
+        ),
+        ...inYearChangeTypes.flatMap(
+          (v) => IN_YEAR_CHANGE_OPTION_BY_VALUE.get(v).typeIds
+        )
+      ],
+      categories: []
+    }
+  }
+  return {
+    // RA-299 AC01/15. The Application type options that are typeIds.
+    typeIds: applicationTypeIds.filter(
+      (id) => !APPLICATION_TYPE_CATEGORIES.has(id)
+    ),
+    // RA-739. Category options ("In-year change") are expanded to typeIds by
+    // the backend and unioned with `typeIds` above.
+    categories: applicationTypeIds.filter((id) =>
+      APPLICATION_TYPE_CATEGORIES.has(id)
+    )
   }
 }
 
@@ -800,6 +868,15 @@ function buildApplicationTypeOptions(selectedApplicationTypeIds) {
   }))
 }
 
+function buildInYearChangeOptions(selectedInYearChangeTypes) {
+  const selected = new Set(selectedInYearChangeTypes)
+  return IN_YEAR_CHANGE_FILTER_OPTIONS.map((o) => ({
+    value: o.value,
+    text: o.text,
+    checked: selected.has(o.value)
+  }))
+}
+
 function buildStatusOptions(selectedStatusGroups) {
   const selected = new Set(selectedStatusGroups)
   return STATUS_FILTER_OPTIONS.map((o) => ({
@@ -911,6 +988,9 @@ function buildHref(filters) {
   for (const id of filters.applicationTypeIds) {
     params.append('applicationType', id)
   }
+  for (const v of filters.inYearChangeTypes) {
+    params.append('inYearChange', v)
+  }
   for (const v of filters.statusGroups) {
     params.append('status', v)
   }
@@ -975,6 +1055,7 @@ function buildFilterCounts(filters) {
   return {
     type: filters.typeIds.length,
     applicationType: filters.applicationTypeIds.length,
+    inYearChange: filters.inYearChangeTypes.length,
     status: filters.statusGroups.length,
     nation: filters.nations.length,
     material: filters.materials.length,
@@ -996,6 +1077,7 @@ function hasActiveFilters(filters) {
   return (
     c.type > 0 ||
     c.applicationType > 0 ||
+    c.inYearChange > 0 ||
     c.status > 0 ||
     c.nation > 0 ||
     c.material > 0 ||
@@ -1031,6 +1113,11 @@ function withoutFilter(filters, key, value) {
       break
     case 'applicationType':
       next.applicationTypeIds = filters.applicationTypeIds.filter(
+        (v) => v !== value
+      )
+      break
+    case 'inYearChange':
+      next.inYearChangeTypes = filters.inYearChangeTypes.filter(
         (v) => v !== value
       )
       break
@@ -1104,6 +1191,10 @@ function buildActiveFilters(filters, assignableUsers) {
   // RA-299 AC01/15. Application-type chips, same shape as Applicant-type.
   for (const id of filters.applicationTypeIds) {
     add('applicationType', id, APPLICATION_TYPE_LABEL.get(id))
+  }
+  // RA-681. In-year change chips: the bare option text ("Tonnage", "ORS").
+  for (const v of filters.inYearChangeTypes) {
+    add('inYearChange', v, IN_YEAR_CHANGE_OPTION_BY_VALUE.get(v).text)
   }
   for (const v of filters.statusGroups) {
     add('status', v, STATUS_OPTION_BY_VALUE.get(v).text)
