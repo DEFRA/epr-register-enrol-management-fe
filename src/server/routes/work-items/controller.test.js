@@ -3262,6 +3262,347 @@ describe('#workItemListController', () => {
   })
 
   // ---------------------------------------------------------------- //
+  // RA-681 — "ORS management" filter section                          //
+  // ---------------------------------------------------------------- //
+  describe('RA-681 ORS management filter section', () => {
+    test('Renders collapsed after In-year change and before Nation, with Applications, Withdrawals, Updates (detail changes)', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+
+      const inYearChange = result.indexOf(
+        'data-testid="filter-section-in-year-change"'
+      )
+      const orsManagement = result.indexOf(
+        'data-testid="filter-section-ors-management"'
+      )
+      const nation = result.indexOf('data-testid="filter-section-nation"')
+      expect(inYearChange).toBeGreaterThan(-1)
+      expect(orsManagement).toBeGreaterThan(inYearChange)
+      expect(nation).toBeGreaterThan(orsManagement)
+
+      const $ = cheerio.load(result)
+      const details = $('[data-testid="filter-section-ors-management"]')
+      expect(details.attr('open')).toBeUndefined()
+      expect(
+        $('[data-testid="filter-section-ors-management-toggle"]').text().trim()
+      ).toBe('ORS management')
+      const options = details
+        .find('input[name="orsManagement"]')
+        .map((_, el) => ({
+          value: $(el).attr('value'),
+          label: details
+            .find(`label[for="${$(el).attr('id')}"]`)
+            .text()
+            .trim(),
+          checked: $(el).attr('checked') !== undefined
+        }))
+        .get()
+      expect(options).toEqual([
+        { value: 'applications', label: 'Applications', checked: false },
+        { value: 'withdrawals', label: 'Withdrawals', checked: false },
+        {
+          value: 'updates',
+          label: 'Updates (detail changes)',
+          checked: false
+        }
+      ])
+    })
+
+    test('Opens with "(N selected)" and ticks the options when something is selected', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?orsManagement=applications&orsManagement=updates&filtersApplied=1'
+      })
+
+      const $ = cheerio.load(result)
+      expect(
+        $('[data-testid="filter-section-ors-management"]').attr('open')
+      ).toBeDefined()
+      expect(
+        $('[data-testid="filter-section-ors-management-toggle"]').text().trim()
+      ).toBe('ORS management (2 selected)')
+      expect(
+        $('input[name="orsManagement"][checked]')
+          .map((_, el) => $(el).attr('value'))
+          .get()
+      ).toEqual(['applications', 'updates'])
+    })
+
+    describe('narrows the backend query', () => {
+      async function typeQueryFor(qs) {
+        getWorkItems.mockResolvedValue(emptyPage())
+        await server.inject({
+          method: 'GET',
+          url: `/work-items?${qs}&filtersApplied=1`
+        })
+        const { typeIds, categories } = getWorkItems.mock.calls[0][0]
+        return { typeIds: [...typeIds].sort(), categories }
+      }
+
+      test('"In-year change" with ORS and Applications sends the add ORS typeIds only', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=in-year-change&inYearChange=ors&orsManagement=applications'
+          )
+        ).toEqual({
+          typeIds: ['add-new-overseas-site', 'add-overseas-site'],
+          categories: []
+        })
+      })
+
+      test('"Updates (detail changes)" sends the ORS update typeId only', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=in-year-change&inYearChange=ors&orsManagement=updates'
+          )
+        ).toEqual({ typeIds: ['update-overseas-site'], categories: [] })
+      })
+
+      test('Tonnage and ORS with Updates does not narrow Tonnage', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=in-year-change&inYearChange=tonnage&inYearChange=ors&orsManagement=updates'
+          )
+        ).toEqual({
+          typeIds: ['update-overseas-site', 'upgrade-tonnage-band'],
+          categories: []
+        })
+      })
+
+      test('Tonnage with Applications sends Tonnage only, as ORS is not ticked', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=in-year-change&inYearChange=tonnage&orsManagement=applications'
+          )
+        ).toEqual({ typeIds: ['upgrade-tonnage-band'], categories: [] })
+      })
+
+      test('An empty In-year change with Applications sends Tonnage and the add ORS typeIds', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=in-year-change&orsManagement=applications'
+          )
+        ).toEqual({
+          typeIds: [
+            'add-new-overseas-site',
+            'add-overseas-site',
+            'upgrade-tonnage-band'
+          ],
+          categories: []
+        })
+      })
+
+      test('Ignores it when Application type is ticked without "In-year change"', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=re-accreditation&orsManagement=updates'
+          )
+        ).toEqual({ typeIds: ['re-accreditation'], categories: [] })
+      })
+
+      test('An empty Application type with Withdrawals sends every option, Tonnage and the withdrawal typeId', async () => {
+        expect(await typeQueryFor('orsManagement=withdrawals')).toEqual({
+          typeIds: [
+            'accreditation',
+            'annual-fee-payment',
+            're-accreditation',
+            'registration-application',
+            'upgrade-tonnage-band',
+            'withdraw-overseas-site'
+          ],
+          categories: []
+        })
+      })
+
+      test('"Re-accreditation" and "In-year change" with Updates send their union', async () => {
+        expect(
+          await typeQueryFor(
+            'applicationType=re-accreditation&applicationType=in-year-change&inYearChange=ors&orsManagement=updates'
+          )
+        ).toEqual({
+          typeIds: ['re-accreditation', 'update-overseas-site'],
+          categories: []
+        })
+      })
+
+      test('Keeps the other filters alongside it', async () => {
+        getWorkItems.mockResolvedValue(emptyPage())
+
+        await server.inject({
+          method: 'GET',
+          url: '/work-items?orsManagement=updates&applicationType=in-year-change&typeId=exporter&material=plastic&nation=England&status=submitted&organisation=Acme&assigneeMode=unassigned&includeArchived=true&filtersApplied=1'
+        })
+
+        expect(getWorkItems).toHaveBeenCalledWith(
+          expect.objectContaining({
+            wasteProcessingTypes: ['Exporter'],
+            materials: ['plastic'],
+            nations: ['England'],
+            stateIds: ['submitted'],
+            organisation: 'Acme',
+            unassigned: true,
+            includeArchived: true
+          })
+        )
+      })
+    })
+
+    test('Shows each option as a prefixed removable chip that keeps the other filters', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?inYearChange=ors&orsManagement=applications&orsManagement=withdrawals&orsManagement=updates&material=plastic&filtersApplied=1'
+      })
+
+      const $ = cheerio.load(result)
+      const chips = $('[data-testid="active-filter-remove"]')
+        .map((_, el) => ({
+          label: $(el).find('[data-testid="active-filter-label"]').text(),
+          href: $(el).attr('href')
+        }))
+        .get()
+      expect(chips).toEqual(
+        expect.arrayContaining([
+          {
+            label: 'ORS applications',
+            href: '/work-items?inYearChange=ors&orsManagement=withdrawals&orsManagement=updates&material=plastic&filtersApplied=1'
+          },
+          {
+            label: 'ORS withdrawals',
+            href: '/work-items?inYearChange=ors&orsManagement=applications&orsManagement=updates&material=plastic&filtersApplied=1'
+          },
+          {
+            label: 'ORS updates (detail changes)',
+            href: '/work-items?inYearChange=ors&orsManagement=applications&orsManagement=withdrawals&material=plastic&filtersApplied=1'
+          }
+        ])
+      )
+      // Removing another filter's chip keeps the ORS management selections.
+      expect(chips).toContainEqual({
+        label: 'Plastic',
+        href: '/work-items?inYearChange=ors&orsManagement=applications&orsManagement=withdrawals&orsManagement=updates&filtersApplied=1'
+      })
+    })
+
+    test('A link carrying only the new param is saved and restored on a bare landing', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?orsManagement=updates'
+      })
+      const cookie = [].concat(applied.headers['set-cookie'] ?? []).join('; ')
+
+      getWorkItems.mockClear()
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems.mock.calls[0][0].typeIds).toContain(
+        'update-overseas-site'
+      )
+      expect(getWorkItems.mock.calls[0][0].typeIds).not.toContain(
+        'add-overseas-site'
+      )
+      expect(result).toContain(
+        'data-testid="active-filter-label">ORS updates (detail changes)</span>'
+      )
+    })
+
+    test('"Clear all filters" drops the saved selection', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const applied = await server.inject({
+        method: 'GET',
+        url: '/work-items?orsManagement=applications&filtersApplied=1'
+      })
+      const firstCookie = []
+        .concat(applied.headers['set-cookie'] ?? [])
+        .join('; ')
+      const cleared = await server.inject({
+        method: 'GET',
+        url: '/work-items?clear=1',
+        headers: { cookie: firstCookie }
+      })
+      // yar re-issues the cookie on a write, as in the RA-299 tests.
+      const cookie =
+        [].concat(cleared.headers['set-cookie'] ?? []).join('; ') || firstCookie
+
+      getWorkItems.mockClear()
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items',
+        headers: { cookie }
+      })
+
+      expect(getWorkItems).toHaveBeenCalledWith(
+        expect.objectContaining({ typeIds: [], categories: [] })
+      )
+      const $ = cheerio.load(result)
+      expect($('input[name="orsManagement"][checked]')).toHaveLength(0)
+      expect(
+        $('[data-testid="filter-section-ors-management"]').attr('open')
+      ).toBeUndefined()
+    })
+
+    test('Pagination links keep the selection', async () => {
+      clearWorkItemRegistry()
+      getWorkItems.mockResolvedValue(
+        emptyPage({
+          items: [
+            {
+              id: '68168168-1681-4681-8681-681681681682',
+              typeId: 'update-overseas-site',
+              stateId: 'submitted',
+              payload: {}
+            }
+          ],
+          totalCount: 45
+        })
+      )
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&orsManagement=updates&filtersApplied=1'
+      })
+
+      const $ = cheerio.load(result)
+      expect($('.govuk-pagination__next a').attr('href')).toBe(
+        '/work-items?applicationType=in-year-change&orsManagement=updates&filtersApplied=1&page=2'
+      )
+    })
+
+    test('Drops unknown values', async () => {
+      getWorkItems.mockResolvedValue(emptyPage())
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items?applicationType=in-year-change&orsManagement=removals&orsManagement=updates&orsManagement=&filtersApplied=1'
+      })
+
+      expect(getWorkItems.mock.calls[0][0].typeIds).toEqual(
+        expect.arrayContaining(['update-overseas-site'])
+      )
+      expect(getWorkItems.mock.calls[0][0].typeIds).not.toContain('removals')
+      const $ = cheerio.load(result)
+      expect(
+        $('[data-testid="active-filter-label"]')
+          .map((_, el) => $(el).text())
+          .get()
+      ).toEqual(['In-year change', 'ORS updates (detail changes)'])
+    })
+  })
+
+  // ---------------------------------------------------------------- //
   // RA-299 — Material: split "Glass" filter (AC05)                    //
   // ---------------------------------------------------------------- //
   describe('RA-299 material glass split', () => {

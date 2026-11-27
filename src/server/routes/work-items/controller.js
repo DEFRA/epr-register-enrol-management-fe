@@ -41,6 +41,7 @@ const RECOGNISED_FILTER_PARAMS = new Set([
   'typeId',
   'applicationType',
   'inYearChange',
+  'orsManagement',
   'status',
   'material',
   'nation',
@@ -174,6 +175,37 @@ const IN_YEAR_CHANGE_FILTER_OPTIONS = [
 ]
 const IN_YEAR_CHANGE_OPTION_BY_VALUE = new Map(
   IN_YEAR_CHANGE_FILTER_OPTIONS.map((o) => [o.value, o])
+)
+
+// RA-681. The "ORS management" section narrows the ORS part of the in-year
+// change results to kinds of ORS change (see resolveTypeFilter). Option text
+// is Figma's; `chip` is prefixed so it can't be confused with the page
+// heading "Applications" or the "Withdrawn" status chip. Applications covers
+// a brand-new ORS (`add-new-overseas-site`, not built yet) and adding an
+// existing registered ORS (`add-overseas-site`). `withdraw-overseas-site` is
+// a placeholder that matches nothing until that type exists.
+const ORS_MANAGEMENT_FILTER_OPTIONS = [
+  {
+    value: 'applications',
+    text: 'Applications',
+    chip: 'ORS applications',
+    typeIds: ['add-new-overseas-site', 'add-overseas-site']
+  },
+  {
+    value: 'withdrawals',
+    text: 'Withdrawals',
+    chip: 'ORS withdrawals',
+    typeIds: ['withdraw-overseas-site']
+  },
+  {
+    value: 'updates',
+    text: 'Updates (detail changes)',
+    chip: 'ORS updates (detail changes)',
+    typeIds: ['update-overseas-site']
+  }
+]
+const ORS_MANAGEMENT_OPTION_BY_VALUE = new Map(
+  ORS_MANAGEMENT_FILTER_OPTIONS.map((o) => [o.value, o])
 )
 
 // RA-324 phase-2. The "Status" filter groups the backend state ids under the
@@ -397,6 +429,9 @@ export const workItemListController = {
         filters.applicationTypeIds
       ),
       inYearChangeOptions: buildInYearChangeOptions(filters.inYearChangeTypes),
+      orsManagementOptions: buildOrsManagementOptions(
+        filters.orsManagementTypes
+      ),
       statusOptions: buildStatusOptions(filters.statusGroups),
       materialOptions: buildMaterialOptions(filters.materials),
       sortOptions: buildSortOptions(filters.sort),
@@ -463,6 +498,10 @@ function readFilters(query, user) {
   // RA-681. "In-year change" sub-filter, read like Application type.
   const inYearChangeTypes = uniqueStringList(query.inYearChange).filter((v) =>
     IN_YEAR_CHANGE_OPTION_BY_VALUE.has(v)
+  )
+  // RA-681. "ORS management" sub-filter, read the same way.
+  const orsManagementTypes = uniqueStringList(query.orsManagement).filter((v) =>
+    ORS_MANAGEMENT_OPTION_BY_VALUE.has(v)
   )
 
   // Status is a UI grouping over backend state ids. Validate the submitted
@@ -542,6 +581,7 @@ function readFilters(query, user) {
     wasteProcessingTypes,
     applicationTypeIds,
     inYearChangeTypes,
+    orsManagementTypes,
     statusGroups,
     stateIds,
     materials,
@@ -566,19 +606,22 @@ function readFilters(query, user) {
  * filter sections. Applicant type is not one of them: it narrows these
  * through `wasteProcessingTypes`.
  *
- * RA-681. The "In-year change" section narrows only the in-year change part
- * of Application type:
- *   - Application type ticked without "In-year change": it is ignored.
- *   - Nothing ticked in it: the request is as before RA-681.
- *   - Otherwise its options' typeIds replace the `in-year-change` category,
- *     and an empty Application type counts as every option ticked.
+ * RA-681. The "In-year change" and "ORS management" sections narrow only
+ * the in-year change part of Application type:
+ *   - Application type ticked without "In-year change": they are ignored.
+ *   - Nothing ticked in either: the request is as before RA-681.
+ *   - Otherwise the narrowed in-year typeIds (see narrowedInYearChangeTypeIds)
+ *     replace the `in-year-change` category, and an empty Application type
+ *     counts as every option ticked.
  */
 function resolveTypeFilter(filters) {
-  const { applicationTypeIds, inYearChangeTypes } = filters
+  const { applicationTypeIds, inYearChangeTypes, orsManagementTypes } = filters
   const inYearChangeApplies =
     applicationTypeIds.length === 0 ||
     applicationTypeIds.includes(IN_YEAR_CHANGE_CATEGORY)
-  if (inYearChangeApplies && inYearChangeTypes.length > 0) {
+  const inYearChangeNarrowed =
+    inYearChangeTypes.length > 0 || orsManagementTypes.length > 0
+  if (inYearChangeApplies && inYearChangeNarrowed) {
     const selectedApplicationTypes =
       applicationTypeIds.length > 0
         ? applicationTypeIds
@@ -588,9 +631,7 @@ function resolveTypeFilter(filters) {
         ...selectedApplicationTypes.filter(
           (id) => !APPLICATION_TYPE_CATEGORIES.has(id)
         ),
-        ...inYearChangeTypes.flatMap(
-          (v) => IN_YEAR_CHANGE_OPTION_BY_VALUE.get(v).typeIds
-        )
+        ...narrowedInYearChangeTypeIds(inYearChangeTypes, orsManagementTypes)
       ],
       categories: []
     }
@@ -606,6 +647,25 @@ function resolveTypeFilter(filters) {
       APPLICATION_TYPE_CATEGORIES.has(id)
     )
   }
+}
+
+/**
+ * RA-681. The in-year typeIds the two sub-sections select. An empty section
+ * counts as every option ticked. "ORS management" narrows only the ORS
+ * option, so Tonnage is never narrowed by it.
+ */
+function narrowedInYearChangeTypeIds(inYearChangeTypes, orsManagementTypes) {
+  const included =
+    inYearChangeTypes.length > 0
+      ? inYearChangeTypes
+      : IN_YEAR_CHANGE_FILTER_OPTIONS.map((o) => o.value)
+  return included.flatMap((v) =>
+    v === 'ors' && orsManagementTypes.length > 0
+      ? orsManagementTypes.flatMap(
+          (o) => ORS_MANAGEMENT_OPTION_BY_VALUE.get(o).typeIds
+        )
+      : IN_YEAR_CHANGE_OPTION_BY_VALUE.get(v).typeIds
+  )
 }
 
 /**
@@ -877,6 +937,15 @@ function buildInYearChangeOptions(selectedInYearChangeTypes) {
   }))
 }
 
+function buildOrsManagementOptions(selectedOrsManagementTypes) {
+  const selected = new Set(selectedOrsManagementTypes)
+  return ORS_MANAGEMENT_FILTER_OPTIONS.map((o) => ({
+    value: o.value,
+    text: o.text,
+    checked: selected.has(o.value)
+  }))
+}
+
 function buildStatusOptions(selectedStatusGroups) {
   const selected = new Set(selectedStatusGroups)
   return STATUS_FILTER_OPTIONS.map((o) => ({
@@ -991,6 +1060,9 @@ function buildHref(filters) {
   for (const v of filters.inYearChangeTypes) {
     params.append('inYearChange', v)
   }
+  for (const v of filters.orsManagementTypes) {
+    params.append('orsManagement', v)
+  }
   for (const v of filters.statusGroups) {
     params.append('status', v)
   }
@@ -1056,6 +1128,7 @@ function buildFilterCounts(filters) {
     type: filters.typeIds.length,
     applicationType: filters.applicationTypeIds.length,
     inYearChange: filters.inYearChangeTypes.length,
+    orsManagement: filters.orsManagementTypes.length,
     status: filters.statusGroups.length,
     nation: filters.nations.length,
     material: filters.materials.length,
@@ -1078,6 +1151,7 @@ function hasActiveFilters(filters) {
     c.type > 0 ||
     c.applicationType > 0 ||
     c.inYearChange > 0 ||
+    c.orsManagement > 0 ||
     c.status > 0 ||
     c.nation > 0 ||
     c.material > 0 ||
@@ -1118,6 +1192,11 @@ function withoutFilter(filters, key, value) {
       break
     case 'inYearChange':
       next.inYearChangeTypes = filters.inYearChangeTypes.filter(
+        (v) => v !== value
+      )
+      break
+    case 'orsManagement':
+      next.orsManagementTypes = filters.orsManagementTypes.filter(
         (v) => v !== value
       )
       break
@@ -1195,6 +1274,10 @@ function buildActiveFilters(filters, assignableUsers) {
   // RA-681. In-year change chips: the bare option text ("Tonnage", "ORS").
   for (const v of filters.inYearChangeTypes) {
     add('inYearChange', v, IN_YEAR_CHANGE_OPTION_BY_VALUE.get(v).text)
+  }
+  // RA-681. ORS management chips are prefixed ("ORS applications").
+  for (const v of filters.orsManagementTypes) {
+    add('orsManagement', v, ORS_MANAGEMENT_OPTION_BY_VALUE.get(v).chip)
   }
   for (const v of filters.statusGroups) {
     add('status', v, STATUS_OPTION_BY_VALUE.get(v).text)

@@ -132,6 +132,18 @@
           }) }}
         {% endcall %}
 
+        {# 2d. ORS management (checkboxes). RA-681: narrows the ORS part   #}
+        {# of the in-year change results to kinds of ORS change.           #}
+        {% call filterSection('ors-management', 'ORS management', filterCounts.orsManagement) %}
+          {{ govukCheckboxes({
+            idPrefix: "filter-ors-management",
+            name: "orsManagement",
+            classes: "govuk-checkboxes--small",
+            fieldset: { legend: { text: "ORS management", classes: "govuk-visually-hidden" } },
+            items: orsManagementOptions
+          }) }}
+        {% endcall %}
+
         {# 3. Nation (checkboxes) #}
         {% call filterSection('nation', 'Nation', filterCounts.nation) %}
           {{ govukCheckboxes({
