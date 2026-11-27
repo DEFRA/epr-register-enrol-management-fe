@@ -232,6 +232,15 @@ templates import their summary macros from
 files under `payload.site.besEvidence.files`.
 `add-overseas-site/module.js` is the example.
 
+RA-681. The ORS update type (`update-overseas-site/module.js`) is minimal
+until its own view is built: it labels each item from its site's `selected`
+("Accreditation: ORS update" / "Registration: ORS update", "ORS update" when
+absent), shares add-ORS's card site line (`core/ors-card-site.js`), has an
+add-ORS-style header without the charge and payment date, and its detail
+template extends `work-items/detail.njk` with add-ORS's site summary
+(`add-overseas-site/site-summary.njk`), Application summary and history
+tabs, and no actions card.
+
 ### Standard lifecycle pages (RA-495)
 
 The Duly make, Make determination, Confirm applicant contact and Change valid

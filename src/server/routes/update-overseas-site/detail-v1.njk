@@ -1,0 +1,25 @@
+{# ------------------------------------------------------------------- #}
+{# ORS update detail template (v1) — RA-681.                            #}
+{#                                                                      #}
+{# A placeholder until the ORS update view (previous and proposed       #}
+{# details, lifecycle actions) is built: the "Application summary" tab  #}
+{# shows the ORS as it stands, as add-ORS's does, with the assignment   #}
+{# panel and no actions.                                                #}
+{#                                                                      #}
+{# `data-state-id` carries the raw state id for the journey tests.      #}
+{# ------------------------------------------------------------------- #}
+{% extends 'work-items/detail.njk' %}
+
+{% block content %}
+  <div data-testid="update-overseas-site-detail"
+       data-state-id="{{ workItem.stateId }}">
+    {{ super() }}
+  </div>
+{% endblock %}
+
+{% block applicationSummary %}
+  {% include 'add-overseas-site/site-summary.njk' %}
+{% endblock %}
+
+{# No actions until the update view offers the Standard lifecycle. #}
+{% block actionsCard %}{% endblock %}

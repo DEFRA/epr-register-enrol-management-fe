@@ -1,0 +1,73 @@
+{# ------------------------------------------------------------------- #}
+{# The ORS site summary: the site's rows and its interim sites, from   #}
+{# `applicationSummary` (built by `buildAddOverseasSiteSummary`).       #}
+{# Shared by the add-ORS detail template (RA-739) and, until it has its #}
+{# own update view, the ORS update one (RA-681).                        #}
+{# ------------------------------------------------------------------- #}
+{% from "work-items/summary-macros.njk" import documentItem, newPrefix, siteDetails %}
+
+{# The site, under re-accreditation's heading and borderless as its   #}
+{# application details. Every row renders; a missing value is the     #}
+{# dash. The row and value testids match re-accreditation's. RA-495: a #}
+{# value the operator supplied on this request, rather than one from  #}
+{# the site's registration, carries the "NEW: " prefix.               #}
+<h2 class="govuk-heading-m" data-testid="application-details-heading">Application details</h2>
+{# The Valid from date leads, set apart from the site's rows by a gap,  #}
+{# and only once the determination has recorded one.                    #}
+{% if applicationSummary.validFrom %}
+  <dl class="govuk-summary-list app-summary-list--borderless govuk-!-margin-bottom-6"
+      data-testid="application-valid-from">
+    <div class="govuk-summary-list__row" data-testid="app-detail-row-valid-from">
+      <dt class="govuk-summary-list__key">{{ applicationSummary.validFrom.label }}</dt>
+      <dd class="govuk-summary-list__value" data-testid="app-detail-value-valid-from">
+        <p class="govuk-body govuk-!-margin-bottom-0">{{ applicationSummary.validFrom.value }}</p>
+      </dd>
+    </div>
+  </dl>
+{% endif %}
+<dl class="govuk-summary-list app-summary-list--borderless" data-testid="application-details">
+  {% for row in applicationSummary.rows %}
+    <div class="govuk-summary-list__row"
+         data-testid="app-detail-row-{{ row.key }}">
+      <dt class="govuk-summary-list__key">{{ row.label }}</dt>
+      <dd class="govuk-summary-list__value"
+          data-testid="app-detail-value-{{ row.key }}">
+        {% if row.kind == 'files' %}
+          {% if row.files.length %}
+            <ul class="govuk-list govuk-!-margin-bottom-0">
+              {% for file in row.files %}{{ documentItem(file, showDates=true, newTestId=('app-detail-supplied-' + row.key) if (row.supplied and loop.first) else '') }}{% endfor %}
+            </ul>
+          {% else %}
+            <span data-testid="app-detail-documents-none">No documents uploaded.</span>
+          {% endif %}
+        {% else %}
+          {% for line in row.values %}
+            <p class="govuk-body govuk-!-margin-bottom-0">{% if row.supplied and loop.first %}{{ newPrefix('app-detail-supplied-' + row.key) }}{% endif %}{{ line }}</p>
+          {% endfor %}
+        {% endif %}
+      </dd>
+    </div>
+  {% endfor %}
+</dl>
+
+{# Interim sites the operator has not withdrawn; no section without any. #}
+{% if applicationSummary.interimSites.length %}
+  <div class="govuk-!-margin-top-8" data-testid="interim-sites">
+    <h2 class="govuk-heading-m" data-testid="interim-sites-heading">Interim sites ({{ applicationSummary.interimSites.length }})</h2>
+    {# Always open, with no left border (user, 2026-11-20): the name    #}
+    {# is the heading, plus the short address only when two interim    #}
+    {# sites share a name, then the site's rows as borderless.         #}
+    {% for interimSite in applicationSummary.interimSites %}
+      <div class="govuk-!-margin-bottom-4" data-testid="interim-site">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-2">
+          <span data-testid="interim-site-name">{{ interimSite.siteName }}</span>
+          {% if interimSite.shortAddress %}
+            <br>
+            <span class="govuk-!-font-weight-regular" data-testid="interim-site-summary-address">{{ interimSite.shortAddress }}</span>
+          {% endif %}
+        </h3>
+        {{ siteDetails(interimSite.details, 'interim-site') }}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
