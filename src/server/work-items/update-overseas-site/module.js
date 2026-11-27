@@ -4,7 +4,7 @@ import { standardWorkflow } from '../core/standard-workflow.js'
 import { buildStandardLifecycleRoutes } from '../core/standard-lifecycle/routes.js'
 import { buildUpdateOverseasSiteSummary } from '#/server/routes/update-overseas-site/application-summary.js'
 import { buildUpdateOverseasSiteHeader } from '#/server/routes/update-overseas-site/case-header.js'
-import { describeCardSite } from '../add-overseas-site/module.js'
+import { describeCardSite } from '../core/ors-card-site.js'
 import {
   ACCREDITATION_SUMMARY_TAB_KEY,
   APPLICATION_HISTORY_TAB_KEY,
@@ -22,7 +22,8 @@ const DETAIL_TEMPLATE_V1 = 'update-overseas-site/detail-v1'
  * workflow, one work item per site, never charged.
  *
  * Its card, header and tabs are add-ORS's: the card's site line is the site
- * name and ORS id, the header has the add-ORS layout (with no payment date),
+ * name and ORS id, the header has the add-ORS layout (plus the application reference and
+ * the site's location, and "-" for the charge and payment date),
  * and the tabs are Application summary, Accreditation summary, Related change
  * requests and Application history. The Application summary compares the
  * ORS's current details with the requested ones (`buildApplicationSummary`).

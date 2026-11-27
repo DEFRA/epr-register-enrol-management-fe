@@ -306,10 +306,16 @@ describe('RA-767 / RA-782: ORS update applications', () => {
   })
 
   describe('detail page', () => {
-    test('has the add-ORS header with no payment date', async () => {
+    test('has the add-ORS header with the reference, the location and "-" for the charge and payment date', async () => {
       const $ = await detailPage()
 
       expect($('[data-testid="update-overseas-site-detail"]')).toHaveLength(1)
+      expect(squash($('[data-testid="case-header-caption"]').text())).toBe(
+        'IYC-ORS-2026-00004'
+      )
+      expect(squash($('[data-testid="case-header-location"]').text())).toBe(
+        'Ejbyvvej 12, Industrial Park, Copenhagen, Denmark'
+      )
       expect(squash($('[data-testid="case-header-title"]').text())).toBe(
         'Denmark PR (007)'
       )
@@ -324,9 +330,10 @@ describe('RA-767 / RA-782: ORS update applications', () => {
         'Assigned to: Unassigned',
         `Due date: ${EM_DASH}`,
         'Accreditation number: ACC-REP-PL-0007',
+        'Location: Ejbyvvej 12, Industrial Park, Copenhagen, Denmark',
         'Material: Plastic',
-        'Charge: £0.00',
-        `Payment date: ${EM_DASH}`,
+        'Charge: -',
+        'Payment date: -',
         'Submitted by: Sam Operator',
         'Submitted on: 11 Feb 2027'
       ])
@@ -768,8 +775,8 @@ describe('RA-767 / RA-782: ORS update applications', () => {
         ok: false,
         reason: 'invalid',
         status: 400,
-        errorCode: 'payment-date-not-taken',
-        message: 'This work item type takes no payment date.'
+        errorCode: 'payment-date-required',
+        message: 'Enter the payment date.'
       })
 
       const posted = await postForm(DULY_MAKE_URL, '')

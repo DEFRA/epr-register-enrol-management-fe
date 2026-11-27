@@ -34,7 +34,10 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
-import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
+import {
+  NO_PAYMENT,
+  formatChargeAmount
+} from '#/server/common/helpers/format/charge-amount.js'
 
 import {
   DULY_MAKE_PAGE,
@@ -68,13 +71,6 @@ const HEADING = 'Duly make the application'
  * failed to load".
  */
 const NOT_PROVIDED = 'Not provided'
-
-/**
- * RA-782 AC4: what the charge and payment reference read for a type that is
- * never charged. Not "Not provided": nothing is missing, there is nothing to
- * pay.
- */
-const NO_PAYMENT = '-'
 
 const logger = createLogger()
 
@@ -420,12 +416,8 @@ const PAYMENT_DATE_REFUSED_BANNER = {
   text: 'There was a problem duly making this application. It has not been duly made.'
 }
 
-function isPaymentDateRefusal(errorCode) {
-  return typeof errorCode === 'string' && errorCode.startsWith('payment-date-')
-}
-
 function bannerForFailure(result, withPaymentDate) {
-  if (!withPaymentDate && isPaymentDateRefusal(result.errorCode)) {
+  if (!withPaymentDate && isPaymentDateErrorCode(result.errorCode)) {
     return PAYMENT_DATE_REFUSED_BANNER
   }
   if (result.outcome === 'conflict') {

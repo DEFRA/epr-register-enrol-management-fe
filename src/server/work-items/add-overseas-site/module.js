@@ -2,11 +2,10 @@ import { registerModuleDetailTemplates } from '../core/templates.js'
 import { IN_YEAR_CHANGE_CATEGORY } from '../core/categories.js'
 import { standardWorkflow } from '../core/standard-workflow.js'
 import { buildStandardLifecycleRoutes } from '../core/standard-lifecycle/routes.js'
+import { describeCardSite } from '../core/ors-card-site.js'
 import { buildAddOverseasSiteSummary } from '#/server/routes/add-overseas-site/application-summary.js'
-import {
-  buildAddOverseasSiteHeader,
-  isRegistrationOnlyChange
-} from '#/server/routes/add-overseas-site/case-header.js'
+import { buildAddOverseasSiteHeader } from '#/server/routes/add-overseas-site/case-header.js'
+import { isRegistrationOnlyChange } from '#/server/routes/work-items/ors-case-header.js'
 import {
   ACCREDITATION_SUMMARY_TAB_KEY,
   APPLICATION_HISTORY_TAB_KEY,
@@ -90,19 +89,6 @@ export const addOverseasSiteType = {
       }
     }
   }
-}
-
-/**
- * The in-year change card's site line: the site's name and its ORS id, from
- * the one site management-be stamps on each add-ORS work item. RA-782: an ORS
- * update's card uses it too.
- *
- * @param {object} payload work item payload
- * @returns {{ name: string|null, reference: string|null }}
- */
-export function describeCardSite(payload) {
-  const site = payload?.site ?? {}
-  return { name: site.siteName ?? null, reference: site.orsId ?? null }
 }
 
 export const addOverseasSiteModule = {

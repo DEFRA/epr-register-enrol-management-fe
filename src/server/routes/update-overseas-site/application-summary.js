@@ -2,9 +2,9 @@ import {
   INTERIM_FIELDS,
   SITE_FIELDS,
   besFileViewModel,
-  buildAddOrsInterimSite,
+  buildOrsInterimSite,
   orDash
-} from '#/server/routes/add-overseas-site/application-summary.js'
+} from '#/server/routes/work-items/ors-summary-rows.js'
 import {
   EM_DASH,
   buildInterimSites,
@@ -33,8 +33,8 @@ import {
  * change's), not null. Each is therefore read as a whole set of details: a
  * missing key is an empty detail, never a reason to fall back to the site's.
  *
- * The rows, labels and readers are add-ORS's (`SITE_FIELDS`,
- * `INTERIM_FIELDS`), so the two summaries never describe an ORS differently.
+ * The rows, labels and readers are the ones add-ORS's summary uses
+ * (`ors-summary-rows.js`), so the two never describe an ORS differently.
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
@@ -194,7 +194,7 @@ const ADD = 'add'
 const REMOVE = 'remove'
 
 /**
- * One section per interim site: every active one (add-ORS's
+ * One section per interim site: every active one (the shared
  * `buildInterimSites`, with its fallback to the pre-RA-603 `interimSite`), in
  * the site's order, with what the update does to it, then the ones the update
  * adds. A change or removal whose interim site is not in the list (it has
@@ -316,7 +316,7 @@ function interimVersion(interim, details) {
  * as add-ORS lists an interim site.
  */
 function listSection(number, details, section) {
-  const { siteName, details: rows } = buildAddOrsInterimSite(details)
+  const { siteName, details: rows } = buildOrsInterimSite(details)
   return {
     number,
     siteName,
