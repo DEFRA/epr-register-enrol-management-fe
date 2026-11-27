@@ -27,6 +27,21 @@
   </details>
 {% endmacro %}
 
+{# A checkbox filter section from the controller's `checkboxSections` (one per  #}
+{# CHECKBOX_FILTERS descriptor in list-filters.js): its id, query param, title, #}
+{# selected count and items.                                                    #}
+{% macro checkboxFilterSection(section) %}
+  {% call filterSection(section.id, section.title, section.count) %}
+    {{ govukCheckboxes({
+      idPrefix: "filter-" + section.id,
+      name: section.name,
+      classes: "govuk-checkboxes--small",
+      fieldset: { legend: { text: section.title, classes: "govuk-visually-hidden" } },
+      items: section.items
+    }) }}
+  {% endcall %}
+{% endmacro %}
+
 {% block content %}
   {# ── Row 1: heading + optional "Create work item" button ─────────────── #}
   <div class="govuk-grid-row">
@@ -96,75 +111,27 @@
         {# 2. Applicant type (checkboxes). RA-299: relabelled from "Type" to  #}
         {# "Applicant type" to disambiguate from the new "Application type"  #}
         {# section below — the param name/values (typeId=) are unchanged.    #}
-        {% call filterSection('type', 'Applicant type', filterCounts.type) %}
-          {{ govukCheckboxes({
-            idPrefix: "filter-type",
-            name: "typeId",
-            classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Applicant type", classes: "govuk-visually-hidden" } },
-            items: typeOptions
-          }) }}
-        {% endcall %}
+        {{ checkboxFilterSection(checkboxSections.type) }}
 
         {# 2b. Application type (checkboxes). RA-299 AC01/15: a SECOND,      #}
         {# distinct type filter (what kind of application it is), separate  #}
         {# from "Applicant type" above (who is applying). Submitted via its #}
         {# own `applicationType=` param.                                    #}
-        {% call filterSection('application-type', 'Application type', filterCounts.applicationType) %}
-          {{ govukCheckboxes({
-            idPrefix: "filter-application-type",
-            name: "applicationType",
-            classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Application type", classes: "govuk-visually-hidden" } },
-            items: applicationTypeOptions
-          }) }}
-        {% endcall %}
+        {{ checkboxFilterSection(checkboxSections.applicationType) }}
 
         {# 2c. In-year change (checkboxes). RA-681: narrows the in-year     #}
         {# change part of the results to particular kinds of change.       #}
-        {% call filterSection('in-year-change', 'In-year change', filterCounts.inYearChange) %}
-          {{ govukCheckboxes({
-            idPrefix: "filter-in-year-change",
-            name: "inYearChange",
-            classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "In-year change", classes: "govuk-visually-hidden" } },
-            items: inYearChangeOptions
-          }) }}
-        {% endcall %}
+        {{ checkboxFilterSection(checkboxSections.inYearChange) }}
 
         {# 2d. ORS management (checkboxes). RA-681: narrows the ORS part   #}
         {# of the in-year change results to kinds of ORS change.           #}
-        {% call filterSection('ors-management', 'ORS management', filterCounts.orsManagement) %}
-          {{ govukCheckboxes({
-            idPrefix: "filter-ors-management",
-            name: "orsManagement",
-            classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "ORS management", classes: "govuk-visually-hidden" } },
-            items: orsManagementOptions
-          }) }}
-        {% endcall %}
+        {{ checkboxFilterSection(checkboxSections.orsManagement) }}
 
         {# 3. Nation (checkboxes) #}
-        {% call filterSection('nation', 'Nation', filterCounts.nation) %}
-          {{ govukCheckboxes({
-            idPrefix: "filter-nation",
-            name: "nation",
-            classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Nation", classes: "govuk-visually-hidden" } },
-            items: nationOptions
-          }) }}
-        {% endcall %}
+        {{ checkboxFilterSection(checkboxSections.nation) }}
 
         {# 4. Material (checkboxes) #}
-        {% call filterSection('material', 'Material', filterCounts.material) %}
-          {{ govukCheckboxes({
-            idPrefix: "filter-material",
-            name: "material",
-            classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Material", classes: "govuk-visually-hidden" } },
-            items: materialOptions
-          }) }}
-        {% endcall %}
+        {{ checkboxFilterSection(checkboxSections.material) }}
 
         {# 5. Assignment (radios; "Specific officer" reveals a select). #}
         {% set assigneeUserSelectHtml %}
@@ -195,15 +162,7 @@
         {% endcall %}
 
         {# 6. Status (checkboxes, AC06 labels) #}
-        {% call filterSection('status', 'Status', filterCounts.status) %}
-          {{ govukCheckboxes({
-            idPrefix: "filter-status",
-            name: "status",
-            classes: "govuk-checkboxes--small",
-            fieldset: { legend: { text: "Status", classes: "govuk-visually-hidden" } },
-            items: statusOptions
-          }) }}
-        {% endcall %}
+        {{ checkboxFilterSection(checkboxSections.status) }}
 
         {# 7. Organisation (combined name-or-ID text input) #}
         {% call filterSection('organisation', 'Organisation', filterCounts.organisation) %}
