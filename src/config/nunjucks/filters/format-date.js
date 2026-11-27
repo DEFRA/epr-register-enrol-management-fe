@@ -14,8 +14,29 @@ import { tz } from '@date-fns/tz'
  */
 export const UK_TIMEZONE = 'Europe/London'
 
+/**
+ * Coerce a timestamp to a Date. Accepts a Date, an ISO string, epoch
+ * milliseconds, or a Mongo extended-JSON value (`{ $date: ... }`) as found in
+ * work item payloads. Anything else yields an invalid Date.
+ */
+function toDate(value) {
+  if (isDate(value)) {
+    return value
+  }
+  if (typeof value === 'string') {
+    return parseISO(value)
+  }
+  if (typeof value === 'number') {
+    return new Date(value)
+  }
+  if (value !== null && typeof value === 'object' && '$date' in value) {
+    return toDate(value.$date)
+  }
+  return new Date(Number.NaN)
+}
+
 export function formatDate(value, formattedDateStr = 'EEE do MMMM yyyy') {
-  const date = isDate(value) ? value : parseISO(value)
+  const date = toDate(value)
 
   return format(date, formattedDateStr, { in: tz(UK_TIMEZONE) })
 }
@@ -36,7 +57,7 @@ export function formatDateTimeGds(value) {
   if (!value) {
     return ''
   }
-  const date = isDate(value) ? value : parseISO(value)
+  const date = toDate(value)
   if (Number.isNaN(date.getTime())) {
     return ''
   }
@@ -74,7 +95,7 @@ function formatDateSafely(value, pattern) {
   if (!value) {
     return ''
   }
-  const date = isDate(value) ? value : parseISO(value)
+  const date = toDate(value)
   if (Number.isNaN(date.getTime())) {
     return ''
   }

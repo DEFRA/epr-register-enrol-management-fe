@@ -153,8 +153,15 @@ const QUERY_SECTION_DISPLAY_NAMES = {
   'prn-tonnage': 'PRN tonnage',
   'sampling-and-inspection-plan': 'Sampling and inspection plan',
   'broadly-equivalent-standards': 'Broadly equivalent standards (BES)',
-  'overseas-reprocessing-sites': 'Overseas reprocessing sites (ORS)'
+  'overseas-reprocessing-sites': 'Overseas reprocessing sites'
 }
+
+// RA-698: the query form's one checkbox stores both keys. A past query that
+// holds both reads as that one option; one holding a single key keeps its own
+// label.
+const BES_KEY = 'broadly-equivalent-standards'
+const ORS_KEY = 'overseas-reprocessing-sites'
+const COMBINED_ORS_BES_LABEL = 'Overseas reprocessing sites and BES evidence'
 
 /**
  * Parse `details.sections` — stored by the backend as a comma-joined string
@@ -170,10 +177,15 @@ function queriedSectionLabels(sections) {
   } else {
     raw = []
   }
-  return raw
-    .map((value) => value.trim())
-    .filter((value) => value !== '')
-    .map((value) => QUERY_SECTION_DISPLAY_NAMES[value] ?? value)
+  const keys = raw.map((value) => value.trim()).filter((value) => value !== '')
+  const combined = keys.includes(BES_KEY) && keys.includes(ORS_KEY)
+  return keys
+    .map((value) =>
+      combined && (value === BES_KEY || value === ORS_KEY)
+        ? COMBINED_ORS_BES_LABEL
+        : (QUERY_SECTION_DISPLAY_NAMES[value] ?? value)
+    )
+    .filter((label, index, labels) => labels.indexOf(label) === index)
 }
 
 /**

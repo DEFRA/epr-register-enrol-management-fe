@@ -14,7 +14,7 @@
 
 import { requireStandard } from '#/server/common/helpers/auth/auth-scopes.js'
 
-import { makeContinueReviewController } from './controller.js'
+import { makeContinueReviewController } from '../../core/continue-review/controller.js'
 
 export function buildContinueReviewRoutes() {
   return [

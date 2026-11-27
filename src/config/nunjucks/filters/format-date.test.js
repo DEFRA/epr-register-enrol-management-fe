@@ -225,3 +225,22 @@ describe('#formatDateShortGds', () => {
     expect(formatDateShortGds('not-a-date')).toBe('')
   })
 })
+
+describe('#formatDateTimeGds non-string timestamps', () => {
+  it('accepts a Mongo extended-JSON date', () => {
+    expect(formatDateTimeGds({ $date: '2026-11-26T10:00:00Z' })).toBe(
+      '26 November 2026 at 10:00am'
+    )
+  })
+
+  it('accepts epoch milliseconds', () => {
+    expect(formatDateTimeGds(Date.UTC(2026, 10, 26, 10, 0))).toBe(
+      '26 November 2026 at 10:00am'
+    )
+  })
+
+  it('returns an empty string for an unsupported value instead of throwing', () => {
+    expect(formatDateTimeGds({ foo: 'bar' })).toBe('')
+    expect(formatDateTimeGds(['2026-11-26'])).toBe('')
+  })
+})

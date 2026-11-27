@@ -19,6 +19,7 @@ import {
   getRelatedWorkItems,
   getWorkItem,
   getWorkItems,
+  continueReviewWorkItem,
   raiseWorkItemQuery,
   recordWorkItemDecision,
   unassignWorkItem,
@@ -2863,5 +2864,71 @@ describe('#getDulyMakeDetails (RA-495)', () => {
     })
 
     expect(result).toEqual({ ok: false, error: 'ECONNREFUSED' })
+  })
+})
+
+describe('#raiseWorkItemQuery for add-ORS (RA-698)', () => {
+  test('POSTs only the reason to the type-less query endpoint', async () => {
+    const workItem = { id: 'wi-1', stateId: 'queried' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await raiseWorkItemQuery({
+      workItemId: 'wi-1',
+      typeId: 'add-overseas-site',
+      reason: 'Check the address',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    const [url, init] = fetchImpl.mock.calls[0]
+    expect(url).toBe('http://backend:8085/work-items/wi-1/query')
+    expect(JSON.parse(init.body)).toEqual({ reason: 'Check the address' })
+    expect(result).toEqual({ ok: true, workItem })
+  })
+})
+
+describe('#continueReviewWorkItem (RA-698)', () => {
+  test('POSTs body-less to the type-less continue-review endpoint', async () => {
+    const workItem = { id: 'wi-1', stateId: 'assessment-in-progress' }
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(workItem)
+    })
+
+    const result = await continueReviewWorkItem({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      'http://backend:8085/work-items/wi-1/continue-review'
+    )
+    expect(fetchImpl.mock.calls[0][1].method).toBe('POST')
+    expect(result).toEqual({ ok: true, workItem })
+  })
+
+  test('maps a 409 to a conflict', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ detail: 'wrong state' })
+    })
+
+    const result = await continueReviewWorkItem({
+      workItemId: 'wi-1',
+      baseUrl: 'http://backend:8085',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(result).toMatchObject({ ok: false, reason: 'conflict', status: 409 })
   })
 })

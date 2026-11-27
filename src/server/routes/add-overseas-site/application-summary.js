@@ -4,6 +4,7 @@ import {
   STATE_APPROVED,
   STATE_APPROVED_PENDING_CONTACT
 } from '#/server/work-items/core/standard-workflow.js'
+import { buildOperatorResponse } from './operator-response.js'
 import {
   EM_DASH,
   buildInterimSites,
@@ -31,7 +32,7 @@ import {
  *
  * @param {object} args
  * @param {object} args.workItem decorated work item
- * @returns {{ validFrom: object | null, rows: object[], interimSites: object[] }}
+ * @returns {{ validFrom: object | null, operatorResponse: object | null, rows: object[], interimSites: object[] }}
  */
 export function buildAddOverseasSiteSummary({ workItem }) {
   const site = workItem?.payload?.site ?? {}
@@ -42,6 +43,8 @@ export function buildAddOverseasSiteSummary({ workItem }) {
 
   return {
     validFrom: validFromEntry(workItem),
+    // RA-698: the operator's latest response to a query, or null.
+    operatorResponse: buildOperatorResponse({ workItem }),
     rows: siteRows(site, workItemId, supplied),
     interimSites: withShortAddressOnlyForRepeatedNames(
       buildInterimSites(site, buildAddOrsInterimSite)

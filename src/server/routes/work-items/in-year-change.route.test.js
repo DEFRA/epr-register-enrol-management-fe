@@ -990,7 +990,9 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
       expect($('[data-testid="work-item-no-actions"]')).toHaveLength(0)
       expect($('[data-testid="action-duly-make"]')).toHaveLength(0)
-      expect($('[data-testid="action-query"]')).toHaveLength(0)
+      // RA-698: the Raise a query link is the one extra action, in a state
+      // that can be queried.
+      expect($('[data-testid="action-query"]')).toHaveLength(1)
     })
 
     test('self-assigning a Not started application assigns it without changing its status', async () => {
@@ -1590,7 +1592,8 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         // under the CTA.
         expect($('[data-testid="work-item-actions"]')).toHaveLength(0)
         expect($('[data-testid="work-item-no-actions"]')).toHaveLength(0)
-        expect($('[data-testid="action-query"]')).toHaveLength(0)
+        // RA-698: only the Raise a query link rides beside it.
+        expect($('[data-testid="action-query"]')).toHaveLength(1)
       }
     )
 

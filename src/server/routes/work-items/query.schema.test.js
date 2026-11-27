@@ -3,22 +3,27 @@ import { describe, expect, test } from 'vitest'
 import {
   EXPORTER_ONLY_SECTION_VALUES,
   INVALID_SECTIONS_MESSAGE,
+  ORS_AND_BES_OPTION_VALUE,
   QUERY_REASON_MAX_WORDS,
   QUERY_SECTION_OPTIONS,
   QUERY_SECTION_VALUES,
+  REASON_REQUIRED_MESSAGE,
   REASON_TOO_LONG_MESSAGE,
   SELECT_SECTIONS_MESSAGE,
   allowedSectionValues,
   buildErrorSummary,
+  isOptionSelected,
   joiDetailsToFieldErrors,
   normaliseSections,
+  validateAddOrsQueryForm,
   validateQueryForm
 } from './query.schema.js'
 
 const words = (n) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ')
 
 describe('QUERY_SECTION_OPTIONS', () => {
-  test('are exactly the six agreed areas, in order', () => {
+  // RA-698: BES and ORS are one checkbox, so five options carry six keys.
+  test('are the five agreed checkboxes, in order', () => {
     expect(QUERY_SECTION_OPTIONS).toEqual([
       { value: 'authority-to-issue', text: 'Authority to issue' },
       { value: 'business-plan', text: 'Business plan' },
@@ -28,17 +33,26 @@ describe('QUERY_SECTION_OPTIONS', () => {
         text: 'Sampling and inspection plan'
       },
       {
-        value: 'broadly-equivalent-standards',
-        text: 'Broadly equivalent standards (BES)',
-        exporterOnly: true
-      },
-      {
-        value: 'overseas-reprocessing-sites',
-        text: 'Overseas reprocessing sites (ORS)',
+        value: ORS_AND_BES_OPTION_VALUE,
+        text: 'Overseas reprocessing sites and BES evidence',
+        expandsTo: [
+          'broadly-equivalent-standards',
+          'overseas-reprocessing-sites'
+        ],
         exporterOnly: true
       }
     ])
-    expect(QUERY_SECTION_VALUES).toHaveLength(6)
+  })
+
+  test('the backend contract still has the six section keys', () => {
+    expect(QUERY_SECTION_VALUES).toEqual([
+      'authority-to-issue',
+      'business-plan',
+      'prn-tonnage',
+      'sampling-and-inspection-plan',
+      'broadly-equivalent-standards',
+      'overseas-reprocessing-sites'
+    ])
   })
 
   test('RA-367: BES and ORS are the exporter-only sections', () => {
@@ -46,6 +60,94 @@ describe('QUERY_SECTION_OPTIONS', () => {
       'broadly-equivalent-standards',
       'overseas-reprocessing-sites'
     ])
+  })
+})
+
+describe('combined ORS and BES checkbox (RA-698)', () => {
+  test('normaliseSections expands it to both existing keys', () => {
+    expect(normaliseSections(ORS_AND_BES_OPTION_VALUE)).toEqual([
+      'broadly-equivalent-standards',
+      'overseas-reprocessing-sites'
+    ])
+    expect(
+      normaliseSections(['business-plan', ORS_AND_BES_OPTION_VALUE])
+    ).toEqual([
+      'business-plan',
+      'broadly-equivalent-standards',
+      'overseas-reprocessing-sites'
+    ])
+  })
+
+  test('validateQueryForm posts both keys for the one checkbox', () => {
+    const result = validateQueryForm(
+      { sections: ORS_AND_BES_OPTION_VALUE, reason: '' },
+      { isExporter: true }
+    )
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        sections: [
+          'broadly-equivalent-standards',
+          'overseas-reprocessing-sites'
+        ],
+        reason: ''
+      }
+    })
+  })
+
+  test('is rejected for a non-exporter', () => {
+    const result = validateQueryForm(
+      { sections: ORS_AND_BES_OPTION_VALUE },
+      { isExporter: false }
+    )
+    expect(result.ok).toBe(false)
+    expect(result.fieldErrors.sections).toBe(INVALID_SECTIONS_MESSAGE)
+  })
+
+  test('isOptionSelected needs every key it stands for', () => {
+    const option = QUERY_SECTION_OPTIONS.at(-1)
+    expect(isOptionSelected(option, ['broadly-equivalent-standards'])).toBe(
+      false
+    )
+    expect(
+      isOptionSelected(option, [
+        'broadly-equivalent-standards',
+        'overseas-reprocessing-sites'
+      ])
+    ).toBe(true)
+  })
+})
+
+describe('validateAddOrsQueryForm (RA-698)', () => {
+  test('accepts a reason alone and drops any sections', () => {
+    expect(
+      validateAddOrsQueryForm({ reason: 'Check the address', sections: 'x' })
+    ).toEqual({ ok: true, value: { reason: 'Check the address' } })
+  })
+
+  test.each([undefined, {}, { reason: '' }, { reason: '   ' }, { reason: 5 }])(
+    'requires a reason (%j)',
+    (payload) => {
+      const result = validateAddOrsQueryForm(payload)
+      expect(result.ok).toBe(false)
+      expect(result.fieldErrors).toEqual({ reason: REASON_REQUIRED_MESSAGE })
+    }
+  )
+
+  test('rejects a reason over the word cap', () => {
+    const result = validateAddOrsQueryForm({
+      reason: words(QUERY_REASON_MAX_WORDS + 1)
+    })
+    expect(result.ok).toBe(false)
+    expect(result.fieldErrors.reason).toBe(REASON_TOO_LONG_MESSAGE)
+  })
+})
+
+describe('normaliseSections edge cases', () => {
+  test('drops blanks and non-strings, and tolerates a missing value', () => {
+    expect(normaliseSections(undefined)).toEqual([])
+    expect(normaliseSections('')).toEqual([])
+    expect(normaliseSections(['a', '', 5, 'a'])).toEqual(['a'])
   })
 })
 

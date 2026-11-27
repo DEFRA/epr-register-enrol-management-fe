@@ -29,7 +29,7 @@
  * call without mocking `undici`.
  */
 
-import { toOutcome } from '../../core/backend-outcome.js'
+import { toOutcome } from '../backend-outcome.js'
 
 async function defaultContinueReview(args) {
   const mod = await import('#/server/common/helpers/backend-api/backend-api.js')

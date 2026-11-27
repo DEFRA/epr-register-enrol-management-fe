@@ -1889,6 +1889,48 @@ describe('change-payment-date audit entries (RA-576)', () => {
   })
 })
 
+// RA-698. The combined ORS + BES checkbox stores both keys; the audit view
+// names them once, under the combined label.
+describe('application-queried with the combined ORS and BES areas (RA-698)', () => {
+  const entry = {
+    action: 'application-queried',
+    details: {
+      sections:
+        'prn-tonnage,broadly-equivalent-standards,overseas-reprocessing-sites'
+    }
+  }
+
+  test('summarises both keys as one combined label', () => {
+    expect(summariseAuditEntry(entry)).toBe(
+      'PRN tonnage, Overseas reprocessing sites and BES evidence'
+    )
+  })
+
+  test('a query holding only one of the keys keeps its own label', () => {
+    expect(
+      summariseAuditEntry({
+        action: 'application-queried',
+        details: { sections: 'broadly-equivalent-standards' }
+      })
+    ).toBe('Broadly equivalent standards (BES)')
+    expect(
+      summariseAuditEntry({
+        action: 'application-queried',
+        details: { sections: 'overseas-reprocessing-sites' }
+      })
+    ).toBe('Overseas reprocessing sites')
+  })
+
+  test('lists the combined label once in the detail rows', () => {
+    expect(detailRowsForAuditEntry(entry)).toEqual([
+      {
+        key: 'Areas queried',
+        value: 'PRN tonnage, Overseas reprocessing sites and BES evidence'
+      }
+    ])
+  })
+})
+
 describe('determination audit entries (RA-795 AC08)', () => {
   const approved = {
     action: 'determination-made',

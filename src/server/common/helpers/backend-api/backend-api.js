@@ -4,6 +4,7 @@ import { config } from '#/config/config.js'
 import { createLogger } from '../logging/logger.js'
 import { signRequestHeaders } from './sign-request.js'
 import { statusCodes } from '#/server/common/constants/status-codes.js'
+import { ADD_OVERSEAS_SITE_TYPE_ID } from '#/server/work-items/add-overseas-site/type-id.js'
 import {
   NATION_ROLE_MAP,
   ROLE_STANDARD,
@@ -533,13 +534,44 @@ export async function continueReviewReAccreditation({
 }) {
   const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/continue-review`
 
-  const result = await postJson({
+  return postContinueReview({
     url,
     timeoutMs,
     fetchImpl,
     user,
     label: 'continueReviewReAccreditation'
   })
+}
+
+/**
+ * Continue the review of a work item of a Standard-lifecycle type that
+ * sits in the `updated` state (RA-698: add-ORS).
+ *
+ * Wraps the type-less `POST /work-items/{id}/continue-review`, like the
+ * type-less duly-make, decision and confirm-contact endpoints. Same
+ * body-less contract and result shape as
+ * {@link continueReviewReAccreditation}.
+ */
+export async function continueReviewWorkItem({
+  workItemId,
+  user = null,
+  baseUrl = config.get(CONFIG_BACKEND_API_URL),
+  timeoutMs = config.get(CONFIG_BACKEND_API_TIMEOUT_MS),
+  fetchImpl = fetch
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/work-items/${encodeURIComponent(workItemId)}/continue-review`
+
+  return postContinueReview({
+    url,
+    timeoutMs,
+    fetchImpl,
+    user,
+    label: 'continueReviewWorkItem'
+  })
+}
+
+async function postContinueReview({ url, timeoutMs, fetchImpl, user, label }) {
+  const result = await postJson({ url, timeoutMs, fetchImpl, user, label })
 
   if (result.ok) {
     return { ok: true, workItem: result.workItem }
@@ -961,6 +993,9 @@ export async function extendWorkItemSla({
  * Wraps `POST /work-items/re-accreditation/{id}/query`.
  * Body: { sections: string[], reason: string }.
  *
+ * RA-698: for `typeId` 'add-overseas-site' it wraps the type-less
+ * `POST /work-items/{id}/query` with body `{ reason }` instead.
+ *
  * The backend resolves the appropriate state transition itself, so no
  * action id is sent. Status mapping matches the vocabulary used by
  * `core/service.js` so controllers can branch on `reason`:
@@ -980,6 +1015,7 @@ export async function extendWorkItemSla({
  */
 export async function raiseWorkItemQuery({
   workItemId,
+  typeId = null,
   sections,
   reason,
   user = null,
@@ -987,7 +1023,14 @@ export async function raiseWorkItemQuery({
   timeoutMs = config.get('backendApi.queryTimeoutMs'),
   fetchImpl = fetch
 }) {
-  const url = `${baseUrl.replace(/\/$/, '')}/work-items/re-accreditation/${encodeURIComponent(workItemId)}/query`
+  // RA-698: add-ORS uses the type-less Standard-lifecycle endpoint, whose
+  // body is the reason alone: the item is one ORS, so the query is implicitly
+  // the combined ORS + BES one and carries no section keys.
+  const isAddOrs = typeId === ADD_OVERSEAS_SITE_TYPE_ID
+  const root = `${baseUrl.replace(/\/$/, '')}/work-items`
+  const url = isAddOrs
+    ? `${root}/${encodeURIComponent(workItemId)}/query`
+    : `${root}/re-accreditation/${encodeURIComponent(workItemId)}/query`
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -999,7 +1042,7 @@ export async function raiseWorkItemQuery({
         { 'content-type': 'application/json', accept: 'application/json' },
         user
       ),
-      body: JSON.stringify({ sections, reason })
+      body: JSON.stringify(isAddOrs ? { reason } : { sections, reason })
     })
 
     if (response.ok) {
