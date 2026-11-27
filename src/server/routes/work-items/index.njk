@@ -241,8 +241,9 @@
             {% else %}
               {# RA-324 phase-2 (prototype). Just the item range + total —    #}
               {# no filter/sort recap here, the Active filters chips above    #}
-              {# already communicate what's applied. Bold per the prototype.  #}
-              <strong>Showing {{ rangeStart }}-{{ rangeEnd }} of {{ totalCount }}</strong>
+              {# already communicate what's applied. Normal weight (RA-814),  #}
+              {# matching the operator-side count lines.                     #}
+              Showing {{ rangeStart }}-{{ rangeEnd }} of {{ totalCount }}
             {% endif %}
           </p>
         {% endif %}
