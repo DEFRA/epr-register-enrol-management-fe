@@ -30,9 +30,12 @@ export function relatedWorkItemRow(related) {
     id: related.id,
     reference: related.applicationReference || EM_DASH,
     site: siteLabel(related),
-    // RA-681. management-be's related item carries no payload, so a type that
-    // works its label out per work item gives its fixed display name here.
-    type: requestTypeLabel(type) ?? related.typeId ?? EM_DASH,
+    // RA-681. management-be's related item carries no payload, only its site's
+    // `selected` flag, which is all a type's per-item label reads.
+    type:
+      requestTypeLabel(type, { site: { selected: related.selected } }) ??
+      related.typeId ??
+      EM_DASH,
     charge: formatChargeAmount(related.chargePence) ?? EM_DASH,
     status: stateDisplayName(type, related.stateId),
     statusTagClass: stateTagClass(related.stateId)
