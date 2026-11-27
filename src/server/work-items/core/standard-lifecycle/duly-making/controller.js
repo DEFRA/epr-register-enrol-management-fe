@@ -409,15 +409,15 @@ const SUCCESS_BANNER_WITHOUT_PAYMENT = {
 const FAILURE_TITLE = 'Could not complete duly making'
 
 /**
- * RA-782. management-be refused the payment date of a work item the page
- * asked no date for (its `payment-date-*` codes, `payment-date-not-taken`
- * included). There is no field to fix and trying again changes nothing.
- * Provisional copy: not in the design, pending content design review.
+ * RA-782. The page sent no payment date and management-be still asked for one
+ * (in practice `payment-date-required`): the two disagree about whether the
+ * type takes a date. There is no field to fix and trying again changes
+ * nothing. Provisional copy: not in the design, pending content design review.
  */
 const PAYMENT_DATE_REFUSED_BANNER = {
   type: 'error',
   title: FAILURE_TITLE,
-  text: 'This application could not be duly made because of a problem with its payment date. Contact the service support team.'
+  text: 'There was a problem duly making this application. It has not been duly made.'
 }
 
 function isPaymentDateRefusal(errorCode) {

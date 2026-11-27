@@ -777,7 +777,7 @@ describe('RA-767 / RA-782: ORS update applications', () => {
       const $ = await followRedirect(posted)
       const banner = squash($('[data-testid="work-item-flash-banner"]').text())
       expect(banner).toContain(
-        'This application could not be duly made because of a problem with its payment date. Contact the service support team.'
+        'There was a problem duly making this application. It has not been duly made.'
       )
       expect(banner).not.toContain('Try again')
       expect($('[data-testid="duly-making-error-summary"]')).toHaveLength(0)
