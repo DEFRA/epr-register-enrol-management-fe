@@ -300,7 +300,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         'Denmark PR (007)'
       )
       expect(squash(card.find('[data-testid="request-type"]').text())).toBe(
-        'Request type: New ORS accreditation'
+        'Request type: Accreditation: add registered ORS'
       )
       expect(
         squash(card.find('[data-testid="application-assigned-to"]').text())
@@ -399,7 +399,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
 
       expect($('[data-testid="submission-reference"]')).toHaveLength(0)
       expect(squash($('[data-testid="application-request"]').text())).toBe(
-        'Request type: New ORS accreditation'
+        'Request type: Accreditation: add registered ORS'
       )
     })
 
@@ -569,7 +569,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         .map((_, el) => squash($(el).text()))
         .get()
       expect(meta).toEqual([
-        'Application type: New ORS accreditation',
+        'Application type: Accreditation: add registered ORS',
         'Status: Not started',
         'Assigned to: Unassigned',
         `Due date: ${EM_DASH}`,
@@ -1401,21 +1401,21 @@ describe('RA-739 / RA-495: in-year change applications', () => {
         {
           reference: 'IYC-ORS-2026-00001',
           site: 'Denmark PR (007)',
-          type: 'New ORS accreditation',
+          type: 'Accreditation: add registered ORS',
           charge: '£328.00',
           status: 'Not started'
         },
         {
           reference: 'IYC-ORS-2026-00002',
           site: 'Belgium PR (010)',
-          type: 'New ORS accreditation',
+          type: 'Accreditation: add registered ORS',
           charge: '£328.00',
           status: 'Duly made'
         },
         {
           reference: 'IYC-ORS-2026-00003',
           site: 'Berlin Steel GmbH (003)',
-          type: 'New ORS accreditation',
+          type: 'Accreditation: add registered ORS',
           charge: EM_DASH,
           status: 'Not started'
         }
@@ -2483,6 +2483,37 @@ describe('RA-739 / RA-495: in-year change applications', () => {
   })
 
   describe('Application history page', () => {
+    // RA-681. Each entry's details name the request type by its label.
+    test("shows the request type label in an entry's details", async () => {
+      const item = anAddOrsItem()
+      item.auditLog = [
+        {
+          id: 'e0000001-0000-4000-8000-000000000000',
+          action: 'assigned',
+          actionDisplayName: 'Assigned',
+          stateId: 'submitted',
+          details: { assigneeName: 'Stub Caseworker One' },
+          createdAt: '2027-02-12T09:00:00Z'
+        }
+      ]
+      getWorkItem.mockResolvedValue({ ok: true, workItem: item })
+
+      const { result } = await server.inject({
+        method: 'GET',
+        url: `/work-items/${ADD_ORS_ID}/audit-log`
+      })
+
+      const $ = cheerio.load(result)
+      const rows = $(
+        '[data-testid="work-item-audit-entry-details"] .govuk-summary-list__row'
+      )
+        .map((_, row) => [
+          [squash($(row).find('dt').text()), squash($(row).find('dd').text())]
+        ])
+        .get()
+      expect(rows).toContainEqual(['Type', 'Accreditation: add registered ORS'])
+    })
+
     // RA-495 AC3. The entries are management-be's; the page lists each.
     test('lists the assignment and due date changes', async () => {
       const item = anAddOrsItem()
@@ -2722,7 +2753,7 @@ describe('RA-739 / RA-495: in-year change applications', () => {
       )
       expect($('[data-testid="case-header-org-name"]')).toHaveLength(0)
       expect(squash($('[data-testid="case-header-request-type"]').text())).toBe(
-        'New ORS accreditation'
+        'Accreditation: add registered ORS'
       )
       expect(squash($('[data-testid="case-header-status"]').text())).toBe(
         'Not started'

@@ -30,6 +30,15 @@ export const myTypeModule = {
   type: {
     id: 'my-type', // unique stable id
     displayName: 'My type',
+    // Optional (RA-681): the request type label for one work item, worked
+    // out from its payload (e.g. "Accreditation: …" / "Registration: …"
+    // from an ORS's `selected` flag). Return null to use `displayName`. The
+    // card, case header, Related change requests and audit log show it
+    // (see `core/request-type-label.js`). The Related change requests rows
+    // carry no payload, so they get `undefined` and show `displayName`.
+    describeRequestType(payload) {
+      return null
+    },
     initialState: { id: 'submitted', displayName: 'Submitted' },
     states: [
       { id: 'submitted', displayName: 'Submitted' },

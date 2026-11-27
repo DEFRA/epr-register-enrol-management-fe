@@ -3978,4 +3978,97 @@ describe('#workItemListController', () => {
       )
     })
   })
+
+  // ---------------------------------------------------------------- //
+  // RA-681 — a request type label worked out per work item            //
+  // ---------------------------------------------------------------- //
+  describe('RA-681 per-item request type label', () => {
+    const PER_ITEM_ID = '68100004-0000-4000-8000-000000000001'
+    const OTHER_PER_ITEM_ID = '68100004-0000-4000-8000-000000000002'
+    const FIXED_ID = '68100004-0000-4000-8000-000000000003'
+
+    function registerTypes() {
+      clearWorkItemRegistry()
+      const states = [{ id: 'submitted', displayName: 'Not started' }]
+      registerWorkItemType({
+        id: 'test-per-item',
+        displayName: 'Change',
+        initialState: states[0],
+        states,
+        describeRequestType: (payload) => {
+          const selected = payload?.site?.selected
+          if (selected === undefined) {
+            return null
+          }
+          return selected ? 'Accreditation: change' : 'Registration: change'
+        }
+      })
+      registerWorkItemType({
+        id: 'test-fixed',
+        displayName: 'Fixed change',
+        initialState: states[0],
+        states
+      })
+    }
+
+    function anItem(id, typeId, payload) {
+      return {
+        id,
+        typeId,
+        stateId: 'submitted',
+        submittedAt: '2027-02-11T10:00:00Z',
+        payload
+      }
+    }
+
+    async function requestTypes(items) {
+      getWorkItems.mockResolvedValue(
+        emptyPage({ items, totalCount: items.length })
+      )
+      const { result } = await server.inject({
+        method: 'GET',
+        url: '/work-items'
+      })
+      const $ = cheerio.load(result)
+      return Object.fromEntries(
+        items.map(({ id }) => [
+          id,
+          $(`[data-work-item-id="${id}"] [data-testid="request-type"]`)
+            .text()
+            .replace(/\s+/g, ' ')
+            .trim()
+        ])
+      )
+    }
+
+    test("shows each card's label from its own payload", async () => {
+      registerTypes()
+
+      expect(
+        await requestTypes([
+          anItem(PER_ITEM_ID, 'test-per-item', { site: { selected: true } }),
+          anItem(OTHER_PER_ITEM_ID, 'test-per-item', {
+            site: { selected: false }
+          })
+        ])
+      ).toEqual({
+        [PER_ITEM_ID]: 'Request type: Accreditation: change',
+        [OTHER_PER_ITEM_ID]: 'Request type: Registration: change'
+      })
+    })
+
+    test("falls back to the type's display name when the payload gives no label", async () => {
+      registerTypes()
+
+      expect(
+        await requestTypes([
+          anItem(PER_ITEM_ID, 'test-per-item', { site: {} }),
+          anItem(FIXED_ID, 'test-fixed', { site: { selected: false } })
+        ])
+      ).toEqual({
+        [PER_ITEM_ID]: 'Request type: Change',
+        [FIXED_ID]: 'Request type: Fixed change'
+      })
+    })
+  })
 })

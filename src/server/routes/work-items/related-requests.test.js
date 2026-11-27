@@ -38,7 +38,7 @@ describe('RA-770: relatedWorkItemRow', () => {
       id: 'wi-1',
       reference: 'IYC-2026-00001',
       site: 'Denmark PR (007)',
-      type: 'New ORS accreditation',
+      type: 'Accreditation: add registered ORS',
       charge: '£328.00',
       status: 'Not started',
       statusTagClass: expect.any(String)
@@ -70,6 +70,28 @@ describe('RA-770: relatedWorkItemRow', () => {
       siteName: 'Belgium PR'
     })
     expect(row).toMatchObject({ site: 'Belgium PR', type: EM_DASH })
+  })
+
+  // RA-681. management-be's related item has no payload to work a per-item
+  // label out from, so the row shows the type's fixed display name.
+  test("shows a per-item type's display name, as the related item has no payload", () => {
+    const states = [{ id: 'submitted', displayName: 'Not started' }]
+    registerWorkItemType({
+      id: 'test-per-item',
+      displayName: 'Change',
+      initialState: states[0],
+      states,
+      describeRequestType: (payload) =>
+        payload?.site?.selected ? 'Accreditation: change' : null
+    })
+
+    expect(
+      relatedWorkItemRow({
+        id: 'wi-5',
+        typeId: 'test-per-item',
+        stateId: 'submitted'
+      }).type
+    ).toBe('Change')
   })
 
   test('shows a £0 charge as £0.00, as the case header does, not as no charge', () => {

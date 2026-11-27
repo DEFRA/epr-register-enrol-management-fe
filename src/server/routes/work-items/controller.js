@@ -20,6 +20,7 @@ import { unwrapMongoDate } from '#/server/common/helpers/format/mongo-date.js'
 import { config } from '#/config/config.js'
 import { isExporterApplication } from './application-summary.js'
 import { resolveOrganisationId, stateDisplayName } from './case-header.js'
+import { requestTypeLabel } from '#/server/work-items/core/request-type-label.js'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -792,9 +793,9 @@ function typeCardFields(type, payload, stateId) {
     // describes a site (add-ORS) shows it in place of the registration number.
     cardModifier: type?.category ?? null,
     cardSite: type?.describeCardSite?.(payload) ?? null,
-    // RA-739. The card's first line starts with the work item type's display
-    // name.
-    requestType: type?.displayName ?? null,
+    // RA-739. The card's first line starts with the request type: RA-681,
+    // the type's label for this work item's payload.
+    requestType: requestTypeLabel(type, payload),
     stateDisplayName: stateDisplayName(type, stateId),
     // The two card dates are gated INDEPENDENTLY — see the block comment above
     // PRE_ASSESSMENT_STATE_IDS for why, and for the cases where both or

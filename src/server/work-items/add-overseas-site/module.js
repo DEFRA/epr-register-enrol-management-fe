@@ -38,7 +38,10 @@ const DETAIL_TEMPLATE_V1 = 'add-overseas-site/detail-v1'
  */
 export const addOverseasSiteType = {
   id: 'add-overseas-site',
-  displayName: 'New ORS accreditation',
+  // RA-681. A fixed label: the site is a registered ORS joining the
+  // accreditation, so it is always "Accreditation:" (`selected` is true).
+  // Kept in step with management-be's `AddOverseasSiteType.DisplayName`.
+  displayName: 'Accreditation: add registered ORS',
   category: IN_YEAR_CHANGE_CATEGORY,
   // Mirrors `AddOverseasSiteType.TemplateVersion` in management-be, which is
   // the value stamped onto work items. Keep the two in lock-step and add the

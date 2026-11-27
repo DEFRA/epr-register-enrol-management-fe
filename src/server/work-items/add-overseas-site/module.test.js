@@ -17,7 +17,7 @@ describe('add-overseas-site module (RA-739)', () => {
   test('declares the add-ORS case type configuration', () => {
     expect(addOverseasSiteType).toMatchObject({
       id: 'add-overseas-site',
-      displayName: 'New ORS accreditation',
+      displayName: 'Accreditation: add registered ORS',
       category: 'in-year-change',
       templateVersion: 'v2'
     })
