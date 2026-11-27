@@ -8,8 +8,9 @@
  * `register(server)`:
  *
  *   standardLifecycle: {
- *     // Required. The raw payment values the Duly make page shows; the
- *     // shared page formats them and says "Not provided" for a missing one.
+ *     // Required unless `paymentDate` is false. The raw payment values the
+ *     // Duly make page shows; the shared page formats them and says "Not
+ *     // provided" for a missing one.
  *     readPaymentDetails: (workItem) => ({ chargePence, paymentReference }),
  *     // Optional. The management-be calls. Each defaults to the type-less
  *     // Standard-lifecycle endpoint (`/work-items/{id}/duly-make` etc.).
@@ -27,7 +28,14 @@
  *     // for a valid from date, required on approval and hidden on refusal
  *     // (see `decision/effective-date.js`), and (RA-800) it can be
  *     // corrected while the approval awaits applicant contact.
- *     effectiveDate: true
+ *     effectiveDate: true,
+ *     // Optional. RA-782: false for a type that is never charged (an ORS
+ *     // update): its Duly make page asks for no payment date, shows the
+ *     // charge and payment reference as "-", and sends management-be no
+ *     // date (management-be refuses one for such a type). Default true.
+ *     // management-be's `takesPaymentDate` decides instead when the Duly
+ *     // make page has read it (with `relatedWorkItems`).
+ *     paymentDate: false
  *   }
  *
  * The pages live under `/work-items/{typeId}/{id}/…`, so re-accreditation's
@@ -85,6 +93,18 @@ export function getStandardLifecycle(typeId) {
  */
 export function takesEffectiveDate(typeId) {
   return getStandardLifecycle(typeId)?.effectiveDate === true
+}
+
+/**
+ * RA-782: does the type's Duly make page take a payment date? Every type does
+ * unless it declares `standardLifecycle.paymentDate: false`, so an unknown
+ * type keeps the date (and management-be's own check decides).
+ *
+ * @param {string | null | undefined} typeId
+ * @returns {boolean}
+ */
+export function takesPaymentDate(typeId) {
+  return getStandardLifecycle(typeId)?.paymentDate !== false
 }
 
 /**

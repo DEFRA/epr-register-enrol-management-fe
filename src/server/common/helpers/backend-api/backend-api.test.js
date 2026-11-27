@@ -2657,6 +2657,24 @@ describe('Standard-lifecycle endpoints (RA-495)', () => {
     expect(result).toEqual({ ok: true, workItem })
   })
 
+  // RA-782. A type with no payment date sends an empty body.
+  test('#dulyMakeWorkItem without a payment date POSTs an empty body', async () => {
+    const fetchImpl = okFetch({ id: 'wi-1', stateId: 'duly-made' })
+
+    await dulyMakeWorkItem({
+      workItemId: 'wi-1',
+      paymentDate: null,
+      baseUrl: 'http://backend:8085/',
+      timeoutMs: 1000,
+      fetchImpl
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://backend:8085/work-items/wi-1/duly-make',
+      expect.objectContaining({ method: 'POST', body: '{}' })
+    )
+  })
+
   test('#dulyMakeWorkItem with a typeSegment POSTs to /work-items/{typeSegment}/{id}/duly-make', async () => {
     const fetchImpl = okFetch({ id: 'wi-1', stateId: 'duly-made' })
 

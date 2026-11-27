@@ -640,6 +640,8 @@ function lifecycleStepUrl(baseUrl, workItemId, step, typeSegment = null) {
  * `wrong-work-item-type`.
  *
  * Body: `{ paymentDate }` — a plain `YYYY-MM-DD` string and nothing else.
+ * RA-782: `{}` for a type with no payment date (an ORS update), for which
+ * management-be refuses a date.
  * The backend parses with an exact `yyyy-MM-dd` invariant-culture format
  * and REJECTS a full ISO timestamp, so never widen this to a Date or an
  * `toISOString()`. Charge amount and payment reference are display-only
@@ -668,7 +670,7 @@ export async function dulyMakeWorkItem({
 }) {
   return postLifecycleStep({
     url: lifecycleStepUrl(baseUrl, workItemId, 'duly-make', typeSegment),
-    body: { paymentDate },
+    body: paymentDate == null ? {} : { paymentDate },
     label: 'dulyMakeWorkItem',
     user,
     timeoutMs,

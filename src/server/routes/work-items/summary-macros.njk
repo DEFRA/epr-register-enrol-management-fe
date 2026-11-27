@@ -1,14 +1,16 @@
 {# ------------------------------------------------------------------- #}
 {# Summary fragments shared by the work item detail templates: the     #}
 {# generic (re-accreditation) Application summary in `detail.njk`, the  #}
-{# add-ORS one in `add-overseas-site/detail-v1.njk` (RA-739) and the     #}
+{# add-ORS one in `add-overseas-site/detail-v1.njk` (RA-739), the ORS    #}
+{# update one in `update-overseas-site/detail-v1.njk` (RA-782) and the   #}
 {# Accreditation summary tab in `accreditation-summary.njk` (RA-769).    #}
 {# ------------------------------------------------------------------- #}
 
 {% from "govuk/components/tag/macro.njk" import govukTag %}
 
 {# RA-292. The "NEW: " prefix. RA-495: the add-ORS summary marks the    #}
-{# values the operator supplied on the request with it too.             #}
+{# values the operator supplied on the request with it too, and RA-782's #}
+{# ORS update summary the BES files the update adds.                    #}
 {#                                                                          #}
 {# DESIGN NOTE: the design is RATIFIED. The mock-ups show newness as a       #}
 {# literal `NEW: ` prefix on the value itself — `NEW: Bharat Recycling` —    #}
@@ -56,7 +58,8 @@
 {# `expiryDate`.                                                            #}
 {# `newTestId` (3bb.13) puts the "NEW: " prefix, with that testid, before    #}
 {# the file: the add-ORS summary marks the first BES file when the operator  #}
-{# uploaded the evidence on the request.                                     #}
+{# uploaded the evidence on the request, and (RA-782) the ORS update        #}
+{# summary each BES file the update adds.                                    #}
 {% macro documentItem(file, showUpdated=false, showDates=false, newTestId='') %}
   <li>
     {% if newTestId %}{{ newPrefix(newTestId) }}{% endif %}

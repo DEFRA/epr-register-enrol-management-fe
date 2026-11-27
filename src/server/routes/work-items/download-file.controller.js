@@ -4,6 +4,7 @@ import { config } from '#/config/config.js'
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { s3Client } from '#/server/common/helpers/s3-client.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
+import { filesIn } from '#/server/routes/work-items/application-summary.js'
 
 const logger = createLogger()
 
@@ -23,15 +24,11 @@ const logger = createLogger()
  * case" model, not an oversight.
  */
 
-function filesIn(container) {
-  const files = container?.files
-  return Array.isArray(files) ? files : []
-}
-
 /**
  * Every file a work item's payload can link to: re-accreditation's sampling
- * plan and each overseas site's BES evidence, and (RA-739) the add-ORS
- * site's BES evidence under `payload.site`.
+ * plan and each overseas site's BES evidence, (RA-739) the add-ORS
+ * site's BES evidence under `payload.site`, and (RA-782) the BES evidence an
+ * ORS update adds beside it (`payload.site.addedBesEvidence`).
  *
  * RA-483 deliberately does NOT filter deselected sites out here. This is a
  * lookup by `fileId`, reachable only from a link the summary renders — and
@@ -48,7 +45,8 @@ function filesOf(payload) {
     ...(Array.isArray(overseasSites) ? overseasSites : []).flatMap((site) =>
       filesIn(site?.besEvidence)
     ),
-    ...filesIn(payload?.site?.besEvidence)
+    ...filesIn(payload?.site?.besEvidence),
+    ...filesIn(payload?.site?.addedBesEvidence)
   ]
 }
 

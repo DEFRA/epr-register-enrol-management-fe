@@ -157,10 +157,12 @@ card's class modifier use. Everything else a type shows differently comes
 from its own hooks, never from a check on its category:
 
 - `buildCaseHeader({ header, workItem, assignment })` builds the case header
-  from the fields every header shares. Add-ORS's
-  (`routes/add-overseas-site/case-header.js`) has the reference as a
-  caption, the site name and ORS id as the title, and three rows of four
-  meta items (RA-495). Every work item page builds its header from a work item passed
+  from the fields every header shares. The ORS cases' (add-ORS and ORS
+  update) build theirs with the shared `routes/work-items/ors-case-header.js`:
+  the site name and ORS id as the title and rows of four meta items (RA-495).
+  Add-ORS's (`routes/add-overseas-site/case-header.js`) has no caption (the
+  breadcrumb has the reference) and no location; the ORS update's has the
+  application reference as a caption and the site's location (RA-782 AC1). Every work item page builds its header from a work item passed
   through `decorateForCaseHeader` (`routes/work-items/case-header.js`), so
   the type's header shows on every tab.
 - `hasAccreditation(payload)` says whether a case has an accreditation to
@@ -206,15 +208,18 @@ from its own hooks, never from a check on its category:
   `/work-items/{id}/files/{fileId}/download` is unchanged (both share
   `serveFile`).
 - `describeCardSite(payload)` gives the card a site line in place of the
-  registration number, and `cardAlwaysShowsSubmittedOn` keeps "Submitted on"
+  registration number (both ORS types use `core/ors-card-site.js`), and `cardAlwaysShowsSubmittedOn` keeps "Submitted on"
   on the card in every state.
 
 A type may also supply `buildApplicationSummary({ workItem })`, the view
 model for its Application summary; the detail controller uses it in place of
 re-accreditation's `buildApplicationSummary` and passes it to the template as
 `applicationSummary`. Add-ORS builds its summary from `payload.site`
-(`routes/add-overseas-site/application-summary.js`). Its detail template
-extends `standard-lifecycle/detail.njk` (see below) and overrides the
+(`routes/add-overseas-site/application-summary.js`), with the site and
+interim site rows shared with the ORS update
+(`routes/work-items/ors-summary-rows.js`). Its detail template extends the
+ORS detail layout (`work-items/ors-detail-layout.njk`, shared with the ORS
+update), which extends `standard-lifecycle/detail.njk` (see below) and overrides the
 `applicationSummary` block with the site summary and interim sites, so it
 keeps the tabs, banners, assignment panel and lifecycle CTAs; it draws the
 actions card only when there is a lifecycle step or an outcome to show. Both
@@ -235,8 +240,9 @@ the pending-contact banner are shared by every type on the Standard workflow
 export const myType = {
   // …the Standard workflow's states and transitions…
   standardLifecycle: {
-    // Required: the raw charge (pence) and payment reference the Duly make
-    // page shows. The page formats them and says "Not provided" for a gap.
+    // Required, unless `paymentDate` is false: the raw charge (pence) and
+    // payment reference the Duly make page shows. The page formats them and
+    // says "Not provided" for a gap.
     readPaymentDetails: (workItem) => ({ chargePence, paymentReference }),
     // Optional: the management-be calls. Each defaults to the type-less
     // Standard-lifecycle endpoint (`POST /work-items/{id}/duly-make`,
@@ -255,7 +261,14 @@ export const myType = {
     // work item's accreditation year (`payload.accreditationYear`, 1 January
     // to 31 December inclusive; RA-795), and it can be corrected on the Change
     // valid from date page (RA-800).
-    effectiveDate: true
+    effectiveDate: true,
+    // Optional (RA-782): false for a type that is never charged. Its Duly make
+    // page shows the charge and payment reference as "-", asks for no payment
+    // date and sends management-be none (management-be refuses one), and the
+    // type needs no `readPaymentDetails`. With `relatedWorkItems`,
+    // management-be's `takesPaymentDate` (same `GET …/duly-make`) decides
+    // instead; this is the fallback when that is not to hand.
+    paymentDate: false
   }
 }
 
@@ -300,6 +313,36 @@ An add-ORS approval mints nothing: the site joins an accreditation that
 already exists, so the approval banner has no accreditation ID. For the
 same reason it supplies its own `contactConfirmedBanners` (the site has, or
 has not, been added to the accreditation; provisional copy).
+
+### ORS update (RA-767 / RA-782)
+
+`update-overseas-site/module.js` ("Update ORS Accreditation") is add-ORS's
+card, tabs and header (`routes/update-overseas-site/case-header.js`: the
+shared ORS case header plus the application reference and the site's location,
+with "-" for the charge and payment date, the `NO_PAYMENT` marker its Duly
+make page also shows) over management-be's `update-overseas-site` type.
+Its Application summary (`routes/update-overseas-site/application-summary.js`
+and `detail-v1.njk`) compares the ORS's details, Current version against
+Requested change, from `payload.site.previous` and `proposed` (the locked
+details from `payload.site` on both sides), each changed row tagged
+"Changed". The operator backend omits null fields, so a detail missing from
+`previous` or `proposed` is empty (cleared), never the site's current value;
+the site's own show only when the whole object is missing. Then the ORS's BES
+files and the ones the update adds (`payload.site.addedBesEvidence`, with the
+"NEW: " prefix, downloadable through the payload download route); then one
+collapsible section per interim site from `interimSites` (the shared
+`buildInterimSites`) and `interimSiteChanges`: "New interim site",
+"Removed", "Changed" (compared, open) or "No changes" (closed); a change with
+no interim site id is not shown. It shares with add-ORS, outside either
+type's folder, the row definitions and interim site details
+(`routes/work-items/ors-summary-rows.js`), the case header
+(`routes/work-items/ors-case-header.js`), the card site line
+(`core/ors-card-site.js`) and the detail layout
+(`work-items/ors-detail-layout.njk`). Its lifecycle
+takes no payment date (`paymentDate: false`, so no `readPaymentDetails`;
+management-be's `takesPaymentDate` decides when the Duly make page has it)
+and no valid from date (`effectiveDate: false`): a change to an ORS changes
+neither its status nor when it was accredited from.
 
 ## Cross-type list
 

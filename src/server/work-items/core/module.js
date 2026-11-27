@@ -153,40 +153,74 @@ const STANDARD_LIFECYCLE_BACKEND_STEPS = [
 
 const STANDARD_LIFECYCLE_BANNER_OUTCOMES = ['approved', 'rejected']
 
+// RA-782. A mistyped `paymentDate: 'false'` would otherwise read as true and
+// ask an uncharged type for a date management-be refuses.
+const STANDARD_LIFECYCLE_FLAGS = ['paymentDate']
+
 /**
  * RA-495. A type opting into the shared Standard-lifecycle pages
  * (`standardLifecycle`, see `standard-lifecycle/lifecycle.js`) must say where
  * its payment details live, and any backend call it declares must be one.
  * Checked at boot because a missing hook would otherwise render "Not
  * provided" on every Duly make page, and a bad call fail only on submit.
+ * RA-782: a type with no payment date (`paymentDate: false`) has no payment
+ * details to read, so it need not say where they live.
  */
 function assertValidStandardLifecycle(type) {
   const lifecycle = type.standardLifecycle
   if (lifecycle == null) {
     return
   }
-  if (typeof lifecycle.readPaymentDetails !== 'function') {
-    throw new TypeError(
-      `Work item type "${type.id}" \`standardLifecycle.readPaymentDetails\` must be a function`
-    )
+  assertStandardLifecycleFlags(type.id, lifecycle)
+  assertPaymentDetailsReader(type.id, lifecycle)
+  assertStandardLifecycleBackend(type.id, lifecycle.backend)
+  assertContactConfirmedBanners(type.id, lifecycle.contactConfirmedBanners)
+}
+
+function assertStandardLifecycleFlags(typeId, lifecycle) {
+  for (const flag of STANDARD_LIFECYCLE_FLAGS) {
+    const value = lifecycle[flag]
+    if (value !== undefined && typeof value !== 'boolean') {
+      throw new TypeError(
+        `Work item type "${typeId}" \`standardLifecycle.${flag}\` must be a boolean`
+      )
+    }
   }
+}
+
+function assertPaymentDetailsReader(typeId, lifecycle) {
+  const reader = lifecycle.readPaymentDetails
+  const required = lifecycle.paymentDate !== false
+  if (typeof reader === 'function' || (!required && reader === undefined)) {
+    return
+  }
+  throw new TypeError(
+    `Work item type "${typeId}" \`standardLifecycle.readPaymentDetails\` must be a function`
+  )
+}
+
+function assertStandardLifecycleBackend(typeId, backend) {
   for (const step of STANDARD_LIFECYCLE_BACKEND_STEPS) {
-    const call = lifecycle.backend?.[step]
+    const call = backend?.[step]
     if (call !== undefined && typeof call !== 'function') {
       throw new TypeError(
-        `Work item type "${type.id}" \`standardLifecycle.backend.${step}\` must be a function`
+        `Work item type "${typeId}" \`standardLifecycle.backend.${step}\` must be a function`
       )
     }
   }
+}
+
+function assertContactConfirmedBanners(typeId, banners) {
   for (const outcome of STANDARD_LIFECYCLE_BANNER_OUTCOMES) {
-    const banner = lifecycle.contactConfirmedBanners?.[outcome]
-    if (
-      banner !== undefined &&
-      (typeof banner?.title !== 'string' || typeof banner?.text !== 'string')
-    ) {
+    const banner = banners?.[outcome]
+    if (banner !== undefined && !isBannerCopy(banner)) {
       throw new TypeError(
-        `Work item type "${type.id}" \`standardLifecycle.contactConfirmedBanners.${outcome}\` must have a string title and text`
+        `Work item type "${typeId}" \`standardLifecycle.contactConfirmedBanners.${outcome}\` must have a string title and text`
       )
     }
   }
+}
+
+function isBannerCopy(banner) {
+  return typeof banner?.title === 'string' && typeof banner?.text === 'string'
 }

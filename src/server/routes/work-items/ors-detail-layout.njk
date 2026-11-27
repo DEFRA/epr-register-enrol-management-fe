@@ -1,0 +1,28 @@
+{# ------------------------------------------------------------------- #}
+{# The detail page layout an ORS case shares: add-ORS's (RA-739 /      #}
+{# RA-495) and the ORS update's (RA-782) `detail-v1.njk` both extend it. #}
+{#                                                                      #}
+{# Extends the Standard-lifecycle detail page for the case tabs, the    #}
+{# notices and error banners, the assignment panel, the pending-contact #}
+{# banner, the Duly make / Make Determination / Confirm applicant       #}
+{# contact CTAs and the closed case's Outcome panel. Each type fills    #}
+{# `applicationSummary` with its own summary and wraps `content` with   #}
+{# its own testid.                                                      #}
+{#                                                                      #}
+{# An ORS case has no generic actions (no Query, no Withdraw), so the   #}
+{# generic actions list and its "No actions" line never render under    #}
+{# the lifecycle CTAs.                                                  #}
+{# ------------------------------------------------------------------- #}
+{% extends 'standard-lifecycle/detail.njk' %}
+
+{% set lifecycleHidesGenericActions = true %}
+
+{# RA-495. With the generic actions hidden, the card would be empty in a  #}
+{# state with no lifecycle step to offer, so it renders only when one is: #}
+{# Duly make, Make Determination, Confirm applicant contact, or the       #}
+{# closed case's Outcome panel.                                           #}
+{% block actionsCard %}
+  {% if workItem.isReadOnlyState or workItem.isPendingContact or workItem.canDulyMake or workItem.canLogDecision %}
+    {{ super() }}
+  {% endif %}
+{% endblock %}

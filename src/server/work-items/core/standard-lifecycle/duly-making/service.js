@@ -20,10 +20,15 @@
  * Constructor takes the backend call so tests can stub it without mocking
  * `undici`. RA-495: by default it is the call the work item's type declares
  * (`standardLifecycle.backend.dulyMake`), else the type-less endpoint.
+ *
+ * RA-782: a work item with no payment date duly makes with none; every
+ * other still needs one. The caller says which (`withPaymentDate`, from
+ * management-be's `takesPaymentDate` when it has it), else the type's
+ * `standardLifecycle.paymentDate` decides.
  */
 
 import { toOutcome } from '../../backend-outcome.js'
-import { lifecycleBackendCall } from '../lifecycle.js'
+import { lifecycleBackendCall, takesPaymentDate } from '../lifecycle.js'
 
 /**
  * @param {object} options
@@ -40,31 +45,52 @@ export function createDulyMakingService({
      *
      * @param {object} args
      * @param {string} args.workItemId
-     * @param {string} args.paymentDate Plain `YYYY-MM-DD`. Never an ISO
-     *   timestamp — the backend parses with an exact `yyyy-MM-dd` format
-     *   and rejects anything carrying a time component.
+     * @param {string | null} [args.paymentDate] Plain `YYYY-MM-DD`. Never
+     *   an ISO timestamp — the backend parses with an exact `yyyy-MM-dd`
+     *   format and rejects anything carrying a time component. Absent for
+     *   a work item with no payment date (RA-782), and only then.
+     * @param {boolean} [args.withPaymentDate] does this work item take a
+     *   payment date? Defaults to the type's declaration.
      */
-    async dulyMakeWorkItem({ workItemId, paymentDate, user = null }) {
-      if (typeof workItemId !== 'string' || workItemId.trim() === '') {
-        throw new Error('workItemId must be a non-empty string')
-      }
-      if (typeof paymentDate !== 'string' || paymentDate.trim() === '') {
-        throw new Error('paymentDate must be a non-empty string')
-      }
+    async dulyMakeWorkItem({
+      workItemId,
+      paymentDate = null,
+      user = null,
+      withPaymentDate = takesPaymentDate(typeId)
+    }) {
+      assertDulyMakeArgs({ workItemId, paymentDate, withPaymentDate })
 
       const result = await dulyMake({ workItemId, paymentDate, user })
 
-      if (result.ok) {
-        return { ok: true, workItem: result.workItem }
-      }
-
-      return {
-        ok: false,
-        outcome: toOutcome(result.reason),
-        status: result.status,
-        errorCode: result.errorCode ?? null,
-        message: result.message ?? 'Duly making failed'
-      }
+      return result.ok
+        ? { ok: true, workItem: result.workItem }
+        : failureOf(result)
     }
+  }
+}
+
+function assertDulyMakeArgs({ workItemId, paymentDate, withPaymentDate }) {
+  if (!isNonEmptyString(workItemId)) {
+    throw new Error('workItemId must be a non-empty string')
+  }
+  if (withPaymentDate && !isNonEmptyString(paymentDate)) {
+    throw new Error('paymentDate must be a non-empty string')
+  }
+  if (!withPaymentDate && paymentDate != null) {
+    throw new Error('this work item type takes no paymentDate')
+  }
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim() !== ''
+}
+
+function failureOf(result) {
+  return {
+    ok: false,
+    outcome: toOutcome(result.reason),
+    status: result.status,
+    errorCode: result.errorCode ?? null,
+    message: result.message ?? 'Duly making failed'
   }
 }

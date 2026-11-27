@@ -1,4 +1,3 @@
-import { formatDateShortGds } from '#/config/nunjucks/filters/format-date.js'
 import { formatHeaderDate } from '#/server/routes/work-items/case-header.js'
 import {
   STATE_APPROVED,
@@ -7,11 +6,14 @@ import {
 import {
   EM_DASH,
   buildInterimSites,
-  fileViewModel,
-  interimSiteAddressLines,
-  overseasSiteAddressLines,
-  toDisplayLines
+  filesIn
 } from '#/server/routes/work-items/application-summary.js'
+import {
+  SITE_FIELDS,
+  besFileViewModel,
+  buildOrsInterimSite,
+  orDash
+} from '#/server/routes/work-items/ors-summary-rows.js'
 
 /**
  * RA-739. The add-ORS Application summary, from the Figma "Application page -
@@ -44,7 +46,7 @@ export function buildAddOverseasSiteSummary({ workItem }) {
     validFrom: validFromEntry(workItem),
     rows: siteRows(site, workItemId, supplied),
     interimSites: withShortAddressOnlyForRepeatedNames(
-      buildInterimSites(site, buildAddOrsInterimSite)
+      buildInterimSites(site, buildOrsInterimSite)
     )
   }
 }
@@ -106,80 +108,11 @@ function siteRows(site, workItemId, supplied) {
   ]
 }
 
-/** One comma-separated line, or nothing when there are no parts. */
-function joined(lines) {
-  return lines.length > 0 ? [lines.join(', ')] : []
-}
-
-function orDash(lines) {
-  return lines.length > 0 ? lines : [EM_DASH]
-}
-
-/**
- * Figma's labels and order. Keys form the `app-detail-*` testids. The fourth
- * entry, where there is one, is the operator backend's name for the field
- * when the operator supplied it (`ChangeRequestRules`: the four fields an
- * ORS may lack and the operator then answers on the request). The location
- * row is marked when the operator supplied the country.
- */
-const SITE_FIELDS = [
-  ['site-name', 'Site name', (site) => toDisplayLines(site.siteName)],
-  [
-    'location',
-    'Location',
-    (site) => joined(overseasSiteAddressLines(site, false)),
-    'country'
-  ],
-  // Not in the Figma frame: re-accreditation's site view wording and order.
-  ['ors-id', 'ORS ID', (site) => toDisplayLines(site.orsId)],
-  [
-    'coordinates',
-    'Coordinates',
-    (site) => toDisplayLines(site.coordinates),
-    'coordinates'
-  ],
-  ['contact-name', 'Contact name', (site) => toDisplayLines(site.contactName)],
-  [
-    'contact-email',
-    'Contact email',
-    (site) => toDisplayLines(site.contactEmail)
-  ],
-  [
-    'contact-phone',
-    'Contact phone number',
-    (site) => toDisplayLines(site.contactPhone)
-  ],
-  // Re-accreditation's labels for these two.
-  [
-    'recycling-operation',
-    'Operation code',
-    (site) => joined(toDisplayLines(site.operationCodes)),
-    'operationCodes'
-  ],
-  [
-    'basel-codes',
-    'Basel/OECD codes',
-    (site) =>
-      joined([site.code1, site.code2, site.code3].flatMap(toDisplayLines))
-  ],
-  [
-    'repatriated-loads',
-    'Arrangements for rejected or returned loads',
-    (site) => toDisplayLines(site.repatriatedLoads)
-  ],
-  [
-    'conditions-of-export',
-    'Conditions of export',
-    (site) => toDisplayLines(site.conditionsOfExport),
-    'conditionsOfExport'
-  ]
-]
-
 /** 3bb.13: the operator backend's name for BES evidence uploaded on the request. */
 const BES_EVIDENCE_FIELD = 'besEvidence'
 
 function besEvidenceRow(site, workItemId, isSupplied) {
-  const files = besFilesOf(site).map((file) =>
+  const files = filesIn(site.besEvidence).map((file) =>
     besFileViewModel(file, workItemId)
   )
   return {
@@ -188,59 +121,5 @@ function besEvidenceRow(site, workItemId, isSupplied) {
     kind: 'files',
     files,
     supplied: files.length > 0 && isSupplied
-  }
-}
-
-function besFilesOf(site) {
-  const files = site.besEvidence?.files
-  return Array.isArray(files) ? files : []
-}
-
-/** The shared file view model (Clean-only link), plus the BES dates. */
-function besFileViewModel(file, workItemId) {
-  return {
-    ...fileViewModel(file, workItemId),
-    validFrom: formatDateShortGds(file?.besEvidenceValidFromDate) || EM_DASH,
-    expiryDate: formatDateShortGds(file?.besEvidenceExpiryDate) || EM_DASH
-  }
-}
-
-/** Figma's interim site fields, in order, plus re-accreditation's contact phone. */
-const INTERIM_FIELDS = [
-  ['site-number', 'Site number', (site) => toDisplayLines(site.siteNumber)],
-  ['location', 'Location', (site) => joined(interimSiteAddressLines(site))],
-  ['contact-name', 'Contact name', (site) => toDisplayLines(site.contactName)],
-  [
-    'contact-email',
-    'Contact email',
-    (site) => toDisplayLines(site.contactEmail)
-  ],
-  [
-    'contact-phone',
-    'Contact phone number',
-    (site) => toDisplayLines(site.contactPhone)
-  ],
-  [
-    'operation-code',
-    'Operation code',
-    (site) => joined(toDisplayLines(site.operationCodes))
-  ]
-]
-
-/**
- * One active interim site: a heading of its name and a short address (first
- * address line and country), then its fields, each with the dash when missing.
- */
-function buildAddOrsInterimSite(site) {
-  return {
-    siteName: toDisplayLines(site.siteName)[0] ?? EM_DASH,
-    shortAddress: [site.addressLine1, site.country]
-      .flatMap(toDisplayLines)
-      .join(', '),
-    details: INTERIM_FIELDS.map(([key, label, read]) => ({
-      key,
-      label,
-      values: orDash(read(site))
-    }))
   }
 }

@@ -16,6 +16,15 @@
  * a wiring fault) redirect with a flash banner instead: a field error would
  * be actively misleading when the problem is not the field.
  *
+ * RA-782. A work item that is never charged (an ORS update) has no payment
+ * date: the page shows the charge and payment reference as "-", asks for no
+ * date, and the POST validates and sends none. management-be says which
+ * (`takesPaymentDate` on `GET /work-items/{id}/duly-make`); the type's
+ * `standardLifecycle.paymentDate` is only the fallback when that is not to
+ * hand (see `related-work-items.js`). A payment-date rejection of a work
+ * item that takes none is a page-level banner: there is no field to bind it
+ * to.
+ *
  * AC04 — Cancel is a plain link straight back to the detail page. It is
  * deliberately NOT a form post: with no handler there is no code path that
  * could touch state, so "Cancel leaves the application in Not started" is
@@ -25,12 +34,16 @@
 import { getWorkItem } from '#/server/common/helpers/backend-api/backend-api.js'
 import { getUser } from '#/server/common/helpers/auth/get-user.js'
 import { createLogger } from '#/server/common/helpers/logging/logger.js'
-import { formatChargeAmount } from '#/server/common/helpers/format/charge-amount.js'
+import {
+  NO_PAYMENT,
+  formatChargeAmount
+} from '#/server/common/helpers/format/charge-amount.js'
 
 import {
   DULY_MAKE_PAGE,
   getStandardLifecycle,
-  lifecyclePageHref
+  lifecyclePageHref,
+  takesPaymentDate
 } from '../lifecycle.js'
 import { evaluateDulyMakeEligibility } from './eligibility.js'
 import {
@@ -42,7 +55,7 @@ import {
   validatePaymentDate
 } from './payment-date.js'
 import { createDulyMakingService } from './service.js'
-import { loadRelatedWorkItems } from './related-work-items.js'
+import { loadDulyMakeDetails } from './related-work-items.js'
 
 const VIEW_PATH = 'standard-lifecycle/duly-making/index'
 const NOT_FOUND_VIEW = 'work-items/not-found'
@@ -87,8 +100,17 @@ function flashBanner(request, banner) {
  * RA-495. The raw values come from the type
  * (`standardLifecycle.readPaymentDetails`): which payload fields hold the
  * charge and the payment reference differs between types.
+ *
+ * RA-782. `withPaymentDate` is false for a work item that is never charged.
  */
-export function buildPaymentDetails(workItem, typeId) {
+export function buildPaymentDetails(
+  workItem,
+  typeId,
+  withPaymentDate = takesPaymentDate(typeId)
+) {
+  if (!withPaymentDate) {
+    return { chargeAmount: NO_PAYMENT, paymentReference: NO_PAYMENT }
+  }
   const raw = getStandardLifecycle(typeId)?.readPaymentDetails?.(workItem) ?? {}
   // `formatChargeAmount` returns null for absent/non-integer only. A
   // legitimate 0 formats as "£0.00" and must NOT collapse to "Not provided" —
@@ -127,7 +149,7 @@ function renderForm(
     id,
     applicationRef,
     paymentDetails,
-    relatedWorkItems = null,
+    dulyMakeDetails,
     values = { day: '', month: '', year: '' },
     errorCode = null,
     statusCode = 200
@@ -141,7 +163,8 @@ function renderForm(
       breadcrumbs: breadcrumbs(id, applicationRef),
       workItem: { id, applicationRef },
       paymentDetails,
-      relatedWorkItems,
+      takesPaymentDate: dulyMakeDetails.takesPaymentDate,
+      relatedWorkItems: dulyMakeDetails.relatedWorkItems,
       dateInputId: PAYMENT_DATE_ID,
       formAction: lifecyclePageHref(typeId, id, DULY_MAKE_PAGE),
       cancelHref: detailHref(id),
@@ -216,16 +239,21 @@ export function makeShowDulyMakingController({ typeId }) {
         return h.redirect(detailHref(id))
       }
 
+      const dulyMakeDetails = await loadDulyMakeDetails({
+        typeId,
+        workItemId: id,
+        user: getUser(request)
+      })
       return renderForm(h, {
         typeId,
         id,
         applicationRef: applicationRefOf(workItem),
-        paymentDetails: buildPaymentDetails(workItem, typeId),
-        relatedWorkItems: await loadRelatedWorkItems({
+        paymentDetails: buildPaymentDetails(
+          workItem,
           typeId,
-          workItemId: id,
-          user: getUser(request)
-        })
+          dulyMakeDetails.takesPaymentDate
+        ),
+        dulyMakeDetails
       })
     }
   }
@@ -240,20 +268,25 @@ export function makeSubmitDulyMakingController({
     async handler(request, h) {
       const id = request.params.id
       const user = getUser(request)
-      const payload = request.payload ?? {}
-      const values = {
-        day: payload[`${PAYMENT_DATE_ID}-day`] ?? '',
-        month: payload[`${PAYMENT_DATE_ID}-month`] ?? '',
-        year: payload[`${PAYMENT_DATE_ID}-year`] ?? ''
-      }
+      const values = paymentDateValues(request.payload)
 
-      const validation = validatePaymentDate(values)
+      // RA-782: a work item with no payment date has nothing to validate or
+      // send. Decided as the page that posted here decided it.
+      const dulyMakeDetails = await loadDulyMakeDetails({
+        typeId,
+        workItemId: id,
+        user
+      })
+      const withDate = dulyMakeDetails.takesPaymentDate
+      const validation = withDate
+        ? validatePaymentDate(values)
+        : { ok: true, value: null }
       if (!validation.ok) {
         return renderInvalid(h, {
           typeId,
-          request,
           id,
           user,
+          dulyMakeDetails,
           values,
           errorCode: validation.errorCode
         })
@@ -266,11 +299,15 @@ export function makeSubmitDulyMakingController({
       const result = await service.dulyMakeWorkItem({
         workItemId: id,
         paymentDate: validation.value,
-        user
+        user,
+        withPaymentDate: withDate
       })
 
       if (result.ok) {
-        flashBanner(request, SUCCESS_BANNER)
+        flashBanner(
+          request,
+          withDate ? SUCCESS_BANNER : SUCCESS_BANNER_WITHOUT_PAYMENT
+        )
         return h.redirect(detailHref(id))
       }
 
@@ -288,23 +325,33 @@ export function makeSubmitDulyMakingController({
         'Duly making failed'
       )
 
-      // Only a payment-date rejection binds to the field. Everything else
-      // is a page-level problem and a field error would point the user at
-      // the wrong thing.
-      if (isPaymentDateErrorCode(result.errorCode)) {
+      // Only a payment-date rejection binds to the field, and only when the
+      // page has the field. Everything else is a page-level problem and a
+      // field error would point the user at the wrong thing.
+      if (withDate && isPaymentDateErrorCode(result.errorCode)) {
         return renderInvalid(h, {
           typeId,
-          request,
           id,
           user,
+          dulyMakeDetails,
           values,
           errorCode: result.errorCode
         })
       }
 
-      flashBanner(request, bannerForFailure(result))
+      flashBanner(request, bannerForFailure(result, withDate))
       return h.redirect(detailHref(id))
     }
+  }
+}
+
+/** The three date boxes as posted, each empty when absent. */
+function paymentDateValues(payload) {
+  const posted = payload ?? {}
+  return {
+    day: posted[`${PAYMENT_DATE_ID}-day`] ?? '',
+    month: posted[`${PAYMENT_DATE_ID}-month`] ?? '',
+    year: posted[`${PAYMENT_DATE_ID}-year`] ?? ''
   }
 }
 
@@ -314,24 +361,31 @@ export function makeSubmitDulyMakingController({
  * page still renders, degraded, rather than turning a validation error into
  * a 502.
  */
-async function renderInvalid(h, { typeId, id, user, values, errorCode }) {
+async function renderInvalid(
+  h,
+  { typeId, id, user, dulyMakeDetails, values, errorCode }
+) {
   const item = await getWorkItem({ workItemId: id, user })
+  const withDate = dulyMakeDetails.takesPaymentDate
   return renderForm(h, {
     typeId,
     id,
     applicationRef: item.ok ? applicationRefOf(item.workItem) : null,
     paymentDetails: item.ok
-      ? buildPaymentDetails(item.workItem, typeId)
-      : { chargeAmount: NOT_PROVIDED, paymentReference: NOT_PROVIDED },
-    relatedWorkItems: await loadRelatedWorkItems({
-      typeId,
-      workItemId: id,
-      user
-    }),
+      ? buildPaymentDetails(item.workItem, typeId, withDate)
+      : unreadPaymentDetails(withDate),
+    dulyMakeDetails,
     values,
     errorCode,
     statusCode: 400
   })
+}
+
+/** The payment details when the work item could not be re-read. */
+function unreadPaymentDetails(withPaymentDate) {
+  return withPaymentDate
+    ? { chargeAmount: NOT_PROVIDED, paymentReference: NOT_PROVIDED }
+    : { chargeAmount: NO_PAYMENT, paymentReference: NO_PAYMENT }
 }
 
 const SUCCESS_BANNER = {
@@ -340,9 +394,32 @@ const SUCCESS_BANNER = {
   text: 'The payment date has been recorded and the application is now duly made.'
 }
 
+// RA-782: nothing was paid, so no payment date was recorded.
+// Provisional copy: not in the design, pending content design review.
+const SUCCESS_BANNER_WITHOUT_PAYMENT = {
+  type: 'success',
+  title: 'Application duly made',
+  text: 'The application is now duly made.'
+}
+
 const FAILURE_TITLE = 'Could not complete duly making'
 
-function bannerForFailure(result) {
+/**
+ * RA-782. The page sent no payment date and management-be still asked for one
+ * (in practice `payment-date-required`): the two disagree about whether the
+ * type takes a date. There is no field to fix and trying again changes
+ * nothing. Provisional copy: not in the design, pending content design review.
+ */
+const PAYMENT_DATE_REFUSED_BANNER = {
+  type: 'error',
+  title: FAILURE_TITLE,
+  text: 'There was a problem duly making this application. It has not been duly made.'
+}
+
+function bannerForFailure(result, withPaymentDate) {
+  if (!withPaymentDate && isPaymentDateErrorCode(result.errorCode)) {
+    return PAYMENT_DATE_REFUSED_BANNER
+  }
   if (result.outcome === 'conflict') {
     return {
       type: 'error',

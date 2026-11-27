@@ -3,6 +3,15 @@
 // work item module.
 
 /**
+ * RA-782 AC4: what a charge, payment reference or payment date reads for a
+ * type that is never charged (an ORS update), on the case header and the
+ * Duly make page alike. A hyphen, as the AC has it: not "Not provided" or
+ * "Not received" (nothing is missing, there is nothing to pay), and not the
+ * em dash the pages use for a missing value.
+ */
+export const NO_PAYMENT = '-'
+
+/**
  * Format an integer minor-unit amount as GBP.
  *
  * `chargeAmountPence` arrives in PENCE — £3,276.00 is `327600`. Getting this
